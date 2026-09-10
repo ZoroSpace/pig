@@ -1,0 +1,24 @@
+# binaries
+/pig
+/pig.exe
+/cmd/pig/pig
+/cmd/pig/pig.exe
+/dist/
+
+# test artifacts
+*.out
+coverage.*
+
+# env
+.env
+
+# macOS
+.DS_Store
+
+# local notes
+QA/
+
+# editors
+.idea/
+.vscode/
+*.swp

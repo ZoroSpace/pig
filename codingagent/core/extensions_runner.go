@@ -1,0 +1,1040 @@
+// pi: core/extensions/runner.ts — the ExtensionRunner, restricted to the
+// no-extension path AgentSession consumes. The extension loader (Phase 7)
+// will feed real Extension values into the same surface; until then the
+// extensions slice is always empty, so every handler loop short-circuits:
+// hasHandlers is false, emit is a no-op, and the emitXxx helpers return
+// their no-handler defaults (pi's semantics with zero extensions).
+package core
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/ZoroSpace/pig/agent"
+	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/tui"
+)
+
+// ExtensionRuntime is the shared runtime state referenced by extension APIs
+// (pi: ExtensionRuntime = ExtensionRuntimeState + ExtensionActions; the
+// pending registration queues and event-bus tracking arrive with Phase 7).
+type ExtensionRuntime struct {
+	// FlagValues holds registered extension flag values (pi: flagValues:
+	// Map<string, boolean | string>; values are only ever bool/string).
+	FlagValues map[string]any
+	// assertActive/invalidate state (pi: assertActive/invalidate members).
+	staleMessage string
+	// Action members, throwing stubs until bindCore (pi: the notInitialized
+	// stubs). nil = not initialized.
+	SendMessage      func(ctx context.Context, message *CustomMessagePayload, options *SendMessageOptions)
+	SendUserMessage  func(ctx context.Context, content string, options *SendUserMessageOptions)
+	AppendEntry      func(customType string, data any) string
+	SetSessionName   func(name string)
+	GetSessionName   func() (string, bool)
+	SetLabel         func(entryID string, label string)
+	GetActiveTools   func() []string
+	GetAllTools      func() []ToolInfo
+	SetActiveTools   func(toolNames []string)
+	RefreshTools     func()
+	GetCommands      func() []SlashCommandInfo
+	SetModel         func(ctx context.Context, model *types.Model) bool
+	GetThinkingLevel func() agent.ThinkingLevel
+	SetThinkingLevel func(level agent.ThinkingLevel)
+	// PendingProviderRegistrations / pendingNativeProviderRegistrations
+	// arrive with Phase 7 (pi: pendingProviderRegistrations).
+	// RegisterProvider/RegisterNativeProvider/UnregisterProvider are bound
+	// by bindCore (pi: registerProvider/registerNativeProvider/
+	// unregisterProvider members; the pre-bind queueing arrives with Phase
+	// 7).
+	RegisterProvider       func(name string, config ProviderConfig)
+	RegisterNativeProvider func(provider any)
+	UnregisterProvider     func(name string)
+}
+
+// CreateExtensionRuntime creates the shared runtime with throwing action
+// stubs (pi: createExtensionRuntime in loader.ts). pi's stubs throw on
+// invocation; pig's are nil and consumers guard.
+func CreateExtensionRuntime() *ExtensionRuntime {
+	return &ExtensionRuntime{FlagValues: map[string]any{}}
+}
+
+// AssertActive panics when the runtime is stale after replacement or reload
+// (pi: assertActive, which throws).
+func (r *ExtensionRuntime) AssertActive() {
+	if r.staleMessage != "" {
+		panic(r.staleMessage)
+	}
+}
+
+// Invalidate marks the runtime stale (pi: invalidate).
+func (r *ExtensionRuntime) Invalidate(message string) {
+	r.staleMessage = message
+}
+
+// ExtensionRunner drives extension event dispatch for one session (pi:
+// ExtensionRunner).
+type ExtensionRunner struct {
+	extensions     []*Extension
+	runtime        *ExtensionRuntime
+	uiContext      ExtensionUIContext
+	mode           ExtensionMode
+	cwd            string
+	sessionManager *SessionManager
+	modelRegistry  *ModelRegistry
+	errorListeners []ExtensionErrorListener
+	// shortcutDiagnostics accumulates shortcut conflict warnings from
+	// GetShortcuts (pi: shortcutDiagnostics).
+	shortcutDiagnostics []ResourceDiagnostic
+	// Context action state, defaulted like pi's field initializers and
+	// completed by bindCore.
+	getModel                 func() *types.Model
+	getScopedModels          func() []ScopedModel
+	isIdleFn                 func() bool
+	isProjectTrustedFn       func() bool
+	getSignalFn              func() context.Context
+	waitForIdleFn            func(ctx context.Context) error
+	abortFn                  func()
+	hasPendingMessagesFn     func() bool
+	getContextUsageFn        func() *ContextUsage
+	compactFn                func(options *CompactOptions)
+	getSystemPromptFn        func() string
+	getSystemPromptOptionsFn func() BuildSystemPromptOptions
+	newSessionHandler        func(ctx context.Context, options *NewSessionCommandOptions) (bool, error)
+	forkHandler              func(ctx context.Context, entryID string, options *ForkCommandOptions) (bool, error)
+	navigateTreeHandler      func(ctx context.Context, targetID string, options *NavigateTreeCommandOptions) (bool, error)
+	switchSessionHandler     func(ctx context.Context, sessionPath string, options *SwitchSessionCommandOptions) (bool, error)
+	reloadHandler            func(ctx context.Context) error
+	shutdownHandler          ShutdownHandler
+	// commandDiagnostics arrives with the loader batch (pi:
+	// commandDiagnostics).
+	staleMessage string
+}
+
+// NewExtensionRunner constructs the runner (pi: constructor).
+func NewExtensionRunner(
+	extensions []*Extension,
+	runtime *ExtensionRuntime,
+	cwd string,
+	sessionManager *SessionManager,
+	modelRegistry *ModelRegistry,
+) *ExtensionRunner {
+	return &ExtensionRunner{
+		extensions:           extensions,
+		runtime:              runtime,
+		uiContext:            noOpExtensionUIContext{},
+		mode:                 ExtensionModePrint,
+		cwd:                  cwd,
+		sessionManager:       sessionManager,
+		modelRegistry:        modelRegistry,
+		getModel:             func() *types.Model { return nil },
+		getScopedModels:      func() []ScopedModel { return nil },
+		isIdleFn:             func() bool { return true },
+		isProjectTrustedFn:   func() bool { return true },
+		getSignalFn:          func() context.Context { return nil },
+		waitForIdleFn:        func(_ context.Context) error { return nil },
+		abortFn:              func() {},
+		hasPendingMessagesFn: func() bool { return false },
+		getContextUsageFn:    func() *ContextUsage { return nil },
+		compactFn:            func(_ *CompactOptions) {},
+		getSystemPromptFn:    func() string { return "" },
+		getSystemPromptOptionsFn: func() BuildSystemPromptOptions {
+			return BuildSystemPromptOptions{Cwd: cwd}
+		},
+		newSessionHandler:    func(_ context.Context, _ *NewSessionCommandOptions) (bool, error) { return false, nil },
+		forkHandler:          func(_ context.Context, _ string, _ *ForkCommandOptions) (bool, error) { return false, nil },
+		navigateTreeHandler:  func(_ context.Context, _ string, _ *NavigateTreeCommandOptions) (bool, error) { return false, nil },
+		switchSessionHandler: func(_ context.Context, _ string, _ *SwitchSessionCommandOptions) (bool, error) { return false, nil },
+		reloadHandler:        func(_ context.Context) error { return nil },
+		shutdownHandler:      func() {},
+	}
+}
+
+// BindCore copies actions into the shared runtime and binds the context
+// actions (pi: bindCore). nil actions fields keep the previous binding, and
+// a nil providerActions skips provider rebinding (pi: optional parameter).
+func (r *ExtensionRunner) BindCore(
+	actions *ExtensionActions,
+	contextActions *ExtensionContextActions,
+	providerActions *ExtensionProviderActions,
+) {
+	r.runtime.SendMessage = actions.SendMessage
+	r.runtime.SendUserMessage = actions.SendUserMessage
+	r.runtime.AppendEntry = actions.AppendEntry
+	r.runtime.SetSessionName = actions.SetSessionName
+	r.runtime.GetSessionName = actions.GetSessionName
+	r.runtime.SetLabel = actions.SetLabel
+	r.runtime.GetActiveTools = actions.GetActiveTools
+	r.runtime.GetAllTools = actions.GetAllTools
+	r.runtime.SetActiveTools = actions.SetActiveTools
+	r.runtime.RefreshTools = actions.RefreshTools
+	r.runtime.GetCommands = actions.GetCommands
+	r.runtime.SetModel = actions.SetModel
+	r.runtime.GetThinkingLevel = actions.GetThinkingLevel
+	r.runtime.SetThinkingLevel = actions.SetThinkingLevel
+
+	// Context actions (required)
+	r.getModel = contextActions.GetModel
+	r.getScopedModels = contextActions.GetScopedModels
+	r.isIdleFn = contextActions.IsIdle
+	r.isProjectTrustedFn = contextActions.IsProjectTrusted
+	r.getSignalFn = contextActions.GetSignal
+	r.abortFn = contextActions.Abort
+	r.hasPendingMessagesFn = contextActions.HasPendingMessages
+	r.shutdownHandler = contextActions.Shutdown
+	r.getContextUsageFn = contextActions.GetContextUsage
+	r.compactFn = contextActions.Compact
+	r.getSystemPromptFn = contextActions.GetSystemPrompt
+	if contextActions.GetSystemPromptOptions != nil {
+		r.getSystemPromptOptionsFn = contextActions.GetSystemPromptOptions
+	}
+
+	// Provider actions (optional in pi)
+	if providerActions != nil {
+		r.runtime.RegisterProvider = providerActions.RegisterProvider
+		r.runtime.RegisterNativeProvider = providerActions.RegisterNativeProvider
+		r.runtime.UnregisterProvider = providerActions.UnregisterProvider
+	}
+}
+
+// BindCommandContext binds the command context actions (pi:
+// bindCommandContext). nil keeps the previous binding (pi: `if (!actions)
+// return`).
+func (r *ExtensionRunner) BindCommandContext(actions *ExtensionCommandContextActions) {
+	if actions == nil {
+		return
+	}
+	r.waitForIdleFn = actions.WaitForIdle
+	r.newSessionHandler = actions.NewSession
+	r.forkHandler = actions.Fork
+	r.navigateTreeHandler = actions.NavigateTree
+	r.switchSessionHandler = actions.SwitchSession
+	r.reloadHandler = actions.Reload
+}
+
+// SetUIContext binds the UI context (pi: setUIContext). nil uiContext keeps
+// the no-op context (pi: `if (uiContext)`).
+func (r *ExtensionRunner) SetUIContext(uiContext ExtensionUIContext, mode ExtensionMode) {
+	if uiContext != nil {
+		r.uiContext = uiContext
+	}
+	if mode != "" {
+		r.mode = mode
+	}
+}
+
+// HasUI reports whether dialog-capable UI is available (pi: hasUI).
+func (r *ExtensionRunner) HasUI() bool {
+	_, isNoOp := r.uiContext.(noOpExtensionUIContext)
+	return !isNoOp
+}
+
+// GetExtensionPaths lists the loaded extension paths (pi:
+// getExtensionPaths).
+func (r *ExtensionRunner) GetExtensionPaths() []string {
+	paths := make([]string, 0, len(r.extensions))
+	for _, ext := range r.extensions {
+		paths = append(paths, ext.Path)
+	}
+	return paths
+}
+
+// GetAllRegisteredTools collects the registered tools from all extensions,
+// first registration per name wins (pi: getAllRegisteredTools).
+func (r *ExtensionRunner) GetAllRegisteredTools() []RegisteredTool {
+	toolsByName := map[string]RegisteredTool{}
+	var order []string
+	for _, ext := range r.extensions {
+		for _, tool := range ext.Tools {
+			if _, seen := toolsByName[tool.Definition.Name]; !seen {
+				toolsByName[tool.Definition.Name] = tool
+				order = append(order, tool.Definition.Name)
+			}
+		}
+	}
+	out := make([]RegisteredTool, 0, len(order))
+	for _, name := range order {
+		out = append(out, toolsByName[name])
+	}
+	return out
+}
+
+// GetFlagValues returns the registered flag values (pi: getFlagValues).
+func (r *ExtensionRunner) GetFlagValues() map[string]any {
+	return r.runtime.FlagValues
+}
+
+// SetFlagValue sets one flag value (pi: setFlagValue).
+func (r *ExtensionRunner) SetFlagValue(name string, value any) {
+	r.runtime.FlagValues[name] = value
+}
+
+// Invalidate marks the runner stale (pi: invalidate). pi defaults the
+// message when called without one.
+func (r *ExtensionRunner) Invalidate(message string) {
+	if message == "" {
+		message = "This extension ctx is stale after session replacement or reload."
+	}
+	r.runtime.Invalidate(message)
+	r.staleMessage = message
+}
+
+// assertActive panics when stale (pi: assertActive throwing).
+func (r *ExtensionRunner) assertActive() {
+	if r.staleMessage != "" {
+		panic(r.staleMessage)
+	}
+}
+
+// OnError registers an error listener and returns the unsubscribe function
+// (pi: onError).
+func (r *ExtensionRunner) OnError(listener ExtensionErrorListener) func() {
+	r.errorListeners = append(r.errorListeners, listener)
+	return func() {
+		for i, l := range r.errorListeners {
+			if listenerEntryEqual(l, listener) {
+				r.errorListeners = append(r.errorListeners[:i], r.errorListeners[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
+func listenerEntryEqual(a, b ExtensionErrorListener) bool {
+	return fmt.Sprintf("%p", a) == fmt.Sprintf("%p", b)
+}
+
+// EmitError reports an error to all listeners (pi: emitError).
+func (r *ExtensionRunner) EmitError(err ExtensionError) {
+	for _, listener := range r.errorListeners {
+		listener(err)
+	}
+}
+
+// HasHandlers reports whether any extension registers handlers for the event
+// type (pi: hasHandlers).
+func (r *ExtensionRunner) HasHandlers(eventType string) bool {
+	for _, ext := range r.extensions {
+		if handlers := ext.Handlers[eventType]; len(handlers) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// GetCommandDiagnostics returns command-name dedup diagnostics (pi:
+// getCommandDiagnostics). The diagnostics arrive with the loader batch
+// (P7); empty until then (declared).
+func (r *ExtensionRunner) GetCommandDiagnostics() []ResourceDiagnostic {
+	return nil
+}
+
+// reservedKeybindingsForExtensionConflicts are the canonical keybinding ids
+// extension shortcuts may not override (pi:
+// RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS — only editor-global
+// shortcuts are reserved; picker-specific bindings are not).
+var reservedKeybindingsForExtensionConflicts = []string{
+	"app.interrupt",
+	"app.clear",
+	"app.exit",
+	"app.suspend",
+	"app.thinking.cycle",
+	"app.model.cycleForward",
+	"app.model.cycleBackward",
+	"app.model.select",
+	"app.tools.expand",
+	"app.thinking.toggle",
+	"app.editor.external",
+	"app.message.copy",
+	"app.message.followUp",
+	"tui.input.submit",
+	"tui.select.confirm",
+	"tui.select.cancel",
+	"tui.input.copy",
+	"tui.editor.deleteToLineEnd",
+}
+
+// builtinKeybindingEntry is one resolved builtin keybinding keyed by key id
+// (pi: BuiltInKeyBindings value type).
+type builtinKeybindingEntry struct {
+	keybinding       string
+	restrictOverride bool
+}
+
+// buildBuiltinKeybindings indexes the resolved config by key id (pi:
+// buildBuiltinKeybindings).
+func buildBuiltinKeybindings(resolvedKeybindings tui.KeybindingsConfig) map[tui.KeyId]*builtinKeybindingEntry {
+	builtinKeybindings := map[tui.KeyId]*builtinKeybindingEntry{}
+	reserved := map[string]bool{}
+	for _, keybinding := range reservedKeybindingsForExtensionConflicts {
+		reserved[keybinding] = true
+	}
+	for keybinding, keys := range resolvedKeybindings {
+		if len(keys) == 0 {
+			continue
+		}
+		restrictOverride := reserved[keybinding]
+		for _, key := range keys {
+			normalizedKey := tui.KeyId(strings.ToLower(key))
+			// If multiple actions bind the same key, the reserved action wins
+			// so extensions remain blocked by reserved shortcuts regardless of
+			// iteration order.
+			if existing := builtinKeybindings[normalizedKey]; existing != nil && existing.restrictOverride && !restrictOverride {
+				continue
+			}
+			builtinKeybindings[normalizedKey] = &builtinKeybindingEntry{keybinding: keybinding, restrictOverride: restrictOverride}
+		}
+	}
+	return builtinKeybindings
+}
+
+// GetShortcuts resolves the extension shortcuts, computing conflict
+// diagnostics against the builtin keybindings (pi: getShortcuts).
+func (r *ExtensionRunner) GetShortcuts(resolvedKeybindings tui.KeybindingsConfig) map[tui.KeyId]*ExtensionShortcut {
+	r.shortcutDiagnostics = nil
+	builtinKeybindings := buildBuiltinKeybindings(resolvedKeybindings)
+	extensionShortcuts := map[tui.KeyId]*ExtensionShortcut{}
+
+	addDiagnostic := func(message string, extensionPath string) {
+		r.shortcutDiagnostics = append(r.shortcutDiagnostics, ResourceDiagnostic{Type: "warning", Message: message, Path: extensionPath})
+		if !r.HasUI() {
+			fmt.Fprintln(os.Stderr, message)
+		}
+	}
+
+	for _, ext := range r.extensions {
+		for key, shortcut := range ext.Shortcuts {
+			normalizedKey := tui.KeyId(strings.ToLower(key))
+
+			builtInKeybinding := builtinKeybindings[normalizedKey]
+			if builtInKeybinding != nil && builtInKeybinding.restrictOverride {
+				addDiagnostic(
+					fmt.Sprintf("Extension shortcut '%s' from %s conflicts with built-in shortcut. Skipping.", key, shortcut.ExtensionPath),
+					shortcut.ExtensionPath,
+				)
+				continue
+			}
+
+			if builtInKeybinding != nil && !builtInKeybinding.restrictOverride {
+				addDiagnostic(
+					fmt.Sprintf("Extension shortcut conflict: '%s' is built-in shortcut for %s and %s. Using %s.", key, builtInKeybinding.keybinding, shortcut.ExtensionPath, shortcut.ExtensionPath),
+					shortcut.ExtensionPath,
+				)
+			}
+
+			if existing := extensionShortcuts[normalizedKey]; existing != nil {
+				addDiagnostic(
+					fmt.Sprintf("Extension shortcut conflict: '%s' registered by both %s and %s. Using %s.", key, existing.ExtensionPath, shortcut.ExtensionPath, shortcut.ExtensionPath),
+					shortcut.ExtensionPath,
+				)
+			}
+			extensionShortcuts[normalizedKey] = shortcut
+		}
+	}
+	return extensionShortcuts
+}
+
+// GetShortcutDiagnostics returns shortcut diagnostics (pi:
+// getShortcutDiagnostics); populated by GetShortcuts.
+func (r *ExtensionRunner) GetShortcutDiagnostics() []ResourceDiagnostic {
+	return r.shortcutDiagnostics
+}
+
+// GetRegisteredCommands returns the resolved commands, recomputing the
+// diagnostics (pi: getRegisteredCommands).
+func (r *ExtensionRunner) GetRegisteredCommands() []ResolvedCommand {
+	return r.resolveRegisteredCommands()
+}
+
+// resolveRegisteredCommands deduplicates command names into invocation names
+// (pi: resolveRegisteredCommands).
+func (r *ExtensionRunner) resolveRegisteredCommands() []ResolvedCommand {
+	var commands []RegisteredCommand
+	counts := map[string]int{}
+	for _, ext := range r.extensions {
+		for _, command := range ext.Commands {
+			commands = append(commands, command)
+			counts[command.Name]++
+		}
+	}
+	seen := map[string]int{}
+	takenInvocationNames := map[string]bool{}
+	out := make([]ResolvedCommand, 0, len(commands))
+	for _, command := range commands {
+		occurrence := seen[command.Name] + 1
+		seen[command.Name] = occurrence
+		invocationName := command.Name
+		if counts[command.Name] > 1 {
+			invocationName = fmt.Sprintf("%s:%d", command.Name, occurrence)
+		}
+		for takenInvocationNames[invocationName] {
+			occurrence++
+			invocationName = fmt.Sprintf("%s:%d", command.Name, occurrence)
+		}
+		takenInvocationNames[invocationName] = true
+		resolved := ResolvedCommand{RegisteredCommand: command, InvocationName: invocationName}
+		out = append(out, resolved)
+	}
+	return out
+}
+
+// GetCommand finds a command by invocation name (pi: getCommand).
+func (r *ExtensionRunner) GetCommand(name string) *ResolvedCommand {
+	for _, command := range r.resolveRegisteredCommands() {
+		if command.InvocationName == name {
+			return &command
+		}
+	}
+	return nil
+}
+
+// GetModelRegistry exposes the model registry (pi: getModelRegistry).
+func (r *ExtensionRunner) GetModelRegistry() *ModelRegistry {
+	return r.modelRegistry
+}
+
+// Shutdown requests graceful shutdown (pi: shutdown).
+func (r *ExtensionRunner) Shutdown() {
+	r.shutdownHandler()
+}
+
+// GetActiveTools returns the active tool names (pi: getActiveTools).
+func (r *ExtensionRunner) GetActiveTools() []string {
+	r.assertActive()
+	if r.runtime.GetActiveTools == nil {
+		return nil
+	}
+	return r.runtime.GetActiveTools()
+}
+
+// CreateContext builds the context for event handlers and tool execution
+// (pi: createContext; the lazy TS getters become eager struct fields, see
+// the types header).
+func (r *ExtensionRunner) CreateContext() ExtensionContext {
+	return ExtensionContext{
+		UI:             r.uiContext,
+		Mode:           r.mode,
+		HasUI:          r.HasUI(),
+		Cwd:            r.cwd,
+		SessionManager: r.sessionManager,
+		ModelRegistry:  r.modelRegistry,
+		Model:          r.getModel(),
+		ScopedModels:   r.getScopedModels(),
+		ThinkingLevel:  r.runtimeThinkingLevel(),
+		IsIdle: func() bool {
+			return r.isIdleFn()
+		},
+		IsProjectTrusted: func() bool {
+			return r.isProjectTrustedFn()
+		},
+		Signal: func() context.Context {
+			return r.getSignalFn()
+		},
+		Abort: func() {
+			r.abortFn()
+		},
+		HasPendingMessages: func() bool {
+			return r.hasPendingMessagesFn()
+		},
+		Shutdown: func() {
+			r.shutdownHandler()
+		},
+		GetContextUsage: func() *ContextUsage {
+			return r.getContextUsageFn()
+		},
+		Compact: func(options *CompactOptions) {
+			r.compactFn(options)
+		},
+		GetSystemPrompt: func() string {
+			return r.getSystemPromptFn()
+		},
+	}
+}
+
+// runtimeThinkingLevel reads the bound getThinkingLevel action; nil (pi's
+// notInitialized stub) yields "".
+func (r *ExtensionRunner) runtimeThinkingLevel() agent.ThinkingLevel {
+	if r.runtime.GetThinkingLevel == nil {
+		return ""
+	}
+	return r.runtime.GetThinkingLevel()
+}
+
+// CreateCommandContext builds the command-handler context (pi:
+// createCommandContext).
+func (r *ExtensionRunner) CreateCommandContext() *ExtensionCommandContext {
+	base := r.CreateContext()
+	return &ExtensionCommandContext{
+		ExtensionContext: base,
+		GetSystemPromptOptions: func() BuildSystemPromptOptions {
+			r.assertActive()
+			return r.getSystemPromptOptionsFn()
+		},
+		WaitForIdle: func(ctx context.Context) error {
+			r.assertActive()
+			return r.waitForIdleFn(ctx)
+		},
+		NewSession: func(ctx context.Context, options *NewSessionCommandOptions) (bool, error) {
+			r.assertActive()
+			return r.newSessionHandler(ctx, options)
+		},
+		Fork: func(ctx context.Context, entryID string, options *ForkCommandOptions) (bool, error) {
+			r.assertActive()
+			return r.forkHandler(ctx, entryID, options)
+		},
+		NavigateTree: func(ctx context.Context, targetID string, options *NavigateTreeCommandOptions) (bool, error) {
+			r.assertActive()
+			return r.navigateTreeHandler(ctx, targetID, options)
+		},
+		SwitchSession: func(ctx context.Context, sessionPath string, options *SwitchSessionCommandOptions) (bool, error) {
+			r.assertActive()
+			return r.switchSessionHandler(ctx, sessionPath, options)
+		},
+		Reload: func(ctx context.Context) error {
+			r.assertActive()
+			return r.reloadHandler(ctx)
+		},
+	}
+}
+
+// Emit dispatches one event to all matching handlers in registration order,
+// short-circuiting on a cancel result from session_before_* events (pi:
+// emit). With no extensions (this batch) it always returns nil: the ctx
+// creation is skipped rather than built-and-discarded (declared deviation —
+// Go has no property getters to guard).
+func (r *ExtensionRunner) Emit(ctx context.Context, event ExtensionEvent) (any, error) {
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers[event.EventType()]
+		if len(handlers) == 0 {
+			continue
+		}
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			result, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         event.EventType(),
+					Error:         err.Error(),
+				})
+				continue
+			}
+			if before, ok := result.(*SessionBeforeCompactResult); ok && before.Cancel {
+				return before, nil
+			}
+			if before, ok := result.(*SessionBeforeTreeResult); ok && before.Cancel {
+				return before, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+// EmitMessageEnd runs message_end handlers and returns the replacement
+// message, if any handler produced one (pi: emitMessageEnd).
+func (r *ExtensionRunner) EmitMessageEnd(ctx context.Context, event *MessageEndEvent) (agent.AgentMessage, error) {
+	currentMessage := event.Message
+	modified := false
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["message_end"]
+		if len(handlers) == 0 {
+			continue
+		}
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			currentEvent := *event
+			currentEvent.Message = currentMessage
+			result, err := handler(ctx, handlerCtx, &currentEvent)
+			if err != nil {
+				r.EmitError(ExtensionError{ExtensionPath: ext.Path, Event: "message_end", Error: err.Error()})
+				continue
+			}
+			messageEndResult, ok := result.(*MessageEndEventResult)
+			if !ok || messageEndResult == nil || messageEndResult.Message == nil {
+				continue
+			}
+			if messageEndResult.Message.MessageRole() != currentMessage.MessageRole() {
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         "message_end",
+					Error:         "message_end handlers must return a message with the same role",
+				})
+				continue
+			}
+			currentMessage = messageEndResult.Message
+			modified = true
+		}
+	}
+	if modified {
+		return currentMessage, nil
+	}
+	return nil, nil
+}
+
+// EmitToolResult runs tool_result handlers and returns the merged result (pi:
+// emitToolResult).
+func (r *ExtensionRunner) EmitToolResult(ctx context.Context, event *ToolResultEvent) (*ToolResultEventResult, error) {
+	currentEvent := *event
+	modified := false
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["tool_result"]
+		if len(handlers) == 0 {
+			continue
+		}
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			result, err := handler(ctx, handlerCtx, &currentEvent)
+			if err != nil {
+				r.EmitError(ExtensionError{ExtensionPath: ext.Path, Event: "tool_result", Error: err.Error()})
+				continue
+			}
+			toolResult, ok := result.(*ToolResultEventResult)
+			if !ok || toolResult == nil {
+				continue
+			}
+			if toolResult.Content != nil {
+				currentEvent.Content = toolResult.Content
+			}
+			if toolResult.Details != nil {
+				currentEvent.Details = toolResult.Details
+			}
+			if toolResult.IsError != nil {
+				currentEvent.IsError = *toolResult.IsError
+			}
+			if toolResult.Usage != nil {
+				currentEvent.Usage = toolResult.Usage
+			}
+			modified = true
+		}
+	}
+	if modified {
+		return &ToolResultEventResult{
+			Content: currentEvent.Content,
+			Details: currentEvent.Details,
+			IsError: &currentEvent.IsError,
+			Usage:   currentEvent.Usage,
+		}, nil
+	}
+	return nil, nil
+}
+
+// EmitToolCall runs tool_call handlers and returns the first blocking result
+// (pi: emitToolCall).
+func (r *ExtensionRunner) EmitToolCall(ctx context.Context, event *ToolCallEvent) (*ToolCallEventResult, error) {
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["tool_call"]
+		if len(handlers) == 0 {
+			continue
+		}
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			result, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{ExtensionPath: ext.Path, Event: "tool_call", Error: err.Error()})
+				continue
+			}
+			toolCallResult, ok := result.(*ToolCallEventResult)
+			if !ok || toolCallResult == nil {
+				continue
+			}
+			if toolCallResult.Block {
+				return toolCallResult, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+// EmitBeforeAgentStart runs before_agent_start handlers and merges their
+// results (pi: emitBeforeAgentStart).
+func (r *ExtensionRunner) EmitBeforeAgentStart(
+	ctx context.Context,
+	prompt string,
+	images []types.ImageContent,
+	systemPrompt string,
+	systemPromptOptions BuildSystemPromptOptions,
+) (*BeforeAgentStartCombinedResult, error) {
+	currentSystemPrompt := systemPrompt
+	var messages []CustomMessagePayload
+	systemPromptModified := false
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["before_agent_start"]
+		if len(handlers) == 0 {
+			continue
+		}
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			event := &BeforeAgentStartEvent{
+				Type:                "before_agent_start",
+				Prompt:              prompt,
+				Images:              images,
+				SystemPrompt:        currentSystemPrompt,
+				SystemPromptOptions: systemPromptOptions,
+			}
+			result, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{ExtensionPath: ext.Path, Event: "before_agent_start", Error: err.Error()})
+				continue
+			}
+			beforeResult, ok := result.(*BeforeAgentStartEventResult)
+			if !ok || beforeResult == nil {
+				continue
+			}
+			if beforeResult.Message != nil {
+				messages = append(messages, *beforeResult.Message)
+			}
+			if beforeResult.SystemPrompt != nil {
+				currentSystemPrompt = *beforeResult.SystemPrompt
+				systemPromptModified = true
+			}
+		}
+	}
+	if len(messages) > 0 || systemPromptModified {
+		combined := &BeforeAgentStartCombinedResult{Messages: messages}
+		if systemPromptModified {
+			combined.SystemPrompt = &currentSystemPrompt
+		}
+		return combined, nil
+	}
+	return nil, nil
+}
+
+// EmitResourcesDiscover runs resources_discover handlers (pi:
+// emitResourcesDiscover).
+func (r *ExtensionRunner) EmitResourcesDiscover(ctx context.Context, cwd string, reason string) (*ResourcesDiscoverResult, error) {
+	result := &ResourcesDiscoverResult{}
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["resources_discover"]
+		if len(handlers) == 0 {
+			continue
+		}
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			event := &ResourcesDiscoverEvent{Type: "resources_discover", Cwd: cwd, Reason: reason}
+			handlerResult, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{ExtensionPath: ext.Path, Event: "resources_discover", Error: err.Error()})
+				continue
+			}
+			discoverResult, ok := handlerResult.(*ResourcesDiscoverResult)
+			if !ok || discoverResult == nil {
+				continue
+			}
+			result.SkillPaths = append(result.SkillPaths, discoverResult.SkillPaths...)
+			result.PromptPaths = append(result.PromptPaths, discoverResult.PromptPaths...)
+			result.ThemePaths = append(result.ThemePaths, discoverResult.ThemePaths...)
+		}
+	}
+	return result, nil
+}
+
+// EmitInput runs input handlers as a transform chain; "handled"
+// short-circuits (pi: emitInput).
+func (r *ExtensionRunner) EmitInput(
+	ctx context.Context,
+	text string,
+	images []types.ImageContent,
+	source InputSource,
+	streamingBehavior string,
+) (*InputEventResult, error) {
+	currentText := text
+	currentImages := images
+	transformed := false
+	for _, ext := range r.extensions {
+		for _, handler := range ext.Handlers["input"] {
+			handlerCtxValue := r.CreateContext()
+			handlerCtx := &handlerCtxValue
+			event := &InputEvent{
+				Type:              "input",
+				Text:              currentText,
+				Images:            currentImages,
+				Source:            source,
+				StreamingBehavior: streamingBehavior,
+			}
+			result, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{ExtensionPath: ext.Path, Event: "input", Error: err.Error()})
+				continue
+			}
+			inputResult, ok := result.(*InputEventResult)
+			if !ok || inputResult == nil {
+				continue
+			}
+			if inputResult.Action == "handled" {
+				return inputResult, nil
+			}
+			if inputResult.Action == "transform" {
+				if inputResult.Text != currentText || inputResult.Images != nil {
+					transformed = true
+				}
+				currentText = inputResult.Text
+				if inputResult.Images != nil {
+					currentImages = inputResult.Images
+				}
+			}
+		}
+	}
+	// pi compares slice identity (`currentText !== text || currentImages !==
+	// images`); Go cannot observe slice identity, so a transform is reported
+	// when a handler replaced the text or images (declared deviation).
+	if transformed {
+		return &InputEventResult{Action: "transform", Text: currentText, Images: currentImages}, nil
+	}
+	return &InputEventResult{Action: "continue"}, nil
+}
+
+// EmitSessionShutdownEvent emits session_shutdown to extensions (pi:
+// emitSessionShutdownEvent). Returns whether the event was emitted.
+func EmitSessionShutdownEvent(ctx context.Context, extensionRunner *ExtensionRunner, event *SessionShutdownEvent) (bool, error) {
+	if extensionRunner.HasHandlers("session_shutdown") {
+		_, err := extensionRunner.Emit(ctx, event)
+		return true, err
+	}
+	return false, nil
+}
+
+// EmitContext applies extension context transforms (pi: emitContext). pi
+// structuredClones the messages first so handlers cannot mutate the caller's
+// slice; pig clones via JSON round-trip (reducer precedent).
+func (r *ExtensionRunner) EmitContext(ctx context.Context, messages []agent.AgentMessage) []agent.AgentMessage {
+	currentMessages := cloneAgentMessages(messages)
+
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["context"]
+		if len(handlers) == 0 {
+			continue
+		}
+
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			event := &ContextEvent{Type: "context", Messages: currentMessages}
+			result, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         "context",
+					Error:         err.Error(),
+				})
+				continue
+			}
+			if eventResult, ok := result.(*ContextEventResult); ok && eventResult != nil && eventResult.Messages != nil {
+				currentMessages = eventResult.Messages
+			}
+		}
+	}
+
+	return currentMessages
+}
+
+// EmitBeforeProviderRequest applies extension payload transforms (pi:
+// emitBeforeProviderRequest). A non-nil handler result replaces the payload.
+func (r *ExtensionRunner) EmitBeforeProviderRequest(ctx context.Context, payload any) any {
+	currentPayload := payload
+
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["before_provider_request"]
+		if len(handlers) == 0 {
+			continue
+		}
+
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			event := &BeforeProviderRequestEvent{Type: "before_provider_request", Payload: currentPayload}
+			result, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         "before_provider_request",
+					Error:         err.Error(),
+				})
+				continue
+			}
+			if result != nil {
+				currentPayload = result
+			}
+		}
+	}
+
+	return currentPayload
+}
+
+// EmitBeforeProviderHeaders applies extension header mutations (pi:
+// emitBeforeProviderHeaders). Handlers mutate headers in place; the return
+// value is ignored. A nil entry deletes that header.
+func (r *ExtensionRunner) EmitBeforeProviderHeaders(ctx context.Context, headers types.ProviderHeaders) types.ProviderHeaders {
+	if headers == nil {
+		headers = types.ProviderHeaders{}
+	}
+
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["before_provider_headers"]
+		if len(handlers) == 0 {
+			continue
+		}
+
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			event := &BeforeProviderHeadersEvent{Type: "before_provider_headers", Headers: headers}
+			if _, err := handler(ctx, handlerCtx, event); err != nil {
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         "before_provider_headers",
+					Error:         err.Error(),
+				})
+				continue
+			}
+		}
+	}
+
+	return headers
+}
+
+// cloneAgentMessage deep-clones one message via JSON round-trip (pi:
+// structuredClone).
+func cloneAgentMessage(message agent.AgentMessage) agent.AgentMessage {
+	data, err := json.Marshal(message)
+	if err != nil {
+		return message
+	}
+	decoded, err := types.DecodeMessage(data)
+	if err != nil {
+		return message
+	}
+	return decoded
+}
+
+// cloneAgentMessages deep-clones a message slice (pi: structuredClone).
+func cloneAgentMessages(messages []agent.AgentMessage) []agent.AgentMessage {
+	if messages == nil {
+		return nil
+	}
+	out := make([]agent.AgentMessage, 0, len(messages))
+	for _, message := range messages {
+		out = append(out, cloneAgentMessage(message))
+	}
+	return out
+}
+
+// GetEntryRenderer returns the renderer for a custom entry type (pi:
+// getEntryRenderer; nil = no content — extension renderers arrive with the
+// sidecar host, Phase 7).
+func (r *ExtensionRunner) GetEntryRenderer(customType string) EntryRenderer {
+	return nil
+}
+
+// GetMessageRenderer returns the renderer for a custom message type (pi:
+// getMessageRenderer; nil = default rendering).
+func (r *ExtensionRunner) GetMessageRenderer(customType string) MessageRenderer {
+	return nil
+}

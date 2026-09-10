@@ -1,0 +1,412 @@
+# pig：pi 的 Go 全量重写方案
+
+记录于 2026-08-30，spec 基线为 `~/Projects/pi` commit `4e58f324f`（v0.84.3，2026-08-24），基线 hash 在 Phase 0 固定。
+
+## 仓库机制（先读）
+
+- **auto-commit**：仓库有自动提交守护，每 5 分钟把当前改动以 `auto-save: <时间>` 提交入库。改动写完即被提交，**无需也不要手动 commit**；`git status` 显示 clean ≠ 没有改动，只说明守护已收走。查某文件的变更历史用 `git log --follow <path>`。
+- **tmux**：agent 自身（及用户的长期会话）跑在同一 tmux server 里。冒烟/测试只允许 `tmux new-session -d -s <专属名字>`，结束 `tmux kill-session -t <专属名字>`；**严禁 `tmux kill-server`**。批量杀进程时 `pkill -f` 的模式会匹配自身命令行，用 `^/absolute/path` 锚定。
+
+## 当前进度（2026-09-02 快照，9月补充续记）
+
+- **阶段位置**：Phase 0 ✅ 完成；Phase 1 ✅ 完成；Phase 2 ✅ 完成（openai-completions 系全量交付并冒烟验证；anthropic-messages/google/bedrock 等剩余 adapter **按需延后**，决策见 §4 Phase 2）；Phase 3 ✅ **全量交付**（agent-loop + Agent 类 + harness/session 全量含 jsonl + harness/utils + harness/compaction + harness 资源装载 + harness reducer + harness 根文件 result/telemetry/agent-harness + harness/tools 全部 + env exec 半区，见下）；Phase 4 前四批已交付（第 1 批 core/tools 运行时层、第 2 批 core/session-manager、第 3 批 settings/config、第 4 批 system-prompt + 资源装载 + 项目信任，见下）；Phase 4 收口中：**print 模式 CLI 已拆为 7 个子批次推进，第 1-6 批 ✅ 交付 + 第 5 批续（core/compaction）、第 5 批续二（扩展消费面收敛）、第 5 批本体（AgentSession 全量），2026-09-07**（凭证与目录存储层、model-config+model-resolver、provider-composer+model-runtime+model-registry、model-registry 测试、AgentSession 前置件，2026-09-05；**第 7 批 cli/args + main 装配 → cmd/pig/main.go，2026-09-08，print 模式全链路经本地 mock OpenAI 端点冒烟跑通，M2 达成**），余下见 §4 Phase 4；Phase 5 ⏸️ 按需延后（2026-09-09 决策，见 §4 Phase 5）；Phase 6 TUI 🔶 T1 ✅ 收口（**路线变更：弃 bubbletea，改为 pi-tui 全量移植**，决策见 §4 Phase 6；T1 的 utils 已交付，**T1 内核剩余 keys / stdin-buffer / terminal / tui / tui-main-screen 全量交付，2026-09-10**，决策见 docs/batches/2026-09.md “T1 内核收口关键决策”）；**T2 编辑器引擎 ✅ 全量收口（第一批内核 2026-09-10；第二批 autocomplete 子段 + T3 autocomplete + T4 select-list + input + editor-component 全量交付，2026-09-10，决策见 docs/batches/2026-09.md “T2 编辑器第二批关键决策”）**；**T3 基础组件 ✅ 全量交付（text/box/stack(H/V)/spacer/loader/cancellable-loader/truncated-text + layout-node Stack 半区 + markdown（含 marked@18.0.5 Lexer 全量移植），2026-09-10，决策见 docs/batches/2026-09.md “T3 基础组件关键决策”）**；**T4 交互组件 ✅ 全量交付（scroll-view + layout.ts 引擎 + layout-node Scroll 半区 + settings-list + alt-screen-flash + alt-screen-search + tui-alt-screen + kitty placement/crop 元数据层 + tui.go getMountedRoots/ViewportTUI 钩子，2026-09-10，决策见 docs/batches/2026-09.md “T4 交互组件关键决策”）**；**T5 拆分推进中：T5b-2 第一波 ✅ 外壳补全（2026-09-10，utils 六件套 + showLoadedResources/autocomplete/剪贴板/Ctrl+Z/通知/会话重绑，**决策见 docs/handoffs/T5b-2.md**；T5b-3 = 扩展 UI + fullscreen + extension-editor，T5b-4 建议单列 grok-mermaid，见同文件）；T5a-1 ✅ theme 基座 + 消息展示组件（2026-09-10，决策见 docs/handoffs/T5a-1.md）；T5a-2 ✅ 工具执行渲染层（2026-09-10，决策见 docs/handoffs/T5a-2.md）；T5b ✅ interactive-mode 外壳（2026-09-09，keybindings/cache-stats/footer/footer-data-provider/custom-editor/startup-ui 三组件/cli startup-ui/interactive_mode.go 2455 行 + main.go 装配；tmux+mock 端点真 TTY 冒烟：多轮流式回复/会话恢复/Ctrl+D 退出全通；修复 TUI 层三个并发死锁与 assistant 渲染空 bug；**M4 交互可用达成**；决策见 docs/handoffs/T5b.md）**；**T5b-3 ✅ 扩展 UI 面 + fullscreen + extension-editor（2026-09-09，ExtensionUIContext 全量面 + 扩展对话框/组件工厂/shortcuts + switchTuiMode 全屏切换 + extension_editor + handleReloadCommand/handleResumeSession，真 TTY 冒烟 regular+fullscreen 全通，决策见 docs/handoffs/T5b-3.md）**；**T5b-4 ✅ grok-mermaid 全量移植（2026-09-09，tui/grokmermaid 独立子包 1:1 移植 grok-mermaid v0.2.2 全部 12 文件 + node 实测 golden 25 例 + components/mermaid.go transformer + interactive_mode 接线；全仓 967 测试函数 -race 全绿；tmux 真 TTY 冒烟 mermaid 块渲染框图全通，**决策见 docs/handoffs/T5b-4.md**）**；**T6 ✅ 收口（v1.0 候选达成）：T6-1 settings/trust/fork/login 选择器族（2026-09-10，见下）+ T6-2 session/tree/model 选择器族（2026-09-09 深夜，session_selector_search/tree_selector/session_selector/model_selector/scoped_models_selector/theme_selector/thinking_selector 七件 + /model /thinking /tree /resume /scoped-models 五命令 + app.model.select/session.tree/session.resume 三 action + 双击 Esc + 树导航 branch-summary 提示循环；991 测试函数 -race 全绿，**决策与未决项见 docs/handoffs/T6-2.md**）**；下一步 **基线同步批**（§4 末节既定：pin 最新正式 tag，v1.0 前最后一次全量对齐，然后 T7 扩展）；Phase 7-8 未开始
+- **已交付**（对应 §4 阶段）：
+  - **配置目录改 `.pig`（小改动，2026-09-10）**：用户决策 pig 不与 pi 共享配置目录，**存量数据不迁移**（会话 JSONL 格式双向兼容不受影响，变的只是位置；过渡可 `cp -a ~/.pi/agent ~/.pig/agent` 或临时 `export PIG_CODING_AGENT_DIR=~/.pi/agent`）。改动：① `codingagent/config.go` 的 `ConfigDirName` `.pi`→`.pig`（一处常量带动全部项目级 `.pi/` 与用户级 `~/.pig/agent/*` 路径，保持 pi 两层结构，即 `~/.pig/agent/{auth.json,settings.json,models.json,models-store.json,sessions,trust.json,bin,npm,skills,...}`）；② 环境变量 `PI_CODING_AGENT_DIR`/`PI_CODING_AGENT_SESSION_DIR` → `PIG_*`（顺带消解 T6-2 事故中“误写 PIG_ 前缀”的历史巧合）；③ `tui/tui.go` 硬编码 env 名与 `~/.pi/agent` 回落字面量同步改（tui 是叶子包不能 import codingagent，注释声明同步义务）；④ `cli/startup_ui.go` 的 `officialConfigDirName` 同步改 `.pig`（否则 first-time setup 判定失效）；⑤ 8 个测试文件约 40 处 `.pi` 目录字面量机械替换（trust/skills/settings/resources/tool_execution/autocomplete/resource_formatting）。验收：`go build && go vet && gofmt` 干净，全仓 `go test ./... -race -count=1` 全绿。其余 pi 自有 env（`PI_HARDWARE_CURSOR`/`PI_CLEAR_ON_SHRINK`/`PI_SHARE_VIEWER_URL`）与目录无关，不改。**顺带修复既有缺口**：内置主题此前按 pi 的 Bun 二进制形态从可执行文件旁的 `theme/` 目录读，pig 二进制旁没有该目录时交互模式启动即 panic（`open .../theme/dark.json: no such file or directory`，冒烟时被测试环境路径掩盖）——新增 `codingagent/assets/assets.go`（`go:embed theme`）并在 theme 包 `getBuiltinThemes` 落盘优先、embedded 回落，静态二进制自包含，tmux 真 TTY 冒烟启动全通
+  - **T6-2：session/tree/model 选择器族（Phase 6，T6 收口，2026-09-09）**：components 七件（session_selector_search + tree_selector + session_selector + model_selector + scoped_models_selector + theme_selector + thinking_selector）← pi 同名 ts 全量；model-search.ts 下沉 components（interactive 再导出）；interactive_mode.go 接线 /scoped-models /model /thinking /tree /resume + 三 action + 双击 Esc + 树导航 branch-summary 提示循环；mutator 走构造参数（后台 goroutine 构造期启动，后设字段会竞争）。测试 991 函数（+16）-race 全绿；tmux+mock 冒烟：/tree /resume /model /thinking /scoped-models 全部交互 + 带参命令 + Ctrl+S 持久化落盘 + 双击 Esc 全通（收尾清单见 handoff 第五节的逐项结果）。**环境事故定论**：冒烟脚本把变量名误写为 PIG_CODING_AGENT_DIR（多个 G）导致 pig 正确回落 ~/.pi/agent 并写入真实 pi 配置（已手工恢复；~4 条真实 API 短调用；非 pig bug，另一 agent 探针矩阵已证 pig env 处理无恙）。决策见 docs/handoffs/T6-2.md
+  - **T6-1：settings/trust/fork/login 选择器族（Phase 6，2026-09-10）**：components 七件（settings_submenu 348 + settings_selector 1222 + trust_selector 167 + show_images_selector 63 + user_message_selector 204 + login_dialog 363 + oauth_selector 269）← pi 同名 ts 全量；interactive_mode.go 5490→6669 行（showSelector 装配 + showSettingsSelector 33 回调 + showTrust/UserMessageSelector + login 全族 + /settings /fork /trust /login /logout 五命令 + app.session.fork action + /login 补全分支）。pig 并发面新增 LoginDialogComponent.Mutator 注入（login goroutine 容器变更经 mutateUI 串行化）+ waitPending 单发送 channel。测试 975 函数（+8）-race 全绿；tmux+mock 端点真 TTY 冒烟：settings/trust/fork/logout/login 对话框与凭证落盘全通。决策见 docs/handoffs/T6-1.md
+  - **T5b：interactive-mode 外壳（Phase 6，2026-09-09）**：`core/keybindings.go`（keybindings.ts 全量：app.* 43 键合并表/平台覆盖/legacy 迁移/keybindings.json 装载）+ `core/cache_stats.go`（cache-stats.ts 全量）+ `utils/fs_watch.go`（fs-watch.ts PollWatcher 化，theme 改别名）+ `core/footer_data_provider.go`（全量：HEAD/reftable/WSL 三路 watcher + 500ms 去抖；child_process 落函数 var seam）+ `components/{footer,custom_editor,extension_selector,extension_input,first_time_setup}.go`（footer 含 footerSessionView seam）+ `cli/startup_ui.go`（startup-ui.ts 全量）+ **`modes/interactive/interactive_mode.go`（2455 行外壳：Init/Run/提交链/handleEvent 全事件面/transcript 全渲染/queue 全套/key handlers/signal+shutdown）** + main.go interactive 装配 + extensions_runner 补 GetEntry·MessageRenderer + theme 导出 TuiThemeDetector + status_indicator 补 IndicatorKind。测试 10 函数（keybindings/cache-stats/footer-data-provider/footer-width/custom-editor/input-gate）；全仓 917 函数 -race 全绿。**修复 pi 单线程下不存在的 pig 遗留 bug**：terminal.go input/render ABBA 死锁（t.mu 分发不再持锁）、stdin_buffer.go emitDataSequence 自死锁（handler 移出锁外）、assistant_message.go 值类型 Content 断言失败渲染空。tmux 真机冒烟 M4 全通。决策见 docs/handoffs/T5b.md
+  - **T5a-1：theme 基座 + 消息展示组件（Phase 6，2026-09-10）**：`codingagent/modes/interactive/theme/`（theme.ts 全量 + theme_controller.go + fs_watch.go）+ `codingagent/utils/syntax_highlight.go`（chroma 后端替代 highlight.js）+ components 14 文件（markdown_transform/dynamic_border/countdown_timer/bordered_loader/status_indicator/user·assistant_message/branch·compaction·skill 三 summary/custom_message/custom_entry 等；keybinding_hints/visual_truncate 后移入 core/tools，见 T5a-2）+ tui 补 GetImageDimensions/ImageFallback。测试 17 函数。决策见 docs/handoffs/T5a-1.md
+  - **T5b-3：扩展 UI 面 + fullscreen + extension-editor（Phase 6，2026-09-09）**：core.ExtensionUIContext 扩到 pi 全量面（footer/header/widget/custom/editor 工厂、theme 三件、tools-expanded、autocomplete provider）+ GetShortcuts（18 保留键 + 三类冲突诊断）+ `components/extension_editor.go` 新建 + interactive_mode.go 3910→5481 行（扩展对话框全族、createExtensionUIContext、setupExtensionShortcuts、bindCurrentSessionExtensions 全量接线 BindExtensions + 五 command actions、switchTuiMode/mountInteractiveTui/stopInteractiveTui、createInteractiveTuiReference、handleReloadCommand/handleResumeSession/handleFatalRuntimeError/maybeSaveImplicitProjectTrustAfterReload、applyRuntimeSettings、resetExtensionUI 全量、Init 布局改造 headerContainer + widget 容器 + fullscreen layout root）。**pig 并发面新增**：`TuiBase.RunExclusive` + `InteractiveMode.mutateUI`（跨 goroutine 容器变更与渲染管线串行化，pi 单事件循环的等价物）；修复 getStartupExpansionState 存量 stub（恒 false）与 fullscreen 构造期 theme.Current() panic。测试 +28（showLoadedResources 20 例全量 + autocomplete 4 + setTheme/custom 3 + test_session_seam），全仓 956 函数 -race 全绿；冒烟 regular + fullscreen 双模式真 TTY 全通。决策见 docs/handoffs/T5b-3.md
+  - **T5b-2 第一波：外壳补全（Phase 6，2026-09-10）**：`codingagent/utils/{changelog,version_check,open_browser,clipboard,clipboard_image,external_editor}.go`（← pi 同名 ts 全量；semver 手写、无 native addon→外部工具+OSC 52、photon 半区声明）+ `modes/interactive/model_search.go` + interactive_mode.go 2455→3910 行（showLoadedResources + 21 个路径标签 helpers、createBase/setupAutocompleteProvider、bindCurrentSessionExtensions/rebindCurrentSession、handleClipboardPaste/Ctrl+Z/外部编辑器、changelog/版本/tmux 启动通知、构造器 rebind 钩子接线；清 T5b 的 3 处 DBG 调试行）+ core/extensions_types 补 AutocompleteProviderFactory + extensions_runner 补 GetCommand/ShortcutDiagnostics + tui/autocomplete 补 triggerCharacters。测试 +11（status 可测子集整体移植 + changelog/version_check）；全仓 928 函数 -race 全绿；mock 端点冒烟复验全通。**T5b-2 余量（扩展 UI 面/fullscreen/mermaid）显式移交 T5b-3**，决策见 docs/handoffs/T5b-2.md
+  - **T5a-2：工具执行渲染层（Phase 6，2026-09-10）**：七工具 renderCall/renderResult/renderShell 全量（bash 含 BashRenderState + 1s elapsed ticker、edit 含异步 preview goroutine + renderShell "self"、write 含增量语法高亮缓存、read 含 compact read classification 全量）+ `core/tools/{render_utils,diff,keybinding_hints,visual_truncate}.go`（keybinding-hints/visual-truncate/diff 三文件自 components 移入以单向化 components→core/tools）+ `agent/harness/tools/jsdiff_word.go`（DiffWords 全量，node golden 16 例；jsdiff.go 的 Myers walk 抽为通用 diffTokens）+ `components/{tool_execution,bash_execution}.go` 全量（mutex 保护）+ **依赖环切断**：SourceInfo 下沉 `codingagent/utils`、theme_controller 的 SettingsManager 改结构化接口（theme 不再 import core）、UITheme/ToolRenderContext/ToolRenderResultOptions 上移 core/tools（core 别名）、ToolDefinition 补渲染成员 + NewRenderState（pig 添加，替代 pi 的 `{}` 共享 state）。测试 26 函数（tool-execution-component.test.ts 547 行整体移植 + bash-width 两例 + renderDiff 自建 4 例 + DiffWords golden）。全仓 907 个测试函数，-race 全绿。决策见 docs/handoffs/T5a-2.md
+  - **T3 基础组件（Phase 6，2026-09-10）**：`tui/text.go`/`box.go`/`stack.go`/`h_stack.go`/`v_stack.go`/`spacer.go`/`loader.go`/`cancellable_loader.go`/`truncated_text.go`/`layout_node.go`（← `components/{text,box,stack,h-stack,v-stack,spacer,loader,cancellable-loader,truncated-text}.ts` + `layout-node.ts` Stack 半区）+ **markdown 全套**：`tui/marked_rules.go`（node dump 最终正则源生成）+ `tui/marked.go` + `tui/marked_tokenizer.go`（marked@18.0.5 Lexer 全量移植，含 pi 的 StrictStrikethroughTokenizer 与 latex tokenizer 扩展）+ `tui/markdown.go`（← `components/markdown.ts` 全量）。测试：`truncated_text_test.go`（← 同名 .test.ts 全量）+ `stack_test.go`（layout.test.ts 唯一不依赖 ScrollView/layout.ts 的用例，其余随 T4）+ `markdown_test.go` + `markdown2_test.go`（← markdown.test.ts 除 LaTeX 真实渲染 7 例与 VT fg-color 2 例外全量）+ `test_themes_test.go`（← test-themes.ts，chalk level-3 手写字节）。全仓 808 个测试函数（+78），-race ×3 全绿。决策见 docs/batches/2026-09.md “T3 基础组件关键决策”
+  - **T2 编辑器第二批：autocomplete 全链路收口（Phase 6，2026-09-10）**：`tui/autocomplete.go`（← `autocomplete.ts`，T3 前置：AutocompleteProvider/SlashCommandOrItem union/CombinedAutocompleteProvider 全量含 fd 模糊搜索）；`tui/select_list.go`（← `components/select-list.ts`，T4 前置）；`tui/input.go`（← `components/input.ts`）；`tui/editor_component.go`（← `editor-component.ts`，可选成员拆 capability 接口）；`tui/editor.go` autocomplete 子段全量接线（字段/常量/19 个方法/五处触发点/render 拼接/HandleInput 事件分支）。测试 `autocomplete_test.go` / `select_list_test.go` / `input_test.go` / `editor_history_keybindings_test.go` + editor_test.go 补 Autocomplete describe 全部 18 用例与 Undo 段两用例。pi 侧约 1600 行源码 + 2100 行测试，Go 侧约 5300 行。顺带修复 TuiBase.lock 的跨 goroutine 内联缺陷（决策归档于 docs/batches/2026-09.md）。全仓 730 个测试函数，-race 全绿。决策见 docs/batches/2026-09.md “T2 编辑器第二批关键决策”
+  - **T2 编辑器内核第一批（Phase 6，2026-09-10）**：`tui/keybindings.go` + `undo_stack.go` + `kill_ring.go` + `word_navigation.go` + `editor.go`（← `keybindings.ts` / `undo-stack.ts` / `kill-ring.ts` / `word-navigation.ts` / `components/editor.ts`）；测试 `keybindings_test.go` / `word_navigation_test.go` / `editor_test.go`（← 同名 .test.ts + editor.test.ts 非 autocomplete 段）。**autocomplete 子段及对应测试延后 T2 第二批**（依赖 T3 autocomplete.ts + T4 select-list），文件头与段位注释声明。pi 侧约 6200 行（keybindings 401 + undo/kill 74 + word-navigation 308 + editor.ts 核心 ~2050 + editor.test.ts ~3380），Go 侧 6445 行。pi 的 keybindings/word-navigation/editor（非 autocomplete 全部 14 个 describe）测试整体移植，-race 全绿。决策见 docs/batches/2026-09.md “T2 编辑器内核第一批关键决策”
+  - `ai/types`：消息模型、`AssistantMessageEvent` 协议、compat 双协议面（openai-completions + anthropic-messages）、images 类型、`EventStream`/`AssistantMessageEventStream`（← `types.ts` + `utils/event-stream.ts`）
+  - `ai/auth`：`Credential` union、`CredentialStore`（Modify 串行写）、auth 解析（OAuth 双检锁刷新：5 分钟窗口 + 15s 超时）、ambient context（← `src/auth/*`）
+  - `ai`：`Models`/`MutableModels` 双接口、`Provider` + 3 个 capability 接口、`CreateProvider`、models store、lazy stream、`index.go` 再导出面（← `models.ts`、`models-store.ts`、`api/lazy.ts`、`index.ts`）
+  - `telemetry`：运行时契约 + noop（← `packages/telemetry`）
+  - **模型注册表生成链路**：`ai/scripts/generatemodels`（Go main，← `packages/ai/scripts/generate-models.ts` + `models-dev-reasoning-options.ts`），产出真实填充的 `ai/models_generated.go`（19 provider、806 模型，与 pi 目录逐字段比对一致）；`ai/scripts/generateimagemodels`（Go main，← `packages/ai/scripts/generate-image-models.ts`）产出 `ai/image_models_generated.go`（OpenRouter 图像模型，与 pi 目录逐字段比对一致）
+  - **openai-completions adapter**：`ai/api/openai_completions*.go`（← `src/api/openai-completions.ts`，openai SDK 以 net/http 原生重写：请求构造 + SSE 解析 + chunk 类型）；`ai/api/` 辅助（`transform_messages.go`、`simple_options.go`、`constrained_sampling.go`、`openai_prompt_cache.go`、`github_copilot_headers.go`）；`ai/utils/` 叶子（`error_body.go`、`estimate.go`、`hash.go`、`headers.go`、`json_parse.go`、`pi_user_agent.go`、`provider_env.go`、`provider_retry.go`、`sanitize_unicode.go`，← `src/utils/*.ts`，其中 `json_parse.go` 移植了 partial-json 的 `parseJSON`）。adapter 已挂到 `providers/deepseek.go`，**deepseek 流式对话已跑通**
+  - **openai-completions 系 provider 铺开**：`providers/` 新增 12 个纯 apiKey provider（`ant_ling.go`、`baseten.go`、`cerebras.go`、`groq.go`、`huggingface.go`、`moonshot_ai.go`、`moonshot_ai_cn.go`、`nvidia.go`、`together.go`、`zai.go`、`zai_coding_cn.go` + `openrouter.go` 挂 adapter），`BuiltinProviders()` 扩至 15 个（pi alphabetical 顺序）。catalog 未覆盖的（qwen-token-plan*/xiaomi*/cloudflare*/github-copilot/opencode*）、走 anthropic-messages 的（anthropic/vercel-ai-gateway/kimi-coding/minimax/minimax-cn）、双协议待 anthropic adapter 的（fireworks）、走 openai-responses 的（xai/openai）未铺
+  - **agent 包（Phase 3，2026-09-02）**：`agent/types.go`、`agent/stream_fn.go`、`agent/agent_loop.go`、`agent/agent.go`（← `packages/agent/src/` 同名 TS 文件）；前置 `ai/utils/validation.go`（← `packages/ai/src/utils/validation.ts`，TypeBox 双路径合并为单一 JSON Schema coercion+checker，偏差全部在文件头声明），经 `ai/index.go` 再导出。pi 的 agent-loop/agent/validation 测试整体移植（-race 干净）。Agent 类的状态守卫用单 mutex + Snapshot()（pig 新增，TS 靠单线程事件循环）；runWithLifecycle 的全捕 catch → recover → 失败事件序列；AbortSignal → ctx+cancel
+  - **harness/session 后端与上下文补齐（2026-09-02 第二批续）**：`session/jsonl/`（repo/codec/storage/errors/types，会话落盘地基）、`session/context.go`（buildSessionContext）+ 前置 `harness/messages.go`（bashExecution/custom/branchSummary/compactionSummary 四消息 + convertToLlm）、`search/`、`harness/env/nodejs.go`。jsonl 后端挂同一套 conformance 验收
+  - **harness/utils + compaction（Phase 3，2026-09-02 第三批）**：`harness/utils/`（truncate + shell_output）、`harness/compaction/`（utils/compaction/branch_summarization）、`harness/types.go` 补 exec 段与 compaction/branch-summary 错误类型；前置 `ai/utils/text.go`（contentText）与 `ai/utils/retry.go`（RetryPolicy/RetryCallbacks/retryAssistantCall/isRetryableAssistantError），均经 `ai/index.go` 再导出。pi 的 truncate/compaction/branch-summarization 测试整体移植（-race 干净）。过程决策见 docs/batches/2026-09.md “harness/utils + compaction 关键决策”
+  - **harness 资源装载（Phase 3，2026-09-02 第四批）**：`harness/events.go`（run 生命周期事件 + HarnessEventBus）、`harness/system_prompt.go`、`harness/prompt_templates.go`、`harness/skills.go`；`harness/types.go` 补 `Skill`/`PromptTemplate`/`AgentHarnessResources`（源位置在 FileKind 之前）。pi 的 events/system-prompt/resource-formatting/prompt-templates/skills 测试整体移植（-race 干净）。过程决策见 docs/batches/2026-09.md “harness 资源装载关键决策”
+  - **harness reducer（Phase 3，2026-09-02 第五批）**：`agent/harness/reducer/`（`reducer.ts` → 独立子包，见下）全量：12 类 RecordLogCorruption、`ValidateRecordLog`、`ReduceLaneState`（effective configuration / tool batch / deferred / terminal failure / overflow guard / pending queues）。pi 的 reducer.test.ts 整体移植（15 个 corruption 用例 + 20 条 durable-prefix 链的逐前缀验收 + 全部 lane-state 归约断言，-race 干净）。另按新规则（§3.4：取指针一律 `lo.ToPtr`）清理了全仓遗留的手写 ptr 助手
+  - **coding-agent core/session-manager（Phase 4，2026-09-02 第八批）**：`codingagent/core/session_manager.go` 全量（session-manager.ts：JSONL 会话树 + 压缩感知上下文 + 分支 + labels + v1→v3 迁移 + 会话发现/列表）+ `codingagent/core/doc.go`（包根）+ `codingagent/config.go` 补 `GetSessionsDir`。pi 的 session-manager 全部 7 份测试（build-context/custom-session-id/file-operations/labels/migration/save-entry/tree-traversal，共 96 个子测试）整体移植（含 512MB 稀疏大文件用例与 1MB 头部扫描上限用例，-race 全绿）。决策见 docs/batches/2026-09.md “session-manager 关键决策”
+  - **codingagent settings/config（Phase 4，2026-09-02 第九批）**：`codingagent/config.go` 补全（config.ts：包资产路径/应用配置常量/用户配置路径全量；自更新段延后，见下）；`codingagent/core/settings_manager.go` 全量（settings-manager.ts：全局+项目双层设置、modified-field 追踪、四条迁移、File/InMemory 存储与文件锁）；`codingagent/core/http_dispatcher.go` 可移植半区、`core/defaults.go`、`core/experimental.go`、`core/settings_diagnostics.go`（含 AgentSessionRuntimeDiagnostic 前置声明）；`core/resolve_config_value.go`（!命令/$env 模板解析 + 进程级缓存）。pi 的 settings-manager（17 函数）/settings-manager-bug（4）/settings-diagnostics（3）/resolve-config-value（8）/experimental（5）/config（findNodePackageDir 1）测试整体移植，本批新增 22 个测试函数 / 62 个子测试，-race 全绿。决策见 docs/batches/2026-09.md “settings/config 关键决策”
+  - **codingagent system-prompt + 资源装载 + 项目信任（Phase 4，2026-09-02 第十批）**：`codingagent/utils/frontmatter.go`（utils/frontmatter.ts，yaml.v3）；`core/diagnostics.go` + `core/source_info.go`（ResourceDiagnostic/SourceInfo）；`core/skills.go` 全量（skills.ts：SKILL.md 发现规则、Agent Skills 规范校验、gitignore 过滤、碰撞处理、formatSkillsForPrompt XML）；`core/prompt_templates.go` 全量（prompt-templates.ts：parseCommandArgs/substituteArgs 含位置默认与 bash 式切片/loadPromptTemplates/expandPromptTemplate）；`core/system_prompt.go` 全量（system-prompt.ts 双分支）；`core/session_cwd.go`（session-cwd.ts，MissingSessionCwdError）；`core/trust_manager.go` 全量（trust-manager.ts：ProjectTrustStore 最近父级继承、trust-requiring 资源探测）；`core/project_trust.go`（resolveProjectTrusted，扩展事件/UI 分支延后声明）；tools 的 system-prompt contribution 对齐测试。pi 的 frontmatter/skills（4 函数）/system-prompt/prompt-templates（5 函数）/session-cwd（前 2 例）/trust-manager/tool-contributions 测试整体移植，本批新增 15 个测试函数 / 172 个子测试，-race 全绿。决策见 docs/batches/2026-09.md “system-prompt + 资源装载关键决策”
+  - **print 模式 CLI 第 1 批：凭证与目录存储层（Phase 4，2026-09-05）**：print 模式 CLI 不是单一批次——它拖着整个 AgentSession 运行时栈，已拆为 7 个子批次按依赖序推进（见 §4 Phase 4 计划）。本批交付底层服务第 1 半：`core/auth_storage.go` 全量（auth-storage.ts：AuthStorage/FileAuthStorageBackend/InMemoryAuthStorageBackend/ReadOnlyAuthStorage/readStoredCredential，sharedAuthFileReadState 共享读缓存 + reload 合并 + revision 检查）；`core/runtime_credentials.go`（runtime-credentials.ts，运行时 API-key 覆盖层）；`core/models_store.go`（coding-agent models-store.ts：FileModelsStore + InMemoryCodingAgentModelsStore 别名到 ai.InMemoryModelsStore）；`core/remote_catalog_provider.go`（remote-catalog-provider.ts：WithRemoteCatalog 三形态 catalog 解析、etag 重验证、TTL/force、逐代检查友好的 publish）；`codingagent/utils/pi_user_agent.go`（coding-agent 侧 pi-user-agent.ts）。pi 的 auth-storage（26 函数）/runtime-credentials（5）/models-store（5）/remote-catalog-provider（7）测试整体移植，本批新增 43 个测试函数，-race 全绿。决策见 docs/batches/2026-09.md “凭证与目录存储层关键决策”
+  - **print 模式 CLI 第 7 批：cli/args + main.ts 装配（Phase 4，2026-09-08，print 模式 CLI 收口 / M2）**：`codingagent/cli/args.go` 全量（args.ts：ParseArgs 逐分支——`--` 终止符、-p 吞后随 message、--list-models 的 string|true 双形态、unknown `--flag[=v]` 收 unknownFlags + UnknownFlagKeys 保插入序、单 `-x` 未知报错；PrintHelp 全文含 extension flags 段，chalk 着色丢弃）；`cli/auth_command.go` 全量（auth-command.ts：check/print-api-key/print-bearer-token 三命令解析、--min-expiry 时长、--json/--credentials/--no-refresh 仅 check、validateAuthCommandArgs、getAuthCredential 的 apiKey/Authorization Bearer 提取）；`cli/auth_check.go`（auth-check.ts：CheckProviderAuth 四态、GetProviderCredential、CreateAuthCheckModelRuntime）；`cli/credential_print.go` 全量（credential-print.ts：credentialTypes 过滤 api_key/oauth 错配、无 --provider 时全 provider 模糊解析、0/1/多匹配三分支文案逐字）；`cli/list_models.go`（list-models.ts：表格列宽/排序/K-M 格式化）；`tui/fuzzy.go`（pi-tui fuzzy.ts：fuzzyMatch 打分——consecutive/gap/word-boundary/exact-100/字母数字换序 +5、fuzzyFilter 分词 token 全匹配 + 稳定排序）；**主装配落 `cmd/pig/main.go`（main.ts + cli.ts，pi 布局表即如此指定；放 package codingagent 会与 cli→codingagent(config) 成环）**：runAuthCommand（check 四态 exit 0/1/2 + print 双命令 + 15s 超时）、bootstrap/startup 双 SettingsManager、resolveAppMode、TakeOver/RestoreStdout、fork/continue/session-id/session 路径解析 + missing-session-cwd print 分支、createRuntime 闭包（projectTrust 逐 cwd 缓存 + resolveProjectTrusted + resolveModelScope 15s + buildSessionOptions + runtime apiKey + cliThinkingOverride）、help/listModels、readPipedStdin（ModeCharDevice 判 TTY）、print 模式收尾 restoreStdout；前置重构：thinking 词表（VALID_THINKING_LEVELS）按用户指示落 `constants/thinking.go`（core 与 cli 双消费且 cli→core，放任一侧即成环），cli 留别名；`core.NewModelRuntimeResolver` 导出（sdk 内 modelRuntimeResolver 桥接的包外面）。**延后段均文件内声明**：handlePackage/handleConfigCommand（P7）、runMigrations（P8）、--export（P8）、runRpcMode（P5）、InteractiveMode/first-time-setup/startup-TUI/theme（P6，`--resume` 显式报错）。**测试**：无 pi 侧新增测试文件（args.ts 的 parseArgs 在 pi 也无直接测试）；冒烟为本地 Python mock OpenAI-completions SSE 端点 + models.json 自定义 provider + auth.json api_key（不触真实 API）：-p 文本/`--mode json` 事件流/`--continue`/`--session`/`--fork`/`--session-id`/`--model`/`--thinking`/`--api-key`（缺 model 报错）/auth 四命令/`--list-models`/`--help`/`--version`/未知扩展 flag exit 1 全部通过；全仓 658 个测试函数，-race 全绿。**发现并修复既有 bug**：① runAuthCommand 初版 `context.WithTimeout(ctx, 15_000)` 漏时间单位（15µs 即超时），修为 15*time.Second；② 冒烟实证 --mode json 时 AgentSessionEvent 走 encoding/json 默认序列化产出 Go 字段名大写 + 全成员 null 的结构体 dump（第 6 批遗留），违反线格式硬约束——本批在 `core/agent_session.go` 补 `AgentSessionEvent.MarshalJSON` 按 pi union 逐事件类型输出 active-variant 成员（camelCase、undefined 省键、agent_end 恒带 willRetry、turn_end/queue_update 恒带数组），mock 实测输出与 pi JSON.stringify 逐键一致
+  - **print 模式 CLI 第 6 批：sdk + services + runtime + print-mode 全链路（Phase 4，2026-09-07）**：`core/sdk.go`（sdk.ts：createAgentSession 全流程：cwd/agentDir 解析、ModelRuntime 默认构造、settings/session manager 默认创建、DefaultResourceLoader 默认装载、会话恢复（model/thinking level restore + fallback 文案逐字）、findInitialModel 接入、thinking clamp、initial active tools 推导（tools/excludeTools/noTools/defaultTools）、convertToLlm blockImages 过滤、Agent options 装配（streamFn 内 timeout/websocket/retry 设置链 + transformHeaders 归属合并））；`core/agent_session_services.go` 全量（services + applyExtensionFlagValues 的 unknown-flag 诊断半区，pending provider 注册队列随 Phase 7）；`core/agent_session_runtime.go` 全量（AgentSessionRuntime：switchSession/newSession/fork/importFromJsonl/dispose + teardown→apply→finishSessionReplacement 时序 + SessionImportFileNotFoundError）；`core/output_guard.go`（os.Stdout 变量重定向适配 + 串行写尾 + 背压/flush 等价物）；`modes/json_event.go`（ToJsonEvent 剥离 partial + toolcall_start 提升 id/toolName）与 `modes/print_mode.go`（runPrintMode text/json 双模式 + SIGTERM/SIGHUP 处置 + rebind/订阅装配）；配套前置：event_bus/timings/telemetry/provider-attribution 四小文件、package_manager_paths.go（package-manager.ts 的 settings 路径解析半区）、resource_loader_default.go（DefaultResourceLoader 无扩展/无包子集：项目上下文文件含 worktree shadow 逻辑、skills/prompts 装载 + sourceInfo、SYSTEM.md/APPEND_SYSTEM.md 发现、override 钩子）。pi 的 sdk-session-manager/sdk-skills/sdk-stream-options/sdk-openrouter-attribution/print-mode 四套测试整体移植 + runtime 换会话时序子集 + json-event pig 侧覆盖，新增 7 个测试函数 / 36 个子测试，全仓 657 个，-race 全绿。决策见 docs/batches/2026-09.md “sdk + print-mode 全链路关键决策”
+  - **print 模式 CLI 第 5 批本体：AgentSession 全量交付（Phase 4，2026-09-07）**：`core/agent_session.go` 全量（agent-session.ts 3440 行：ParseSkillBlock/AgentSessionEvent（union→单 struct，嵌入 agent.AgentEvent + 会话级字段，compaction 结果字段命名 CompactionResult 避开嵌入 Result 撞名）/AgentSession 构造与运行时装配（buildRuntime/refreshToolRegistry 含 allowed/excluded 工具过滤与 baseToolDefinitionOrder 插入序）/事件订阅与会话持久化（handleAgentEvent）/prompt 全流程（extension command→input→skill/template 展开→streaming 队列→auth 校验→pre-prompt compaction 检查→before_agent_start）/steer·followUp·sendCustomMessage·sendUserMessage·clearQueue/abort·waitForIdle（promise→channel）/模型管理（setModel/cycleModel scoped+available）/thinking level（clamp/cycle/per-model override）/queue modes/compaction（compact 手动 + checkCompaction 三分支自动 + runAutoCompaction，session_before_compact 钩子）/bindExtensions + extendResourcesFromExtensions + bindExtensionCore（pi.* 全消费面绑定）/reload/auto-retry（指数退避）/bash（executeBash/recordBashResult/pending flush）/setSessionName/navigateTree + CollectEntriesForBranchSummary/GetUserMessagesForForking/getSessionStats/getContextUsage/getLastAssistantText/createReplacedSessionContext）；前置 `ai/utils/overflow.go`（utils/overflow.ts：isContextOverflow/isRecoverableLength，25+3 正则逐条移植，RE2 全兼容）+ `ai/compat_registry.go` 补 compat 级 StreamSimple 与 ResetApiProviders（builtin registrar hook 由 ai/api init 注入）+ `ai/session_resources.go`（session-resources.ts）+ `codingagent/core/tools/tool_definition_wrapper.go`（createToolDefinitionFromAgentTool）。pi 的 retry（5）/concurrent（7）/auto-compaction-queue（6）/stats（8）测试整体移植；compaction/tree-navigation 两个 e2e 套件保留 ANTHROPIC skip 门 + adapter 延后显式 skip（同 compaction_test.go 先例）；dynamic-provider/dynamic-tools/branching/runtime-events 四套测试随 sdk + DefaultResourceLoader 批（第 6 批）延后，声明见文件头。本批新增 53 个测试函数（含 overflow 17），-race 全绿。决策见 docs/batches/2026-09.md “AgentSession 本体关键决策”
+  - **print 模式 CLI 第 5 批续二：扩展消费面收敛，AgentSession 本体前置（Phase 4，2026-09-07）**：`core/extensions_types.go`（extensions/types.ts 消费子集：ExtensionMode/InputSource/ContextUsage/CompactOptions/ScopedModel→复用 resolver 同名类型/ExtensionUIContext 接口 + noOp 实现/ExtensionError 及监听/ExtensionContext·CommandContext·ReplacedSessionContext（TS 惰性 getter → 函数字段 struct，声明）/全部 AgentSession 发射的事件 struct（ExtensionEvent 接口 + 具体类型，signal 成员按规则丢弃）/事件结果类型/TreePreparation/RegisteredTool·ResolvedCommand·ExtensionFlag/Extension·LoadExtensionsResult 占位）；`core/extensions_runner.go`（runner.ts 无扩展路径：ExtensionRuntime（assertActive/invalidate + notInitialized→nil 守卫）+ ExtensionRunner 全消费面方法（hasHandlers/emit/emitInput/emitBeforeAgentStart/emitMessageEnd/emitToolCall/emitToolResult/emitResourcesDiscover/bindCore/bindCommandContext/setUIContext/onError/getCommand/getRegisteredCommands 含 invocationName 去重链/getAllRegisteredTools/getFlagValues/invalidate/createContext/createCommandContext）+ emitSessionShutdownEvent）；`core/extensions_wrapper.go`（wrapper.ts：WrapRegisteredTool(s)——active-set 快照 + addedToolNames 去重合并语义逐字）；`core/resource_loader.go`（resource-loader.ts 的 ResourceLoader 消费面接口 + ResourceExtensionPaths/AgentsFile）；core/tools 补 `WrapToolDefinition` ctxFactory 变体（pi: `ctx ?? ctxFactory()`）+ ToolDefinition 导出（AgentSession 注册表存储）+ ExtensionContext 实现 ToolExecuteContext 桥接（GetModel/GetSessionID/GetSessionFile/GetThinkingLevel 方法）；`codingagent/utils/sleep.go`（sleep.ts，signal→ctx）+ `tool_result_images.go`（tool-result-images.ts，含 base64 宽松解码声明）。pi 的 runner 无扩展语义 + handler 分发/取消短路/错误报告 + invocationName 去重 + wrapper addedToolNames + tool-result-images（photon 延后适配）测试整体移植，本批新增 21 个测试函数，-race 全绿。决策见 docs/batches/2026-09.md “扩展消费面收敛关键决策”
+  - **print 模式 CLI 第 5 批续：core/compaction，AgentSession 本体前置（Phase 4，2026-09-07）**：`core/compaction.go` 全量（compaction.ts：CompactionResult/CompactionSettings→复用 CompactionSettingsValues（settings-manager 的可选形状已占用 CompactionSettings 原名，注释声明）/DefaultCompactionSettings/CalculateContextTokens/GetLastAssistantUsage/EstimateContextTokens/EstimateTokens/FindTurnStartIndex/CutPointResult/FindCutPoint/CompleteSummarization/GenerateSummary(WithUsage)/CompactionPreparation/PrepareCompaction/Compact，summarization 双 prompt 与 turn-prefix prompt 逐字）；`core/compaction_utils.go`（compaction/utils.ts：FileOperations/SerializeConversation/SummarizationSystemPrompt 等——与 agent harness 侧 utils 近字节级重复，仅 safeJsonStringify vs JSON.stringify 一处且行为等价，按 edit-diff 先例收敛复用 agent/harness/compaction 并再导出）；`core/branch_summarization.go` 全量（branch-summarization.ts：BranchSummaryResult/BranchSummaryDetails/BranchPreparation/CollectEntriesResult/GenerateBranchSummaryOptions/CollectEntriesForBranchSummary/PrepareBranchEntries/GenerateBranchSummary，双形态 details 读取）。pi 的 compaction（token 计算/cut point/buildSessionContext/prepareCompaction 大会话 fixture）+ compaction-serialization + compaction-summary-reasoning（completeSimple 以包级 seam 替代 vi.mock）+ branch-summarization 测试整体移植，本批新增 43 个测试函数，-race 全绿。决策见 docs/batches/2026-09.md “core/compaction 关键决策”
+  - **print 模式 CLI 第 5 批：AgentSession 前置件（Phase 4，2026-09-05）**：`core/usage_totals.go`（usage-totals.ts：UsageTotals/AddUsageToTotals/GetUsageCostBreakdown——assistant 按 `provider/responseModel??model` 分桶、toolResult 与 compaction/branch_summary usage 归 "Tools/summaries"，Map 插入序→有序 keys、cost 降序）；`core/auth_guidance.go`（auth-guidance.ts 四函数文案逐字）；`core/slash_commands.go`（slash-commands.ts：SlashCommandInfo/BUILTIN_SLASH_COMMANDS 24 条声明序）；`core/session_export.go`（session-export.ts：ExportSessionToJsonl——header+分支重写 parentId 链（spread 覆盖语义经 map 再序列化）+ trailing entries）；`core/bash_executor.go`（bash-executor.ts：ExecuteBashWithOperations——滚动 buffer/阈值后落盘 temp file/截断 tail/ctx 取消→cancelled、UTF-8 流式解码器）。pig 侧覆盖 6 例。AgentSession 本体（3440 行）下一步交付
+  - **print 模式 CLI 第 4 批：model-registry.test.ts 全量移植（Phase 4，2026-09-05）**：`core/model_registry_test.go`（pi test/model-registry.test.ts 1780 行 → 46 个测试函数 / 80 个运行匹配）：baseUrl override 组、custom models merge 组（api/baseUrl 继承、同 id 替换、compat 三层合并）、modelOverrides 组（samplingParams/compat 深合并/部分 cost/请求时 headers）、dynamic provider lifecycle 组（displayName、大写 apiKey 字面量语义、失败注册不持久化不丢模型、OAuth overlay 注销、streamSimple 不污染全局 api registry）、override persistence 组（re-registration 合并语义）、API key resolution 全组（`!` 命令执行/剪裁/多行/失败、`$`/`${}`/`$$`/`$!` 插值转义、counter 文件锁定命令每次执行/跨实例/失败重试/仅一次解析、authHeader 每请求解析、stored credential 旁路、auth status 四态）。**适配声明**：builtin provider 断言用 openrouter/deepseek/zai 替代 anthropic/google/openai（pig 无后者的 builtin）；cloudflare/github-copilot 两测随 provider 延后。**过程修复**：ThinkingLevelMap 的 null/缺失语义（missing 不写条目、null 写 nil 条目，Present 记录集），GetSupportedThinkingLevels 的 [high xhigh] 用例锁定
+  - **print 模式 CLI 第 3 批：provider-composer + model-runtime + model-registry（Phase 4，2026-09-05）**：`ai/compat_registry.go`（compat.ts 的 api-provider registry：RegisterApiProvider/GetApiProvider/UnregisterApiProviders/ClearApiProviders/RegisterBuiltInApiProvider，builtin 适配器经 ai/api 的 init 自注册以遵守分层规则）；`ai/extension_oauth_types.go`（extension-oauth-types.ts：OAuthLoginCallbacks 及 info/prompt 类型，Promise→(value, error)）；`core/provider_composer.go` 全量（provider-composer.ts：mergeCompat/applyModelOverride/modelFromJSON/applyModelsJSON/applyExtension/adaptOAuth/withConfiguredAuth/composeAPIKeyAuth/composeOAuthAuth/rawModelHeaders/validateExtensionProvider/ComposeModelProvider/ResolveConfiguredModelHeaders/ResolveCompatibilityRequestConfig/ConfiguredRequestAuthStatus）；`core/model_runtime.go` 全量（model-runtime.ts 787 行：快照缓存/可用性刷新逐代合并/凭证操作串行链/prepareRequest/stream 全家/login/logout/refresh/register 全家/configureRadiusProviders 占位）；`core/model_registry.go`（model-registry.ts 157 行，扩展用同步门面，ResolvedRequestAuth union→struct+Ok 字段）；`modes/interactive/model_catalog_refresh.go` + 测试（共享刷新协调器）。pi 的 model-runtime 测试族整体移植：auth-options（26 函数）+ credential-sync + modify-models-compat + model-catalog-refresh（3），-race 全绿。决策见 docs/batches/2026-09.md “provider-composer + model-runtime 关键决策”
+  - **print 模式 CLI 第 2 批：model-config + model-resolver（Phase 4，2026-09-05）**：`core/model_config.go` 全量（model-config.ts：models.json 类型面 ModelsJsonProvider/Model/ModelOverride/Cost/ChatTemplateKwarg + TypeBox schema 的手写等价校验器（错误路径格式 formatValidationPath 保留）+ ModelConfig.load 三段错误包装逐字保留、注释/尾逗号剥离）；`codingagent/utils/json.go`（utils/json.ts stripJsonComments 两遍正则逐字移植）；`codingagent/utils/minimatch.go`（npm minimatch 子集：`*` 不跨段/`**`/`?`/`[...]`/`{a,b}`/nocase，声明偏差）；`codingagent/cli/args.go` 部分提前面（VALID_THINKING_LEVELS + isValidThinkingLevel，其余随 CLI 批）；`core/model_resolver.go` 全量（model-resolver.ts：defaultModelPerProvider 含有序键切片、findExactModelReferenceMatch/parseModelPattern/resolveModelScopeFromModels/resolveCliModel/findInitialModel/restoreModelFromSession，ModelRuntime 参数面收敛为 ModelResolverRuntime 接口供测试 stub、ModelRuntime 后续实现即满足）。pi 的 model-resolver 测试整体移植（44 子测试）+ model-config/minimatch/stripJsonComments pig 侧覆盖（22 例），-race 全绿。决策见 docs/batches/2026-09.md “model-config + model-resolver 关键决策”
+  - **coding-agent core/tools（Phase 4，2026-09-02 第七批）**：`codingagent/core/tools/` 运行时层全量（read/bash/powershell/edit/write/grep/find/ls 八工具 + tool 工厂 index），前置 `codingagent/utils/`（paths/text/ansi/shell/child_process/mime/image-process/management-http/tools-manager）与 `codingagent/config.go` 部分提前面（GetAgentDir/GetBinDir）。pi 的 tools.test.ts（read/write/edit/bash/grep/find/ls + fuzzy + CRLF）、edit-tool-legacy-input、path-utils、paths（subset）、file-mutation-queue 测试整体移植（-race 干净）。决策见 docs/batches/2026-09.md “core/tools 关键决策”
+  - **harness 根文件 + tools + env exec 半区（Phase 3，2026-09-02 第六批，Phase 3 收口）**：`harness/result.go`（TaggedError 契约）、`harness/telemetry.go`（AI/HARNESS 两套 schema 有序数据 + StartAiSpan/StartHarnessSpan）、`agent/harness/agentharness/`（`agent-harness.ts` → 独立子包，见下：14 个 TaggedError、三族 invocation outcome、ActionInfo、AgentLane 接口、AgentHarness 脚手架全部 unavailable 面）；`harness/types.go` 补 AgentHarnessTool/AgentHarnessStreamOptions/Patch；`env/nodejs.go` 补 exec 半区（getShellConfig/killProcessTree/waitForChildProcess 等价物 + `Exec`，含 stdin 传输、进程树杀灭、100ms post-exit 宽限）；`harness/tools/` 全量 9 文件（bash/edit/edit-diff/read/write/image/path-utils/file-mutation-queue/tool-context，npm `diff@8.0.4` 移植为 `jsdiff.go`）。pi 的 tools.test.ts / agent-harness-scaffold.test.ts / telemetry.test.ts（runtime 面）/ nodejs-env.test.ts（exec 半区）整体移植；jsdiff 另有 node 实测 golden 对照 9+3 例（-race 干净）。过程决策见 docs/batches/2026-09.md “harness 根 + tools 关键决策”
+
+### 历史批次决策日志（已归档，2026-09-10 瘦身迁移）
+
+2026-09-02 至 2026-09-10 各批次（harness/session 至 T4 交互组件，共 22 批）的过程决策与偏差记录原文整体迁移至 `docs/batches/2026-09.md`，逐字保留未删减；下文「决策见…」引用均已改指该文件。检索：`grep "关键词" docs/batches/2026-09.md`。自 T5a-1 起新批次决策写入 `docs/handoffs/<批次号>.md`（每批一份，旧 handoff 即该批决策归档），AGENTS.md 进度快照只保留最近 1-2 批摘要并显式指向最新 handoff 路径。
+
+### docs/fix/：bug 排查记录（2026-09-10 设立）
+
+`docs/fix/` 存放**非批次性的 bug 排查与修复记录**——与 docs/handoffs/（批次交接）、docs/batches/（历史批次决策归档）分工：handoff 记录「做了什么、下一批做什么」，fix 记录「哪里坏了、根因是什么、怎么修的、怎么复现」。凡用户可见 bug、flaky 测试排查、行为偏差定论等独立事件，每起一份 md。
+
+文件命名：`YYYY-MM-DD-<简短主题>.md`（同日多起可合并一份，主题用 `-` 连接）；文件头部必须标注日期（**精确到分钟**，取自各修复落盘的文件 mtime）、状态、涉及文件路径。
+
+**登记规则（2026-09-10 起）**：后续 fix **不再写入上文「已交付」段**（该段只记批次交付，避免被零散 bug 修复稀释）；每起 fix 完成后，在本小节的「现有文件」列表补一条**一行简要摘要**（现象 + 根因 + 处置），详情一律落对应 `docs/fix/*.md`。
+
+现有文件：
+- `2026-09-10-skill-desc-length-and-auth-storage-flaky.md`：skills description 长度校验误用字节计数（CJK 误报，改 rune 计数）+ auth-storage 取消语义测试 flaky（JS 微任务确定序 vs Go 抢占窗口，断言放宽至 1..2）
+- `2026-09-10-tui-streaming-empty-partial-content.md`：交互模式非流式（两个叠加 bug）——① openai-completions adapter 移植偏差：pi 的 `blocks` 与 `output.content` 同一数组引用（partial 增量生长），pig 的 blocks 是独立局部切片、`output.Content` 到结束才赋值，流式期间每个事件 `Partial.Content` 恒空 → TUI 全程渲染空消息（改为每次 push 前快照 blocks 进 output.Content，保持 Content 存值类型约定，连带事件 Partial/Message 浅拷贝快照化切断跨 goroutine race，顺带修正 `!hasFinishReason` 时 toolUse 恒判不出的潜伏错误）；② `StatusIndicator` 按值拷贝 `*tui.NewLoader()`，动画 ticker goroutine 在构造器内已启动并捕获被丢弃的原件，树内副本冻结第一帧（改指针嵌入归一实例）
+
+### 验证与恢复（2026-09-02）
+
+- **单元/集成测试**：`go test ./ai/... -count=1`。deepseek 覆盖在 `ai/api/openai_completions_test.go`（文本/思考/工具调用/usage/401/缺 key 的参数与语义断言，mock SSE server 不发真实网络）与 `ai/providers/deepseek_test.go`（CreateProvider → StreamSimple 全链路 + Fetch 换向 mock server）；completions 系各 provider 的 detectCompat 分支（store/max_tokens 字段/thinking 编码/thinkingFormat 分族）锁在 `ai/providers/completions_test.go`（裸模型 + mock SSE 断言请求体），工厂装配锁在 `TestBuiltinProvidersAssembled`/`TestBuiltinModelsRegistersNewProviders`。
+- **真实 API 冒烟**：2026-09-02 用真实 DeepSeek key 跑通 `deepseek-v4-flash`（StreamSimple + reasoning=high）。结果：55 个流式事件（reasoning_content + content 交替），`stopReason=stop`，in=99/out=50 token，耗时 1.6s，成本 ≈$0.00003。复现方式：`ai/providers/deepseek_smoke_test.go`（`//go:build smoke` 隔离，默认 `go test` 不跑）——`DEEPSEEK_API_KEY=sk-xxx go test -tags=smoke ./ai/providers/ -run TestDeepSeekRealAPISmoke -v`；key 从环境变量读，未设置或仍为占位 `xxx` 时测试 skip（不失败）。key 不落盘。
+- **已知缺口（下一阶段处理）**：WebSocket 传输未实现（`TransportWebsocket*`，仅 SSE）。
+- **ctx 穿透（2026-09-02 已交付）**：`ProviderStreams`/`Provider`/`DeferredStreamer` 的 `Stream`/`StreamSimple`/`FetchDeferred`/`CancelDeferred` 首参均加 `context.Context`（pi 的 `options.signal` 按 AbortSignal → context 规则改走参数）；openai-completions adapter 内 `createChatCompletion` 与 retry helper 用调用方 ctx，取消关闭响应体；abort 语义对齐 pi（catch 路径 `signal.aborted ? "aborted" : "error"`、SSE 中断报告 abort error、finish 后的 `signal.aborted`/`stopReason === "aborted"` 检查），由 `TestStreamSimpleAbort` 锁定。
+
+## 1. 目标与保真度定义
+
+把 pi（TypeScript monorepo，核心约 9.2 万行 TS）全量重写为 Go。
+
+**交付物**：单个静态二进制（pi 靠 Bun compile + node_modules）、无运行时 Node 主依赖（扩展 sidecar 除外）、秒启低内存、交叉编译简单。
+
+**对齐标准**：行为规格级对齐，不是代码级翻译。逐项对齐的对象：
+
+- provider 流式事件序列（含 usage、tool call 边界、错误/中止语义）
+- CLI 行为：命令、flag、print 模式、RPC 模式、slash 命令
+- 会话格式：JSONL schema 双向兼容（pi 写的 pig 能读，反之亦然）
+- TUI 交互：按键行为、编辑器手感、信息呈现完整性（pi-tui 移植方案，交互行为对齐）
+
+pi 仓库整体作为可执行规格书：TS 代码定义"什么是对的"。
+
+**明确放弃的部分**（结构性不可行，文档明示）：
+
+- npm 库消费者：Go 无法被 TS 项目 import
+- 有 UI 的 TS 扩展（widgets、编辑器组件、主题运行时切换）：扩展协议无法承载 JS UI 对象
+- photon 图像处理经 WASM 运行时保功能，不保性能特征
+
+## 2. 基础决策
+
+| 决策 | 结论 | 理由 |
+|---|---|---|
+| spec 基线 | pin pi 当前 commit，之后按需选择性跟随 | 避免追移动靶 |
+| 扩展模型 | Go 主进程 + Node sidecar 子进程，stdio JSON-RPC | 唯一能运行现有 TS 扩展的方案 |
+| TUI | 直接移植 pi-tui（差分行渲染器 + 编辑器引擎照搬） | 2026-09-09 变更，原 bubbletea v2 重建方案作废：① 手感本体（editor/keys/autocomplete/keybindings ≈7k 行）任何框架都省不掉；② pi-tui 是纯字节级程序（stdin 字节 → 状态 → ANSI 转义序列，渲染器是用户终端），Go 写同样字节即字节级复现；③ pi-tui 自带 17k 行测试（@xterm/headless 仿真 golden），test-for-test 移植即机械验收；④ bubbletea 的 Elm 全量重渲范式与 pi 主屏内联聊天流结构性冲突。详见 §4 Phase 6 |
+| 会话格式 | 兼容读写 pi 的 JSONL session | 迁移现有会话，对齐成本≈0 |
+| config/themes | 格式沿用 pi；**目录名偏差：`.pig`（2026-09-10 用户决策）**——项目级 `.pig/`、用户级 `~/.pig/agent/`、env 前缀 `PIG_CODING_AGENT_DIR`，存量数据不迁移 | 与 pi 隔离，避免 T6-2 式误写事故再伤真实 pi 配置 |
+
+技术选型：Go 1.25.0（go.mod floor，不设 toolchain 指令，CI 里钉版本）、golang.org/x/term（raw mode）+ rivo/uniseg（grapheme 分段，TUI 移植配套）、modernc.org/sqlite（免 cgo）、goldmark + chroma、wazero（WASM 运行时）、aws-sdk-go-v2（bedrock）。2026-09-09 起 TUI 不依赖 bubbletea。
+
+## 3. 架构
+
+### 3.1 模块布局（与 pi 包一一对应）
+
+命名规则：目录 = pi 包名去 `-`（`coding-agent` → `codingagent`，`session-backends/sqlite-node` → `sessionbackends/sqlitenode`）；**文件 = TS 文件名转 snake_case（下划线间隔）**：连字符 `-` → `_`，且无分隔的连写复合词按下划线拆分（`agent-loop.ts` → `agent_loop.go`、`zai-coding-cn.ts` → `zai_coding_cn.go`、`moonshotai.ts` → `moonshot_ai.go`、`error-body.ts` → `error_body.go`）。两边 grep 同名即可互查，无需心智映射表。
+
+```
+pig/
+├── go.mod                          # 单模块起步；目录自包含，将来可按目录拆 go.work
+├── ai/                             # ← packages/ai（运行时主体 package ai；见 §3.4 分层规则）
+│   ├── types/                      #   src/types.ts（消息模型 + 事件协议 + compat，叶子包）
+│   │   ├── types.go  event_stream.go
+│   ├── index.go                    #   src/index.ts（对 ai/types 的再导出面）
+│   ├── models.go / models_store.go #   src/models.ts / models-store.ts
+│   ├── lazy.go / abort.go          #   src/api/lazy.ts / src/utils/abort.ts
+│   ├── auth/                       #   src/auth/*（types/resolve/context/credential_store）
+│   ├── models_generated.go          #   src/models.generated.ts（生成物，禁手改）
+│   └── api/  compat/  providers/   #   子包槽位：叶子，import ai/types 与 ai
+├── agent/                          # ← packages/agent
+│   ├── agent_loop.go  agent.go  stream_fn.go  types.go
+│   ├── harness/                    #   compaction/ env/ tools/ utils/ session/（含 jsonl/）
+│   └── search/
+├── tui/                            # ← packages/tui（pi-tui 全量移植，Phase 6；fuzzy.ts 已随 CLI 批先期移植）
+├── protocol/                       # ← packages/protocol（含 cbor/）
+├── client/                         # ← packages/client
+├── server/                         # ← packages/server（含 transports/）
+├── sessionbackends/                # ← packages/session-backends
+│   └── sqlitenode/                 #   sqlite-node → sqlitenode/（migrations/ storage/）
+├── telemetry/                      # ← packages/telemetry
+├── evals/                          # ← packages/evals
+├── codingagent/                    # ← packages/coding-agent
+│   ├── core/                       #   tools/ extensions/（sidecar 宿主）compaction/ export_html/
+│   ├── modes/                      #   interactive/（components/ theme/ assets/）rpc/
+│   ├── server/  client/  cli/  extensions/  utils/
+├── cmd/pig/main.go                 # ← coding-agent src/main.ts + cli.ts
+└── scripts/
+```
+
+| pi 包 | Go 模块 |
+|---|---|
+| ai | `ai/` |
+| agent | `agent/` |
+| protocol | `protocol/` |
+| client / server | `client/` `server/` |
+| session-backends/sqlite-node | `sessionbackends/sqlitenode/` |
+| tui | `tui/` |
+| telemetry | `telemetry/` |
+| evals | `evals/` |
+| coding-agent | `codingagent/` |
+| src/bun（Bun 打包入口） | goreleaser 配置（无代码对应物） |
+
+依赖方向规则（= pi 的 build 顺序，depguard 固化）：`tui`/`telemetry` 为叶子 → `ai` → `agent` → `protocol`/`client`/`server` → `codingagent`（依赖全部）；`sessionbackends` 只被 codingagent 引。测试贴代码（`_test.go` + 各包 `testdata/`）；生成物统一 `_generated.go` 后缀（Go 文件名用下划线而非点，`models_generated.go` 等）。
+
+### 3.2 扩展边界
+
+- 传输：行分隔 JSON-RPC 2.0 over stdio；每个扩展包一个 sidecar 子进程
+- 生命周期：`initialize`（manifest 协商：tools / commands / events 订阅）→ 调用 → `shutdown`
+- sidecar 内部：node 加载真 pi 运行时 + 目标扩展，把扩展注册的 tools/commands 映射到协议
+- 能力边界：UI 类 API 在协议层声明为显式 no-op（可查询能力集，静默降级而非崩溃）
+- Go 原生扩展 API（Go interface）与 sidecar 走同一协议，二者共存
+- 兼容矩阵：工具/命令完整支持；事件订阅制、尽力送达；UI 类不支持
+
+### 3.4 改写规则（TS → Go）
+
+移植任何 pi 模块前先读本节。规则的目的只有一个：让 pig 与 pi 保持可 grep、可对照、线格式兼容。
+
+**命名与顺序**
+
+- 目录 = pi 包名去 `-`；文件 = TS 文件名转 snake_case（**Go 文件名一律下划线间隔，禁止去连字符连写**）：`agent-loop.ts` → `agent_loop.go`、`zai-coding-cn.ts` → `zai_coding_cn.go`、`moonshotai.ts` → `moonshot_ai.go`（无分隔的连写复合词同样按下划线拆分）、`error-body.ts` → `error_body.go`。反例（禁止）：`zaicodingcn.go`、`agentloop.go`
+- 文件内声明顺序跟随 pi 源文件声明顺序；新增类型插入对应位置，跳过的段落留相对顺序空档（如 `AnthropicAllowedFallbackModel` 随 anthropic 协议进）
+- pi 的字段注释（默认值、例外语义、平台特判）是移植内容的一部分 → Go 字段注释逐条带上；字段语义与 Go 零值冲突时改用指针（如显式 0 有含义的 `MaxRetries *int`）
+- 命名保留 pi 名，但参数名避开 Go 惯用词：pi 的 `context` 参数 → `llmContext`（`ctx` 专属于 `context.Context`）
+- 凡相对 pi 有缺失（整段类型、结构体字段、union 成员、文件内分段）→ 必须在缺失位置留注释，写明缺什么、为什么、何时补；"以后再说"不构成省略注释的理由
+- 例外：`utils/event-stream.ts` → `ai/event_stream.go`（包根）。pi 经 pi-ai 导出该类且 agent 包消费它；Go 放 `ai/utils` 会造成 import cycle
+- pi 的内联 union 提为命名 Go 类型时（`Role`、`ModelInput`、`ContentKind`），放在原声明位置
+
+**线格式（硬约束）**
+
+- JSON 字段名与 pi 完全一致（camelCase），字符串字面量完全一致（`"toolCall"`、`"toolResult"`、事件名、stop reason）——会话与 RPC 线兼容依赖此条，改动即破坏双向兼容
+
+**类型映射**
+
+- discriminated union（`Content`、`Message`）→ interface + 具体类型 + `Decode*` 分发函数；heterogeneous 数组字段配自定义 `UnmarshalJSON`（alias 技巧 + raw 字段重解码）
+- 事件 union（`AssistantMessageEvent`）→ 单 struct + `Type` 判别字段，字段语义写在类型注释里（对 RPC 线格式友好）
+- `X | string` 开放 union（`Api`、`ProviderID`）→ 命名 string 类型 + 已知值常量，不封闭
+- TS 可选字段 → 指针 + `omitempty`；区分“未设置”与“零值”是 compat 语义的一部分（显式 `false` 必须在序列化中存活）；取指针一律用 `lo.ToPtr(x)`（samber/lo 已在依赖中），**禁止手写 `func xPtr(v T) *T` 之类的本地 ptr 助手**
+- 接口继承时重复声明同名字段且仅细化文档（如 `StreamOptions.onResponse`）→ Go 嵌入自动提升，不重复声明，注释挂在嵌入字段上
+- TypeBox schema → JSON Schema（`json.RawMessage`）
+- timestamp 统一 int64 毫秒
+- AbortSignal → Go 惯例：取消经 `context.Context` 参数传递，不进 options 结构体（pi 把 signal 放在 options 里）；被省略的 pi 字段必须在类型注释里显式列出并写明归期
+- pi 回调允许返回 Promise → Go 回调为同步签名，异步由适配层内部处理
+- 泛型 `TModel`（仅出现在回调签名，所有线协议共享同一 `Model` 结构）→ 具体 `*Model`；Go 有泛型但此处实例化无收益，出现按 API 特化需求时再把 options 泛型化
+- pi 泛型 `startSpan<T>` 的返回值传播 → Go 接口不能有泛型方法，回调只传 `error`，其余值走闭包
+- async 可迭代类（`EventStream<T, R>`）→ 泛型 struct + `iter.Seq` + 结果 channel；TS 端永不 resolve 的边界 case 在 Go 侧 resolve 零值并注释声明
+- 接口的可选成员（`fetchDeferred?`）→ 拆分 capability 接口（`DeferredStreamer`），调用侧类型断言
+- TS 条件类型 / 类型映射表（`ApiOptionsMap`、`ApiStreamOptions`）→ 无运行时对应物，各 adapter 自声明 options 类型，dispatch 侧类型断言
+
+**结构保真**
+
+- pi 的一个类/闭包对象/函数 → pig 一个 struct/函数，一一对应；不得擅自拆分、合并、引入辅助类型或改变逻辑归属（反例：把 `createProvider` 的单对象拆成 composedProvider + deferredDispatch 两个 struct）
+- 对结构组织有任何偏离 pi 的需要（类型数量、方法归属、文件内分区、函数拆分合并），先说明理由、征得确认后再动手；"代码更干净"不构成单方面改结构的理由
+- 行为与结构的偏差（含顺手简化）必须在变更说明里显式列出，不允许静默带入
+
+**包分层规则（ai 模块）**
+
+- 依赖严格单向：`ai/types`（叶子，仅 import telemetry）← `ai/auth`（import types）← `ai`（运行时，import types + auth + telemetry）← `ai/api`、`ai/compat`、`ai/providers`（叶子，import 向下）← `agent` ← `codingagent`。depguard 固化
+- `ai/types` 是消息模型/事件协议/compat 的规范定义地（pi: types.ts），`ProviderEnv`/`ProviderHeaders` 的规范所有权在此；`ai` 与 `ai/auth` 直接使用 `types.` 限定名
+- `ai/index.go`（pi: index.ts）把 types 面再导出为类型别名与 var 绑定：package ai 内部代码与外部消费者可写裸名 `ai.Model`，与 pi 从 pi-ai 导入 `Model` 同构。新增 types 类型时须同步补 index.go 别名（漏了会被编译器立即发现）
+- 泛型类型无法起别名（Go 尚无泛型别名）：`EventStream[E, R]` 本体只在 `ai/types`，需要原始泛型的消费者（agent 循环）直接 import `ai/types`
+- `src/api/lazy.ts` 与 `src/utils/abort.ts` 被 models.ts 消费，留在 `package ai`（`lazy.go`/`abort.go`，文件头注释标明源文件）
+- 实现载体变化时概念名仍跟 pi：`AbortController` → `refreshController`（ctx+cancel 结构体），不起新名（如 handle）
+- AbortSignal → `context.Context` 后，`utils/abort.ts` 的 `raceWithAbortSignal` → 泛型 `waitOperation`；`operationSignal` 无对应物（Go context 永不为 nil）
+- 同一行为的语言收敛允许简化，但必须在注释里声明（如 Login 的 abort 竞态折叠进 ctx 取消）
+- `A & Record<string, unknown>`（provider 专属扩展键）→ struct + `Extra map[string]any`
+- `X | null` 记录字段 → `map[string]*string`（nil = 抑制默认值，如 `ProviderHeaders`）
+
+**范围规则**
+
+- 线协议实现两个：`openai-completions`（覆盖 openai / openrouter / deepseek / 任意 OpenAI 形端点）+ `anthropic-messages`；其余（google / bedrock / azure / codex / responses 系 / pi-messages / mistral）随各自 adapter 进，`Api` 开放类型保证无需改 schema
+- 未移植的 provider id 常量（google/bedrock/azure/codex）随各自协议一起加
+- `Model.compat` 的 TS 条件类型 → `ModelCompat` 接口，`Model.UnmarshalJSON` 按 `Model.API` 分发解码
+
+### 3.5 批次执行协议（handoff 交接，2026-09-10 定稿）
+
+每批收尾时，除 AGENTS.md 进度快照更新与验收门外，**必须写 `docs/handoffs/<批次号>.md`**（每批一份，文件名 = 批次号，如 `T5a-2.md`；不覆盖不删除——旧 handoff 自然成为该批的决策归档，与 docs/batches/ 分工：batches/ 只存瘦身迁移的历史日志）。头部标注状态链（本批完成后被谁取代）。写作时点 = 批次完成、上下文满载时——此时写几乎零成本，而下一个全新 session 只读 AGENTS.md + 最新一份 handoff（约 2k token）即可直接开工，免去重新探索代码（约 50 倍开销）。AGENTS.md 进度快照必须显式指向最新 handoff 的完整路径，防误读旧文件开工错的批次。模板与硬性要求如下：
+
+**模板**（全文控制在 2000 token 以内，只写增量，AGENTS.md 已有的规则/决策写引用不写重复）：
+
+1. **本批完成**：新建/改动文件清单（精确路径 + 行数）；测试（新增测试函数数/子测试数、全仓总数、-race 是否全绿）；与 AGENTS.md 的新增偏差与决策（仅本批新产生的，每条一句话）
+2. **下一批定义**（批次范围从 §4 计划取，不得自行发明）：要读的 pi 源文件（规格书）精确路径逐个列出（每个一句话职责说明）；要移植的 pi 测试文件精确路径；预期产出的 Go 文件目标路径（按命名规则）；依赖与顺序（本批产出的哪些类型/接口被下一批消费、下一批前置依赖是否有缺）
+3. **风险与坑**：上批实证发现、下一批大概率会撞的——逐条列现象/原因/正确处置
+4. **明确不要读的**：与下一批无关、禁止顺手翻阅的目录/文件（防上下文浪费）
+
+**硬性要求**：
+
+- 「下一批定义」里的 pi 源文件路径必须精确到文件，禁止模糊描述（「xxx 下的相关文件」）——探索规格书是下一批开销大头，路径列全等于省掉它
+- 若判断 §4 计划需要调整，在文档末尾单列「给人类的建议」段提出，**不擅自改计划**——批次范围的决策权在人，模型只执行定义良好的批次（防计划漂移）
+- 写完自查：一个从未参与本项目的 session，只读 AGENTS.md + 最新 handoff 能否直接开始下一批而无需探索？不能则补齐
+- 验收门照旧：`go build && go vet && gofmt -l` 干净 + `go test ./... -race` 全绿，方可收批
+
+## 4. 分阶段计划
+
+原则：先无头、后有脸；可自动验证的先行，需要人眼的集中押后。**批次体量控制：每批移植/重构以约 8000 行为限、不超过 8000 行（源码 + 配套测试合计计），超出则继续拆子批**（print 模式 CLI 拆 7 子批、T1 拆两批均循此惯例）。
+
+### Phase 0：决策落地 + 脚手架（1 周）— ✅ 完成
+
+go module、§3 目录布局、选型定型、pin 基线 commit。扩展协议 schema 先行定义（影响后续所有分层）。
+
+### Phase 1：ai 核心类型 + 事件流（2 周）— 🔶 约 80%
+
+消息模型（对照 `ai/src/types.ts`）、`AssistantMessageEvent` 流协议、SSE 解析、EventStream。全项目被依赖最多的模块。
+
+### Phase 2：ai providers（4-5 周）— ✅ 完成（openai-completions 系；剩余 adapter 按需延后）
+
+原计划顺序按 compat 面从宽到窄：openai-completions（compat 矩阵最大）→ anthropic-messages → google → openai-responses 系 → bedrock（最后，引 aws-sdk-go-v2），随后 OAuth 各家流程、模型注册表 + 模型数据生成脚本。
+
+已交付：① openai-completions adapter（`ai/api/openai_completions*.go` + 辅助 + `ai/utils/*`），deepseek 真实 API 冒烟跑通，12 个 completions 系 provider 铺开；② 模型注册表生成链路（`ai/scripts/generatemodels`/`generateimagemodels`，产出 `models_generated.go`）。
+
+**收口决策（2026-09-02）**：Phase 2 就此交付，进入 Phase 3。剩余部分**不在此阶段铺开**，留待后续推进中遇到卡点（如 Phase 3+ 实际依赖非 completions 协议）或整体迁移完成后按需补齐：
+
+1. anthropic-messages 及后续 adapter（google / bedrock / openai-responses 系 / mistral / pi-messages），及随之解锁的 anthropic / vercel-ai-gateway / kimi-coding / minimax / fireworks / opencode 等 provider
+2. OAuth 各家流程（随各自 adapter 进）
+3. qwen-token-plan*/xiaomi*/cloudflare*/github-copilot/opencode* 等 catalog 未覆盖 provider（需模型数据生成源补齐）
+
+§3.4 既定范围（线协议实现 openai-completions + anthropic-messages 两个、`Api` 开放类型）不变，届时新增 adapter 无需改 schema。
+
+**里程碑 M1：裸流式对话可用（deepseek + 12 家 completions 系 provider 已达）。**
+
+### Phase 3：agent 包（2 周） — 🔶 主体已交付，仅余 harness 根文件与 tools
+
+已交付（2026-09-02，提前于 Phase 2 收口后启动）：agent 循环（`agent/src/agent-loop.ts` → `agent/agent_loop.go`）、Agent 类（`agent/src/agent.ts` → `agent/agent.go`：steering/follow-up 双队列封装、AgentState、subscribe/waitForIdle/abort 生命周期）、`types.ts` → `agent/types.go`、`stream-fn.ts` → `agent/stream_fn.go`，及其前置 `validateToolArguments`（`ai/utils/validation.go`）。保真细节已锁定：`stopReason=length` 时全部 tool call 判失败重发；steering/follow-up 双队列；parallel 批次 `tool_execution_end` 完成序 vs tool-result 源序；`shouldStopAfterTurn` 精确事件序列；streamFn 抛错 → 失败事件序列——均由移植的 pi 测试锁定。
+
+已交付（同日第二批）：harness/session 全量（types/session/state/memory + jsonl 后端 + context.ts/messages.ts + conformance 套件 30 例全绿）+ uuidv7 + `search/` + `env/`，决策与待办见「harness/session 关键决策」。
+
+已交付（同日第三批）：harness/utils（truncate/shell_output）、harness/compaction（utils/compaction/branch_summarization）、harness/types.go 的 exec 段与错误类型，前置 ai/utils 的 text/retry，决策见 docs/batches/2026-09.md “harness/utils + compaction 关键决策”。
+
+已交付（同日第七批，Phase 4 第 1 批）：coding-agent core/tools 运行时层全量 + codingagent/utils 前置包 + core 工具测试移植（-race 全绿），决策见 docs/batches/2026-09.md “core/tools 关键决策”。
+
+已交付（同日第六批，Phase 3 收口）：harness 根文件（result.go：TaggedError 契约；telemetry.go：两套 schema 有序数据 + StartAiSpan/StartHarnessSpan）、`agent/harness/agentharness/`（agent-harness.ts 脚手架全量：14 个 TaggedError、invocation outcome 三族、AgentLane 接口与 AgentHarness unavailable 面、hooks/events 的 UnavailableRegistry）、harness/tools/ 全部（bash/edit/edit-diff/read/write/image/path-utils/file-mutation-queue/tool-context，npm diff@8.0.4 移植为 jsdiff.go 并以 node 实测 golden 锁定）、env 的 exec 半区（spawn/shell 探测/进程树杀灭/stdin 传输/100ms 宽限）。pi 的 tools/agent-harness-scaffold/telemetry/nodejs-env(exec) 测试整体移植，-race 全绿。决策见 docs/batches/2026-09.md “harness 根 + tools 关键决策”。**Phase 3 完成。**
+
+**验证与恢复（agent 包）**：`go test ./agent/... -race -count=1`；mock streamFn 与内存存储不发真实网络。
+
+### Phase 4：coding-agent 无头核心（3-4 周） — 🔶 前四批已交付；print 模式 CLI 拆 6 子批推进中
+
+tools（bash/read/edit/grep/ls/find/write）→ session-manager（JSONL）→ settings/config（settings-manager + config 补全 + resolve-config-value + defaults/experimental/http-dispatcher 可移植半区）→ system-prompt + 资源装载（skills/prompt-templates/session-cwd）+ 项目信任（trust-manager + resolveProjectTrusted）→ print 模式 CLI。
+
+**print 模式 CLI 批次拆分（2026-09-05，按依赖序；它拖着整个 AgentSession 运行时栈，约 10k 行 TS，无法单批收口）**：
+
+1. ✅ 凭证与目录存储层（auth-storage/runtime-credentials/models-store/remote-catalog-provider）
+2. ✅ model-config + model-resolver（+ stripJsonComments/minimatch 前置）
+3. ✅ provider-composer + model-runtime + model-registry 门面 + modes/interactive/model-catalog-refresh
+4. ✅ model-registry.test.ts 全量移植（46 测试函数）；resource-loader 随扩展批（依赖 package-manager/theme/extensions，见上）
+5. ✅ AgentSession：前置件已交付（usage-totals/auth-guidance/slash-commands/session-export/bash-executor，第 5 批；core/compaction + branch-summarization 随第 5 批续落地；扩展消费面收敛（无扩展路径 ExtensionRunner + ResourceLoader 接口 + sleep/tool-result-images）随第 5 批续二落地）；本体（agent-session.ts 3440 行 → core/agent_session.go，2026-09-07，消费已就绪的 ExtensionRunner 与 ResourceLoader 接口）；其 e2e 依赖的 dynamic-provider/dynamic-tools/branching 三套测试随第 6 批 sdk 批补验
+6. ✅ sdk + agent-session-services + agent-session-runtime + output-guard + json-event + print-mode（2026-09-07）
+7. ✅ cli/args + main.ts 装配（2026-09-08：parseArgs/auth-command/auth-check/credential-print/list-models/fuzzy + cmd/pig/main.go 装配；session-picker/startup-ui 随 P6 TUI，package-manager-cli 随 P7，migrations/export-html 随 P8）
+
+model-registry 门面已随第 3 批落地；第 4 批交付其 1780 行测试与 resource-loader；auth-storage/迁移已随第 1 批落地。
+
+**里程碑 M2：`pig -p "..."` 完整可用，会话落盘，此时已可日常自用。**
+
+### Phase 5：protocol + server + client + sqlite 后端（2 周） — ⏸️ 按需延后（2026-09-09 决策）
+
+RPC 模式、会话 sqlite 存储。原判断：服务 pi 的多进程/远程场景；pig 是单二进制自用工具，会话 JSONL 存储已全量可用，无消费方，做成 RPC/SDK 意义不大（已有 pi 承担该角色）。暂不删条目：将来做分享/远程协作再议。
+
+**里程碑 M3：RPC 模式可用（延后，随需启动）。**
+
+### Phase 6：TUI（pi-tui 全量移植） — 🔶 T1 进行中（2026-09-09）
+
+已交付（2026-09-09，T1 首批）：**tui/utils.go**（pi: packages/tui/src/utils.ts 全量：VisibleWidth/graphemeWidth、ExtractAnsiCode（CSI/OSC/APC）、AnsiCodeTracker（SGR 状态 + OSC 8 超链接跨行保持）、WrapTextWithAnsi（换行 + 样式跨行保持 + 行尾 underline-only reset）、TruncateToWidth（连员前缀保持/pendingAnsi/宽省略号 clip）、SliceByColumn/SliceWithWidth/ExtractSegments（overlay 合成）、GetGraphemeCellRange/GetOsc8LinkAtColumn、NormalizeTerminalOutput 泰老 AM 兼容分解 + tab 展开）+ **tui/scripts/generatetables**（Unicode 表生成器 → tables_generated.go）+ 测试移植（wrap-ansi 17 + truncate/visibleWidth 18 + regional-indicator 回归 5 + tab-width 前 3 例，共 51 个 PASS 节点，-race 全绿）。
+
+**路线变更（2026-09-09，原 bubbletea v2 重建方案作废）**：重新评估结论：① 手感本体（editor 2363 行 + keys 1401 + autocomplete 786 + keybindings/word-nav/kill-ring/undo-stack ≈7k 行）无论选什么框架都必须移植，bubbletea 一行省不掉；② bubbletea 的 Elm 全量重渲范式与 pi 的主屏内联聊天流（差分行更新、内容流入 scrollback、主屏/alt-screen 双渲染器）结构性冲突，50 个 interactive components（9.9k 行，全是 `render(width) → string[]` 的 string 渲染器）需全部重新架构；③ pi-tui 是纯字节级程序（stdin 字节 → 状态 → ANSI 转义序列，真正的渲染器是用户终端），Go 对同一 tty 写同样字节即字节级复现：raw mode→x/term、stdin data 事件→goroutine 读循环、resize→SIGWINCH、process.nextTick→goroutine 调度，全部有等价物；④ pi-tui 自带 17k 行测试（virtual-terminal.ts 以 @xterm/headless 做终端仿真跑 golden），test-for-test 移植即机械验收，TUI 不再是"唯一需要人眼验收的阶段"。
+
+**已知唯一语义缺口：`Intl.Segmenter`（ICU）**：grapheme 粒度 UAX #29 → rivo/uniseg 基本等价（pi 的 regression-regional-indicator-width/CJK boundary/tab-width 回归测试锁定边角）；word 粒度 ICU 带 CJK 词典分词，Go 无现成等价物，影响 word-navigation 词跳转/editor word 删除/alt-screen 搜索分段 → 先以 UAX #29 word 起步（中日文按字切，比 ICU 粗），WordSegmenter 做成接口渐进增强（pi 的 word-navigation 本就有 segmentFn 注入点）。另：TS UTF-16 码元世界 → Go rune 世界的索引数学沿全仓既有约定（truncate 批先例）。
+
+分批（依赖序）：
+
+1. **T1 内核**：✅ utils（宽度/grapheme 分段/ANSI 剥离/truncate/wrap，2026-09-09，见“T1 utils 关键决策”）；✅ keys + stdin-buffer + terminal + tui（差分渲染器基座 + overlay）+ tui-main-screen（2026-09-10，见“T1 内核收口关键决策”）
+2. **T2 编辑器引擎**：✅ 全量收口（拆两批）。第一批 ✅（2026-09-10）：keybindings + undo-stack + kill-ring + word-navigation + editor 内核及非 autocomplete 测试；第二批 ✅（2026-09-10，随 T3/T4 前置）：editor autocomplete 子段 + T3 autocomplete.ts + T4 select-list.ts + input + editor-component + 余下测试 —— 手感所在，测试最重
+3. **T3 基础组件**：✅ text/box/stack（H/V）/loader/truncated-text + markdown（含 marked@18.0.5 Lexer 移植）全量交付（2026-09-10，keybindings/autocomplete 已随 T2 前置）；latex.ts 延后（renderLatexFn seam，见 T3 关键决策）
+4. **T4 交互组件**：✅ 全量交付（2026-09-10）：scroll-view + layout.ts 引擎（renderLayoutFrame/paintBox/scrollbar）+ layout-node Scroll 半区 + settings-list + alt-screen-flash + alt-screen-search + tui-alt-screen（鼠标滚轮路由/overscroll 链式、SGR 鼠标选择、scrollbar 拖拽、OSC 8 链接激活、transcript 搜索 overlay、flash、Kitty placement 复用/逐出、全量/差分渲染）；layout.test.ts 主体 + tui-alt-screen.test.ts + settings-list.test.ts 整体移植（唯二 skip 是构造 Image 组件的两测，随 Phase 8；placement/crop/逐出机制经 encodeKitty 用例全量锁定），决策见 docs/batches/2026-09.md “T4 交互组件关键决策”
+5. **T5 interactive-mode 外壳 + 最小组件集**（user/assistant-message、footer、tool-execution、model/session/thinking selector、status-indicator 等）→ 里程碑：接上已有 AgentSession，交互聊天可用
+6. **T6 收尾**：theme-controller、first-time-setup、extension editor/input、设置子菜单、其余组件
+
+**可砍/延后**：latex.ts（1380 行，数学渲染最后再说）、terminal-image.ts（657 行，随 Phase 8 photon/wazero）、native-module-path.ts（node 原生模块，无对应物）。实际移植面 ≈14k 行源码 + 17k 行测试。
+
+**里程碑 M4：交互模式日常自用。**
+
+### Phase 7：扩展系统（3-4 周） — 未开始
+
+Go 原生扩展 API（从 Phase 4 起内部结构即按此接口组织）→ sidecar 宿主 → 包管理器（安装/卸载/更新 pi 生态包）。
+
+**里程碑 M5：现有 TS 扩展的无 UI 子集可加载运行。**
+
+### Phase 8：杂项 + 发布（2-3 周） — 未开始
+
+export-html（goldmark/chroma 替换，vendor JS 照搬，输出差异记录在案）、telemetry、photon 经 wazero、migrations、goreleaser 交叉编译。
+
+**里程碑 M6：v1.0 发布。**
+
+### 基线同步策略（2026-09-08/09 定调）
+
+**批次顺序（用户决策）**：`T4 → T5（M4）→ T6 → v1.0 → 基线同步批 → T7（扩展）`。v1.0 前不做同步，T4-T6 从 pin 基线移植；同步批位于 T7 之前，使 T7 协议设计直接对齐新基线的扩展面。
+
+**同步原则**：
+
+1. **钉正式 tag，永不追 main**：同步目标恒为“当时最新正式 tag”（当前为 v0.85.1，2026-09-05；main 在其上还有 28 个未发版 commit）。不追无版本的中间态
+2. **不逐版跟进**：84.4/85.0/85.1 分三次同步 = 三遍固定成本（全量回归 + AGENTS.md 快照 + 偏差记录），一次消化 501 commits 更便宜；中间版本无独立价值
+3. **分区消化，风险序**：① 线格式核对（硬约束优先）→ ② ai/agent/session 增量 → ③ TUI 增量 → ④ coding-agent 增量，每区做完跑 pig 全仓测试回归
+4. **收尾动作**：AGENTS.md 重新 pin + 偏差清单归档（哪些 pi 新能力选择不跟进、为什么）
+5. **pi 仓库只读**：同步前不动 pi 工作区分支；对比用 `git fetch` + `git diff <old-tag>..<new-tag>` 或独立 worktree
+
+**v0.84.3 → v0.85.1 实测增量（501 commits，2026-09-08 实测，行数为 git diff --stat）**：
+
+| 区域 | 变化量 | pig 处置 |
+|---|---|---|
+| `packages/tui` | 33 文件 +3.0k/-327 | **主要同步负担**。新增鼠标交互支持（`mouse-region.ts` + mouse-components.test 249 行，feat: reusable mouse interaction support）；`tui-alt-screen.ts` +503、`tui.ts` +221、`editor.ts` +132、`layout.test.ts` +111。T4-T6 移植自旧基线，此区 delta 是同步批的重头（≈ 一个 T4 级批次） |
+| `packages/ai` | 62 文件 +3.2k/-914 | provider/类型面增量，按区跟进 |
+| `agent/session` | 216 文件 +54.3k（含大量 docs/fixtures） | **新增 harness/runtime 子系统**：`runtime/lane.ts` 2012 行 + `runtime/drive/structural.ts` 1221 行 + `jsonl-v3-migration.test.ts` 2013 行——reducer 之后 harness 又长出新模块，**建议单列子批**；纯代码实际约 +7k（54k 里大头是 docs/plugins.md、markdown-bundle.js 等非移植对象） |
+| session 线格式 | 修复未终止会话文件、fork 保留压缩边界、ingest external entries 等 | 硬约束区，逐条核对；若 schema 有变需做迁移 |
+| `coding-agent` | 250 文件 +19.4k | **大头可跳过**，见下 |
+| `core/extensions/types.ts` | **仅 69 行 diff** | T7 协议输入基本稳定，好消息 |
+
+**coding-agent +19.4k 的构成（拆解结论）**：
+
+| 区块 | 行数 | pig 处置 |
+|---|---|---|
+| `src/experimental/`（47 文件） | +9.3k | **跳过**。pi 新开的“Radius/远程运行时”实验子系统（session-worker 884 + session-worker-manager 859 + client-tui 804 + server 798 + radius-relay 724 + coordinator 612 + mini/tui 555 等）：多进程会话编排 + 远程会话客户端 + 迷你 TUI。对应 Phase 5 RPC/远程场景（已按需延后），且 experimental 未稳定 |
+| lock 文件 | ~1.1k | package-lock/npm-shrinkwrap，无关 |
+| `test/experimental*` | ~2.4k | 同 experimental，跳过 |
+| 其余 src（84 文件） | ≈ +2.6k/-2.4k | **真正要消化的**：edit 工具重构（`edit.ts` −250 拆出 `renderers/edit.ts` +238，渲染与实现分离——撞 pig core/tools 已移植代码，需跟进）；`interactive-mode.ts` ±296（T5 移植对象，含 footer debounce、fullscreen transcript jump-to-end 指示器）；移除 legacy session RPC facade；主题校验拆分 |
+| 其余 test | ≈ +3.5k | 随对应模块移植 |
+
+**已知代价（接受）**：T4-T6 移植自旧基线，同步批需对 tui-alt-screen 等文件补 delta（二次加工）；v1.0 的交互体验比同期 pi 少鼠标支持一块。extensions/types.ts 低漂移 + sidecar 捆绑真 pi 运行时（扩展 facing 语义可独立跟进）使“同步放 T7 前”的位置代价可控。
+
+**同步批的工作量预估**：pig 侧有效移植面 ≈ TUI 3.0k + agent/session 7k + ai 3.2k + coding-agent 2.6k + 各区测试 ≈ **pi 侧 16-20k 行**（对 pig 全量移植面 ≈ 92k 而言是小批次），预计 2-3 个常规批次；harness/runtime 若复杂可单列。
+
+**讨论详情**：扩展系统设计另见 `extension_plan.md`（sidecar 五种桥接模式、兼容性判定与安装门禁、T7 子批拆分与验收标杆）。
+
+## 5. 风险登记
+
+| 风险 | 等级 | 缓解 |
+|---|---|---|
+| provider 语义验证串行人肉 | 高 | 单测（mock SSE）锁参数与事件语义 + 真实 API 冒烟逐家人肉对，无差分基建摊薄 |
+| TUI 手感回归 | 中 | pi-tui 17k 行测试 test-for-test 移植 + @xterm/headless golden 对照；交互行为对齐清单兜底 |
+| ICU word 分词无 Go 等价物（中日文词边界手感） | 中 | WordSegmenter 接口渐进增强；grapheme 粒度用 uniseg + pi 回归测试锁定 |
+| 追移动靶 | 中 | pin 基线；跟随成本可控；扩展协议带版本协商 |
+| UI 扩展天花板 | 中 | 明确不支持并文档化，能力集可查询避免静默异常 |
+| sidecar 的 node 依赖 | 低 | 运行时探测，缺失时扩展功能降级并明确提示 |
+
+## 6. 工时
+
+| 阶段 | 周数 |
+|---|---|
+| P0 脚手架 | 1 |
+| P1 ai 核心 | 2 |
+| P2 providers | 4-5 |
+| P3 agent | 2 |
+| P4 无头核心 | 3-4 |
+| P5 RPC + 存储 | 2 |
+| P6 TUI（pi-tui 移植） | 4-6 |
+| P7 扩展 | 3-4 |
+| P8 收尾 | 2-3 |
+
+乐观约 6 个月；现实 7-10 个月（provider 语义验证串行人肉是剩余的最大硬下限，放弃差分基建后该风险由冒烟测试硬扛；TUI 路线改为 pi-tui 移植后，风险由其自带 17k 行测试硬扛）。其余阶段 AI 加速比高。

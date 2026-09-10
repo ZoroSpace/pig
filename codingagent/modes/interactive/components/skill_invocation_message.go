@@ -1,0 +1,69 @@
+// skill_invocation_message.go (pi: components/skill-invocation-message.ts)
+// — renders a skill invocation message with collapsed/expanded state. Uses
+// the same background color as custom messages for visual consistency.
+// Only renders the skill block itself - user message is rendered
+// separately.
+package components
+
+import (
+	"github.com/ZoroSpace/pig/codingagent/core"
+	"github.com/ZoroSpace/pig/codingagent/core/tools"
+	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
+	"github.com/ZoroSpace/pig/tui"
+)
+
+// SkillInvocationMessageComponent renders a skill invocation (pi: class
+// SkillInvocationMessageComponent extends Box).
+type SkillInvocationMessageComponent struct {
+	tui.Box
+
+	expanded      bool
+	skillBlock    *core.ParsedSkillBlock
+	markdownTheme tui.MarkdownTheme
+}
+
+// NewSkillInvocationMessageComponent builds the component (pi:
+// constructor; markdownTheme nil = getMarkdownTheme()).
+func NewSkillInvocationMessageComponent(skillBlock *core.ParsedSkillBlock, markdownTheme *tui.MarkdownTheme) *SkillInvocationMessageComponent {
+	c := &SkillInvocationMessageComponent{skillBlock: skillBlock}
+	if markdownTheme != nil {
+		c.markdownTheme = *markdownTheme
+	} else {
+		c.markdownTheme = theme.GetMarkdownTheme()
+	}
+	c.Box = *tui.NewBox(1, 1, func(t string) string { return theme.Bg("customMessageBg", t) })
+	c.updateDisplay()
+	return c
+}
+
+// SetExpanded toggles the expanded state (pi: setExpanded).
+func (c *SkillInvocationMessageComponent) SetExpanded(expanded bool) {
+	c.expanded = expanded
+	c.updateDisplay()
+}
+
+// Invalidate re-renders (pi: invalidate override).
+func (c *SkillInvocationMessageComponent) Invalidate() {
+	c.Box.Invalidate()
+	c.updateDisplay()
+}
+
+func (c *SkillInvocationMessageComponent) updateDisplay() {
+	c.Clear()
+
+	if c.expanded {
+		// Expanded: label + skill name header + full content
+		label := theme.Fg("customMessageLabel", "\x1b[1m[skill]\x1b[22m")
+		c.AddChild(tui.NewText(label, 0, 0))
+		header := "**" + c.skillBlock.Name + "**\n\n"
+		c.AddChild(tui.NewMarkdown(header+c.skillBlock.Content, 0, 0, c.markdownTheme, &tui.DefaultTextStyle{
+			Color: func(text string) string { return theme.Fg("customMessageText", text) },
+		}, nil))
+	} else {
+		// Collapsed: single line - [skill] name (hint to expand)
+		line := theme.Fg("customMessageLabel", "\x1b[1m[skill]\x1b[22m ") +
+			theme.Fg("customMessageText", c.skillBlock.Name) +
+			theme.Fg("dim", " ("+tools.KeyText("app.tools.expand")+" to expand)")
+		c.AddChild(tui.NewText(line, 0, 0))
+	}
+}
