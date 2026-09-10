@@ -1,12 +1,11 @@
 // tui/markdown_test.go (pi: packages/tui/test/markdown.test.ts)
 //
 // Deferred cases (declared):
-//   - LaTeX tests that need real math rendering ("renders inline dollar...",
-//     "renders display dollar...", "renders display bracket...", "aligns
-//     matrix rows...", "renders lower limits...", "renders math inside lists
-//     and tables", "switches from raw to rendered...") require latex.ts
-//     renderLatex (README Phase 6 延后); the raw-fallback LaTeX tests are
-//     ported below and pass with the nil renderLatexFn seam.
+//   - The LaTeX rendered-math cases (including "switches from raw to
+//     rendered...") ported 2026-09-10 to markdown_latex_test.go once
+//     tui/latex.go (renderLatex) landed; the raw-fallback LaTeX tests below
+//     remain valid (unsupported/incomplete math still falls back to raw
+//     with the seam active).
 //   - "should not leak wrapped link styles into table borders or plain cells"
 //     and "should restore the enclosing style after a wrapped table link"
 //     need the VT simulator's fg-color cell attributes (isFgDefault/isDim/
