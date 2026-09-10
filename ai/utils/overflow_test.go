@@ -219,3 +219,25 @@ func TestIsContextOverflowDoesNotTreatZeroOutputLengthStopsFarBelowContextAsCont
 		t.Fatal("want no overflow")
 	}
 }
+
+// pig-only additions (Volcengine ark / Coding Plan; the
+// pi-provider-volcengine-codingplan extension normalized these via a
+// message_end hook, pig detects them directly).
+
+func TestIsContextOverflowDetectsVolcengineArkOutOfContextError(t *testing.T) {
+	message := createErrorMessage(
+		"Error: request failed: [200] OutofContextError: The context length of the model exceeds the limit.",
+	)
+	if !IsContextOverflow(&message, 262144) {
+		t.Fatal("want overflow")
+	}
+}
+
+func TestIsContextOverflowDetectsVolcengineArkExceedMaxMessageTokens(t *testing.T) {
+	message := createErrorMessage(
+		"Error: request failed: exceed max message tokens limit",
+	)
+	if !IsContextOverflow(&message, 262144) {
+		t.Fatal("want overflow")
+	}
+}

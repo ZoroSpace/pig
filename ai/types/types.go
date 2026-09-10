@@ -71,6 +71,14 @@ const (
 	ProviderXiaomiTokenPlanCN   ProviderID = "xiaomi-token-plan-cn"
 	ProviderXiaomiTokenPlanAMS  ProviderID = "xiaomi-token-plan-ams"
 	ProviderXiaomiTokenPlanSGP  ProviderID = "xiaomi-token-plan-sgp"
+	// ProviderVolcenginePlan is pig-only (not in pi's KnownProvider): the
+	// Volcengine Coding Plan provider, made built-in from the
+	// pi-provider-volcengine-codingplan extension (see
+	// ai/providers/volcengine_plan.go). Named "volcengine-plan" — not
+	// "volcengine" — to leave room for a future models.dev "volcengine"
+	// (plain Ark base-model endpoint, pay-per-token) and to keep the
+	// Coding Plan billing path explicit.
+	ProviderVolcenginePlan ProviderID = "volcengine-plan"
 )
 
 // ImagesProviderID identifies an image-generation provider.
@@ -1038,6 +1046,17 @@ const (
 	// ThinkingFormatAntLing sends reasoning: { effort } only when the mapped
 	// effort is non-null.
 	ThinkingFormatAntLing ThinkingFormat = "ant-ling"
+	// ThinkingFormatVolcengine is pig-only (no pi counterpart): Volcengine
+	// ark Coding Plan encoding, probed live against all plan models
+	// (2026-09-10). Like zai (thinking: { type: enabled, clear_thinking:
+	// false }), with two ark-specific differences: reasoning_effort is never
+	// sent (the endpoint silently ignores it and it suppresses thinking on
+	// GLM models), and "off" sends the thinking param only when the model
+	// allows disabling (glm-5-3-flash, glm-5.3 and kimi-k2.7-code return
+	// HTTP 400 on thinking.type "disabled"; their ThinkingLevelMap marks off
+	// as nil, so those requests omit the param and the hybrid model falls
+	// back to its own default behavior).
+	ThinkingFormatVolcengine ThinkingFormat = "volcengine"
 )
 
 type MaxTokensField string

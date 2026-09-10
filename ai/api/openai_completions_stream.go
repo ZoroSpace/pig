@@ -154,6 +154,16 @@ func buildParams(model *types.Model, llmContext *types.Context, options *OpenAIC
 			}
 			zaiParams["reasoning_effort"] = *effort
 		}
+	} else if compat.thinkingFormat == types.ThinkingFormatVolcengine && model.Reasoning {
+		// pig-only (see ThinkingFormatVolcengine in ai/types/types.go).
+		// Like zai but: no reasoning_effort ever, and "off" omits the
+		// thinking param for models that reject "disabled" (off marked nil
+		// in ThinkingLevelMap).
+		if options.ReasoningEffort != "" {
+			params["thinking"] = map[string]any{"type": "enabled", "clear_thinking": false}
+		} else if thinkingLevelOffAllowed(model) {
+			params["thinking"] = map[string]any{"type": "disabled"}
+		}
 	} else if compat.thinkingFormat == types.ThinkingFormatQwen && model.Reasoning {
 		params["enable_thinking"] = options.ReasoningEffort != ""
 		if options.ReasoningEffort != "" && compat.supportsReasoningEffort {

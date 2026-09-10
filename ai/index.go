@@ -63,6 +63,7 @@ const (
 	ProviderXiaomiTokenPlanCN   = types.ProviderXiaomiTokenPlanCN
 	ProviderXiaomiTokenPlanAMS  = types.ProviderXiaomiTokenPlanAMS
 	ProviderXiaomiTokenPlanSGP  = types.ProviderXiaomiTokenPlanSGP
+	ProviderVolcenginePlan      = types.ProviderVolcenginePlan
 )
 
 const (
@@ -329,6 +330,7 @@ const (
 	ThinkingFormatQwenChatTemplate = types.ThinkingFormatQwenChatTemplate
 	ThinkingFormatStringThinking   = types.ThinkingFormatStringThinking
 	ThinkingFormatAntLing          = types.ThinkingFormatAntLing
+	ThinkingFormatVolcengine       = types.ThinkingFormatVolcengine
 )
 
 const (

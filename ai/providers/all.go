@@ -91,6 +91,7 @@ func BuiltinProviders() []ai.Provider {
 		OpenAIProvider(),
 		OpenRouterProvider(),
 		TogetherProvider(),
+		VolcenginePlanProvider(),
 		ZaiProvider(),
 		ZaiCodingCNProvider(),
 	}

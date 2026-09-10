@@ -39,6 +39,9 @@ var overflowPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)too many tokens`),                                                                           // Generic fallback
 	regexp.MustCompile(`(?i)token limit exceeded`),                                                                      // Generic fallback
 	regexp.MustCompile(`(?i)^4(?:00|13)\s*(?:status code)?\s*\(no body\)`),                                              // Cerebras: 400/413 with no body
+	// pig-only additions (not in pi's OVERFLOW_PATTERNS):
+	regexp.MustCompile(`(?i)OutofContextError`),         // Volcengine ark (Coding Plan) — pi-provider-volcengine-codingplan extension normalized these via a message_end hook; pig detects them here instead
+	regexp.MustCompile(`(?i)exceed max message tokens`), // Volcengine ark (Coding Plan)
 }
 
 // nonOverflowPatterns indicate non-overflow errors (e.g. rate limiting,

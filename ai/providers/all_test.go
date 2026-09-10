@@ -38,10 +38,12 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 		ids = append(ids, provider.ID())
 	}
 	// pi's builtinProviders order, restricted to the ported protocols.
+	// "volcengine-plan" is pig-only (extension made builtin), slotted
+	// alphabetically.
 	want := []string{
 		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek", "groq",
 		"huggingface", "moonshotai", "moonshotai-cn", "nvidia", "openai",
-		"openrouter", "together", "zai", "zai-coding-cn",
+		"openrouter", "together", "volcengine-plan", "zai", "zai-coding-cn",
 	}
 	if !reflect.DeepEqual(ids, want) {
 		t.Fatalf("BuiltinProviders() = %v, want %v", ids, want)
@@ -53,7 +55,7 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 	for _, id := range []string{
 		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek", "groq",
 		"huggingface", "moonshotai", "moonshotai-cn", "nvidia", "openai",
-		"openrouter", "together", "zai", "zai-coding-cn",
+		"openrouter", "together", "volcengine-plan", "zai", "zai-coding-cn",
 	} {
 		provider := models.GetProvider(id)
 		if provider == nil {
@@ -63,8 +65,8 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 15 {
-		t.Fatalf("GetProviders() length = %d, want 15", got)
+	if got := len(models.GetProviders()); got != 16 {
+		t.Fatalf("GetProviders() length = %d, want 16", got)
 	}
 }
 
@@ -78,6 +80,7 @@ func TestProviderMetadata(t *testing.T) {
 		{DeepSeekProvider(), "DeepSeek", "https://api.deepseek.com"},
 		{OpenAIProvider(), "OpenAI", "https://api.openai.com/v1"},
 		{OpenRouterProvider(), "OpenRouter", "https://openrouter.ai/api/v1"},
+		{VolcenginePlanProvider(), "Volcengine Coding Plan", "https://ark.cn-beijing.volces.com/api/coding/v3"},
 	}
 	for _, c := range cases {
 		if c.provider.Name() != c.name {
