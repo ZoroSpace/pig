@@ -272,6 +272,7 @@ go module、§3 目录布局、选型定型、pin 基线 commit。扩展协议 s
 1. anthropic-messages 及后续 adapter（google / bedrock / openai-responses 系 / mistral / pi-messages），及随之解锁的 anthropic / vercel-ai-gateway / kimi-coding / minimax / fireworks / opencode 等 provider
 2. OAuth 各家流程（随各自 adapter 进）
 3. qwen-token-plan*/xiaomi*/cloudflare*/github-copilot/opencode* 等 catalog 未覆盖 provider（需模型数据生成源补齐）
+4. pi 17de82d7（v0.85.1，feat: GPT-6 Astra support）的模型与 adapter 语义——openai/gpt-6-astra（openai-responses）+ openai-codex/gpt-6-astra（codex-responses）+ openai-responses 的 prompt_cache_options ttl "30m"（supportsExplicitPromptCacheMode 行为变更）+ xhigh/max thinking 规则。随 openai-responses 系 adapter 启动时一并补（届时同步生成脚本的 missingOpenAiModels/CODEX 列表）
 
 §3.4 既定范围（线协议实现 openai-completions + anthropic-messages 两个、`Api` 开放类型）不变，届时新增 adapter 无需改 schema。
 
