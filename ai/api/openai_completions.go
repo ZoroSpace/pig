@@ -287,6 +287,65 @@ func parseLegacyEncryptedReasoningDetail(signature string) map[string]any {
 	return detail
 }
 
+// fillMissingCommonReasoningDetailFields fills id/format/index on target
+// from source when missing (pi: fillMissingCommonReasoningDetailFields;
+// pi's ??=/||= collapse to nil/empty checks, and a value TS would drop as
+// undefined is deleted from the map so json.Marshal matches
+// JSON.stringify).
+func fillMissingCommonReasoningDetailFields(target, source map[string]any) {
+	if id, ok := target["id"]; !ok || id == nil {
+		if sid, ok := source["id"]; ok && sid != nil {
+			target["id"] = sid
+		}
+	}
+	if format, ok := target["format"]; !ok || format == "" {
+		if sformat, ok := source["format"].(string); ok && sformat != "" {
+			target["format"] = sformat
+		} else {
+			delete(target, "format")
+		}
+	}
+	if index, ok := target["index"]; !ok || index == nil {
+		if sindex, ok := source["index"]; ok && sindex != nil {
+			target["index"] = sindex
+		}
+	}
+}
+
+// appendOpenAIReasoningDetail appends one streamed reasoning detail to the
+// accumulating list, merging consecutive text/summary deltas into logical
+// entries while encrypted entries remain opaque and discrete (pi:
+// appendOpenAIReasoningDetail; OpenRouter streams reasoning_details as
+// deltas).
+func appendOpenAIReasoningDetail(details []map[string]any, detail map[string]any) []map[string]any {
+	var lastDetail map[string]any
+	if len(details) > 0 {
+		lastDetail = details[len(details)-1]
+	}
+	if detail["type"] == "reasoning.text" && lastDetail != nil && lastDetail["type"] == "reasoning.text" {
+		lastDetail["text"] = lastDetail["text"].(string) + detail["text"].(string)
+		if sig, ok := lastDetail["signature"]; !ok || sig == nil || sig == "" {
+			if dsig, ok := detail["signature"]; ok && dsig != nil && dsig != "" {
+				lastDetail["signature"] = dsig
+			} else {
+				delete(lastDetail, "signature")
+			}
+		}
+		fillMissingCommonReasoningDetailFields(lastDetail, detail)
+		return details
+	}
+	if detail["type"] == "reasoning.summary" && lastDetail != nil && lastDetail["type"] == "reasoning.summary" {
+		lastDetail["summary"] = lastDetail["summary"].(string) + detail["summary"].(string)
+		fillMissingCommonReasoningDetailFields(lastDetail, detail)
+		return details
+	}
+	clone := make(map[string]any, len(detail))
+	for key, value := range detail {
+		clone[key] = value
+	}
+	return append(details, clone)
+}
+
 var openAICompletionsReasoningFields = []string{"reasoning", "reasoning_content", "reasoning_text"}
 
 func isOpenAICompletionsReasoningField(field string) bool {
@@ -319,7 +378,7 @@ type openAICacheControl struct {
 }
 
 // resolvedOpenAICompletionsCompat is the fully-resolved compatibility settings
-// (pi: ResolvedOpenAICompletionsCompat — Required except the four optional
+// (pi: ResolvedOpenAICompletionsCompat — Required except the five optional
 // members).
 type resolvedOpenAICompletionsCompat struct {
 	supportsStore                               bool
@@ -347,6 +406,7 @@ type resolvedOpenAICompletionsCompat struct {
 	deferredToolsMode                           *types.DeferredToolsMode
 	sessionAffinityFormat                       types.SessionAffinityFormat
 	supportsLongCacheRetention                  bool
+	vllmPriority                                *float64
 }
 
 // chatCompletionChunk is the streamed chat completion chunk (pi: openai SDK's

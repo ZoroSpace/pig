@@ -1,589 +1,570 @@
-// pi: src/harness/session/jsonl/storage.ts — durable jsonl SessionStorage.
+// pi: harness/session/jsonl/storage.ts — JSONL storage backed by an injected
+// filesystem capability (format 4 transactions; torn-write repair; legacy v3
+// lazy upgrade).
 //
 // Deviations:
-//   - pi's tail-promise write chain → one mutex held across validate + fs
-//     append + state apply, giving the same linearized write order (the
-//     concurrent-write conformance cases pin linearization, not submission
-//     order). Reads share the mutex (Go state is not safe for concurrent
-//     use; pi relies on single-threadedness between microtask writes).
-//   - Drain() awaits the same critical section (pi: drain() awaits the tail
-//     chain); pending-operation errors were swallowed by the tail in TS and
-//     were already reported by their own calls.
-//   - pi's JsonlSessionStorage implements SessionStorage<JsonlSessionMetadata>
-//     whose getMetadata returns the full metadata; the Go base interface
-//     returns the base session.SessionMetadata, so the full value moves to
-//     GetJsonlMetadata (repo code uses it; declared in the types header).
-//   - FileSystem calls use context.Background(): pi's session layer never
-//     forwards an abort signal, so the ctx parameter added at the
-//     harness.FileSystem boundary is always "no signal" here.
-//   - structuredClone → JSON round-trip clones (typed unions re-decode via
-//     session.DecodeEntry/DecodeRecord; see codec header for the
-//     unknown-property note).
-//   - Date.now() → time.Now().UnixMilli().
-//   - Statics: JsonlSessionStorage.create/load/fork → CreateJsonlSessionStorage /
-//     LoadJsonlSessionStorage / (*JsonlSessionStorage).Fork (no ctx: pi's
-//     session layer has no AbortSignal to map).
+//   - pi's promise commitQueue serializes commits; pig guards all state with
+//     a mutex.
+//   - fileValue(Result) error propagation collapses to Go error returns.
 package jsonl
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"github.com/samber/lo"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/samber/lo"
+
+	"github.com/ZoroSpace/pig/agent/harness"
 	"github.com/ZoroSpace/pig/agent/harness/session"
+	"github.com/ZoroSpace/pig/ai/types"
+	aiutils "github.com/ZoroSpace/pig/ai/utils"
 )
 
-// context for filesystem calls inside storage operations (see header note).
-var storageFSContext = context.Background()
+// harnessFileSystem aliases harness.FileSystem for local brevity.
+type harnessFileSystem = harness.FileSystem
 
-// cloneEntry deep-copies a typed entry via JSON round-trip (pi:
-// structuredClone).
-func cloneEntry(entry session.Entry) (session.Entry, error) {
-	raw, err := jsonMarshal(entry)
-	if err != nil {
-		return nil, err
-	}
-	cloned, err := session.DecodeEntry(raw)
-	if err != nil {
-		return nil, err
-	}
-	return cloned, nil
+// jsonlBacking distinguishes the v4 and lazy-upgraded legacy v3 backings
+// (pi: JsonlBacking).
+type jsonlBacking struct {
+	kind string // "v4" | "v3"
+	// v3 members:
+	importedUsage  types.Usage
+	baselineWrites []session.CommittedWrite
 }
 
-// cloneRecord deep-copies a typed lane record via JSON round-trip (pi:
-// structuredClone).
-func cloneRecord(record session.LaneRecord) (session.LaneRecord, error) {
-	raw, err := jsonMarshal(record)
+// JsonlStorage implements session.Storage over one JSONL file (pi:
+// JsonlStorage).
+type JsonlStorage struct {
+	fileSystem harnessFileSystem
+	path       string
+	now        func() int64
+
+	mu sync.Mutex
+	// commitGate serializes Commit/CaptureForkSource in admission order
+	// (pi: the commitQueue promise chain).
+	commitGate chan struct{}
+	header     JsonlStorageHeader
+	backing    jsonlBacking
+	stateMu    sync.RWMutex
+	state      *session.InMemoryStorageState
+	stateName  string // "open" | "closing" | "closed"
+}
+
+// harnessFileSystem aliases harness.FileSystem (kept short in this file).
+
+func newJsonlStorage(options *JsonlStorageOptions, header JsonlStorageHeader, backing jsonlBacking) *JsonlStorage {
+	now := options.Now
+	if now == nil {
+		now = func() int64 { return time.Now().UnixMilli() }
+	}
+	return &JsonlStorage{
+		fileSystem: options.FileSystem,
+		path:       options.Path,
+		now:        now,
+		header:     header,
+		backing:    backing,
+		commitGate: make(chan struct{}, 1),
+		state:      session.NewInMemoryStorageState(),
+		stateName:  "open",
+	}
+}
+
+// CreateJsonlStorage initializes a fresh storage file with initial writes
+// (pi: JsonlStorage.create static).
+func CreateJsonlStorage(options *JsonlStorageOptions, header JsonlStorageHeader, initialWrites []session.Write, ctx context.Context) (*JsonlStorage, error) {
+	storage := newJsonlStorage(options, header, jsonlBacking{kind: "v4"})
+	prepared, err := storage.state.PrepareCommit(initialWrites, storage.now())
 	if err != nil {
 		return nil, err
 	}
-	cloned, err := session.DecodeRecord(raw)
-	if err != nil {
+	var transactions [][]session.CommittedWrite
+	if len(prepared.Writes) != 0 {
+		transactions = [][]session.CommittedWrite{prepared.Writes}
+	}
+	if err := publishFileAtomically(options.FileSystem, options.Path, serializeStorage(header, transactions), ctx); err != nil {
 		return nil, err
 	}
-	return cloned, nil
+	storage.state.ApplyValidated(prepared.Writes)
+	return storage, nil
 }
 
-// publishFileAtomically builds a complete sibling temporary file, then
-// atomically renames it over the destination. The populate callback must
-// create or overwrite tempPath with the complete file. The destination is
-// untouched until the rename commits, so a process crash while populating
-// can leave only the ignored .tmp file behind.
-//
-// Returns an error when population or rename fails. On failure,
-// temporary-file removal is best-effort and the original error is preserved.
-// Callers must serialize publications to the same destination because they
-// share its deterministic .tmp path. (pi: publishFileAtomically.)
-func publishFileAtomically(fs JsonlSessionRepoFileSystem, destinationPath string, populate func(tempPath string) error) error {
-	tempPath := destinationPath + ".tmp"
-	err := populate(tempPath)
-	if err == nil {
-		err = fileResult(fs.RenameFile(storageFSContext, tempPath, destinationPath), "Failed to publish staged file "+destinationPath)
+// CreateJsonlStorageFromForkSnapshot atomically creates storage from a
+// complete prepared snapshot (pi: JsonlStorage.createFromForkSnapshot).
+func CreateJsonlStorageFromForkSnapshot(options *JsonlStorageOptions, header JsonlStorageHeader, snapshot session.ForkDestinationSnapshot, ctx context.Context) (*JsonlStorage, error) {
+	writes := session.ForkSnapshotWrites(snapshot)
+	snapshotHeader := header
+	nextSeq := snapshot.NextSeq
+	snapshotHeader.NextSeq = &nextSeq
+	transactions := make([][]session.CommittedWrite, len(writes))
+	for i, write := range writes {
+		transactions[i] = []session.CommittedWrite{write}
 	}
-	if err != nil {
-		// Best-effort cleanup; the original error is preserved.
-		_ = fs.Remove(storageFSContext, tempPath, nil, lo.ToPtr(true))
-		return err
-	}
-	return nil
-}
-
-// JsonlSessionStorage is the file-backed session storage (pi:
-// JsonlSessionStorage class).
-type JsonlSessionStorage struct {
-	fs       JsonlSessionRepoFileSystem
-	metadata JsonlSessionMetadata
-	state    *session.SessionState
-	mu       sync.Mutex
-}
-
-// NewJsonlSessionStorage wraps an existing metadata + fresh state (pi:
-// constructor; metadata is cloned).
-func NewJsonlSessionStorage(fs JsonlSessionRepoFileSystem, metadata JsonlSessionMetadata) (*JsonlSessionStorage, error) {
-	cloned, err := cloneMetadata(metadata)
-	if err != nil {
+	if err := publishFileAtomically(options.FileSystem, options.Path, serializeStorage(snapshotHeader, transactions), ctx); err != nil {
 		return nil, err
 	}
-	return &JsonlSessionStorage{fs: fs, metadata: cloned, state: session.NewSessionState()}, nil
+	return OpenJsonlStorage(options, ctx)
 }
 
-// CreateJsonlSessionStorage initializes a new session file with one header
-// line (pi: static create).
-func CreateJsonlSessionStorage(fs JsonlSessionRepoFileSystem, path string, header JsonlV4Header) (*JsonlSessionStorage, error) {
-	if err := fileResult(fs.WriteFile(storageFSContext, path, []byte(EncodeHeader(header))), "Failed to initialize session "+path); err != nil {
-		return nil, err
-	}
-	info, err := fs.FileInfo(storageFSContext, path)
+// OpenJsonlStorage loads and replays one storage file (pi: JsonlStorage.open
+// static).
+func OpenJsonlStorage(options *JsonlStorageOptions, ctx context.Context) (*JsonlStorage, error) {
+	content, err := options.FileSystem.ReadTextFile(ctx, options.Path)
 	if err != nil {
-		return nil, fileResult(err, "Failed to read session metadata "+path)
+		return nil, fmt.Errorf("Failed to read JSONL storage %s: %w", options.Path, err)
 	}
-	return NewJsonlSessionStorage(fs, MetadataFromHeader(header, path, info.MtimeMs))
-}
+	lines, torn := splitCompleteLines(content)
+	if len(lines) == 0 || lines[0] == "" {
+		return nil, fmt.Errorf("Invalid JSONL storage %s: missing header", options.Path)
+	}
+	parsedHeader, err := ParseJsonlSessionHeader(lines[0])
+	if err != nil {
+		return nil, fmt.Errorf("Invalid JSONL storage %s: invalid header: %w", options.Path, err)
+	}
+	if parsedHeader.Format == "v3-legacy" {
+		return openLegacyV3(options, parsedHeader.V3Legacy, lines[1:], ctx)
+	}
 
-// LoadJsonlSessionStorage reads and replays one session file (pi: static
-// load).
-func LoadJsonlSessionStorage(fs JsonlSessionRepoFileSystem, path string) (*JsonlSessionStorage, error) {
-	content, err := fs.ReadTextFile(storageFSContext, path)
-	if err != nil {
-		return nil, fileResult(err, "Failed to read session "+path)
+	header := *parsedHeader.V4
+	if header.StorageVersion != JSONLStorageVersion {
+		return nil, fmt.Errorf("Session %s uses unsupported storage version %d", header.ID, header.StorageVersion)
 	}
-	physicalLines := strings.Split(content, "\n")
-	if len(physicalLines) > 0 && physicalLines[len(physicalLines)-1] == "" {
-		physicalLines = physicalLines[:len(physicalLines)-1]
-	}
-	if len(physicalLines) == 0 || physicalLines[0] == "" {
-		return nil, invalidFile(path, 1, NewJsonlDecodeError("schema", "is missing a header", nil))
-	}
-	header, err := ParseHeader(physicalLines[0])
-	if err != nil {
-		return nil, invalidFile(path, 1, err)
-	}
-	info, err := fs.FileInfo(storageFSContext, path)
-	if err != nil {
-		return nil, fileResult(err, "Failed to read session metadata "+path)
-	}
-	storage, err := NewJsonlSessionStorage(fs, MetadataFromHeader(header, path, info.MtimeMs))
-	if err != nil {
-		return nil, err
-	}
-	for index := 1; index < len(physicalLines); index++ {
-		line := physicalLines[index]
-		mutation, err := ParseMutation(line)
+	storage := newJsonlStorage(options, header, jsonlBacking{kind: "v4"})
+	for index := 1; index < len(lines); index++ {
+		line := lines[index]
+		writes, err := parseTransaction(line)
 		if err != nil {
-			// Drop the unacknowledged partial append by atomically
-			// publishing the valid prefix (pi: torn-tail repair).
-			isTornTail := index == len(physicalLines)-1 && isSyntaxError(err)
-			if isTornTail {
-				validPrefix := strings.Join(physicalLines[:index], "\n") + "\n"
-				err := publishFileAtomically(fs, path, func(tempPath string) error {
-					return fileResult(fs.WriteFile(storageFSContext, tempPath, []byte(validPrefix)), "Failed to stage torn-tail repair "+path)
-				})
-				if err != nil {
-					return nil, err
-				}
-				return storage, nil
-			}
-			return nil, invalidFile(path, index+1, err)
+			return nil, fmt.Errorf("Invalid JSONL storage %s: line %d: %w", options.Path, index+1, err)
 		}
-		if err := storage.applyMutation(mutation); err != nil {
-			var sessionErr *session.SessionError
-			if asSessionError(err, &sessionErr) && sessionErr.Code == session.CodeInvalidEntry {
-				return nil, invalidFile(path, index+1, err)
-			}
+		if err := storage.replayCommitted(writes); err != nil {
+			return nil, fmt.Errorf("Invalid JSONL storage %s: line %d: %w", options.Path, index+1, err)
+		}
+	}
+	if header.NextSeq != nil {
+		if err := storage.state.AdvanceNextSeq(*header.NextSeq); err != nil {
 			return nil, err
 		}
 	}
-	if !strings.HasSuffix(content, "\n") {
-		if err := fileResult(fs.AppendFile(storageFSContext, path, []byte("\n")), "Failed to repair unterminated session tail "+path); err != nil {
+	if torn {
+		if err := publishFileAtomically(options.FileSystem, options.Path, strings.Join(lines, "\n")+"\n", ctx); err != nil {
 			return nil, err
 		}
 	}
 	return storage, nil
 }
 
-// Fork copies this session's mutations into a new file (pi: fork).
-func (s *JsonlSessionStorage) Fork(path string, header JsonlV4Header, options *session.ForkOptions) (*JsonlSessionStorage, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	mutations, err := s.state.CreateForkMutations(options)
+// openLegacyV3 lazily upgrades a legacy v3 file (pi: openLegacyV3).
+func openLegacyV3(options *JsonlStorageOptions, header *LegacyV3SessionHeader, recordLines []string, ctx context.Context) (*JsonlStorage, error) {
+	normalized, err := NormalizeLegacyV3Records(recordLines)
 	if err != nil {
 		return nil, err
 	}
-	err = publishFileAtomically(s.fs, path, func(tempPath string) error {
-		targetStorage, err := CreateJsonlSessionStorage(s.fs, tempPath, header)
-		if err != nil {
-			return err
-		}
-		for _, mutation := range mutations {
-			if err := targetStorage.appendMutation(mutation); err != nil {
-				return err
-			}
-			if err := targetStorage.applyMutation(mutation); err != nil {
-				return err
-			}
-		}
-		return nil
+	targetHeader, err := NormalizeLegacyV3Header(options.FileSystem, header, ctx)
+	if err != nil {
+		return nil, err
+	}
+	nextSeq := normalized.NextSeq
+	targetHeader.NextSeq = &nextSeq
+	storage := newJsonlStorage(options, targetHeader, jsonlBacking{
+		kind:           "v3",
+		importedUsage:  normalized.ImportedUsage,
+		baselineWrites: normalized.Writes,
 	})
-	if err != nil {
+	if err := storage.replayCommitted(normalized.Writes); err != nil {
 		return nil, err
 	}
-	return LoadJsonlSessionStorage(s.fs, path)
+	return storage, nil
 }
 
-// Drain waits for pending write operations to complete (pi: drain). The
-// mutex acquire is the wait; errors were reported by their own calls.
-func (s *JsonlSessionStorage) Drain() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *JsonlStorage) replayCommitted(writes []session.CommittedWrite) error {
+	if err := s.state.ValidateCommitted(writes); err != nil {
+		return err
+	}
+	s.state.ApplyValidated(writes)
 	return nil
 }
 
-// GetMetadata returns the base session metadata (session.SessionStorage).
-func (s *JsonlSessionStorage) GetMetadata() (session.SessionMetadata, error) {
-	return s.metadata.SessionMetadata, nil
+// Header returns the parsed storage header (pi: readonly header field).
+func (s *JsonlStorage) Header() JsonlStorageHeader {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.header
 }
 
-// GetJsonlMetadata returns the full jsonl metadata (pi: getMetadata).
-func (s *JsonlSessionStorage) GetJsonlMetadata() (JsonlSessionMetadata, error) {
-	cloned, err := cloneMetadata(s.metadata)
+// Commit applies one transaction (pi: commit).
+func (s *JsonlStorage) Commit(writes []session.Write, ctx context.Context) (session.CommitResult, error) {
+	s.commitGate <- struct{}{}
+	defer func() { <-s.commitGate }()
+	s.mu.Lock()
+	if s.stateName != "open" {
+		s.mu.Unlock()
+		return session.CommitResult{}, fmt.Errorf("JsonlStorage is closed")
+	}
+	s.mu.Unlock()
+	if s.backing.kind == "v3" && len(writes) != 0 {
+		return s.upgradeLegacyV3ToV4(writes, ctx)
+	}
+	s.stateMu.Lock()
+	prepared, err := s.state.PrepareCommit(writes, s.now())
 	if err != nil {
-		return JsonlSessionMetadata{}, err
+		s.stateMu.Unlock()
+		return session.CommitResult{}, err
 	}
-	return cloned, nil
-}
-
-// GetLanes implements session.SessionStorage.
-func (s *JsonlSessionStorage) GetLanes() ([]session.LanePointer, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state.GetLanes(), nil
-}
-
-// CreateLane implements session.SessionStorage.
-func (s *JsonlSessionStorage) CreateLane(lane string, at *string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.state.ValidateNewLane(lane); err != nil {
-		return err
-	}
-	if err := s.state.ValidateTarget(at); err != nil {
-		return err
-	}
-	mutation := session.SessionMutation{
-		Kind:   session.MutationKindLane,
-		Seq:    s.state.NextSequence(),
-		Lane:   lo.ToPtr(lane),
-		LeafID: at,
-	}
-	if err := s.appendMutation(mutation); err != nil {
-		return err
-	}
-	return s.applyMutation(mutation)
-}
-
-// MoveLane implements session.SessionStorage.
-func (s *JsonlSessionStorage) MoveLane(lane string, to *string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, err := s.state.RequireLane(lane); err != nil {
-		return err
-	}
-	if err := s.state.ValidateTarget(to); err != nil {
-		return err
-	}
-	mutation := session.SessionMutation{
-		Kind:   session.MutationKindLane,
-		Seq:    s.state.NextSequence(),
-		Lane:   lo.ToPtr(lane),
-		LeafID: to,
-	}
-	if err := s.appendMutation(mutation); err != nil {
-		return err
-	}
-	return s.applyMutation(mutation)
-}
-
-// AppendEntry implements session.SessionStorage.
-func (s *JsonlSessionStorage) AppendEntry(newEntry session.Entry, lane string) (session.Entry, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	parentID, err := s.state.RequireLane(lane)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.state.ValidateUnusedID(newEntry.Base().ID); err != nil {
-		return nil, err
-	}
-	entry, err := cloneEntry(newEntry)
-	if err != nil {
-		return nil, err
-	}
-	base := entry.Base()
-	base.ParentID = parentID
-	base.Seq = s.state.NextSequence()
-	base.Timestamp = time.Now().UnixMilli()
-	mutation := session.SessionMutation{
-		Kind:  session.MutationKindEntry,
-		Lane:  lo.ToPtr(lane),
-		Entry: entry,
-	}
-	if err := s.appendMutation(mutation); err != nil {
-		return nil, err
-	}
-	if err := s.applyMutation(mutation); err != nil {
-		return nil, err
-	}
-	return cloneEntry(entry)
-}
-
-// AppendRecord implements session.SessionStorage.
-func (s *JsonlSessionStorage) AppendRecord(newRecord session.LaneRecord) (session.LaneRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, err := s.state.RequireLane(newRecord.Base().Lane); err != nil {
-		return nil, err
-	}
-	if err := s.state.ValidateUnusedID(newRecord.Base().ID); err != nil {
-		return nil, err
-	}
-	open, err := s.state.FindOpenOperations(newRecord.Base().Lane, lo.ToPtr(1))
-	if err != nil {
-		return nil, err
-	}
-	if newRecord.Base().Type == session.RecordTypeOperationStarted && len(open) > 0 {
-		return nil, session.NewSessionError(
-			session.CodeStorage,
-			"Lane "+newRecord.Base().Lane+" already has an open operation "+open[0].ID,
-		)
-	}
-	record, err := cloneRecord(newRecord)
-	if err != nil {
-		return nil, err
-	}
-	base := record.Base()
-	base.Seq = s.state.NextSequence()
-	base.Timestamp = time.Now().UnixMilli()
-	mutation := session.SessionMutation{
-		Kind:   session.MutationKindRecord,
-		Record: record,
-	}
-	if err := s.appendMutation(mutation); err != nil {
-		return nil, err
-	}
-	if err := s.applyMutation(mutation); err != nil {
-		return nil, err
-	}
-	return cloneRecord(record)
-}
-
-// GetEntry implements session.SessionStorage; (nil, nil) when unknown.
-func (s *JsonlSessionStorage) GetEntry(id string) (session.Entry, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	entry := s.state.GetEntry(id)
-	if entry == nil {
-		return nil, nil
-	}
-	return cloneEntry(entry)
-}
-
-// FindEntries implements session.SessionStorage.
-func (s *JsonlSessionStorage) FindEntries(query *session.EntryQuery) ([]session.Entry, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	entries, err := s.state.FindEntries(query)
-	if err != nil {
-		return nil, err
-	}
-	return cloneEntries(entries)
-}
-
-// FindEntriesOnBranch implements session.SessionStorage.
-func (s *JsonlSessionStorage) FindEntriesOnBranch(query session.BranchEntryQuery) ([]session.Entry, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	entries, err := s.state.FindEntriesOnBranch(query)
-	if err != nil {
-		return nil, err
-	}
-	return cloneEntries(entries)
-}
-
-// FindRecords implements session.SessionStorage.
-func (s *JsonlSessionStorage) FindRecords(query *session.RecordQuery) ([]session.LaneRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	records, err := s.state.FindRecords(query)
-	if err != nil {
-		return nil, err
-	}
-	return cloneRecords(records)
-}
-
-// FindOpenOperations implements session.SessionStorage.
-func (s *JsonlSessionStorage) FindOpenOperations(lane string, limit *int) ([]session.OperationStartedRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	open, err := s.state.FindOpenOperations(lane, limit)
-	if err != nil {
-		return nil, err
-	}
-	records := make([]session.OperationStartedRecord, len(open))
-	for i, record := range open {
-		cloned, err := cloneRecord(&record)
-		if err != nil {
-			return nil, err
-		}
-		records[i] = *cloned.(*session.OperationStartedRecord)
-	}
-	return records, nil
-}
-
-// GetLog implements session.SessionStorage.
-func (s *JsonlSessionStorage) GetLog(options *session.LogOptions) ([]session.LogItem, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	log, err := s.state.GetLog(options)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]session.LogItem, len(log))
-	for i, item := range log {
-		items[i] = item
-		if item.Entry != nil {
-			cloned, err := cloneEntry(item.Entry)
-			if err != nil {
-				return nil, err
-			}
-			items[i].Entry = cloned
-		}
-		if item.Record != nil {
-			cloned, err := cloneRecord(item.Record)
-			if err != nil {
-				return nil, err
-			}
-			items[i].Record = cloned
+	if len(prepared.Writes) != 0 {
+		if err := s.fileSystem.AppendFile(ctx, s.path, []byte(serializeTransaction(prepared.Writes)+"\n")); err != nil {
+			s.stateMu.Unlock()
+			return session.CommitResult{}, fmt.Errorf("Failed to append JSONL storage %s: %w", s.path, err)
 		}
 	}
-	return items, nil
-}
-
-// GetName implements session.SessionStorage.
-func (s *JsonlSessionStorage) GetName() (*string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state.GetName(), nil
-}
-
-// SetName implements session.SessionStorage.
-func (s *JsonlSessionStorage) SetName(name *string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	mutation := session.SessionMutation{
-		Kind: session.MutationKindFact,
-		Seq:  s.state.NextSequence(),
-		Fact: "name",
-		Name: name,
+	stats := s.state.ApplyValidated(prepared.Writes)
+	s.stateMu.Unlock()
+	result := session.CommitResult{
+		FirstSeq:  prepared.Result.FirstSeq,
+		Seqs:      prepared.Result.Seqs,
+		Timestamp: prepared.Result.Timestamp,
+		Stats:     s.withImportedUsage(stats),
 	}
-	if err := s.appendMutation(mutation); err != nil {
-		return err
-	}
-	return s.applyMutation(mutation)
+	return result, nil
 }
 
-// GetLabel implements session.SessionStorage.
-func (s *JsonlSessionStorage) GetLabel(id string) (*string, error) {
+// upgradeLegacyV3ToV4 atomically upgrades the legacy backing and preserves
+// the first caller write as a v4 transaction (pi: upgradeLegacyV3ToV4).
+func (s *JsonlStorage) upgradeLegacyV3ToV4(callerWrites []session.Write, ctx context.Context) (session.CommitResult, error) {
+	timestamp := s.now()
+	adjustment := session.UsageRow{
+		ID:         aiutils.UUIDv7WithTime(timestamp),
+		Usage:      s.backing.importedUsage,
+		Adjustment: true,
+		Details:    map[string]any{"source": "v3-import"},
+	}
+	writes := append([]session.Write{session.InsertUsage(adjustment)}, callerWrites...)
+	s.stateMu.Lock()
+	prepared, err := s.state.PrepareCommit(writes, timestamp)
+	if err != nil {
+		s.stateMu.Unlock()
+		return session.CommitResult{}, err
+	}
+	s.stateMu.Unlock()
+
+	nextSeq := prepared.Result.FirstSeq + int64(len(prepared.Writes))
+	upgradedHeader := s.header
+	upgradedHeader.NextSeq = &nextSeq
+	var transactions [][]session.CommittedWrite
+	for _, write := range s.backing.baselineWrites {
+		transactions = append(transactions, []session.CommittedWrite{write})
+	}
+	transactions = append(transactions, prepared.Writes)
+	if err := publishFileAtomically(s.fileSystem, s.path, serializeStorage(upgradedHeader, transactions), ctx); err != nil {
+		return session.CommitResult{}, err
+	}
+
+	s.stateMu.Lock()
+	stats := s.state.ApplyValidated(prepared.Writes)
+	s.stateMu.Unlock()
+	s.backing = jsonlBacking{kind: "v4"}
+	s.header = upgradedHeader
+	// The first sequence belongs to the internal usage adjustment; return
+	// only caller-write sequences.
+	result := session.CommitResult{
+		FirstSeq:  prepared.Result.FirstSeq + 1,
+		Seqs:      prepared.Result.Seqs[1:],
+		Timestamp: prepared.Result.Timestamp,
+		Stats:     stats,
+	}
+	return result, nil
+}
+
+func (s *JsonlStorage) assertOpen() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	label, ok := s.state.GetLabel(id)
+	if s.stateName != "open" {
+		return fmt.Errorf("JsonlStorage is closed")
+	}
+	return nil
+}
+
+func (s *JsonlStorage) GetEntries(ids []string, _ context.Context) (map[string]session.Entry, error) {
+	if err := s.assertOpen(); err != nil {
+		return nil, err
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state.GetEntries(ids), nil
+}
+
+func (s *JsonlStorage) GetValue(address session.Value, _ context.Context) (*session.StoredValue, error) {
+	if err := s.assertOpen(); err != nil {
+		return nil, err
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state.GetValue(address), nil
+}
+
+func (s *JsonlStorage) ScanValues(prefix session.Value, _ context.Context) ([]session.StoredValue, error) {
+	if err := s.assertOpen(); err != nil {
+		return nil, err
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state.ScanValues(prefix), nil
+}
+
+func (s *JsonlStorage) ReadList(address session.ValueList, options *session.ListReadOptions, _ context.Context) ([]session.ListElement, error) {
+	if err := s.assertOpen(); err != nil {
+		return nil, err
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state.ReadList(address, options)
+}
+
+func (s *JsonlStorage) ScanBranch(query session.StorageBranchScan, _ context.Context) ([]session.Entry, error) {
+	if err := s.assertOpen(); err != nil {
+		return nil, err
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state.ScanBranch(query)
+}
+
+func (s *JsonlStorage) ScanBranchStructure(query session.StorageBranchScan, _ context.Context) ([]session.EntryStructure, error) {
+	if err := s.assertOpen(); err != nil {
+		return nil, err
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state.ScanBranchStructure(query)
+}
+
+func (s *JsonlStorage) ScanEntries(query session.EntryScan, _ context.Context) ([]session.Entry, error) {
+	if err := s.assertOpen(); err != nil {
+		return nil, err
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state.ScanEntries(query), nil
+}
+
+func (s *JsonlStorage) ScanUsage(query session.UsageScan, _ context.Context) ([]session.UsageRow, error) {
+	if err := s.assertOpen(); err != nil {
+		return nil, err
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state.ScanUsage(query), nil
+}
+
+func (s *JsonlStorage) GetStats(_ context.Context) (session.SessionStats, error) {
+	if err := s.assertOpen(); err != nil {
+		return session.SessionStats{}, err
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.withImportedUsage(s.state.GetStats()), nil
+}
+
+func (s *JsonlStorage) withImportedUsage(stats session.SessionStats) session.SessionStats {
+	if s.backing.kind == "v4" {
+		return stats
+	}
+	stats.Usage = s.backing.importedUsage
+	return stats
+}
+
+// CaptureForkSource captures the state needed to fork at one serialized
+// boundary between commits (pi: captureForkSource).
+func (s *JsonlStorage) CaptureForkSource(_ context.Context) (session.ForkSourceSnapshot, error) {
+	if err := s.assertOpen(); err != nil {
+		return session.ForkSourceSnapshot{}, err
+	}
+	s.commitGate <- struct{}{}
+	defer func() { <-s.commitGate }()
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state.SnapshotEntriesAndValues()
+}
+
+func (s *JsonlStorage) Close(_ context.Context) error {
+	// Drain admitted commits before sealing (pi: close waits on the commit
+	// queue).
+	s.commitGate <- struct{}{}
+	defer func() { <-s.commitGate }()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.stateName == "closed" || s.stateName == "closing" {
+		return nil
+	}
+	s.stateName = "closing"
+	s.stateName = "closed"
+	return nil
+}
+
+// parseCommittedWrite decodes one replay write (pi: parseCommittedWrite).
+func parseCommittedWrite(raw json.RawMessage) (session.CommittedWrite, error) {
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, fmt.Errorf("Invalid JSONL transaction write")
+	}
+	seqField, ok := value["seq"]
 	if !ok {
-		return nil, nil
+		return nil, fmt.Errorf("Invalid JSONL write seq")
 	}
-	return &label, nil
-}
-
-// SetLabel implements session.SessionStorage.
-func (s *JsonlSessionStorage) SetLabel(id string, label *string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.state.ValidateTarget(&id); err != nil {
-		return err
+	var seq float64
+	if err := json.Unmarshal(seqField, &seq); err != nil || seq < 1 || seq != float64(int64(seq)) {
+		return nil, fmt.Errorf("Invalid JSONL write seq")
 	}
-	mutation := session.SessionMutation{
-		Kind:     session.MutationKindFact,
-		Seq:      s.state.NextSequence(),
-		Fact:     "label",
-		TargetID: id,
-		Label:    label,
+	var kind string
+	if rawKind, ok := value["kind"]; ok {
+		_ = json.Unmarshal(rawKind, &kind)
 	}
-	if err := s.appendMutation(mutation); err != nil {
-		return err
+	switch kind {
+	case "entry":
+		var timestamp float64
+		if rawTimestamp, ok := value["timestamp"]; !ok || json.Unmarshal(rawTimestamp, &timestamp) != nil || timestamp < 0 {
+			return nil, fmt.Errorf("Invalid JSONL entry timestamp")
+		}
+		entry, err := session.DecodeEntry(raw)
+		if err != nil {
+			return nil, err
+		}
+		return session.CommittedEntryWrite{Entry: entry}, nil
+	case "usage":
+		var write session.CommittedUsageWrite
+		if err := json.Unmarshal(raw, &write); err != nil {
+			return nil, err
+		}
+		return write, nil
+	case "value":
+		var op string
+		if rawOp, ok := value["op"]; ok {
+			_ = json.Unmarshal(rawOp, &op)
+		}
+		switch op {
+		case "set":
+			var write session.CommittedValueSetWrite
+			if err := json.Unmarshal(raw, &write); err != nil {
+				return nil, err
+			}
+			return write, nil
+		case "delete":
+			var write session.CommittedValueDeleteWrite
+			if err := json.Unmarshal(raw, &write); err != nil {
+				return nil, err
+			}
+			return write, nil
+		default:
+			return nil, fmt.Errorf("Invalid JSONL value operation: %v", op)
+		}
+	case "list":
+		var op string
+		if rawOp, ok := value["op"]; ok {
+			_ = json.Unmarshal(rawOp, &op)
+		}
+		switch op {
+		case "append":
+			var write session.CommittedListAppendWrite
+			if err := json.Unmarshal(raw, &write); err != nil {
+				return nil, err
+			}
+			return write, nil
+		case "delete":
+			var write session.CommittedListDeleteWrite
+			if err := json.Unmarshal(raw, &write); err != nil {
+				return nil, err
+			}
+			return write, nil
+		default:
+			return nil, fmt.Errorf("Invalid JSONL list operation: %v", op)
+		}
+	default:
+		return nil, fmt.Errorf("Invalid JSONL write kind: %v", kind)
 	}
-	return s.applyMutation(mutation)
 }
 
-// GetStats implements session.SessionStorage.
-func (s *JsonlSessionStorage) GetStats() (session.SessionStats, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state.GetStats(), nil
+// parseTransaction decodes one replay line (pi: parseTransaction).
+func parseTransaction(line string) ([]session.CommittedWrite, error) {
+	var value any
+	if err := json.Unmarshal([]byte(line), &value); err != nil {
+		return nil, fmt.Errorf("Invalid JSONL transaction: not valid JSON")
+	}
+	var raws []json.RawMessage
+	if array, ok := value.([]any); ok {
+		raws = make([]json.RawMessage, len(array))
+		for i, item := range array {
+			raws[i], _ = json.Marshal(item)
+		}
+	} else {
+		raws = []json.RawMessage{[]byte(line)}
+	}
+	writes := make([]session.CommittedWrite, len(raws))
+	for i, raw := range raws {
+		write, err := parseCommittedWrite(raw)
+		if err != nil {
+			return nil, err
+		}
+		writes[i] = write
+	}
+	return writes, nil
 }
 
-// appendMutation appends one encoded line to the session file (pi:
-// appendMutation). Callers hold mu.
-func (s *JsonlSessionStorage) appendMutation(mutation session.SessionMutation) error {
-	return fileResult(
-		s.fs.AppendFile(storageFSContext, s.metadata.Path, []byte(EncodeMutation(mutation))),
-		"Failed to append session "+s.metadata.Path,
-	)
+// serializeTransaction encodes one line (pi: serializeTransaction): a single
+// write serializes as one object, several as an array.
+func serializeTransaction(writes []session.CommittedWrite) string {
+	if len(writes) == 1 {
+		return string(mustJSON(writes[0]))
+	}
+	return string(mustJSON(writes))
 }
 
-// applyMutation applies one mutation to the in-memory state (pi:
-// applyMutation). Callers hold mu.
-func (s *JsonlSessionStorage) applyMutation(mutation session.SessionMutation) error {
-	return s.state.ApplyMutation(mutation, nil)
-}
-
-// jsonMarshal aliases json.Marshal for the clone helpers.
-func jsonMarshal(value any) (json.RawMessage, error) {
-	return json.Marshal(value)
-}
-
-// cloneMetadata deep-copies the jsonl metadata (pi: structuredClone of the
-// constructor argument). Shallow copy suffices: callers treat the metadata
-// map as immutable after construction, matching pi's clone-then-read usage.
-func cloneMetadata(metadata JsonlSessionMetadata) (JsonlSessionMetadata, error) {
-	raw, err := json.Marshal(metadata)
+func mustJSON(v any) []byte {
+	data, err := json.Marshal(v)
 	if err != nil {
-		return JsonlSessionMetadata{}, err
+		panic(err)
 	}
-	var cloned JsonlSessionMetadata
-	if err := json.Unmarshal(raw, &cloned); err != nil {
-		return JsonlSessionMetadata{}, err
-	}
-	return cloned, nil
+	return data
 }
 
-// isSyntaxError reports whether err is a "syntax" JsonlDecodeError.
-func isSyntaxError(err error) bool {
-	var decodeErr *JsonlDecodeError
-	if errors.As(err, &decodeErr) {
-		return decodeErr.Kind == "syntax"
+// serializeStorage encodes header + transactions (pi: serializeStorage).
+func serializeStorage(header JsonlStorageHeader, transactions [][]session.CommittedWrite) string {
+	lines := []string{string(mustJSON(header))}
+	for _, transaction := range transactions {
+		lines = append(lines, serializeTransaction(transaction))
 	}
-	return false
+	return strings.Join(lines, "\n") + "\n"
 }
 
-// asSessionError is errors.As specialized for *session.SessionError.
-func asSessionError(err error, target **session.SessionError) bool {
-	return errors.As(err, target)
-}
-
-// cloneEntries deep-copies an entry slice.
-func cloneEntries(entries []session.Entry) ([]session.Entry, error) {
-	cloned := make([]session.Entry, len(entries))
-	for i, entry := range entries {
-		c, err := cloneEntry(entry)
-		if err != nil {
-			return nil, err
+// splitCompleteLines splits full lines and reports a torn tail (pi:
+// splitCompleteLines).
+func splitCompleteLines(content string) ([]string, bool) {
+	if strings.HasSuffix(content, "\n") {
+		trimmed := strings.TrimSuffix(content, "\n")
+		if trimmed == "" {
+			return []string{}, false
 		}
-		cloned[i] = c
+		return strings.Split(trimmed, "\n"), false
 	}
-	return cloned, nil
+	lastNewline := strings.LastIndex(content, "\n")
+	if lastNewline == -1 {
+		return []string{}, true
+	}
+	return strings.Split(content[:lastNewline], "\n"), true
 }
 
-// cloneRecords deep-copies a record slice.
-func cloneRecords(records []session.LaneRecord) ([]session.LaneRecord, error) {
-	cloned := make([]session.LaneRecord, len(records))
-	for i, record := range records {
-		c, err := cloneRecord(record)
-		if err != nil {
-			return nil, err
-		}
-		cloned[i] = c
+// publishFileAtomically stages content and renames it into place (pi:
+// publishFileAtomically).
+func publishFileAtomically(fileSystem harnessFileSystem, destinationPath string, content string, ctx context.Context) error {
+	tempPath := destinationPath + ".tmp"
+	if err := fileSystem.WriteFile(ctx, tempPath, []byte(content)); err != nil {
+		_ = fileSystem.Remove(ctx, tempPath, nil, lo.ToPtr(true))
+		return fmt.Errorf("Failed to stage JSONL storage %s: %w", destinationPath, err)
 	}
-	return cloned, nil
+	if err := fileSystem.RenameFile(ctx, tempPath, destinationPath); err != nil {
+		_ = fileSystem.Remove(ctx, tempPath, nil, lo.ToPtr(true))
+		return fmt.Errorf("Failed to publish JSONL storage %s: %w", destinationPath, err)
+	}
+	return nil
 }

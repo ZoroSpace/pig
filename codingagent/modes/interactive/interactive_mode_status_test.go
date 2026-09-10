@@ -17,7 +17,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ZoroSpace/pig/codingagent/core"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/components"
+	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	"github.com/ZoroSpace/pig/codingagent/utils"
 	"github.com/ZoroSpace/pig/tui"
 )
@@ -50,7 +52,11 @@ func newStatusTestMode() *InteractiveMode {
 	m := &InteractiveMode{
 		chatContainer: &tui.Container{},
 		ui:            &stubRequestRenderTUI{},
+		// pi: defaultEditor always exists; the editor-border working status
+		// machinery (v0.85.1) touches it on every show/clear.
+		defaultEditor: components.NewCustomEditor(&stubRequestRenderTUI{}, theme.GetEditorTheme(), core.CreateKeybindingsManager(""), nil),
 	}
+	m.editor = m.defaultEditor
 	return m
 }
 
@@ -208,7 +214,7 @@ func TestClearStatusIndicatorRestoresIdle(t *testing.T) {
 	m.idleStatus = &components.IdleStatus{}
 	m.ui = &stubGetClearOnShrinkTUI{stubRequestRenderTUI: stubRequestRenderTUI{}, clearOnShrink: true}
 
-	m.showStatusIndicator(components.NewWorkingStatusIndicator(m.ui, "Working…", nil))
+	m.showStatusIndicator(components.NewWorkingStatusIndicator(m.ui, "Working…", nil, nil))
 	if m.activeStatusIndicator == nil {
 		t.Fatal("expected active indicator")
 	}

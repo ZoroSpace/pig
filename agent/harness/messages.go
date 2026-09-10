@@ -91,12 +91,14 @@ type CustomMessage struct {
 func (m CustomMessage) MessageRole() types.Role { return m.Role }
 
 // BranchSummaryMessage reports a branch summarization result (pi:
-// BranchSummaryMessage).
+// BranchSummaryMessage; v0.85.1: fromId is string | null).
 type BranchSummaryMessage struct {
-	Role      types.Role `json:"role"` // "branchSummary"
-	Summary   string     `json:"summary"`
-	FromID    string     `json:"fromId"`
-	Timestamp int64      `json:"timestamp"`
+	Role    types.Role `json:"role"` // "branchSummary"
+	Summary string     `json:"summary"`
+	// FromID is the source entry id; nil = pi's null (summary of a session
+	// boundary with no single source entry).
+	FromID    *string `json:"fromId"`
+	Timestamp int64   `json:"timestamp"`
 }
 
 func (m BranchSummaryMessage) MessageRole() types.Role { return m.Role }
@@ -133,8 +135,8 @@ func BashExecutionToText(msg BashExecutionMessage) string {
 }
 
 // CreateBranchSummaryMessage builds a branch summary message (pi:
-// createBranchSummaryMessage).
-func CreateBranchSummaryMessage(summary string, fromID string, timestamp int64) BranchSummaryMessage {
+// createBranchSummaryMessage; v0.85.1: fromId is string | null; nil = null).
+func CreateBranchSummaryMessage(summary string, fromID *string, timestamp int64) BranchSummaryMessage {
 	return BranchSummaryMessage{
 		Role:      RoleBranchSummary,
 		Summary:   summary,

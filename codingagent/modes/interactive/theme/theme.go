@@ -128,11 +128,15 @@ const (
 	ColorThinkingXhigh      ThemeColor = "thinkingXhigh"
 	ColorThinkingMax        ThemeColor = "thinkingMax"
 	ColorBashMode           ThemeColor = "bashMode"
+	// Scrollbar colors are foreground tokens as of v0.85.1 (pi: moved
+	// scrollbarThumb from ThemeBg to ThemeColor and added scrollbarTrack; both
+	// optional, falling back to muted/text).
+	ColorScrollbarTrack ThemeColor = "scrollbarTrack"
+	ColorScrollbarThumb ThemeColor = "scrollbarThumb"
 )
 
 const (
 	BgSelectedBg      ThemeBg = "selectedBg"
-	BgScrollbarThumb  ThemeBg = "scrollbarThumb"
 	BgSearchMatchBg   ThemeBg = "searchMatchBg"
 	BgUserMessageBg   ThemeBg = "userMessageBg"
 	BgCustomMessageBg ThemeBg = "customMessageBg"
@@ -142,16 +146,18 @@ const (
 )
 
 // optionalThemeColors/optionalThemeBgs are the schema-optional tokens (pi:
-// OptionalThemeColor/OptionalThemeBg — thinkingMax, searchMatchText,
-// scrollbarThumb, searchMatchBg).
+// OptionalThemeColor/OptionalThemeBg — v0.85.1 adds scrollbarTrack and moves
+// scrollbarThumb to the fg side: scrollbarTrack | scrollbarThumb |
+// thinkingMax | searchMatchText; optionalThemeBg = searchMatchBg only).
 var optionalThemeColors = map[ThemeColor]bool{
+	ColorScrollbarTrack:  true,
+	ColorScrollbarThumb:  true,
 	ColorThinkingMax:     true,
 	ColorSearchMatchText: true,
 }
 
 var optionalThemeBgs = map[ThemeBg]bool{
-	BgScrollbarThumb: true,
-	BgSearchMatchBg:  true,
+	BgSearchMatchBg: true,
 }
 
 // requiredThemeColors lists every required foreground token, in schema
@@ -404,18 +410,23 @@ func resolveThemeColors(colors map[string]ColorValue, vars map[string]ColorValue
 // withThemeColorFallbacks applies the optional-token fallbacks (pi:
 // withThemeColorFallbacks). Returns a new map.
 func withThemeColorFallbacks(colors map[string]ColorValue) map[string]ColorValue {
-	out := make(map[string]ColorValue, len(colors)+4)
+	out := make(map[string]ColorValue, len(colors)+5)
 	for k, v := range colors {
 		out[k] = v
+	}
+	if _, ok := out["scrollbarTrack"]; !ok {
+		if v, ok := colors["muted"]; ok {
+			out["scrollbarTrack"] = v
+		}
+	}
+	if _, ok := out["scrollbarThumb"]; !ok {
+		if v, ok := colors["text"]; ok {
+			out["scrollbarThumb"] = v
+		}
 	}
 	if _, ok := out["thinkingMax"]; !ok {
 		if v, ok := colors["thinkingXhigh"]; ok {
 			out["thinkingMax"] = v
-		}
-	}
-	if _, ok := out["scrollbarThumb"]; !ok {
-		if v, ok := colors["selectedBg"]; ok {
-			out["scrollbarThumb"] = v
 		}
 	}
 	if _, ok := out["searchMatchBg"]; !ok {
@@ -471,9 +482,19 @@ func NewTheme(fgColors map[string]ColorValue, bgColors map[string]ColorValue, mo
 		t.SourceInfo = options.SourceInfo
 	}
 
-	colors := make(map[string]ColorValue, len(fgColors)+2)
+	colors := make(map[string]ColorValue, len(fgColors)+4)
 	for k, v := range fgColors {
 		colors[k] = v
+	}
+	if _, ok := colors["scrollbarTrack"]; !ok {
+		if v, ok := fgColors["muted"]; ok {
+			colors["scrollbarTrack"] = v
+		}
+	}
+	if _, ok := colors["scrollbarThumb"]; !ok {
+		if v, ok := fgColors["text"]; ok {
+			colors["scrollbarThumb"] = v
+		}
 	}
 	if _, ok := colors["thinkingMax"]; !ok {
 		if v, ok := fgColors["thinkingXhigh"]; ok {
@@ -493,14 +514,9 @@ func NewTheme(fgColors map[string]ColorValue, bgColors map[string]ColorValue, mo
 		t.fgColors[ThemeColor(key)] = ansi
 	}
 
-	backgrounds := make(map[string]ColorValue, len(bgColors)+2)
+	backgrounds := make(map[string]ColorValue, len(bgColors)+1)
 	for k, v := range bgColors {
 		backgrounds[k] = v
-	}
-	if _, ok := backgrounds["scrollbarThumb"]; !ok {
-		if v, ok := bgColors["selectedBg"]; ok {
-			backgrounds["scrollbarThumb"] = v
-		}
 	}
 	if _, ok := backgrounds["searchMatchBg"]; !ok {
 		if v, ok := bgColors["selectedBg"]; ok {
@@ -759,139 +775,32 @@ func assertThemeNameIsValid(name string) error {
 	return nil
 }
 
-// validateColorValue checks the ColorValue union (string, or integer
-// 0-255).
-func validateColorValue(path string, value ColorValue) (string, bool) {
-	switch v := value.(type) {
-	case string:
-		return path, true
-	case int:
-		if v < 0 || v > 255 {
-			return path + ": color index must be between 0 and 255", false
-		}
-		return path, true
-	case float64:
-		if v != math.Trunc(v) || v < 0 || v > 255 {
-			return path + ": color index must be an integer between 0 and 255", false
-		}
-		return path, true
+func parseThemeJsonContent(label string, content string) (*ThemeJson, error) {
+	var parsed any
+	decoder := json.NewDecoder(strings.NewReader(utils.StripBom(content)))
+	if err := decoder.Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("Failed to parse theme %s: %v", label, err)
 	}
-	return path + ": must be a string or a 256-color index", false
+	return parseThemeJson(label, parsed)
 }
 
-// validateThemeJson hand-validates the theme schema (pi: TypeBox Compile).
-// Missing required colors keep pi's diagnostic formatting.
-func validateThemeJson(label string, parsed any) (*ThemeJson, error) {
+// parseThemeJson validates one parsed theme document (pi: parseThemeJson,
+// v0.85.1). Full validation runs through the installed validator (see
+// theme_json.go); without one, documents are accepted with a minimal
+// structural check — the equivalent of pi's `json as ThemeJson` cast, with
+// the JSON round-trip pig needs to produce the typed shape. Note the
+// validator-less path also skips the "/" name check, matching pi.
+func parseThemeJson(label string, parsed any) (*ThemeJson, error) {
+	if themeJsonValidator != nil {
+		return themeJsonValidator(label, parsed)
+	}
 	top, ok := parsed.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("Invalid theme %q:\n  - /: must be object", label)
+		return nil, fmt.Errorf("Invalid theme %q: expected an object with a \"colors\" map.", label)
 	}
-
-	var missingColors []string
-	var otherErrors []string
-
-	name, hasName := top["name"]
-	if !hasName {
-		missingColors = append(missingColors, "name")
-	} else if _, ok := name.(string); !ok {
-		otherErrors = append(otherErrors, "  - /name: must be string")
+	if _, hasColors := top["colors"]; !hasColors {
+		return nil, fmt.Errorf("Invalid theme %q: expected an object with a \"colors\" map.", label)
 	}
-	if v, ok := top["$schema"]; ok {
-		if _, ok := v.(string); !ok {
-			otherErrors = append(otherErrors, "  - /$schema: must be string")
-		}
-	}
-	if v, ok := top["vars"]; ok && v != nil {
-		vars, ok := v.(map[string]any)
-		if !ok {
-			otherErrors = append(otherErrors, "  - /vars: must be object")
-		} else {
-			keys := make([]string, 0, len(vars))
-			for k := range vars {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				if msg, ok := validateColorValue("/vars/"+k, vars[k]); !ok {
-					otherErrors = append(otherErrors, "  - "+msg)
-				}
-			}
-		}
-	}
-
-	colorsRaw, hasColors := top["colors"]
-	if !hasColors || colorsRaw == nil {
-		// Entire colors object missing: report every required color.
-		for _, c := range requiredThemeColors {
-			missingColors = append(missingColors, string(c))
-		}
-		for _, c := range requiredThemeBgs {
-			missingColors = append(missingColors, string(c))
-		}
-	} else {
-		colors, ok := colorsRaw.(map[string]any)
-		if !ok {
-			otherErrors = append(otherErrors, "  - /colors: must be object")
-		} else {
-			for _, c := range requiredThemeColors {
-				if _, ok := colors[string(c)]; !ok {
-					missingColors = append(missingColors, string(c))
-				}
-			}
-			for _, c := range requiredThemeBgs {
-				if _, ok := colors[string(c)]; !ok {
-					missingColors = append(missingColors, string(c))
-				}
-			}
-			keys := make([]string, 0, len(colors))
-			for k := range colors {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				if msg, ok := validateColorValue("/colors/"+k, colors[k]); !ok {
-					otherErrors = append(otherErrors, "  - "+msg)
-				}
-			}
-		}
-	}
-
-	if v, ok := top["export"]; ok && v != nil {
-		exportSection, ok := v.(map[string]any)
-		if !ok {
-			otherErrors = append(otherErrors, "  - /export: must be object")
-		} else {
-			for _, k := range []string{"pageBg", "cardBg", "infoBg"} {
-				if val, ok := exportSection[k]; ok {
-					if msg, ok := validateColorValue("/export/"+k, val); !ok {
-						otherErrors = append(otherErrors, "  - "+msg)
-					}
-				}
-			}
-		}
-	}
-
-	if len(missingColors) > 0 || len(otherErrors) > 0 {
-		errorMessage := fmt.Sprintf("Invalid theme %q:\n", label)
-		if len(missingColors) > 0 {
-			errorMessage += "\nMissing required color tokens:\n"
-			sort.Strings(missingColors)
-			for _, c := range missingColors {
-				errorMessage += "  - " + c + "\n"
-			}
-			// pi joins with "\n" so the last entry has no trailing newline
-			// before the fixed text; rebuild without the trailing newline.
-			errorMessage = strings.TrimSuffix(errorMessage, "\n")
-			errorMessage += "\n\nPlease add these colors to your theme's \"colors\" object."
-			errorMessage += "\nSee the built-in themes (dark.json, light.json) for reference values."
-		}
-		if len(otherErrors) > 0 {
-			errorMessage += "\n\nOther errors:\n" + strings.Join(otherErrors, "\n")
-		}
-		return nil, fmt.Errorf("%s", errorMessage)
-	}
-
-	// Re-marshal into the typed shape via JSON round-trip.
 	raw, err := json.Marshal(parsed)
 	if err != nil {
 		return nil, err
@@ -900,19 +809,7 @@ func validateThemeJson(label string, parsed any) (*ThemeJson, error) {
 	if err := json.Unmarshal(raw, &themeJson); err != nil {
 		return nil, fmt.Errorf("Failed to parse theme %s: %v", label, err)
 	}
-	if err := assertThemeNameIsValid(themeJson.Name); err != nil {
-		return nil, err
-	}
 	return &themeJson, nil
-}
-
-func parseThemeJsonContent(label string, content string) (*ThemeJson, error) {
-	var parsed any
-	decoder := json.NewDecoder(strings.NewReader(utils.StripBom(content)))
-	if err := decoder.Decode(&parsed); err != nil {
-		return nil, fmt.Errorf("Failed to parse theme %s: %v", label, err)
-	}
-	return validateThemeJson(label, parsed)
 }
 
 func loadThemeJson(name string) (*ThemeJson, error) {
@@ -963,7 +860,6 @@ func createTheme(themeJson *ThemeJson, mode ColorMode, sourcePath string) (*Them
 	bgColors := map[string]ColorValue{}
 	bgColorKeys := map[string]bool{
 		"selectedBg":      true,
-		"scrollbarThumb":  true,
 		"searchMatchBg":   true,
 		"userMessageBg":   true,
 		"customMessageBg": true,

@@ -31,7 +31,8 @@ type ScrollViewOptions struct {
 	Primary              bool
 	Overscroll           string // "chain" | "contain"; "" = "chain"
 	Scrollbar            ScrollViewScrollbar
-	ScrollbarStyle       func(text string) string
+	ScrollbarTrackStyle  func(text string) string
+	ScrollbarThumbStyle  func(text string) string
 	ScrollbarHideDelayMs *int
 }
 
@@ -53,7 +54,8 @@ type ScrollView struct {
 	followEnd                 bool
 	primary                   bool
 	overscroll                string
-	scrollbarStyle            func(text string) string
+	scrollbarTrackStyle       func(text string) string
+	scrollbarThumbStyle       func(text string) string
 	currentScrollbar          ScrollViewScrollbar
 	scrollbarHideDelayMs      int
 	currentScrollTop          int
@@ -89,9 +91,13 @@ func NewScrollView(component Component, options *ScrollViewOptions) *ScrollView 
 	if options != nil && options.Scrollbar != "" {
 		s.currentScrollbar = options.Scrollbar
 	}
-	s.scrollbarStyle = func(text string) string { return "\x1b[100m" + text + "\x1b[49m" }
-	if options != nil && options.ScrollbarStyle != nil {
-		s.scrollbarStyle = options.ScrollbarStyle
+	s.scrollbarTrackStyle = func(text string) string { return "\x1b[90m" + text + "\x1b[39m" }
+	if options != nil && options.ScrollbarTrackStyle != nil {
+		s.scrollbarTrackStyle = options.ScrollbarTrackStyle
+	}
+	s.scrollbarThumbStyle = func(text string) string { return "\x1b[37m" + text + "\x1b[39m" }
+	if options != nil && options.ScrollbarThumbStyle != nil {
+		s.scrollbarThumbStyle = options.ScrollbarThumbStyle
 	}
 	s.scrollbarHideDelayMs = 1000
 	if options != nil && options.ScrollbarHideDelayMs != nil {
@@ -212,7 +218,8 @@ func (s *ScrollView) hideTransientScrollbarLocked() {
 }
 
 // SetScrollbarActive marks pointer interaction with the scrollbar (pi:
-// setScrollbarActive).
+// setScrollbarActive). Activity changes request a render so hover states
+// paint promptly.
 func (s *ScrollView) SetScrollbarActive(active bool) {
 	s.mu.Lock()
 	if active == s.scrollbarActive {
@@ -221,8 +228,24 @@ func (s *ScrollView) SetScrollbarActive(active bool) {
 	}
 	s.scrollbarActive = active
 	s.markScrollbarActivityLocked()
+	notify := s.requestRenderCallback
 	s.mu.Unlock()
+	if notify != nil {
+		notify()
+	}
 }
+
+// IsScrollbarActive reports whether the pointer is interacting with the
+// scrollbar (pi: isScrollbarActive getter).
+func (s *ScrollView) IsScrollbarActive() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.scrollbarActive
+}
+
+// FollowEnd reports whether the view tracks the content end (pi: readonly
+// followEnd).
+func (s *ScrollView) FollowEnd() bool { return s.followEnd }
 
 // ScrollTo scrolls to an absolute offset (pi: scrollTo).
 func (s *ScrollView) ScrollTo(scrollTop int, options *ScrollViewScrollToOptions) {
@@ -384,9 +407,13 @@ func (s *ScrollView) Primary() bool { return s.primary }
 // Overscroll returns the overscroll chaining mode (pi: readonly overscroll).
 func (s *ScrollView) Overscroll() string { return s.overscroll }
 
-// ScrollbarStyle returns the scrollbar cell styler (pi: readonly
-// scrollbarStyle).
-func (s *ScrollView) ScrollbarStyle(text string) string { return s.scrollbarStyle(text) }
+// ScrollbarTrackStyle returns the scrollbar track cell styler (pi: readonly
+// scrollbarTrackStyle).
+func (s *ScrollView) ScrollbarTrackStyle(text string) string { return s.scrollbarTrackStyle(text) }
+
+// ScrollbarThumbStyle returns the scrollbar thumb cell styler (pi: readonly
+// scrollbarThumbStyle).
+func (s *ScrollView) ScrollbarThumbStyle(text string) string { return s.scrollbarThumbStyle(text) }
 
 // LayoutNode implements LayoutComponent (pi: [LAYOUT_NODE]()).
 func (s *ScrollView) LayoutNode() LayoutNode {

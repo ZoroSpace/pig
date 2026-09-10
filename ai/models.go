@@ -208,6 +208,9 @@ type Models interface {
 	StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *ModelsSimpleStreamOptions) *AssistantMessageEventStream
 	// CompleteSimple is StreamSimple plus Result (pi: completeSimple).
 	CompleteSimple(ctx context.Context, model *Model, llmContext *Context, options *ModelsSimpleStreamOptions) (*AssistantMessage, error)
+	// StreamDeferred resolves auth lazily and returns the deferred-response
+	// stream (pi: streamDeferred; fetchDeferred became its Result() wrapper).
+	StreamDeferred(ctx context.Context, model *Model, handle *DeferredHandle, options *ModelsDeferredFetchOptions) *AssistantMessageEventStream
 	// FetchDeferred fetches a deferred response to completion.
 	FetchDeferred(ctx context.Context, model *Model, handle *DeferredHandle, options *ModelsDeferredFetchOptions) (*AssistantMessage, error)
 	// CancelDeferred cancels one deferred response.
@@ -1004,9 +1007,10 @@ func (m *modelsImpl) CompleteSimple(ctx context.Context, model *Model, llmContex
 	return &result, nil
 }
 
-// FetchDeferred fetches a deferred response to completion.
-func (m *modelsImpl) FetchDeferred(ctx context.Context, model *Model, handle *DeferredHandle, options *ModelsDeferredFetchOptions) (*AssistantMessage, error) {
-	result := LazyStream(model, func() (*AssistantMessageEventStream, error) {
+// StreamDeferred resolves auth lazily and returns the deferred-response
+// stream (pi: streamDeferred).
+func (m *modelsImpl) StreamDeferred(ctx context.Context, model *Model, handle *DeferredHandle, options *ModelsDeferredFetchOptions) *AssistantMessageEventStream {
+	return LazyStream(model, func() (*AssistantMessageEventStream, error) {
 		provider, err := m.requireProvider(model)
 		if err != nil {
 			return nil, err
@@ -1027,7 +1031,13 @@ func (m *modelsImpl) FetchDeferred(ctx context.Context, model *Model, handle *De
 		}
 		applyResolvedToRequestOptions(&base.ProviderRequestOptions, resolved)
 		return deferred.FetchDeferred(ctx, resolved.requestModel, handle, &base), nil
-	}).Result()
+	})
+}
+
+// FetchDeferred fetches a deferred response to completion; it is
+// StreamDeferred plus Result (pi: fetchDeferred as the thin wrapper).
+func (m *modelsImpl) FetchDeferred(ctx context.Context, model *Model, handle *DeferredHandle, options *ModelsDeferredFetchOptions) (*AssistantMessage, error) {
+	result := m.StreamDeferred(ctx, model, handle, options).Result()
 	return &result, nil
 }
 

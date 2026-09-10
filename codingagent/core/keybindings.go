@@ -33,6 +33,7 @@ const (
 	AppKeybindingExit                     = "app.exit"
 	AppKeybindingSuspend                  = "app.suspend"
 	AppKeybindingThinkingCycle            = "app.thinking.cycle"
+	AppKeybindingThinkingSave             = "app.thinking.save"
 	AppKeybindingModelCycleForward        = "app.model.cycleForward"
 	AppKeybindingModelCycleBackward       = "app.model.cycleBackward"
 	AppKeybindingModelSelect              = "app.model.select"
@@ -164,6 +165,7 @@ var Keybindings = func() tui.KeybindingDefinitions {
 		Description: "Suspend to background",
 	}
 	defs["app.thinking.cycle"] = tui.KeybindingDefinition{DefaultKeys: keys("shift+tab"), Description: "Cycle thinking level"}
+	defs["app.thinking.save"] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+s"), Description: "Save thinking level"}
 	defs["app.model.cycleForward"] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+p"), Description: "Cycle to next model"}
 	defs["app.model.cycleBackward"] = tui.KeybindingDefinition{
 		DefaultKeys: func() []tui.KeyId {

@@ -133,6 +133,10 @@ func buildParams(model *types.Model, llmContext *types.Context, options *OpenAIC
 		params["tool_choice"] = string(options.ToolChoice)
 	}
 
+	if compat.vllmPriority != nil {
+		params["priority"] = *compat.vllmPriority
+	}
+
 	thinkingTokenBudgetField := resolveThinkingTokenBudgetField(compat)
 	thinkingBudget := resolveClampedThinkingBudget(model, options, params)
 
@@ -312,6 +316,19 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 		toolCallBlocksByID := map[string]*streamingToolBlock{}
 		hasFinishReason := false
 
+		// `reasoning_details` are replay metadata, not user-visible stream
+		// deltas. Keep them in memory during streaming and serialize once
+		// when the block is finalized (pi: streamedReasoningDetails +
+		// applyStreamedReasoningDetails).
+		var streamedReasoningDetails []map[string]any
+		applyStreamedReasoningDetails := func(block *streamingThinkingBlock) {
+			if streamedReasoningDetails != nil {
+				if b, err := json.Marshal(streamedReasoningDetails); err == nil {
+					block.content.ThinkingSignature = string(b)
+				}
+			}
+		}
+
 		getContentIndex := func(block streamingBlock) int {
 			for i, b := range blocks {
 				if b == block {
@@ -333,6 +350,7 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 				case *streamingTextBlock:
 					content = append(content, b.content)
 				case *streamingThinkingBlock:
+					applyStreamedReasoningDetails(b)
 					content = append(content, b.content)
 				case *streamingToolBlock:
 					b.finalize()
@@ -578,6 +596,7 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 			case *streamingTextBlock:
 				push(types.AssistantMessageEvent{Type: types.EventTextEnd, ContentIndex: contentIndex, Content: b.content.Text, Partial: output})
 			case *streamingThinkingBlock:
+				applyStreamedReasoningDetails(b)
 				push(types.AssistantMessageEvent{Type: types.EventThinkingEnd, ContentIndex: contentIndex, Content: b.content.Thinking, Partial: output})
 			case *streamingToolBlock:
 				if b.customInput != nil {
@@ -697,18 +716,12 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 					if !isOpenAIReasoningDetail(detail) {
 						continue
 					}
-					block := ensureThinkingBlock("")
-					var preserved []map[string]any
-					if existing := parseOpenAIReasoningDetails(block.content.ThinkingSignature); existing != nil {
-						preserved = existing
-					}
-					preserved = append(preserved, detail.(map[string]any))
+					ensureThinkingBlock("")
 					// Keep provider replay data in the existing signature slot.
-					// OpenRouter requires the complete reasoning_details
-					// sequence in its original order.
-					if b, err := json.Marshal(preserved); err == nil {
-						block.content.ThinkingSignature = string(b)
-					}
+					// OpenRouter streams reasoning_details as deltas: consecutive
+					// text/summary deltas are merged into logical entries, while
+					// encrypted entries remain opaque and discrete.
+					streamedReasoningDetails = appendOpenAIReasoningDetail(streamedReasoningDetails, detail.(map[string]any))
 				}
 			}
 		}

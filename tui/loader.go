@@ -144,7 +144,16 @@ func (l *Loader) restartAnimation() {
 	}()
 }
 
-func (l *Loader) updateDisplay() {
+// Invalidate implements Component: theme changes must re-render the loader
+// text with the new color functions (pi: override invalidate).
+func (l *Loader) Invalidate() {
+	l.Text.Invalidate()
+	l.updateDisplay()
+}
+
+// getRenderedIndicator returns the current frame, colorized unless the
+// indicator is rendered verbatim (pi: protected getRenderedIndicator).
+func (l *Loader) getRenderedIndicator() string {
 	l.mu.Lock()
 	frame := ""
 	if l.currentFrame < len(l.frames) {
@@ -152,14 +161,29 @@ func (l *Loader) updateDisplay() {
 	}
 	renderIndicatorVerbatim := l.renderIndicatorVerbatim
 	spinnerColorFn := l.spinnerColorFn
+	l.mu.Unlock()
+	if renderIndicatorVerbatim {
+		return frame
+	}
+	return spinnerColorFn(frame)
+}
+
+// GetRenderedIndicator exposes the current colorized frame (pi: protected
+// getRenderedIndicator; consumed by WorkingStatusIndicator's
+// renderSpinnerInBorder, which subclasses Loader in pi but embeds it in pig).
+func (l *Loader) GetRenderedIndicator() string { return l.getRenderedIndicator() }
+
+func (l *Loader) updateDisplay() {
+	l.mu.Lock()
+	frame := ""
+	if l.currentFrame < len(l.frames) {
+		frame = l.frames[l.currentFrame]
+	}
 	messageColorFn := l.messageColorFn
 	message := l.message
 	l.mu.Unlock()
 
-	renderedFrame := frame
-	if !renderIndicatorVerbatim {
-		renderedFrame = spinnerColorFn(frame)
-	}
+	renderedFrame := l.getRenderedIndicator()
 	indicator := ""
 	if len(frame) > 0 {
 		indicator = renderedFrame + " "

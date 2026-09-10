@@ -456,7 +456,14 @@ func loadSkillFromFile(filePath string, source string) skillFileResult {
 //
 // Skills with disableModelInvocation=true are excluded from the prompt
 // (they can only be invoked explicitly via /skill:name commands).
-func FormatSkillsForPrompt(skills []Skill) string {
+// FormatSkillsForPrompt renders the available-skills prompt section (pi:
+// formatSkillsForPrompt; v0.85.1 adds fileReadTool — "bash" when the read
+// tool is unavailable).
+func FormatSkillsForPrompt(skills []Skill, fileReadTool ...string) string {
+	readTool := "read"
+	if len(fileReadTool) > 0 && fileReadTool[0] != "" {
+		readTool = fileReadTool[0]
+	}
 	var visibleSkills []Skill
 	for _, skill := range skills {
 		if !skill.DisableModelInvocation {
@@ -468,9 +475,13 @@ func FormatSkillsForPrompt(skills []Skill) string {
 		return ""
 	}
 
+	instruction := "Use the read tool to load a skill's file when the task matches its description."
+	if readTool == "bash" {
+		instruction = "Use bash to load a skill's file when the task matches its description."
+	}
 	lines := []string{
 		"\n\nThe following skills provide specialized instructions for specific tasks.",
-		"Use the read tool to load a skill's file when the task matches its description.",
+		instruction,
 		"When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
 		"",
 		"<available_skills>",

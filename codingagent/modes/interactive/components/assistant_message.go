@@ -25,6 +25,10 @@ type AssistantMessageComponent struct {
 	lastMessage          *types.AssistantMessage
 	hasToolCalls         bool
 	isStreaming          bool
+	// thinkingVisibilityOverrides carries per-run click-toggled visibility
+	// (pi: thinkingVisibilityOverrides, v0.85.1); missing = follow
+	// hideThinkingBlock.
+	thinkingVisibilityOverrides map[int]bool
 }
 
 // AssistantMessageOptions carries the constructor's optional parameters
@@ -105,6 +109,8 @@ func (c *AssistantMessageComponent) Invalidate() {
 // setHideThinkingBlock).
 func (c *AssistantMessageComponent) SetHideThinkingBlock(hide bool) {
 	c.hideThinkingBlock = hide
+	// pi: setHideThinkingBlock clears the click overrides (v0.85.1).
+	c.thinkingVisibilityOverrides = nil
 	if c.lastMessage != nil {
 		c.UpdateContent(c.lastMessage, c.isStreaming)
 	}
@@ -179,6 +185,7 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 		normalized[idx] = asTextOrThinking(block)
 	}
 	message.Content = normalized
+	thinkingRunIndex := 0
 	for i := 0; i < len(message.Content); i++ {
 		switch content := message.Content[i].(type) {
 		case *types.TextContent:
@@ -230,17 +237,24 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 				}
 			}
 
-			if c.hideThinkingBlock {
+			runIndex := thinkingRunIndex
+			thinkingRunIndex++
+			hidden := c.hideThinkingBlock
+			if override, ok := c.thinkingVisibilityOverrides[runIndex]; ok {
+				hidden = override
+			}
+			var thinkingComponent tui.Component
+			if hidden {
 				// Show one static label for each run of thinking blocks when
 				// hidden.
-				c.contentContainer.AddChild(tui.NewText(
+				thinkingComponent = tui.NewText(
 					c.italicThinkingLabel(),
 					c.outputPad,
 					0,
-				))
+				)
 			} else {
 				// Render each run of thinking blocks as one Markdown section.
-				c.contentContainer.AddChild(tui.NewMarkdown(
+				thinkingComponent = tui.NewMarkdown(
 					strings.Join(thinkingBlocks, "\n\n"),
 					c.outputPad,
 					0,
@@ -252,8 +266,23 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 					&tui.MarkdownOptions{
 						Transform: CreateMarkdownTransform("assistant-thinking", c.isStreaming, c.markdownTransformers),
 					},
-				))
+				)
 			}
+			// Click toggles this run's visibility (pi: MouseRegion wrapper,
+			// v0.85.1).
+			c.contentContainer.AddChild(tui.NewMouseRegion(thinkingComponent, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
+				if event.Type != tui.MouseEventTypeClick || event.Button != tui.MouseButtonLeft {
+					return nil
+				}
+				if c.thinkingVisibilityOverrides == nil {
+					c.thinkingVisibilityOverrides = map[int]bool{}
+				}
+				c.thinkingVisibilityOverrides[runIndex] = !hidden
+				if c.lastMessage != nil {
+					c.UpdateContent(c.lastMessage, c.isStreaming)
+				}
+				return &tui.TuiMouseEventResult{Handled: true}
+			}))
 			if hasVisibleContentAfter {
 				c.contentContainer.AddChild(tui.NewSpacer(1))
 			}

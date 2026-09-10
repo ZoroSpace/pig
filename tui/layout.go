@@ -4,6 +4,7 @@ package tui
 import (
 	"math"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -300,7 +301,11 @@ func layoutComponent(
 // heights; nil expresses the undefined case.
 func intPtr(v int) *int { return &v }
 
-func styleScrollbarCell(line string, column int, totalWidth int, style func(text string) string) string {
+// replaceScrollbarCell replaces the cell at column with replacement,
+// preserving the target cell's background when requested (pi:
+// replaceScrollbarCell; v0.85.1 replaces styleScrollbarCell so the track
+// paints without clobbering the line's background color).
+func replaceScrollbarCell(line string, column int, totalWidth int, replacement string, preserveTargetBackground bool) string {
 	if IsImageLine(line) {
 		return line
 	}
@@ -325,19 +330,24 @@ func styleScrollbarCell(line string, column int, totalWidth int, style func(text
 		targetPrefix.WriteString(ansi.Code)
 		targetIndex += ansi.Length
 	}
-	targetText := target[targetIndex:]
-	if targetText == "" {
-		targetText = strings.Repeat(" ", end-start)
-	}
 	beforePadding := strings.Repeat(" ", maxInt(0, start-VisibleWidth(before)))
-	return before + beforePadding + targetPrefix.String() + style(targetText) + after
+	cellPaddingBefore := strings.Repeat(" ", maxInt(0, column-start))
+	cellPaddingAfter := strings.Repeat(" ", maxInt(0, end-column-1))
+	targetStyle := "\x1b[0m\x1b]8;;\x07"
+	if preserveTargetBackground {
+		targetStyle += GetActiveBackgroundAnsi(targetPrefix.String())
+	}
+	return before + beforePadding + targetStyle + cellPaddingBefore + replacement + cellPaddingAfter + after
 }
 
-// GetScrollbarGeometry computes the scrollbar geometry for a laid-out
-// scroll view box (pi: getScrollbarGeometry). Returns nil when no scrollbar
+// GetScrollbarGeometry computes the scrollbar geometry for a laid-out scroll
+// view box (pi: getScrollbarGeometry). includeHiddenAuto also reveals
+// auto-scrollbars whose content overflows but whose transient visibility is
+// currently off (used for track hit-testing). Returns nil when no scrollbar
 // paints.
-func GetScrollbarGeometry(box *LayoutBox) *ScrollbarGeometry {
-	if box.ScrollView == nil || !box.ScrollView.IsScrollbarVisible() || box.Rect.Width <= 0 || box.Rect.Height <= 0 {
+func GetScrollbarGeometry(box *LayoutBox, includeHiddenAuto ...bool) *ScrollbarGeometry {
+	includeHidden := len(includeHiddenAuto) > 0 && includeHiddenAuto[0]
+	if box.ScrollView == nil || box.Rect.Width <= 0 || box.Rect.Height <= 0 {
 		return nil
 	}
 
@@ -348,6 +358,10 @@ func GetScrollbarGeometry(box *LayoutBox) *ScrollbarGeometry {
 		contentHeight = len(box.ScrollContentLines)
 	}
 	trackHeight := box.Rect.Height
+	canRevealHiddenAuto := includeHidden && box.ScrollView.Scrollbar() == ScrollViewScrollbarAuto && contentHeight > trackHeight
+	if !box.ScrollView.IsScrollbarVisible() && !canRevealHiddenAuto {
+		return nil
+	}
 
 	minThumbHeight := minInt(2, trackHeight)
 	thumbHeight := maxInt(
@@ -381,8 +395,8 @@ func paintScrollbar(box *LayoutBox, screen []string, totalWidth int) {
 		return
 	}
 
-	for offset := 0; offset < geometry.ThumbHeight; offset++ {
-		row := geometry.ThumbTop + offset
+	for offset := 0; offset < geometry.TrackHeight; offset++ {
+		row := geometry.TrackTop + offset
 		if row < box.Clip.Y || row >= box.Clip.Y+box.Clip.Height || row < 0 || row >= len(screen) {
 			continue
 		}
@@ -390,7 +404,18 @@ func paintScrollbar(box *LayoutBox, screen []string, totalWidth int) {
 		if row < len(screen) {
 			line = screen[row]
 		}
-		screen[row] = styleScrollbarCell(line, geometry.Column, totalWidth, box.ScrollView.scrollbarStyle)
+		isThumb := row >= geometry.ThumbTop && row < geometry.ThumbTop+geometry.ThumbHeight
+		thumbChar := "┃"
+		if box.ScrollView.IsScrollbarActive() {
+			thumbChar = "█"
+		}
+		replacement := ""
+		if isThumb {
+			replacement = box.ScrollView.ScrollbarThumbStyle(thumbChar)
+		} else {
+			replacement = box.ScrollView.ScrollbarTrackStyle("│")
+		}
+		screen[row] = replaceScrollbarCell(line, geometry.Column, totalWidth, replacement, box.ScrollView.Scrollbar() != ScrollViewScrollbarAlways)
 	}
 }
 
@@ -489,6 +514,41 @@ func RenderLayoutFrame(root Component, width int, height int, requestRender func
 
 func containsPoint(rect LayoutRect, x int, y int) bool {
 	return x >= rect.X && x < rect.X+rect.Width && y >= rect.Y && y < rect.Y+rect.Height
+}
+
+// layoutBoxDepth pairs a box with its depth in the layout tree.
+type layoutBoxDepth struct {
+	box   *LayoutBox
+	depth int
+}
+
+// GetLayoutBoxesAt returns the visual hit path from the deepest component to
+// the layout root (pi: getLayoutBoxesAt). Boxes are ordered outermost-layer
+// first, deepest-node first within a layer.
+func GetLayoutBoxesAt(frame *LayoutFrame, x int, y int) []*LayoutBox {
+	var result []layoutBoxDepth
+	var visit func(box *LayoutBox, depth int)
+	visit = func(box *LayoutBox, depth int) {
+		if !containsPoint(box.Clip, x, y) {
+			return
+		}
+		result = append(result, layoutBoxDepth{box: box, depth: depth})
+		for _, child := range box.Children {
+			visit(child, depth+1)
+		}
+	}
+	visit(frame.Root, 0)
+	sort.SliceStable(result, func(a, b int) bool {
+		if result[a].box.Layer != result[b].box.Layer {
+			return result[a].box.Layer > result[b].box.Layer
+		}
+		return result[a].depth > result[b].depth
+	})
+	boxes := make([]*LayoutBox, len(result))
+	for i, entry := range result {
+		boxes[i] = entry.box
+	}
+	return boxes
 }
 
 // GetScrollViewBox finds the LayoutBox for a scroll view in the frame (pi:

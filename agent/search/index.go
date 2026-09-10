@@ -1,47 +1,50 @@
-// pi: src/search/index.ts — the session search surface.
+// pi: src/search/index.ts — the session search service contract (v0.85.1:
+// the scanning implementation was removed upstream; pig's search package
+// collapses to this interface, matching the v0.85.1 file 1:1).
 //
 // Deviations:
-//   - SessionSearch.search returns iter.Seq2[ScanningSessionSearchHit,
-//     error]: pi's async iterable throws on abort/duplicate-id/fs errors;
-//     Go sequences surface the terminating error as the second element.
-//   - search takes a leading context.Context (pi: AbortSignal → context
-//     rule); the signal field of SessionSearchOptions has no counterpart.
-//   - pi's SessionSearch<T> hit generic collapses to the concrete
-//     ScanningSessionSearchHit (per the TModel generic rule).
-//   - pi's `readonly` option fields are plain struct fields.
+//   - pi's Promise-returning methods → (T, error).
 package search
 
-import (
-	"context"
-	"iter"
+import "context"
 
-	"github.com/ZoroSpace/pig/agent/harness/session"
-)
-
-// SessionSearchOptions parameterizes a search call (pi:
-// SessionSearchOptions).
-type SessionSearchOptions struct {
-	// EntryTypes restricts results to specific canonical entry types.
-	EntryTypes []session.EntryType
-	// Limit caps the number of hits returned.
+// SearchQuery is one search request (pi: SearchQuery).
+type SearchQuery struct {
+	Text  string
 	Limit *int
-	// pi's `signal?: AbortSignal` maps to the Search ctx parameter.
 }
 
-// SessionSearchHit identifies one matching entry (pi: SessionSearchHit).
+// SessionSearchHit is one matched session (pi: SessionSearchHit).
 type SessionSearchHit struct {
-	// SessionID is the logical identifier of the session that owns the
-	// entry.
-	SessionID string
-	// EntryID is the logical identifier of the entry within that session.
-	EntryID string
+	SessionID string            `json:"sessionId"`
+	Score     *float64          `json:"score,omitempty"`
+	Top       *SessionSearchTop `json:"top,omitempty"`
 }
 
-// SessionSearch searches session entries (pi: SessionSearch<T>; the hit
-// generic collapses to ScanningSessionSearchHit).
-type SessionSearch interface {
-	// Search yields hits until the limit is reached; the second element
-	// carries a terminating error (abort, duplicate session id, read
-	// failure).
-	Search(ctx context.Context, text string, options *SessionSearchOptions) iter.Seq2[ScanningSessionSearchHit, error]
+// SessionSearchTop is the top matching entry of a session hit (pi: the
+// inline `top` shape).
+type SessionSearchTop struct {
+	EntryID   string  `json:"entryId"`
+	Snippet   *string `json:"snippet,omitempty"`
+	Timestamp int64   `json:"timestamp"`
+}
+
+// EntrySearchHit is one matched entry (pi: EntrySearchHit).
+type EntrySearchHit struct {
+	SessionID string   `json:"sessionId"`
+	EntryID   string   `json:"entryId"`
+	Timestamp int64    `json:"timestamp"`
+	Snippet   *string  `json:"snippet,omitempty"`
+	Score     *float64 `json:"score,omitempty"`
+}
+
+// SessionSearchService is the search contract consumed by the app layer
+// (pi: SessionSearchService).
+type SessionSearchService interface {
+	SearchSessions(ctx context.Context, query SearchQuery) ([]SessionSearchHit, error)
+	SearchEntries(ctx context.Context, query SearchQuery) ([]EntrySearchHit, error)
+	Sync(ctx context.Context) error
+	Notify(sessionID string)
+	Remove(ctx context.Context, sessionID string) error
+	Close(ctx context.Context) error
 }

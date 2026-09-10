@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ZoroSpace/pig/codingagent/core"
+	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
+	"github.com/ZoroSpace/pig/codingagent/utils"
 	"github.com/ZoroSpace/pig/tui"
 )
 
@@ -54,4 +57,62 @@ type countRenderTUI struct {
 
 func (c *countRenderTUI) RequestRender(force bool) {
 	c.renderCalls++
+}
+
+// editorBorderTUI adds the Terminal surface Editor.Render consumes (pi:
+// terminal: { rows: 10 }).
+type editorBorderTUI struct {
+	countRenderTUI
+}
+
+func (c *editorBorderTUI) Terminal() tui.Terminal { return tui.NewVirtualTerminal(80, 10) }
+
+// pi: "keeps the top border unchanged unless the editor opts in" (v0.85.1).
+func TestStatusIndicatorTopBorderUnchangedWithoutOptIn(t *testing.T) {
+	initTestTheme(t)
+	editorTUI := &editorBorderTUI{countRenderTUI: countRenderTUI{}}
+	editor := NewCustomEditor(editorTUI, theme.GetEditorTheme(), core.CreateKeybindingsManager(""), nil)
+	indicator := NewWorkingStatusIndicator(editorTUI, "Working", nil, nil)
+	editor.SetWorkingStatusIndicator(indicator)
+
+	topBorder := utils.StripAnsi(editor.Render(20)[0])
+	if topBorder != strings.Repeat("─", 20) {
+		t.Fatalf("expected default border, got %q", topBorder)
+	}
+	standaloneLine := indicator.Render(20)[1]
+	if !strings.Contains(standaloneLine, theme.Current().GetFgAnsi("accent")) {
+		t.Fatal("expected accent spinner color")
+	}
+	if !strings.Contains(standaloneLine, theme.Current().GetFgAnsi("muted")) {
+		t.Fatal("expected muted message color")
+	}
+	indicator.Dispose()
+}
+
+// pi: "embeds the working indicator when the editor opts in" (v0.85.1).
+func TestStatusIndicatorEmbedsWorkingIndicatorInBorder(t *testing.T) {
+	initTestTheme(t)
+	editorTUI := &editorBorderTUI{countRenderTUI: countRenderTUI{}}
+	editor := NewCustomEditor(editorTUI, theme.GetEditorTheme(), core.CreateKeybindingsManager(""), &CustomEditorOptions{
+		EditorOptions:      tui.EditorOptions{},
+		EmbedWorkingStatus: true,
+	})
+	if !editor.EmbedWorkingStatus {
+		t.Fatal("expected EmbedWorkingStatus")
+	}
+	editor.BorderColor = theme.Current().GetThinkingBorderColor("high")
+	indicator := NewWorkingStatusIndicator(editorTUI, "Working", nil, editor.BorderColor)
+	editor.SetWorkingStatusIndicator(indicator)
+
+	topBorder := editor.Render(20)[0]
+	if got := utils.StripAnsi(topBorder); got != "── ⠋ Working ───────" {
+		t.Fatalf("unexpected border %q", got)
+	}
+	if got := tui.VisibleWidth(topBorder); got != 20 {
+		t.Fatalf("border width = %d, want 20", got)
+	}
+	if parts := strings.Split(topBorder, theme.Current().GetFgAnsi("thinkingHigh")); len(parts) != 5 {
+		t.Fatalf("expected 5 thinkingHigh-colored segments, got %d: %q", len(parts), topBorder)
+	}
+	indicator.Dispose()
 }

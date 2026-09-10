@@ -249,14 +249,18 @@ type InteractiveMode struct {
 	isInitialized bool
 	inputGate     userInputGate
 
-	activeStatusIndicator      statusIndicatorItem
-	idleStatus                 *components.IdleStatus
-	workingMessage             *string
-	workingVisible             bool
-	workingIndicatorOptions    *core.WorkingIndicatorOptions
-	defaultWorkingMessage      string
-	defaultHiddenThinkingLabel string
-	hiddenThinkingLabel        string
+	activeStatusIndicator   statusIndicatorItem
+	idleStatus              *components.IdleStatus
+	workingMessage          *string
+	workingVisible          bool
+	workingIndicatorOptions *core.WorkingIndicatorOptions
+	defaultWorkingMessage   string
+	// activeWorkingIndicatorEmbedded reports whether the working indicator is
+	// embedded in the editor top border instead of the status row (pi:
+	// activeWorkingIndicatorEmbedded, v0.85.1).
+	activeWorkingIndicatorEmbedded bool
+	defaultHiddenThinkingLabel     string
+	hiddenThinkingLabel            string
 
 	lastSigintTime      time.Time
 	startupNoticesShown bool
@@ -424,6 +428,7 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 		submitDone:           make(chan struct{}),
 		skillCommands:        map[string]string{},
 	}
+	m.defaultWorkingMessage = "Working"
 	// Session replacement hooks (pi: constructor's setBeforeSessionInvalidate
 	// / setRebindSession; resetExtensionUI lands with T5b-3 and is a no-op
 	// until the extension UI surface exists).
@@ -448,11 +453,16 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 	}
 	m.options.TuiMode = tuiMode
 
+	// pi: setCapabilityOverrides(this.settingsManager.getTerminalCapabilityOverrides())
+	// — user-forced terminal capabilities take effect from construction on.
+	tui.SetCapabilityOverrides(settingsManager.GetTerminalCapabilityOverrides())
+
 	m.renderer = createInteractiveTui(createInteractiveTuiOptions{
-		tuiMode:            tuiMode,
-		showHardwareCursor: settingsManager.GetShowHardwareCursor(),
-		logDirectory:       codingagent.GetAgentDir(),
-		onRightClickPaste:  m.handleRightClickPaste,
+		tuiMode:                tuiMode,
+		showHardwareCursor:     settingsManager.GetShowHardwareCursor(),
+		logDirectory:           codingagent.GetAgentDir(),
+		onRightClickPaste:      m.handleRightClickPaste,
+		fullscreenCopyOnSelect: settingsManager.GetFullscreenCopyOnSelect(),
 	})
 	m.ui = createInteractiveTuiReference(func() tui.TUI { return m.renderer })
 	m.ui.SetClearOnShrink(settingsManager.GetClearOnShrink())
@@ -473,9 +483,12 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 	tui.SetKeybindings(m.keybindings.KeybindingsManager)
 	editorPaddingX := settingsManager.GetEditorPaddingX()
 	autocompleteMaxVisible := settingsManager.GetAutocompleteMaxVisible()
-	m.defaultEditor = components.NewCustomEditor(m.ui, theme.GetEditorTheme(), m.keybindings, &tui.EditorOptions{
-		PaddingX:               int(editorPaddingX),
-		AutocompleteMaxVisible: lo.ToPtr(int(autocompleteMaxVisible)),
+	m.defaultEditor = components.NewCustomEditor(m.ui, theme.GetEditorTheme(), m.keybindings, &components.CustomEditorOptions{
+		EditorOptions: tui.EditorOptions{
+			PaddingX:               int(editorPaddingX),
+			AutocompleteMaxVisible: lo.ToPtr(int(autocompleteMaxVisible)),
+		},
+		EmbedWorkingStatus: true,
 	})
 	m.editor = m.defaultEditor
 	m.editorContainer = &tui.Container{}
@@ -505,97 +518,9 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 }
 
 // createInteractiveTuiOptions mirror pi's InteractiveTuiOptions.
-type createInteractiveTuiOptions struct {
-	tuiMode            core.TuiMode
-	showHardwareCursor bool
-	logDirectory       string
-	onRightClickPaste  func()
-}
+// (createInteractiveTui moved to tui_renderer.go, v0.85.1 extraction; see
+// that file for the composition root.)
 
-// createInteractiveTui is the composition root for the interactive terminal
-// renderer (pi: createInteractiveTui).
-func createInteractiveTui(options createInteractiveTuiOptions) tui.TUI {
-	cursor := options.showHardwareCursor
-	if options.tuiMode == core.TuiModeFullscreen {
-		// Styles resolve the global theme lazily at call time: the renderer is
-		// built before theme.InitTheme runs (pi's `theme` import is a live
-		// binding; pig's global is initialized later in Init).
-		styleSearchMatch := func(text string) string {
-			t := theme.Current()
-			return t.Bg("searchMatchBg", t.Fg("searchMatchText", text))
-		}
-		return tui.NewTuiAltScreen(tui.NewProcessTerminal(), &cursor, options.logDirectory, &tui.TuiAltScreenOptions{
-			SearchMatchStyle: func(text string) string {
-				t := theme.Current()
-				return t.Underline(styleSearchMatch(text))
-			},
-			SearchCurrentMatchStyle: func(text string) string {
-				t := theme.Current()
-				return t.Bold(t.Inverse(styleSearchMatch(text)))
-			},
-			OpenUrl:           utils.OpenBrowser,
-			OnRightClickPaste: options.onRightClickPaste,
-			CopySelection: func(text string) bool {
-				if err := utils.CopyToClipboard(text); err != nil {
-					return false
-				}
-				return true
-			},
-		})
-	}
-	return tui.NewTuiMainScreen(tui.NewProcessTerminal(), &cursor, options.logDirectory)
-}
-
-// createInteractiveTuiReference returns a stable TUI reference whose method
-// calls always forward to the active renderer (pi:
-// createInteractiveTuiReference — a Proxy; pig needs an explicit forwarding
-// type since components capture the reference at construction time).
-type tuiReference struct{ getTui func() tui.TUI }
-
-func createInteractiveTuiReference(getTui func() tui.TUI) tui.TUI {
-	return &tuiReference{getTui: getTui}
-}
-
-func (r *tuiReference) Render(width int) []string          { return r.getTui().Render(width) }
-func (r *tuiReference) Invalidate()                        { r.getTui().Invalidate() }
-func (r *tuiReference) Mode() tui.TuiMode                  { return r.getTui().Mode() }
-func (r *tuiReference) Terminal() tui.Terminal             { return r.getTui().Terminal() }
-func (r *tuiReference) FullRedraws() int                   { return r.getTui().FullRedraws() }
-func (r *tuiReference) AddChild(c tui.Component)           { r.getTui().AddChild(c) }
-func (r *tuiReference) RemoveChild(c tui.Component)        { r.getTui().RemoveChild(c) }
-func (r *tuiReference) Clear()                             { r.getTui().Clear() }
-func (r *tuiReference) GetShowHardwareCursor() bool        { return r.getTui().GetShowHardwareCursor() }
-func (r *tuiReference) SetShowHardwareCursor(enabled bool) { r.getTui().SetShowHardwareCursor(enabled) }
-func (r *tuiReference) GetClearOnShrink() bool             { return r.getTui().GetClearOnShrink() }
-func (r *tuiReference) SetClearOnShrink(enabled bool)      { r.getTui().SetClearOnShrink(enabled) }
-func (r *tuiReference) SetFocus(c tui.Component)           { r.getTui().SetFocus(c) }
-func (r *tuiReference) ShowOverlay(c tui.Component, o *tui.OverlayOptions) tui.OverlayHandle {
-	return r.getTui().ShowOverlay(c, o)
-}
-func (r *tuiReference) HideOverlay()               { r.getTui().HideOverlay() }
-func (r *tuiReference) HasOverlay() bool           { return r.getTui().HasOverlay() }
-func (r *tuiReference) Start()                     { r.getTui().Start() }
-func (r *tuiReference) Stop(o *tui.TuiStopOptions) { r.getTui().Stop(o) }
-func (r *tuiReference) RenderNow(force bool)       { r.getTui().RenderNow(force) }
-func (r *tuiReference) RequestRender(force bool)   { r.getTui().RequestRender(force) }
-func (r *tuiReference) AddInputListener(l tui.TuiInputListener) func() {
-	return r.getTui().AddInputListener(l)
-}
-func (r *tuiReference) RemoveInputListener(l tui.TuiInputListener) { r.getTui().RemoveInputListener(l) }
-func (r *tuiReference) OnTerminalColorSchemeChange(l func(scheme tui.TerminalColorScheme)) func() {
-	return r.getTui().OnTerminalColorSchemeChange(l)
-}
-func (r *tuiReference) SetTerminalColorSchemeNotifications(enabled bool) {
-	r.getTui().SetTerminalColorSchemeNotifications(enabled)
-}
-func (r *tuiReference) QueryTerminalBackgroundColor(timeoutMs int) *tui.RgbColor {
-	return r.getTui().QueryTerminalBackgroundColor(timeoutMs)
-}
-func (r *tuiReference) QueryTerminalColorScheme(timeoutMs int) *tui.TerminalColorScheme {
-	return r.getTui().QueryTerminalColorScheme(timeoutMs)
-}
-
-// Convenience accessors (pi: getters).
 func (m *InteractiveMode) session() *core.AgentSession          { return m.runtimeHost.Session() }
 func (m *InteractiveMode) agent() *agent.Agent                  { return m.session().Agent }
 func (m *InteractiveMode) sessionManager() *core.SessionManager { return m.session().SessionManager }
@@ -682,24 +607,19 @@ func (m *InteractiveMode) Init() error {
 	// init's mountInteractiveTui block).
 	m.renderWidgets() // Initialize with default spacer
 	if m.options.TuiMode == core.TuiModeFullscreen {
-		m.transcriptScrollView = tui.NewScrollView(m.documentContainer, &tui.ScrollViewOptions{
-			Follow:     "end",
-			Primary:    true,
-			Overscroll: "chain",
-			Scrollbar:  m.settingsManager().GetFullscreenScrollbar(),
+		scrollbar := m.settingsManager().GetFullscreenScrollbar()
+		viewport := createChatViewport(chatViewportOptions{
+			document:        m.documentContainer,
+			pendingMessages: m.pendingMessagesContainer,
+			status:          m.statusContainer,
+			widgetsAbove:    m.widgetContainerAbove,
+			editor:          m.editorContainer,
+			widgetsBelow:    m.widgetContainerBelow,
+			footer:          m.footerContainer,
+			scrollbar:       &scrollbar,
 		})
-		dock := tui.NewVStack([]tui.StackChild{
-			tui.StackEntryOf(m.pendingMessagesContainer, &tui.StackEntryOptions{Shrink: lo.ToPtr(1), MinSize: 0}),
-			tui.StackEntryOf(m.statusContainer, &tui.StackEntryOptions{Shrink: lo.ToPtr(1), MinSize: 0}),
-			tui.StackEntryOf(m.widgetContainerAbove, &tui.StackEntryOptions{Shrink: lo.ToPtr(1), MinSize: 0}),
-			tui.StackEntryOf(m.editorContainer, &tui.StackEntryOptions{Shrink: lo.ToPtr(1), MinSize: 3}),
-			tui.StackEntryOf(m.widgetContainerBelow, &tui.StackEntryOptions{Shrink: lo.ToPtr(1), MinSize: 0}),
-			tui.StackEntryOf(m.footerContainer, &tui.StackEntryOptions{Shrink: lo.ToPtr(1), MinSize: 1}),
-		}, nil)
-		m.fullscreenLayoutRoot = tui.NewVStack([]tui.StackChild{
-			tui.StackEntryOf(m.transcriptScrollView, &tui.StackEntryOptions{Basis: 0, Grow: 1, Shrink: lo.ToPtr(1), MinSize: 1}),
-			tui.StackEntryOf(dock, &tui.StackEntryOptions{Basis: "auto", Grow: 0, Shrink: lo.ToPtr(1), MinSize: 1}),
-		}, nil)
+		m.transcriptScrollView = viewport.transcript
+		m.fullscreenLayoutRoot = viewport.root
 	}
 	m.mountInteractiveTui(m.renderer, []tui.Component{
 		m.documentContainer,
@@ -865,12 +785,18 @@ func (m *InteractiveMode) Run(ctx context.Context) error {
 		}()
 	}
 
-	// Start version check asynchronously (pi: run's checkForNewPiVersion).
-	go func() {
-		if release := utils.CheckForNewPiVersion(context.Background(), m.version); release != nil {
-			m.showNewVersionNotification(release)
-		}
-	}()
+	// pig disables pi's update-version check (pi: run's checkForNewPiVersion):
+	// the check queries pi.dev for PI's latest release and compares it against
+	// pig's pinned baseline version — two unrelated products. The resulting
+	// "New version available. Run pig update" banner is meaningless for pig
+	// (a static Go binary with no npm distribution / self-update channel;
+	// self-update arrives with the P8 packaging batch). Re-enable when pig
+	// has its own release channel, pointing at pig's endpoint instead.
+	// go func() {
+	// 	if release := utils.CheckForNewPiVersion(context.Background(), m.version); release != nil {
+	// 		m.showNewVersionNotification(release)
+	// 	}
+	// }()
 
 	// pi's package update check lands with the package manager (P7) and the
 	// tmux keyboard setup check with T6 (declared).
@@ -976,6 +902,8 @@ func (m *InteractiveMode) setupKeyHandlers() {
 	m.defaultEditor.OnAction(core.AppKeybindingModelCycleBackward, func() { go m.cycleModel("backward") })
 	m.defaultEditor.OnAction(core.AppKeybindingToolsExpand, func() { m.toggleToolOutputExpansion() })
 	m.defaultEditor.OnAction(core.AppKeybindingThinkingToggle, func() { m.toggleThinkingBlockVisibility() })
+	m.defaultEditor.OnAction(core.AppKeybindingEditorExternal, func() { go m.handleOpenExternalEditor(context.Background()) })
+	m.defaultEditor.OnAction(core.AppKeybindingMessageCopy, func() { go m.handleCopyCommand(true, true) })
 	m.defaultEditor.OnAction(core.AppKeybindingMessageFollowUp, func() { m.handleFollowUp() })
 	m.defaultEditor.OnAction(core.AppKeybindingMessageDequeue, func() { m.handleDequeue() })
 	m.defaultEditor.OnAction(core.AppKeybindingSessionNew, func() { go m.handleClearCommand() })
@@ -1214,24 +1142,26 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 	switch event.Type {
 	case agent.AgentEventAgentStart:
 		m.pendingTools = map[string]*components.ToolExecutionComponent{}
-		if m.settingsManager().GetShowTerminalProgress() {
-			m.ui.Terminal().SetProgress(true)
-		}
 		// Restore main escape handler if retry handler is still active
 		// (retry success event fires later, but we need the main handler
-		// now).
+		// now). Progress + working indicator moved to turn_start (v0.85.1)
+		// so an agent run that resumes after compaction gets them too.
 		m.abortMu.Lock()
 		if m.retryEscapeHandler != nil {
 			m.defaultEditor.OnEscape = m.retryEscapeHandler
 			m.retryEscapeHandler = nil
 		}
 		m.abortMu.Unlock()
+		m.ui.RequestRender(false)
+
+	case agent.AgentEventTurnStart:
+		if m.settingsManager().GetShowTerminalProgress() {
+			m.ui.Terminal().SetProgress(true)
+		}
 		if m.workingVisible {
-			message := m.defaultWorkingMessage
-			if m.workingMessage != nil {
-				message = *m.workingMessage
+			if !m.isWorkingIndicator() {
+				m.showWorkingStatusIndicator()
 			}
-			m.showStatusIndicator(components.NewWorkingStatusIndicator(m.ui, message, m.workingIndicatorOptions))
 		} else {
 			m.clearStatusIndicator("")
 		}
@@ -1370,6 +1300,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 				for _, component := range m.pendingTools {
 					component.SetArgsComplete()
 				}
+				m.maybeShowAssistantDiagnostics(m.streamingMessage)
 				m.maybeShowCacheMissNotice(m.streamingMessage)
 			}
 			m.streamingComponent = nil
@@ -1626,6 +1557,41 @@ func (m *InteractiveMode) showStatus(message string) {
 	m.ui.RequestRender(false)
 }
 
+// handleCopyCommand copies the last assistant message, preferring the active
+// fullscreen text selection when copy-on-select is disabled (pi:
+// handleCopyCommand; pig additively registers the action — the T5b shell
+// missed it, surfaced by the v0.85.1 preferSelection tests).
+func (m *InteractiveMode) handleCopyCommand(flashConfirmation bool, preferSelection bool) {
+	if altScreen, ok := m.ui.(interface {
+		GetCopyOnSelect() bool
+		HasActiveSelection() bool
+		CopyActiveSelectionToClipboard() bool
+	}); ok && preferSelection && !altScreen.GetCopyOnSelect() && altScreen.HasActiveSelection() {
+		altScreen.CopyActiveSelectionToClipboard()
+		return
+	}
+
+	text := m.session().GetLastAssistantText()
+	if text == "" {
+		m.ShowError("No agent messages to copy yet.")
+		return
+	}
+
+	if err := interactiveCopyToClipboard(text); err != nil {
+		m.ShowError(errorMessageOf(err))
+		return
+	}
+	if flashConfirmation {
+		if as, ok := m.ui.(interface{ Flash(string, int) }); ok {
+			as.Flash("Copied!", 0)
+		} else {
+			m.showStatus("Copied last agent message to clipboard")
+		}
+	} else {
+		m.showStatus("Copied last agent message to clipboard")
+	}
+}
+
 // addCustomEntryToChat renders an appended custom entry (pi:
 // addCustomEntryToChat).
 func (m *InteractiveMode) addCustomEntryToChat(entry *core.CustomEntry) {
@@ -1854,6 +1820,7 @@ func (m *InteractiveMode) renderSessionItems(items []renderSessionItem, options 
 				}
 			}
 			if assistant.StopReason != types.StopReasonAborted && assistant.StopReason != types.StopReasonError {
+				m.maybeShowAssistantDiagnostics(assistant)
 				if miss := cacheMisses[assistant]; miss != nil {
 					m.addCacheMissNotice(miss)
 				}
@@ -1946,6 +1913,56 @@ func (m *InteractiveMode) addCompactionCostNotice(notice *CompactionCostNotice) 
 	m.chatContainer.AddChild(tui.NewSpacer(1))
 	m.chatContainer.AddChild(tui.NewText(theme.Current().Fg("warning",
 		fmt.Sprintf("%s: %s tokens billed%s", label, components.FormatTokens(tokens), cost)), 1, 0))
+}
+
+// maybeShowAssistantDiagnostics surfaces assistant-message diagnostics as
+// transcript notices (pi: maybeShowAssistantDiagnostics, v0.85.1). Currently
+// reports Anthropic thinking blocks dropped by input transformations.
+func (m *InteractiveMode) maybeShowAssistantDiagnostics(message *types.AssistantMessage) {
+	if !m.settingsManager().GetShowCacheMissNotices() {
+		return
+	}
+
+	for _, diagnostic := range message.Diagnostics {
+		if diagnostic.Type != "anthropic_input_transformations" {
+			continue
+		}
+		transformations, ok := diagnostic.Details["transformations"].([]any)
+		if !ok {
+			continue
+		}
+
+		dropped := make([]string, 0, len(transformations))
+		for _, transformation := range transformations {
+			details, ok := transformation.(map[string]any)
+			if !ok {
+				continue
+			}
+			if details["type"] != "thinking_dropped" {
+				continue
+			}
+			reason := "unknown reason"
+			if r, ok := details["reason"].(string); ok {
+				reason = r
+			}
+			location := ""
+			if p, ok := details["path"].(string); ok {
+				location = " at " + p
+			}
+			dropped = append(dropped, reason+location)
+		}
+		if len(dropped) == 0 {
+			continue
+		}
+
+		noun := "thinking block"
+		if len(dropped) != 1 {
+			noun = fmt.Sprintf("%d thinking blocks", len(dropped))
+		}
+		m.chatContainer.AddChild(tui.NewSpacer(1))
+		m.chatContainer.AddChild(tui.NewText(
+			theme.Fg("warning", fmt.Sprintf("Anthropic dropped %s: %s", noun, strings.Join(dropped, "; "))), 1, 0))
+	}
 }
 
 // maybeShowCacheMissNotice shows a transcript notice when a completed
@@ -2208,6 +2225,12 @@ func (m *InteractiveMode) updateEditorBorderColor() {
 		}
 		m.defaultEditor.BorderColor = theme.Current().GetThinkingBorderColor(level)
 	}
+	// The embedded working indicator colors itself after the border (pi:
+	// updateEditorBorderColor invalidates the active working indicator,
+	// v0.85.1).
+	if m.isWorkingIndicator() {
+		m.activeStatusIndicator.Invalidate()
+	}
 	m.ui.RequestRender(false)
 }
 
@@ -2284,25 +2307,27 @@ func (m *InteractiveMode) setToolsExpanded(expanded bool) {
 	m.showStatus("Tool output: " + expandedLabel)
 }
 
+// updateThinkingBlockVisibility re-renders assistant messages in place
+// without rebuilding live tool components (pi: updateThinkingBlockVisibility,
+// v0.85.1).
+func (m *InteractiveMode) updateThinkingBlockVisibility() {
+	for _, child := range m.chatContainer.Children {
+		if assistant, ok := child.(*components.AssistantMessageComponent); ok {
+			assistant.SetHideThinkingBlock(m.hideThinkingBlock)
+		}
+	}
+	m.ui.RequestRender(false)
+}
+
 // toggleThinkingBlockVisibility toggles thinking blocks and rebuilds the
 // transcript (pi: toggleThinkingBlockVisibility).
 func (m *InteractiveMode) toggleThinkingBlockVisibility() {
 	m.hideThinkingBlock = !m.hideThinkingBlock
 	m.settingsManager().SetHideThinkingBlock(m.hideThinkingBlock)
 
-	// Rebuild chat from session messages
-	m.chatContainer.Clear()
-	m.rebuildChatFromMessages()
-
-	// If streaming, re-add the streaming component with updated visibility
-	// and re-render
-	m.streamingMu.Lock()
-	if m.streamingComponent != nil && m.streamingMessage != nil {
-		m.streamingComponent.SetHideThinkingBlock(m.hideThinkingBlock)
-		m.streamingComponent.UpdateContent(m.streamingMessage, false)
-		m.chatContainer.AddChild(m.streamingComponent)
-	}
-	m.streamingMu.Unlock()
+	// Update rendered assistant messages in place (v0.85.1) — rebuilding the
+	// chat destroyed live streaming/pending tool components (#8611).
+	m.updateThinkingBlockVisibility()
 
 	visible := "visible"
 	if m.hideThinkingBlock {
@@ -2335,14 +2360,35 @@ func (m *InteractiveMode) ShowWarning(warningMessage string) {
 	m.ui.RequestRender(false)
 }
 
+// setEditorWorkingStatusIndicator forwards the indicator to the active
+// editor when it opted into border embedding (pi:
+// setEditorWorkingStatusIndicator, v0.85.1). Returns false when the active
+// editor does not support it.
+func (m *InteractiveMode) setEditorWorkingStatusIndicator(indicator *components.WorkingStatusIndicator) bool {
+	m.defaultEditor.SetWorkingStatusIndicator(nil)
+	editor, ok := m.editor.(*components.CustomEditor)
+	if !ok || !editor.EmbedWorkingStatus {
+		return false
+	}
+	editor.SetWorkingStatusIndicator(indicator)
+	return true
+}
+
 // showStatusIndicator swaps the status container content (pi:
-// showStatusIndicator).
+// showStatusIndicator). A working indicator is embedded into the editor's
+// top border instead of occupying a standalone row when possible.
 func (m *InteractiveMode) showStatusIndicator(indicator statusIndicatorItem) {
 	if m.activeStatusIndicator != nil {
 		m.activeStatusIndicator.Dispose()
 	}
 	m.activeStatusIndicator = indicator
+	m.activeWorkingIndicatorEmbedded = false
 	m.statusContainer.Clear()
+	m.setEditorWorkingStatusIndicator(nil)
+	if working, ok := indicator.(*components.WorkingStatusIndicator); ok && m.setEditorWorkingStatusIndicator(working) {
+		m.activeWorkingIndicatorEmbedded = true
+		return
+	}
 	m.statusContainer.AddChild(indicator)
 }
 
@@ -2352,15 +2398,45 @@ func (m *InteractiveMode) clearStatusIndicator(kind components.StatusIndicatorKi
 	if kind != "" && (m.activeStatusIndicator == nil || m.activeStatusIndicator.IndicatorKind() != kind) {
 		return
 	}
-	hadActiveStatusIndicator := m.activeStatusIndicator != nil
-	if m.activeStatusIndicator != nil {
-		m.activeStatusIndicator.Dispose()
+	clearedIndicator := m.activeStatusIndicator
+	clearedIndicatorWasEmbedded := clearedIndicator != nil &&
+		clearedIndicator.IndicatorKind() == components.StatusKindWorking &&
+		m.activeWorkingIndicatorEmbedded
+	if clearedIndicator != nil {
+		clearedIndicator.Dispose()
 	}
 	m.activeStatusIndicator = nil
+	m.activeWorkingIndicatorEmbedded = false
 	m.statusContainer.Clear()
-	if hadActiveStatusIndicator && m.options.TuiMode == "regular" && m.ui.GetClearOnShrink() {
+	m.setEditorWorkingStatusIndicator(nil)
+	// Reserve the status height only for a standalone indicator row; an
+	// embedded working indicator frees its row without the idle filler.
+	if clearedIndicator != nil && !clearedIndicatorWasEmbedded && m.options.TuiMode == "regular" && m.ui.GetClearOnShrink() {
 		m.statusContainer.AddChild(m.idleStatus)
 	}
+}
+
+// showWorkingStatusIndicator builds and shows the working indicator, matching
+// the editor border color when the editor embeds it (pi:
+// showWorkingStatusIndicator, v0.85.1).
+func (m *InteractiveMode) showWorkingStatusIndicator() {
+	var colorFn func(string) string
+	if editor, ok := m.editor.(*components.CustomEditor); ok && editor.EmbedWorkingStatus {
+		borderColor := editor.BorderColor
+		if borderColor == nil {
+			level := m.session().ThinkingLevel()
+			if level == "" {
+				level = "off"
+			}
+			borderColor = theme.Current().GetThinkingBorderColor(level)
+		}
+		colorFn = borderColor
+	}
+	message := m.defaultWorkingMessage
+	if m.workingMessage != nil {
+		message = *m.workingMessage
+	}
+	m.showStatusIndicator(components.NewWorkingStatusIndicator(m.ui, message, m.workingIndicatorOptions, colorFn))
 }
 
 // =========================================================================
@@ -2677,9 +2753,11 @@ func (m *InteractiveMode) getMarkdownTransformers() []core.MarkdownTransformer {
 }
 
 // getRegisteredToolDefinition resolves a tool definition for rendering (pi:
-// getRegisteredToolDefinition).
+// getRegisteredToolDefinition; v0.85.1 merges built-in renderers here so
+// extension tools named like a built-in still render, and the component no
+// longer imports the tool implementations).
 func (m *InteractiveMode) getRegisteredToolDefinition(toolName string) *coretools.ToolDefinition {
-	return m.session().GetToolDefinition(toolName)
+	return coretools.WithBuiltInRenderers(toolName, m.session().GetToolDefinition(toolName))
 }
 
 // modelPriceSource adapts the model runtime to the pricing lookup (pig:
@@ -2861,10 +2939,11 @@ func (m *InteractiveMode) switchTuiMode(mode core.TuiMode, restoreProgress bool,
 	}
 
 	nextUi := createInteractiveTui(createInteractiveTuiOptions{
-		tuiMode:            mode,
-		showHardwareCursor: showHardwareCursor,
-		logDirectory:       codingagent.GetAgentDir(),
-		onRightClickPaste:  m.handleRightClickPaste,
+		tuiMode:                mode,
+		showHardwareCursor:     showHardwareCursor,
+		logDirectory:           codingagent.GetAgentDir(),
+		onRightClickPaste:      m.handleRightClickPaste,
+		fullscreenCopyOnSelect: m.settingsManager().GetFullscreenCopyOnSelect(),
 	})
 	nextUi.SetClearOnShrink(clearOnShrink)
 	if _, ok := nextUi.(*tui.TuiMainScreen); ok && m.hasMainScreenRenderState {
@@ -4123,15 +4202,7 @@ func (m *InteractiveMode) setWorkingVisible(visible bool) {
 		return
 	}
 	if m.session().IsStreaming() && !m.isWorkingIndicator() {
-		message := m.defaultWorkingMessage
-		if m.workingMessage != nil {
-			message = *m.workingMessage
-		}
-		m.showStatusIndicator(components.NewWorkingStatusIndicator(
-			m.ui,
-			message,
-			m.workingIndicatorOptions,
-		))
+		m.showWorkingStatusIndicator()
 	}
 	m.ui.RequestRender(false)
 }
@@ -4837,6 +4908,15 @@ func (m *InteractiveMode) setCustomEditorComponent(factory core.EditorFactory) {
 
 	m.mutateUI(func() {
 		m.editorContainer.AddChild(m.editor)
+		// Re-embed the working indicator when a custom editor without border
+		// embedding was swapped out (pi: setCustomEditorComponent tail, v0.85.1).
+		if working, ok := m.activeStatusIndicator.(*components.WorkingStatusIndicator); ok {
+			m.statusContainer.Clear()
+			m.activeWorkingIndicatorEmbedded = m.setEditorWorkingStatusIndicator(working)
+			if !m.activeWorkingIndicatorEmbedded {
+				m.statusContainer.AddChild(m.activeStatusIndicator)
+			}
+		}
 		m.ui.SetFocus(m.editor)
 	})
 	m.ui.RequestRender(false)
@@ -5061,6 +5141,7 @@ func (m *InteractiveMode) showSettingsSelector() {
 				TuiMode:                 m.ui.Mode(),
 				FullscreenExitOutput:    m.settingsManager().GetFullscreenExitOutput(),
 				FullscreenScrollbar:     m.settingsManager().GetFullscreenScrollbar(),
+				FullscreenCopyOnSelect:  m.settingsManager().GetFullscreenCopyOnSelect(),
 				Warnings:                m.settingsManager().GetWarnings(),
 			},
 			&components.SettingsCallbacks{
@@ -5146,13 +5227,7 @@ func (m *InteractiveMode) showSettingsSelector() {
 				OnHideThinkingBlockChange: func(hidden bool) {
 					m.hideThinkingBlock = hidden
 					m.settingsManager().SetHideThinkingBlock(hidden)
-					for _, child := range m.chatContainer.Children {
-						if assistant, ok := child.(*components.AssistantMessageComponent); ok {
-							assistant.SetHideThinkingBlock(hidden)
-						}
-					}
-					m.chatContainer.Clear()
-					m.rebuildChatFromMessages()
+					m.updateThinkingBlockVisibility()
 				},
 				OnMermaidRenderingModeChange: func(mode core.MermaidRenderingMode) {
 					m.settingsManager().SetMermaidRenderingMode(mode)
@@ -5254,6 +5329,12 @@ func (m *InteractiveMode) showSettingsSelector() {
 				OnFullscreenScrollbarChange: func(mode core.ScrollViewScrollbar) {
 					m.settingsManager().SetFullscreenScrollbar(mode)
 					m.applyFullscreenScrollbarSetting()
+				},
+				OnFullscreenCopyOnSelectChange: func(enabled bool) {
+					m.settingsManager().SetFullscreenCopyOnSelect(enabled)
+					if altScreen, ok := m.renderer.(*tui.TuiAltScreen); ok {
+						altScreen.SetCopyOnSelect(enabled)
+					}
 				},
 				OnWarningsChange: func(warnings core.WarningSettings) {
 					m.settingsManager().SetWarnings(warnings)
@@ -5500,6 +5581,9 @@ func (m *InteractiveMode) showModelSelector(initialSearchInput string) {
 					m.ShowError(errorMessageOf(err))
 					return
 				}
+				// pi: updateAvailableProviderCount() after setModel (v0.85.1)
+				// keeps the footer provider count in sync.
+				m.updateAvailableProviderCount()
 				m.footer.Invalidate()
 				m.updateEditorBorderColor()
 				done()
@@ -6911,7 +6995,14 @@ func (m *InteractiveMode) applyRuntimeSettings() {
 	// pi configures the http dispatcher here (configureHttpDispatcher); pig's
 	// net/http transport needs no dispatcher swap (declared in
 	// core/http_dispatcher.go), so only the idle timeout parse runs.
+	// v0.85.1: terminal capability overrides apply at runtime too (settings
+	// changes), and fullscreen copy-on-select syncs to the alt-screen
+	// renderer.
+	tui.SetCapabilityOverrides(m.settingsManager().GetTerminalCapabilityOverrides())
 	m.applyFullscreenScrollbarSetting()
+	if altScreen, ok := m.renderer.(*tui.TuiAltScreen); ok {
+		altScreen.SetCopyOnSelect(m.settingsManager().GetFullscreenCopyOnSelect())
+	}
 	m.footer.SetSession(m.session())
 	m.footer.SetAutoCompactEnabled(m.session().AutoCompactionEnabled())
 	m.footerDataProviderView.SetCwd(m.sessionManager().GetCwd())
@@ -7006,10 +7097,13 @@ func (m *InteractiveMode) handleReloadCommand(ctx context.Context) error {
 		if e := asExpandable(activeHeader); e != nil {
 			e.SetExpanded(m.toolOutputExpanded)
 		}
+		// v0.85.1 swaps the order: applyRuntimeSettings (which installs the
+		// terminal capability overrides) runs before the theme is applied so
+		// theme-dependent rendering sees the final capabilities.
+		m.applyRuntimeSettings()
 		if err := m.themeController.ApplyFromSettings(); err != nil {
 			return err
 		}
-		m.applyRuntimeSettings()
 		m.setupAutocompleteProvider()
 		runner := m.session().GetExtensionRunner()
 		m.setupExtensionShortcuts(runner)

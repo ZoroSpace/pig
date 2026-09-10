@@ -123,7 +123,7 @@ func TestTuiRenderScheduling(t *testing.T) {
 func TestTuiDebugLogging(t *testing.T) {
 	t.Run("writes redraw logs to the provided directory", func(t *testing.T) {
 		logDir := t.TempDir()
-		t.Setenv("PI_DEBUG_REDRAW", "1")
+		t.Setenv("PI_TUI_DEBUG_REDRAW", "1")
 		terminal := NewVirtualTerminal(40, 10)
 		tui := NewTuiMainScreen(terminal, nil, logDir)
 		component := &testComponent{}
@@ -132,7 +132,7 @@ func TestTuiDebugLogging(t *testing.T) {
 		tui.Start()
 		terminal.WaitForRender()
 
-		data, err := os.ReadFile(filepath.Join(logDir, "pi-debug.log"))
+		data, err := os.ReadFile(filepath.Join(logDir, "pi-tui-debug.log"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -772,4 +772,132 @@ func TestTuiDifferentialRendering(t *testing.T) {
 
 		tui.Stop(nil)
 	})
+}
+
+// boundedWriteTerminal records each terminal write (pi: BoundedWriteTerminal).
+type boundedWriteTerminal struct {
+	writes []string
+	cols   int
+	rows   int
+}
+
+func newBoundedWriteTerminal() *boundedWriteTerminal {
+	return &boundedWriteTerminal{cols: 80, rows: 24}
+}
+
+func (t *boundedWriteTerminal) Start(onInput func(data string), onResize func()) {}
+func (t *boundedWriteTerminal) Stop()                                            {}
+func (t *boundedWriteTerminal) DrainInput(maxMs int, idleMs int)                 {}
+func (t *boundedWriteTerminal) Write(data string)                                { t.writes = append(t.writes, data) }
+func (t *boundedWriteTerminal) MoveBy(lines int)                                 {}
+func (t *boundedWriteTerminal) HideCursor()                                      {}
+func (t *boundedWriteTerminal) ShowCursor()                                      {}
+func (t *boundedWriteTerminal) ClearLine()                                       {}
+func (t *boundedWriteTerminal) ClearFromCursor()                                 {}
+func (t *boundedWriteTerminal) ClearScreen()                                     {}
+func (t *boundedWriteTerminal) SetTitle(title string)                            {}
+func (t *boundedWriteTerminal) SetProgress(active bool)                          {}
+func (t *boundedWriteTerminal) Columns() int                                     { return t.cols }
+func (t *boundedWriteTerminal) Rows() int                                        { return t.rows }
+func (t *boundedWriteTerminal) KittyProtocolActive() bool                        { return false }
+func (t *boundedWriteTerminal) ModifyOtherKeysActive() bool                      { return false }
+
+func TestTuiBoundedRenderOutputSplitsLargeFullRenderWithoutChangingItsOutput(t *testing.T) {
+	terminal := newBoundedWriteTerminal()
+	tui := NewTuiMainScreen(terminal, nil, "")
+	component := &testComponent{}
+	tui.AddChild(component)
+	kittyLine := "\x1b_Ga=T,f=100;" + strings.Repeat("A", 1_200_000) + "\x1b\\"
+	component.SetLines([]string{kittyLine, kittyLine})
+
+	tui.RenderNow(false)
+
+	if len(terminal.writes) <= 2 {
+		t.Fatalf("writes = %d, want > 2 (large output should be split)", len(terminal.writes))
+	}
+	for _, write := range terminal.writes {
+		if len(write) > maxRenderWriteChars {
+			t.Fatalf("write length %d exceeds limit %d", len(write), maxRenderWriteChars)
+		}
+	}
+	joined := strings.Join(terminal.writes, "")
+	want := "\x1b[?2026h" + kittyLine + "\r\n" + kittyLine + "\x1b[?2026l"
+	if joined != want {
+		t.Fatalf("chunked output differs (lengths %d vs %d)", len(joined), len(want))
+	}
+}
+
+func TestTuiBoundedRenderOutputSplitsLargeDifferentialUpdatesWithoutAFullRedraw(t *testing.T) {
+	terminal := newBoundedWriteTerminal()
+	tui := NewTuiMainScreen(terminal, nil, "")
+	component := &testComponent{}
+	tui.AddChild(component)
+	component.SetLines([]string{"before"})
+	tui.RenderNow(false)
+	terminal.writes = nil
+
+	kittyLine := "\x1b_Ga=T,f=100;" + strings.Repeat("A", 1_200_000) + "\x1b\\"
+	component.SetLines([]string{"before", kittyLine, kittyLine})
+	tui.RenderNow(false)
+
+	if len(terminal.writes) <= 2 {
+		t.Fatalf("writes = %d, want > 2", len(terminal.writes))
+	}
+	for _, write := range terminal.writes {
+		if len(write) > maxRenderWriteChars {
+			t.Fatalf("write length %d exceeds limit %d", len(write), maxRenderWriteChars)
+		}
+	}
+	output := strings.Join(terminal.writes, "")
+	if !strings.HasPrefix(output, "\x1b[?2026h") {
+		t.Fatal("output should start with synchronized-output begin")
+	}
+	if !strings.HasSuffix(output, "\x1b[?2026l") {
+		t.Fatal("output should end with synchronized-output end")
+	}
+	if strings.Contains(output, "\x1b[2J") {
+		t.Fatal("the update should stay on the differential render path")
+	}
+}
+
+func TestTuiCrashDumpWithoutConfiguredLogDirectory(t *testing.T) {
+	crashDir := t.TempDir()
+	t.Setenv("TMPDIR", crashDir)
+	t.Setenv("TEMP", crashDir)
+	t.Setenv("TMP", crashDir)
+
+	terminal := NewVirtualTerminal(40, 10)
+	tui := NewTuiMainScreen(terminal, nil, "")
+	component := &testComponent{}
+	tui.AddChild(component)
+	component.SetLines([]string{"ok"})
+	tui.Start()
+	terminal.WaitForRender()
+
+	// Width overflow is detected in the differential render path
+	component.SetLines([]string{"ok", strings.Repeat("x", 60)})
+	func() {
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("expected render to panic on over-wide line")
+			}
+			err, ok := r.(error)
+			if !ok {
+				t.Fatalf("panic = %v, want error", r)
+			}
+			crashLogPath := filepath.Join(crashDir, "pi-tui-crash.log")
+			if !strings.Contains(err.Error(), crashLogPath) {
+				t.Fatalf("error message should reference %s: %v", crashLogPath, err)
+			}
+		}()
+		tui.RenderNow(false)
+	}()
+	data, err := os.ReadFile(filepath.Join(crashDir, "pi-tui-crash.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "Terminal width: 40") {
+		t.Fatalf("crash log = %q", data)
+	}
 }

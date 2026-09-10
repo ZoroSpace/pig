@@ -148,7 +148,11 @@ func signalAborted(ctx context.Context) bool {
 func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []AgentMessage, initialConfig AgentLoopConfig, emit AgentEventSink, streamFunction StreamFn) []AgentMessage {
 	currentContext := initialContext
 	config := initialConfig
-	firstTurn := true
+	// pi: lastCompletedTurn — the completed-turn snapshot handed to
+	// prepareNextTurn at the start of the next turn (moved from the turn_end
+	// site in v0.85.1: preparation now runs immediately before the next turn
+	// starts, not before the loop decides whether to continue).
+	var lastCompletedTurn *ShouldStopAfterTurnContext
 	// Check for steering messages at start (user may have typed while waiting)
 	var pendingMessages []AgentMessage
 	if config.GetSteeringMessages != nil {
@@ -172,10 +176,33 @@ func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []Ag
 
 		// Inner loop: process tool calls and steering messages
 		for hasMoreToolCalls || len(pendingMessages) > 0 {
-			if !firstTurn {
+			if lastCompletedTurn != nil {
+				if config.PrepareNextTurn != nil {
+					nextTurnSnapshot := config.PrepareNextTurn(*lastCompletedTurn)
+					if nextTurnSnapshot != nil {
+						if nextTurnSnapshot.Context != nil {
+							currentContext = nextTurnSnapshot.Context
+						}
+						if nextTurnSnapshot.Model != nil {
+							config.Model = nextTurnSnapshot.Model
+						}
+						if nextTurnSnapshot.ThinkingLevel == "" {
+							// keep config.Reasoning (pi: undefined ?? config.reasoning)
+						} else if nextTurnSnapshot.ThinkingLevel == types.ModelThinkingOff {
+							config.Reasoning = ""
+						} else {
+							config.Reasoning = types.ThinkingLevel(nextTurnSnapshot.ThinkingLevel)
+						}
+					}
+				}
+				// Preparation can be long-running (for example, compaction). Pick up
+				// steering queued while it ran. Only poll again if the earlier poll
+				// returned nothing; otherwise one-at-a-time mode would deliver two
+				// messages in this turn.
+				if len(pendingMessages) == 0 && config.GetSteeringMessages != nil {
+					pendingMessages = config.GetSteeringMessages()
+				}
 				emit(AgentEvent{Type: AgentEventTurnStart})
-			} else {
-				firstTurn = false
 			}
 
 			// Process pending messages (inject before next assistant response)
@@ -230,38 +257,15 @@ func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []Ag
 
 			emit(AgentEvent{Type: AgentEventTurnEnd, Message: message, ToolResults: toolResults})
 
-			nextTurnContext := ShouldStopAfterTurnContext{
+			lastCompletedTurn = &ShouldStopAfterTurnContext{
 				Message:     message,
 				ToolResults: toolResults,
 				Context:     currentContext,
 				NewMessages: newMessages,
 			}
-			if config.PrepareNextTurn != nil {
-				nextTurnSnapshot := config.PrepareNextTurn(nextTurnContext)
-				if nextTurnSnapshot != nil {
-					if nextTurnSnapshot.Context != nil {
-						currentContext = nextTurnSnapshot.Context
-					}
-					if nextTurnSnapshot.Model != nil {
-						config.Model = nextTurnSnapshot.Model
-					}
-					if nextTurnSnapshot.ThinkingLevel == "" {
-						// keep config.Reasoning (pi: undefined ?? config.reasoning)
-					} else if nextTurnSnapshot.ThinkingLevel == types.ModelThinkingOff {
-						config.Reasoning = ""
-					} else {
-						config.Reasoning = types.ThinkingLevel(nextTurnSnapshot.ThinkingLevel)
-					}
-				}
-			}
 
 			if config.ShouldStopAfterTurn != nil &&
-				config.ShouldStopAfterTurn(ShouldStopAfterTurnContext{
-					Message:     message,
-					ToolResults: toolResults,
-					Context:     currentContext,
-					NewMessages: newMessages,
-				}) {
+				config.ShouldStopAfterTurn(*lastCompletedTurn) {
 				emit(AgentEvent{Type: AgentEventAgentEnd, Messages: newMessages})
 				return newMessages
 			}
@@ -525,6 +529,18 @@ func executeToolCallsParallel(ctx context.Context, currentContext *AgentContext,
 
 		prepared := preparation
 		finalizedCalls = append(finalizedCalls, finalizedToolCallEntry{run: func() finalizedToolCallOutcome {
+			// pi: signal.aborted check before dispatch — cancellation landing
+			// between preparation and execution yields an error tool result
+			// instead of running the tool.
+			if signalAborted(ctx) {
+				finalized := finalizedToolCallOutcome{
+					toolCall: prepared.toolCall,
+					result:   createErrorToolResult("Operation aborted"),
+					isError:  true,
+				}
+				emitToolExecutionEnd(&finalized, emit)
+				return finalized
+			}
 			executed := executePreparedToolCall(ctx, &prepared, emit)
 			finalized := finalizeExecutedToolCall(ctx, currentContext, assistantMessage, &prepared, &executed, config)
 			emitToolExecutionEnd(&finalized, emit)

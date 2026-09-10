@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/codingagent"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 )
 
@@ -115,7 +116,7 @@ func TestBuiltinSlashCommandsIncludeQuitWithAppName(t *testing.T) {
 	for _, command := range BuiltinSlashCommands {
 		if command.Name == "quit" {
 			found = true
-			if command.Description != "Quit pi" {
+			if command.Description != "Quit "+codingagent.AppName {
 				t.Fatalf("quit description = %q", command.Description)
 			}
 		}

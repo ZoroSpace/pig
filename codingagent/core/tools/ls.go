@@ -2,8 +2,9 @@
 // limits and byte truncation).
 //
 // Segment deviations:
-//   - The render functions depend on Theme/pi-tui and arrive with the theme
-//     batch.
+//   - The render functions live in renderers_*.go (S5a: pi moved them to
+//     core/tools/renderers/; pig keeps package tools, see the file header
+//     there).
 //   - signal wiring → context.Context (abort-listener pattern collapses to
 //     ctx probes; the entries loop is synchronous so there is nothing to
 //     interrupt mid-flight).
@@ -24,7 +25,6 @@ import (
 	"github.com/ZoroSpace/pig/agent"
 	harnessutils "github.com/ZoroSpace/pig/agent/harness/utils"
 	"github.com/ZoroSpace/pig/ai/types"
-	"github.com/ZoroSpace/pig/tui"
 )
 
 // lsSchemaJSON is the ls tool's parameter schema (pi: lsSchema).
@@ -127,7 +127,7 @@ func CreateLsToolDefinition(cwd string, options *LsToolOptions) *ToolDefinition 
 			if ctx.Err() != nil {
 				return agent.AgentToolResult{}, fmt.Errorf("Operation aborted")
 			}
-			dirPath := ResolveToCwd(orDot(input.Path), cwd)
+			dirPath := ResolveToCwd(orDot(input.Path), executeCwd(toolCtx, cwd))
 			effectiveLimit := lsDefaultLimit
 			if input.Limit != nil {
 				effectiveLimit = int(*input.Limit)
@@ -214,103 +214,10 @@ func CreateLsToolDefinition(cwd string, options *LsToolOptions) *ToolDefinition 
 			}
 			return resultOf([]types.Content{asTextContent(output)}, detailsValue), nil
 		},
-		RenderCall: func(args any, themeArg UITheme, context ToolRenderContext) tui.Component {
-			var text *tui.Text
-			if c, ok := context.LastComponent.(*tui.Text); ok {
-				text = c
-			} else {
-				text = tui.NewText("", 0, 0)
-			}
-			m, _ := args.(map[string]any)
-			if m == nil {
-				m = map[string]any{}
-			}
-			text.SetText(formatLsCall(themeArg, m, context.Cwd))
-			return text
-		},
-		RenderResult: func(result ToolRenderResult, options ToolRenderResultOptions, themeArg UITheme, context ToolRenderContext) tui.Component {
-			var text *tui.Text
-			if c, ok := context.LastComponent.(*tui.Text); ok {
-				text = c
-			} else {
-				text = tui.NewText("", 0, 0)
-			}
-			text.SetText(formatLsResult(themeArg, result, options, context.ShowImages))
-			return text
-		},
+		// pi: ...lsRenderers.
+		RenderCall:   LsRenderers.RenderCall,
+		RenderResult: LsRenderers.RenderResult,
 	}
-}
-
-// ============================================================================
-// Render segment (pi: ls.ts render declarations)
-// ============================================================================
-
-// formatLsCall renders the call row (pi: formatLsCall).
-func formatLsCall(theme UITheme, args map[string]any, cwd string) string {
-	var limit *float64
-	if v, ok := args["limit"].(float64); ok {
-		limit = &v
-	}
-	pathDisplay := RenderToolPath(rawPathFromArgs(args), theme, cwd, ".")
-	text := theme.Fg("toolTitle", theme.Bold("ls")) + " " + pathDisplay
-	if limit != nil {
-		text += theme.Fg("toolOutput", fmt.Sprintf(" (limit %d)", int64(*limit)))
-	}
-	return text
-}
-
-// formatLsResult renders the result body (pi: formatLsResult).
-func formatLsResult(theme UITheme, result ToolRenderResult, options ToolRenderResultOptions, showImages bool) string {
-	output := strings.Trim(GetTextOutput(&result, showImages), " \t\n\r")
-	text := ""
-	if output != "" {
-		lines := strings.Split(output, "\n")
-		maxLines := 20
-		if options.Expanded {
-			maxLines = len(lines)
-		}
-		displayEnd := maxLines
-		if displayEnd > len(lines) {
-			displayEnd = len(lines)
-		}
-		displayLines := lines[:displayEnd]
-		remaining := len(lines) - maxLines
-		styled := make([]string, 0, len(displayLines))
-		for _, line := range displayLines {
-			styled = append(styled, theme.Fg("toolOutput", line))
-		}
-		text += "\n" + strings.Join(styled, "\n")
-		if remaining > 0 {
-			text += theme.Fg("muted", fmt.Sprintf("\n... (%d more lines,", remaining)) +
-				" " + KeyHint("app.tools.expand", "to expand") + theme.Fg("muted", ")")
-		}
-	}
-
-	var details *LsToolDetails
-	if result.Details != nil {
-		details, _ = result.Details.(*LsToolDetails)
-	}
-	var entryLimit *int
-	var truncation *harnessutils.TruncationResult
-	if details != nil {
-		entryLimit = details.EntryLimitReached
-		truncation = details.Truncation
-	}
-	if entryLimit != nil || (truncation != nil && truncation.Truncated) {
-		var warnings []string
-		if entryLimit != nil {
-			warnings = append(warnings, fmt.Sprintf("%d entries limit", *entryLimit))
-		}
-		if truncation != nil && truncation.Truncated {
-			maxBytes := int64(harnessutils.DefaultMaxBytes)
-			if truncation.MaxBytes != 0 {
-				maxBytes = int64(truncation.MaxBytes)
-			}
-			warnings = append(warnings, harnessutils.FormatSize(maxBytes)+" limit")
-		}
-		text += "\n" + theme.Fg("warning", "[Truncated: "+strings.Join(warnings, ", ")+"]")
-	}
-	return text
 }
 
 // CreateLsTool wraps the ls definition into an AgentTool (pi: createLsTool).

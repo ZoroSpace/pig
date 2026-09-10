@@ -2,6 +2,7 @@
 package agentharness
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -15,9 +16,14 @@ import (
 	"github.com/ZoroSpace/pig/ai/types"
 )
 
-func createSession(t *testing.T, id string) *session.Session {
+func createSession(t *testing.T, id string) session.Session {
 	t.Helper()
-	return session.NewSession(session.NewInMemorySessionStorage(session.SessionMetadata{ID: id, CreatedAt: 1}), nil)
+	repo := session.NewMemorySessionRepo(session.MemorySessionRepoOptions{})
+	sess, err := repo.Create(session.SessionCreateOptions{ID: lo.ToPtr(id)}, context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sess
 }
 
 func catalogModel(t *testing.T, providerID ai.ProviderID, id string) *types.Model {
@@ -29,7 +35,7 @@ func catalogModel(t *testing.T, providerID ai.ProviderID, id string) *types.Mode
 	return &entry
 }
 
-func createHarness(t *testing.T, sess *session.Session) *AgentHarness {
+func createHarness(t *testing.T, sess session.Session) *AgentHarness {
 	t.Helper()
 	harness, _, err := CreateAgentHarness(&AgentHarnessOptions{
 		Session: sess,
@@ -40,22 +46,6 @@ func createHarness(t *testing.T, sess *session.Session) *AgentHarness {
 		t.Fatal(err)
 	}
 	return harness
-}
-
-func operationStarted(id string) session.LaneRecord {
-	return &session.OperationStartedRecord{
-		RecordBase: session.RecordBase{
-			Type: session.RecordTypeOperationStarted,
-			ID:   id,
-			Lane: "main",
-		},
-		SourceLeafID: nil,
-		Intent: &session.RunIntent{
-			Kind:            session.OperationIntentRun,
-			OriginalPrompt:  []agent.AgentMessage{},
-			InitialMessages: []session.Entry{},
-		},
-	}
 }
 
 func asNotImplemented(t *testing.T, err error, operation string) {
@@ -85,22 +75,32 @@ func TestOpensOnlyRecordFreeSessionsBeforeRestoreIsImplemented(t *testing.T) {
 	if h.Name() != "main" {
 		t.Fatalf("name = %q", h.Name())
 	}
-	if h.SessionTree() != session.SessionTree(sess) {
+	if h.Session() != sess {
 		t.Fatal("harness session must be the provided session")
 	}
 	leaf, err := h.GetLeafID()
 	if err != nil || leaf != nil {
 		t.Fatalf("leaf = %v, %v", leaf, err)
 	}
-	sessionLeaf, err := h.SessionTree().GetLeafID()
+	sessionLeaf, err := h.Session().Branch("main", context.Background())
 	if err != nil || sessionLeaf != nil {
 		t.Fatalf("session leaf = %v, %v", sessionLeaf, err)
 	}
 
 	h.Close()
 
+	// pi v0.84.3 appended an operation_started record; the v0.85.1 Session
+	// has no record log, so the restore gate keys on an existing entry.
 	recorded := createSession(t, "recorded")
-	if _, err := recorded.AppendRecord(operationStarted("run")); err != nil {
+	branch, err := recorded.CreateBranch("main", nil, context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := branch.AppendMessage(&types.UserMessage{
+		Role:      types.RoleUser,
+		Content:   types.UserContent{Parts: []types.Content{&types.TextContent{Kind: types.KindText, Text: "hi"}}},
+		Timestamp: 1,
+	}, context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	_, _, err = CreateAgentHarness(&AgentHarnessOptions{

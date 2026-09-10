@@ -11,7 +11,9 @@ import (
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/ZoroSpace/pig/ai/auth"
 	"github.com/ZoroSpace/pig/ai/providers"
+	"github.com/ZoroSpace/pig/ai/types"
 )
 
 func resolverModel(id, name, provider, baseURL string, reasoning bool) ai.Model {
@@ -698,3 +700,132 @@ func TestDefaultModelSelection(t *testing.T) {
 // agent.ThinkingLevel appears in the resolver signatures; keep the import
 // honest for the fixture typed constants.
 var _ agent.ThinkingLevel = agent.ThinkingLevel("medium")
+
+func TestPersistedDefaultModelScoping(t *testing.T) {
+	// pi (v0.85.1): persisting a default model adds it to a non-empty scope
+	// and appends the reference to the enabled-models patterns.
+	makeModels := func() []*ai.Model {
+		m1 := &ai.Model{ID: "model-a", Name: "Model A", API: ai.ApiOpenAICompletions, Provider: "test-provider", Input: []types.ModelInput{types.ModelInputText}, ContextWindow: 1000, MaxTokens: 100, Cost: types.ModelCost{}}
+		m2 := &ai.Model{ID: "model-b", Name: "Model B", API: ai.ApiOpenAICompletions, Provider: "test-provider", Input: []types.ModelInput{types.ModelInputText}, ContextWindow: 1000, MaxTokens: 100, Cost: types.ModelCost{}}
+		return []*types.Model{m1, m2}
+	}
+
+	createSession := func(t *testing.T, options *createAgentTestSessionOptions, scoped bool, persistedScope []string) (*AgentSession, *SettingsManager) {
+		t.Helper()
+		models := makeModels()
+		modelA, modelB := models[0], models[1]
+		settingsManager := InMemorySettingsManager(nil, nil)
+		if persistedScope != nil {
+			settingsManager.SetEnabledModels(persistedScope)
+		}
+		authStorage := NewInMemoryAuthStorage(authStorageData{})
+		if _, err := authStorage.Modify(context.Background(), "test-provider", func(credential auth.Credential) (auth.Credential, error) {
+			return &auth.ApiKeyCredential{Key: "test-key"}, nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		registry, modelRuntime := createTestModelRegistry(t, authStorage, "")
+		if err := modelRuntime.RegisterProvider("test-provider", &ProviderConfigInput{
+			API: ai.ApiOpenAICompletions,
+			Models: []ProviderConfigInputModel{
+				{ID: modelA.ID, Name: modelA.Name, API: ai.ApiOpenAICompletions, BaseURL: "http://localhost:0", Input: []ai.ModelInput{ai.ModelInputText}, ContextWindow: 1000, MaxTokens: 100},
+				{ID: modelB.ID, Name: modelB.Name, API: ai.ApiOpenAICompletions, BaseURL: "http://localhost:0", Input: []ai.ModelInput{ai.ModelInputText}, ContextWindow: 1000, MaxTokens: 100},
+			},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		agentInstance, err := agent.NewAgent(agent.AgentOptions{
+			StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+				stream := types.NewAssistantMessageEventStream()
+				stream.End()
+				return stream
+			},
+			InitialState: &agent.AgentState{Model: modelA, SystemPrompt: "test"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		scopedModels := []ScopedModel(nil)
+		if scoped {
+			scopedModels = []ScopedModel{{Model: *modelA}}
+		}
+		session := NewAgentSession(AgentSessionConfig{
+			Agent:           agentInstance,
+			SessionManager:  mustInMemorySessionManager(t),
+			SettingsManager: settingsManager,
+			Cwd:             t.TempDir(),
+			ModelRuntime:    registry.GetModelRuntime(),
+			ResourceLoader:  createTestResourceLoader(),
+			ScopedModels:    scopedModels,
+		})
+		t.Cleanup(session.Dispose)
+		return session, settingsManager
+	}
+
+	t.Run("adds a persisted default to an existing scoped model list", func(t *testing.T) {
+		models := makeModels()
+		session, settingsManager := createSession(t, nil, true, []string{"test-provider/model-a"})
+
+		if err := session.SetModel(context.Background(), models[1], &ModelMutationOptions{Persist: true}); err != nil {
+			t.Fatal(err)
+		}
+
+		if provider, _ := settingsManager.GetDefaultProvider(); provider != "test-provider" {
+			t.Fatalf("default provider = %q", provider)
+		}
+		if model, _ := settingsManager.GetDefaultModel(); model != "model-b" {
+			t.Fatalf("default model = %q", model)
+		}
+		scoped := session.ScopedModels()
+		if len(scoped) != 2 || scoped[0].Model.ID != "model-a" || scoped[1].Model.ID != "model-b" {
+			t.Fatalf("scoped models = %+v", scoped)
+		}
+		enabled, ok := settingsManager.GetEnabledModels()
+		if !ok || len(enabled) != 2 || enabled[0] != "test-provider/model-a" || enabled[1] != "test-provider/model-b" {
+			t.Fatalf("enabled models = %v, %v", enabled, ok)
+		}
+	})
+
+	t.Run("does not create a scoped model list when all models are available", func(t *testing.T) {
+		models := makeModels()
+		session, settingsManager := createSession(t, nil, false, nil)
+
+		if err := session.SetModel(context.Background(), models[1], &ModelMutationOptions{Persist: true}); err != nil {
+			t.Fatal(err)
+		}
+
+		if scoped := session.ScopedModels(); len(scoped) != 0 {
+			t.Fatalf("scoped models = %+v", scoped)
+		}
+		if _, ok := settingsManager.GetEnabledModels(); ok {
+			t.Fatal("enabled models should be absent")
+		}
+	})
+
+	t.Run("keeps session-only model changes out of scope", func(t *testing.T) {
+		models := makeModels()
+		session, settingsManager := createSession(t, nil, true, []string{"test-provider/model-a"})
+
+		if err := session.SetModel(context.Background(), models[1], &ModelMutationOptions{Persist: false}); err != nil {
+			t.Fatal(err)
+		}
+
+		if scoped := session.ScopedModels(); len(scoped) != 1 || scoped[0].Model.ID != "model-a" {
+			t.Fatalf("scoped models = %+v", scoped)
+		}
+		enabled, ok := settingsManager.GetEnabledModels()
+		if !ok || len(enabled) != 1 || enabled[0] != "test-provider/model-a" {
+			t.Fatalf("enabled models = %v, %v", enabled, ok)
+		}
+	})
+}
+
+// mustInMemorySessionManager builds a throwaway in-memory session manager.
+func mustInMemorySessionManager(t *testing.T) *SessionManager {
+	t.Helper()
+	session, err := InMemorySession(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return session
+}

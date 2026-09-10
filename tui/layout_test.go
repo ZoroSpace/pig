@@ -271,75 +271,100 @@ func TestViewportLayoutTracksFollowEndStateAndReturnsUnusedScrollDelta(t *testin
 	}
 }
 
-func TestViewportLayoutRendersATransientProportionalScrollbarWithoutReplacingCellContent(t *testing.T) {
+// renderFuncComponent renders via a lambda (width-aware test component).
+type renderFuncComponent struct {
+	fn func(width int) []string
+}
+
+func (c *renderFuncComponent) Render(width int) []string { return c.fn(width) }
+func (c *renderFuncComponent) Invalidate()               {}
+
+func TestViewportLayoutRendersAProportionalGlyphScrollbarWithAnExpandedActiveThumb(t *testing.T) {
 	sourceLines := []string{"abcd界", "abcde2", "abcde3", "abcde4", "abcde5", "abcde6", "abcde7", "abcde8"}
 	contentBackground := "\x1b[42m"
-	scrollbarBackground := "\x1b[48;5;1m"
-	scrollbarStyle := func(text string) string { return scrollbarBackground + text + "\x1b[49m" }
+	trackColor := "\x1b[38;5;2m"
+	thumbColor := "\x1b[38;5;1m"
+	scrollbarTrackStyle := func(text string) string { return trackColor + text + "\x1b[39m" }
+	scrollbarThumbStyle := func(text string) string { return thumbColor + text + "\x1b[39m" }
 	content := NewText(strings.Join(sourceLines, "\n"), 0, 0, func(text string) string {
 		return contentBackground + text + "\x1b[49m"
 	})
 	scrollView := NewScrollView(content, &ScrollViewOptions{
 		Scrollbar:            ScrollViewScrollbarAuto,
-		ScrollbarStyle:       scrollbarStyle,
+		ScrollbarTrackStyle:  scrollbarTrackStyle,
+		ScrollbarThumbStyle:  scrollbarThumbStyle,
 		ScrollbarHideDelayMs: lo.ToPtr(10),
 	})
 	render := func() []string { return RenderLayoutFrame(scrollView, 6, 4, func() {}).Lines }
-	thumbRows := func(lines []string) []bool {
-		out := make([]bool, len(lines))
-		for i, line := range lines {
-			out[i] = strings.Contains(line, scrollbarBackground)
-		}
-		return out
-	}
-	stripped := func(lines []string) []string {
+	visible := func(lines []string) []string {
 		out := make([]string, len(lines))
 		for i, line := range lines {
 			out[i] = StripTerminalSequences(line)
 		}
 		return out
 	}
+	includesColor := func(lines []string, color string) []bool {
+		out := make([]bool, len(lines))
+		for i, line := range lines {
+			out[i] = strings.Contains(line, color)
+		}
+		return out
+	}
 
 	lines := render()
-	if got := thumbRows(lines); !boolSlicesEqual(got, []bool{false, false, false, false}) {
-		t.Fatalf("thumbRows = %v", got)
-	}
-	if got := stripped(lines); !stringSlicesEqual(got, sourceLines[:4]) {
+	if got := visible(lines); !stringSlicesEqual(got, sourceLines[:4]) {
 		t.Fatalf("lines = %q", got)
 	}
 
 	scrollView.ScrollBy(2)
 	lines = render()
-	if got := thumbRows(lines); !boolSlicesEqual(got, []bool{false, true, true, false}) {
-		t.Fatalf("thumbRows = %v", got)
-	}
-	if got := stripped(lines); !stringSlicesEqual(got, sourceLines[2:6]) {
+	if got := visible(lines); !stringSlicesEqual(got, []string{"abcde│", "abcde┃", "abcde┃", "abcde│"}) {
 		t.Fatalf("lines = %q", got)
 	}
-	if strings.LastIndex(lines[1], contentBackground) > strings.LastIndex(lines[1], scrollbarBackground) {
+	if got := includesColor(lines, trackColor); !boolSlicesEqual(got, []bool{true, false, false, true}) {
+		t.Fatalf("track color rows = %v", got)
+	}
+	if got := includesColor(lines, thumbColor); !boolSlicesEqual(got, []bool{false, true, true, false}) {
+		t.Fatalf("thumb color rows = %v", got)
+	}
+
+	scrollView.SetScrollbarActive(true)
+	lines = render()
+	if got := visible(lines); !stringSlicesEqual(got, []string{"abcde│", "abcde█", "abcde█", "abcde│"}) {
+		t.Fatalf("active lines = %q", got)
+	}
+	if got := includesColor(lines, thumbColor); !boolSlicesEqual(got, []bool{false, true, true, false}) {
+		t.Fatalf("active thumb color rows = %v", got)
+	}
+	if strings.LastIndex(lines[1], contentBackground) > strings.LastIndex(lines[1], thumbColor) {
 		t.Fatalf("content background painted over scrollbar: %q", lines[1])
 	}
 
+	scrollView.SetScrollbarActive(false)
 	time.Sleep(30 * time.Millisecond)
 	lines = render()
-	if got := thumbRows(lines); !boolSlicesEqual(got, []bool{false, false, false, false}) {
-		t.Fatalf("thumbRows after hide = %v", got)
+	if got := visible(lines); !stringSlicesEqual(got, sourceLines[2:6]) {
+		t.Fatalf("lines after hide = %q", got)
 	}
 
 	scrollView.ScrollToEnd()
 	lines = render()
-	if got := thumbRows(lines); !boolSlicesEqual(got, []bool{false, false, true, true}) {
-		t.Fatalf("thumbRows after scrollToEnd = %v", got)
+	if got := visible(lines); !stringSlicesEqual(got, []string{"abcde│", "abcde│", "abcde┃", "abcde┃"}) {
+		t.Fatalf("lines after scrollToEnd = %q", got)
 	}
-	if got := stripped(lines); !stringSlicesEqual(got, sourceLines[4:]) {
-		t.Fatalf("lines = %q", got)
+
+	scrollView.ScrollToStart()
+	lines = render()
+	if got := visible(lines)[0]; got != "abcd ┃" {
+		t.Fatalf("line after scrollToStart = %q", got)
 	}
 
 	followedContent := NewText(strings.Join(sourceLines, "\n"), 0, 0)
 	followed := NewScrollView(followedContent, &ScrollViewOptions{
-		Follow:         "end",
-		Scrollbar:      ScrollViewScrollbarAuto,
-		ScrollbarStyle: scrollbarStyle,
+		Follow:              "end",
+		Scrollbar:           ScrollViewScrollbarAuto,
+		ScrollbarTrackStyle: scrollbarTrackStyle,
+		ScrollbarThumbStyle: scrollbarThumbStyle,
 	})
 	RenderLayoutFrame(followed, 6, 4, func() {})
 	if followed.ScrollTop() != 4 {
@@ -351,45 +376,63 @@ func TestViewportLayoutRendersATransientProportionalScrollbarWithoutReplacingCel
 		t.Fatalf("followed scrollTop after growth = %d, want 5", followed.ScrollTop())
 	}
 	for _, line := range growthFrame.Lines {
-		if strings.Contains(line, scrollbarBackground) {
+		if strings.ContainsAny(StripTerminalSequences(line), "│┃") {
 			t.Fatalf("growth frame shows scrollbar: %q", line)
 		}
 	}
 
 	fittingContent := NewText("1\n2", 0, 0)
-	automatic := NewScrollView(fittingContent, &ScrollViewOptions{Scrollbar: ScrollViewScrollbarAuto, ScrollbarStyle: scrollbarStyle})
+	automatic := NewScrollView(fittingContent, &ScrollViewOptions{Scrollbar: ScrollViewScrollbarAuto, ScrollbarThumbStyle: scrollbarThumbStyle})
 	RenderLayoutFrame(automatic, 6, 4, func() {})
 	automatic.ScrollBy(1)
 	for _, line := range RenderLayoutFrame(automatic, 6, 4, func() {}).Lines {
-		if strings.Contains(line, scrollbarBackground) {
+		if strings.ContainsAny(StripTerminalSequences(line), "│┃") {
 			t.Fatalf("fitting content shows scrollbar: %q", line)
 		}
 	}
 
-	alwaysFitting := NewScrollView(fittingContent, &ScrollViewOptions{Scrollbar: ScrollViewScrollbarAlways, ScrollbarStyle: scrollbarStyle})
+	alwaysFitting := NewScrollView(fittingContent, &ScrollViewOptions{Scrollbar: ScrollViewScrollbarAlways, ScrollbarThumbStyle: scrollbarThumbStyle})
 	alwaysFittingFrame := RenderLayoutFrame(alwaysFitting, 6, 4, func() {})
 	if alwaysFittingFrame.Root.Children[0].Rect.Width != 5 {
 		t.Fatalf("always-fitting scroll width = %d, want 5", alwaysFittingFrame.Root.Children[0].Rect.Width)
 	}
 	for _, line := range alwaysFittingFrame.Lines {
-		if !strings.Contains(line, scrollbarBackground) {
+		if !strings.HasSuffix(StripTerminalSequences(line), "┃") {
 			t.Fatalf("always-fitting line missing scrollbar: %q", line)
 		}
 	}
 
-	alwaysOverflowing := NewScrollView(content, &ScrollViewOptions{Scrollbar: ScrollViewScrollbarAlways, ScrollbarStyle: scrollbarStyle})
+	alwaysOverflowing := NewScrollView(content, &ScrollViewOptions{
+		Scrollbar:           ScrollViewScrollbarAlways,
+		ScrollbarTrackStyle: scrollbarTrackStyle,
+		ScrollbarThumbStyle: scrollbarThumbStyle,
+	})
 	alwaysOverflowingFrame := RenderLayoutFrame(alwaysOverflowing, 6, 4, func() {})
 	if alwaysOverflowingFrame.Root.Children[0].Rect.Width != 5 {
 		t.Fatalf("always-overflowing scroll width = %d, want 5", alwaysOverflowingFrame.Root.Children[0].Rect.Width)
 	}
-	count := 0
+	thumbs := 0
+	tracks := 0
 	for _, line := range alwaysOverflowingFrame.Lines {
-		if strings.Contains(line, scrollbarBackground) {
-			count++
+		if strings.HasSuffix(StripTerminalSequences(line), "┃") {
+			thumbs++
+		}
+		if strings.HasSuffix(StripTerminalSequences(line), "│") {
+			tracks++
 		}
 	}
-	if count != 2 {
-		t.Fatalf("always-overflowing scrollbar rows = %d, want 2", count)
+	if thumbs != 2 {
+		t.Fatalf("always-overflowing thumb rows = %d, want 2", thumbs)
+	}
+	if tracks != 2 {
+		t.Fatalf("always-overflowing track rows = %d, want 2", tracks)
+	}
+	for _, line := range alwaysOverflowingFrame.Lines {
+		scrollbarStyleIndex := max(strings.LastIndex(line, trackColor), strings.LastIndex(line, thumbColor))
+		reservedColumnResetIndex := strings.LastIndex(line[:scrollbarStyleIndex], "\x1b[0m\x1b]8;;\x07")
+		if reservedColumnResetIndex <= strings.LastIndex(line, contentBackground) {
+			t.Fatalf("reserved column reset not after content background: %q", line)
+		}
 	}
 
 	thumbHeightFor := func(contentHeight int) int {
@@ -398,14 +441,14 @@ func TestViewportLayoutRendersATransientProportionalScrollbarWithoutReplacingCel
 			xs[i] = "x"
 		}
 		sized := NewScrollView(NewText(strings.Join(xs, "\n"), 0, 0), &ScrollViewOptions{
-			Scrollbar:      ScrollViewScrollbarAuto,
-			ScrollbarStyle: scrollbarStyle,
+			Scrollbar:           ScrollViewScrollbarAuto,
+			ScrollbarThumbStyle: scrollbarThumbStyle,
 		})
 		RenderLayoutFrame(sized, 6, 20, func() {})
 		sized.ScrollBy(1)
 		count := 0
 		for _, line := range RenderLayoutFrame(sized, 6, 20, func() {}).Lines {
-			if strings.Contains(line, scrollbarBackground) {
+			if strings.HasSuffix(StripTerminalSequences(line), "┃") {
 				count++
 			}
 		}
@@ -418,13 +461,52 @@ func TestViewportLayoutRendersATransientProportionalScrollbarWithoutReplacingCel
 	}
 }
 
+func TestViewportLayoutPreservesOnlyUnderlyingBackgroundBeneathOverlayScrollbarGlyphs(t *testing.T) {
+	background := "\x1b[42m"
+	borderForeground := "\x1b[31m"
+	content := &renderFuncComponent{fn: func(width int) []string {
+		lines := make([]string, 8)
+		for i := range lines {
+			lines[i] = background + strings.Repeat("x", width-1) + borderForeground + "│\x1b[39m\x1b[49m"
+		}
+		return lines
+	}}
+	scrollView := NewScrollView(content, &ScrollViewOptions{
+		Scrollbar:           ScrollViewScrollbarAuto,
+		ScrollbarTrackStyle: func(text string) string { return text },
+		ScrollbarThumbStyle: func(text string) string { return text },
+	})
+	RenderLayoutFrame(scrollView, 6, 4, func() {})
+	scrollView.ScrollBy(1)
+	frame := RenderLayoutFrame(scrollView, 6, 4, func() {})
+
+	got := make([]string, len(frame.Lines))
+	for i, line := range frame.Lines {
+		got[i] = StripTerminalSequences(line)
+	}
+	if !stringSlicesEqual(got, []string{"xxxxx│", "xxxxx┃", "xxxxx┃", "xxxxx│"}) {
+		t.Fatalf("lines = %q", got)
+	}
+	for _, line := range frame.Lines {
+		if !strings.Contains(line, background) {
+			t.Fatalf("line lost background: %q", line)
+		}
+		if strings.Contains(line, borderForeground) {
+			t.Fatalf("line kept foreign foreground: %q", line)
+		}
+		if !strings.Contains(line, "\x1b[0m\x1b]8;;\x07"+background) {
+			t.Fatalf("line missing background-preserving reset: %q", line)
+		}
+	}
+}
+
 func TestViewportLayoutUpdatesReservedScrollbarLayoutAtRuntime(t *testing.T) {
 	scrollView := NewScrollView(NewText("123456", 0, 0), &ScrollViewOptions{Scrollbar: ScrollViewScrollbarAlways})
 	render := func() *LayoutFrame {
 		return RenderLayoutFrame(NewHStack([]StackChild{scrollView}, &StackOptions{Align: "start"}), 6, 2, func() {})
 	}
 	always := render()
-	if got := visibleLinesLocal(always.Lines); !stringSlicesEqual(got, []string{"12345", "6"}) {
+	if got := visibleLinesLocal(always.Lines); !stringSlicesEqual(got, []string{"12345┃", "6    ┃"}) {
 		t.Fatalf("lines = %q", got)
 	}
 	if always.Root.Children[0].Rect.Width != 6 {

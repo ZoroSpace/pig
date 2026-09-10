@@ -48,6 +48,7 @@
 package agentharness
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -666,7 +667,7 @@ type RecordUsageOptions struct {
 // AgentHarnessOptions parameterize the harness (pi: AgentHarnessOptions).
 type AgentHarnessOptions struct {
 	// Session is the durable session.
-	Session *session.Session
+	Session session.Session
 	// Models resolves providers and streams.
 	Models ai.Models
 	// Model is the active model.
@@ -725,8 +726,11 @@ type AgentHarnessOptions struct {
 type AgentLane interface {
 	// Name is the lane name (pi: readonly name).
 	Name() string
-	// SessionTree is the branch-scoped session view (pi: readonly session).
-	SessionTree() session.SessionTree
+	// Session is the durable session handle (pi v0.84.3: readonly session
+	// SessionTree; the v0.85.1 AgentLane no longer exposes the session —
+	// that rewrite lands with the S2 agent-harness batch, so the scaffold
+	// keeps the accessor over the new Session interface).
+	Session() session.Session
 
 	GetLeafID() (*string, error)
 	Prompt(messages ...agent.AgentMessage) (*RunSuccess, error)
@@ -767,7 +771,7 @@ type AgentHarness struct {
 	hooks  Hooks
 	events HarnessEvents
 
-	durableSession     *session.Session
+	durableSession     session.Session
 	model              *types.Model
 	thinkingLevel      agent.ThinkingLevel
 	activeToolNames    []string
@@ -784,8 +788,9 @@ type AgentHarness struct {
 // Name implements AgentLane (pi: readonly name = "main").
 func (h *AgentHarness) Name() string { return "main" }
 
-// SessionTree implements AgentLane (pi: readonly session).
-func (h *AgentHarness) SessionTree() session.SessionTree { return h.durableSession }
+// Session implements AgentLane (pi v0.84.3: readonly session; see the
+// interface note — the v0.85.1 surface drops it, deferred to S2).
+func (h *AgentHarness) Session() session.Session { return h.durableSession }
 
 // newAgentHarness builds the harness (pi: private constructor).
 func newAgentHarness(options *AgentHarnessOptions) *AgentHarness {
@@ -849,11 +854,13 @@ func newAgentHarness(options *AgentHarnessOptions) *AgentHarness {
 // create). Restoring sessions with records is not implemented yet (pi:
 // throws HarnessNotImplemented("create.restore")).
 func CreateAgentHarness(options *AgentHarnessOptions) (*AgentHarness, []SuspendedOperation, error) {
-	records, err := options.Session.FindRecords(&session.RecordQuery{Limit: lo.ToPtr(1)})
+	// pi v0.84.3 checked for existing lane records; v0.85.1 Session has no
+	// record log, so restore detection keys on any existing entry.
+	entries, err := options.Session.FindEntries(&session.EntryQuery{Limit: lo.ToPtr(1)}, context.Background())
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(records) != 0 {
+	if len(entries) != 0 {
 		return nil, nil, NewHarnessNotImplemented("create.restore")
 	}
 	return newAgentHarness(options), []SuspendedOperation{}, nil
@@ -881,9 +888,26 @@ func (h *AgentHarness) unavailable(operation string) error {
 	return NewHarnessNotImplemented(operation)
 }
 
-// GetLeafID implements AgentLane (pi: getLeafId).
+// GetLeafID implements AgentLane (pi v0.84.3: getLeafId; the v0.85.1
+// equivalent is the main branch tip).
 func (h *AgentHarness) GetLeafID() (*string, error) {
-	return h.durableSession.GetLeafID()
+	return h.GetTip(context.Background())
+}
+
+// GetTip returns the main branch tip (v0.85.1 lane equivalent of
+// getLeafId; S2 rewrites this surface).
+func (h *AgentHarness) GetTip(ctx context.Context) (*string, error) {
+	if h.closed {
+		return nil, &HarnessClosed{}
+	}
+	branch, err := h.durableSession.Branch("main", ctx)
+	if err != nil {
+		return nil, err
+	}
+	if branch == nil {
+		return nil, nil
+	}
+	return branch.GetTipID(ctx)
 }
 
 // Prompt implements AgentLane (pi: prompt overloads collapsed; see header).

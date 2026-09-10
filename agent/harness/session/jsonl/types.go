@@ -1,31 +1,45 @@
-// pi: src/harness/session/jsonl/types.ts — jsonl backend types.
-//
-// Deviations:
-//   - JsonlSessionMetadata embeds session.SessionMetadata (pi: extends
-//     SessionMetadata), flattening to the same JSON wire shape.
-//   - sourceFormat's `3 | 4` union → int with SourceFormat constants.
-//   - JsonlSessionRepoFileSystem (pi: Pick<FileSystem, ...>) is a Go
-//     interface with the picked members; harness.FileSystem implementations
-//     satisfy it structurally. Methods carry the ctx parameter per the
-//     harness.FileSystem convention (the session layer passes
-//     context.Background() — its TS source never forwards an abort signal).
-//   - TS `modifiedAt`/`createdAt` stay int64 Unix ms.
+// pi: harness/session/jsonl/types.ts — JSONL storage constants, header and
+// repo option types (format 4).
 package jsonl
 
 import (
-	"context"
-
 	"github.com/ZoroSpace/pig/agent/harness"
 	"github.com/ZoroSpace/pig/agent/harness/session"
 )
 
-// Source format constants (pi: `sourceFormat: 3 | 4`).
-const (
-	SourceFormatV3 = 3
-	SourceFormatV4 = 4
-)
+// JSONLFormatVersion is the wire format version (pi: JSONL_FORMAT_VERSION).
+const JSONLFormatVersion = 4
 
-// JsonlSessionMetadata is one jsonl session's list metadata (pi:
+// JSONLStorageVersion is the storage-layout version (pi:
+// JSONL_STORAGE_VERSION).
+const JSONLStorageVersion = 1
+
+// JsonlStorageHeader is the v4 file header (pi: JsonlStorageHeader).
+type JsonlStorageHeader struct {
+	V               int     `json:"v"` // JSONLFormatVersion
+	Kind            string  `json:"kind"`
+	ID              string  `json:"id"`
+	StorageVersion  int     `json:"storageVersion"`
+	CreatedAt       int64   `json:"createdAt"` // Unix ms
+	Cwd             string  `json:"cwd"`
+	ParentSessionID *string `json:"parentSessionId,omitempty"`
+	// LegacyParentSessionPath survives when the legacy v3 parent file could
+	// not be resolved to an id.
+	LegacyParentSessionPath *string `json:"legacyParentSessionPath,omitempty"`
+	// NextSeq is the sequence high-water mark written by snapshot rewrites.
+	NextSeq *int64 `json:"nextSeq,omitempty"`
+}
+
+// JsonlStorageOptions parameterizes one storage file (pi:
+// JsonlStorageOptions).
+type JsonlStorageOptions struct {
+	FileSystem harness.FileSystem
+	Path       string
+	// Now overrides the commit timestamp source.
+	Now func() int64
+}
+
+// JsonlSessionMetadata is the JSONL session metadata (pi:
 // JsonlSessionMetadata).
 type JsonlSessionMetadata struct {
 	session.SessionMetadata
@@ -34,70 +48,24 @@ type JsonlSessionMetadata struct {
 	// ModifiedAt is the filesystem modification time as milliseconds since
 	// Unix epoch.
 	ModifiedAt int64 `json:"modifiedAt"`
-	// SourceFormat is the on-disk format version the file was read from.
-	SourceFormat int `json:"sourceFormat"`
-	// LegacyParentSessionPath is present only when a v3 parent path could
-	// not be resolved to a session id.
-	LegacyParentSessionPath *string `json:"legacyParentSessionPath,omitempty"`
-	// Metadata is opaque application-owned metadata.
-	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
-// JsonlSessionCreateOptions parameterizes jsonl session creation (pi:
+// JsonlSessionCreateOptions parameterizes creation (pi:
 // JsonlSessionCreateOptions).
 type JsonlSessionCreateOptions struct {
 	session.SessionCreateOptions
-	Cwd string `json:"cwd"`
-	// Metadata is opaque application-owned metadata.
-	Metadata map[string]any `json:"metadata,omitempty"`
+	Cwd string
 }
 
-// JsonlSessionListOptions filters session listings (pi:
-// JsonlSessionListOptions).
+// JsonlSessionListOptions parameterizes listing (pi: JsonlSessionListOptions).
 type JsonlSessionListOptions struct {
-	// Cwd restricts the listing to one session directory.
-	Cwd *string `json:"cwd,omitempty"`
+	Cwd *string
 }
 
-// JsonlV4Header is the first line of a v4 session file (pi: JsonlV4Header).
-type JsonlV4Header struct {
-	Kind    string `json:"kind"` // always "header"
-	Version int    `json:"version"`
-	ID      string `json:"id"`
-	// CreatedAt is Unix milliseconds.
-	CreatedAt int64  `json:"createdAt"`
-	Cwd       string `json:"cwd"`
-	// ParentSessionID links the session to its source; nil when standalone.
-	ParentSessionID *string `json:"parentSessionId,omitempty"`
-	// LegacyParentSessionPath is preserved only when a v3 parent path could
-	// not be resolved to a session id.
-	LegacyParentSessionPath *string `json:"legacyParentSessionPath,omitempty"`
-	// Metadata is opaque application-owned metadata.
-	Metadata map[string]any `json:"metadata,omitempty"`
-}
-
-// JsonlSessionRepoFileSystem is the filesystem surface the jsonl backend
-// consumes (pi: Pick<FileSystem, ...>; see file-header note).
-type JsonlSessionRepoFileSystem interface {
-	AbsolutePath(ctx context.Context, path string) (string, error)
-	JoinPath(ctx context.Context, parts []string) (string, error)
-	ReadTextFile(ctx context.Context, path string) (string, error)
-	ReadTextLines(ctx context.Context, path string, maxLines *int) ([]string, error)
-	WriteFile(ctx context.Context, path string, content []byte) error
-	AppendFile(ctx context.Context, path string, content []byte) error
-	RenameFile(ctx context.Context, sourcePath string, destinationPath string) error
-	FileInfo(ctx context.Context, path string) (harness.FileInfo, error)
-	ListDir(ctx context.Context, path string) ([]harness.FileInfo, error)
-	Exists(ctx context.Context, path string) (bool, error)
-	CreateDir(ctx context.Context, path string, recursive *bool) error
-	Remove(ctx context.Context, path string, recursive *bool, force *bool) error
-}
-
-// JsonlSessionRepoOptions parameterizes the jsonl repo (pi:
-// JsonlSessionRepoOptions).
+// JsonlSessionRepoOptions parameterizes the repo (pi: JsonlSessionRepoOptions).
 type JsonlSessionRepoOptions struct {
-	Fs JsonlSessionRepoFileSystem
-	// SessionsRoot is the root containing coding-agent-compatible
-	// cwd-encoded session directories.
+	FileSystem   harness.FileSystem
 	SessionsRoot string
+	// Now overrides the timestamp source.
+	Now func() int64
 }

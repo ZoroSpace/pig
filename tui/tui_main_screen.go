@@ -5,8 +5,10 @@
 //   - pi's doRender throws on over-wide rendered lines (crashes the process);
 //     the Go doRender returns the error and the render scheduler panics with
 //     it (equivalent process-fatal behavior, see tui.go doRenderOrPanic).
-//   - PI_DEBUG_REDRAW / PI_TUI_DEBUG file logging and the crash log are kept
-//     (fs → os). logDirectory empty disables logging.
+//   - PI_TUI_DEBUG_REDRAW / PI_TUI_DEBUG file logging and the crash log are
+//     kept (fs → os). logDirectory empty disables debug logging; the crash
+//     log falls back to os.TempDir() (pi: logDirectory ?? os.tmpdir(),
+//     pi-tui-crash.log).
 //   - Kitty image handling uses the terminal_image.go subset (Phase 8 keeps
 //     full image rendering out of scope; placement sequences remain opaque
 //     strings and are diffed/cleared exactly as pi does).
@@ -16,12 +18,83 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const kittySequencePrefix = "\x1b_G"
+const maxRenderWriteChars = 1024 * 1024
+
+// boundedTerminalWriter streams terminal output in 1 MiB chunks so a full
+// render never forms one string large enough to stress terminal writers
+// (pi: BoundedTerminalWriter).
+//
+// Deviation note: pi counts UTF-16 code units and preserves surrogate pairs
+// at chunk boundaries; Go strings are UTF-8, so the equivalent constraint is
+// never splitting a multi-byte rune across chunks (chunk size counted in
+// bytes).
+//
+// append() fills the current chunk and flushes it when full. Oversized input
+// is split at chunk boundaries on rune boundaries so each write remains valid
+// UTF-8. Callers append synchronized-output begin/end sequences themselves;
+// the final flush() writes any remainder, including the end sequence.
+type boundedTerminalWriter struct {
+	buffer       strings.Builder
+	bufferedLen  int
+	writtenChars int
+	write        func(data string)
+}
+
+func newBoundedTerminalWriter(write func(data string)) *boundedTerminalWriter {
+	return &boundedTerminalWriter{write: write}
+}
+
+// append appends terminal data, flushing full chunks as needed. Callers must
+// call flush() after the final append.
+func (w *boundedTerminalWriter) append(value string) {
+	offset := 0
+	for offset < len(value) {
+		capacity := maxRenderWriteChars - w.bufferedLen
+		if capacity == 0 {
+			w.flush()
+			continue
+		}
+
+		end := minInt(len(value), offset+capacity)
+		// Back off to a rune boundary so no UTF-8 sequence is split.
+		for end > offset && end < len(value) && !utf8.RuneStart(value[end]) {
+			end--
+		}
+		if end == offset {
+			w.flush()
+			continue
+		}
+
+		w.buffer.WriteString(value[offset:end])
+		w.bufferedLen += end - offset
+		offset = end
+		if w.bufferedLen == maxRenderWriteChars {
+			w.flush()
+		}
+	}
+}
+
+// flush writes the current chunk, if any, and retains only its character
+// count for debug output.
+func (w *boundedTerminalWriter) flush() {
+	if w.bufferedLen == 0 {
+		return
+	}
+	w.write(w.buffer.String())
+	w.writtenChars += w.bufferedLen
+	w.buffer.Reset()
+	w.bufferedLen = 0
+}
+
+func (w *boundedTerminalWriter) length() int {
+	return w.writtenChars + w.bufferedLen
+}
 
 type kittyImageHeader struct {
 	ids  []int
@@ -108,9 +181,10 @@ type TuiMainScreen struct {
 	previousViewportTop   int
 }
 
-// NewTuiMainScreen creates a TuiMainScreen. showHardwareCursor (nil = env
-// default) and logDirectory (nil/"" = env or ~/.pi/agent) mirror the pi
-// constructor's optional parameters.
+// NewTuiMainScreen creates a TuiMainScreen. showHardwareCursor (nil = false,
+// v0.85.1 removed the env default) and logDirectory ("" = debug logging
+// disabled, crash log falls back to os.TempDir) mirror the pi constructor's
+// optional parameters.
 func NewTuiMainScreen(terminal Terminal, showHardwareCursor *bool, logDirectory string) *TuiMainScreen {
 	m := &TuiMainScreen{previousKittyImageIds: map[int]bool{}}
 	m.TuiBase = *newTuiBase(terminal, TuiModeRegular, m, showHardwareCursor, logDirectory)
@@ -315,15 +389,15 @@ func (m *TuiMainScreen) doRender() error {
 	// Helper to clear scrollback and viewport and render all new lines
 	fullRender := func(clear bool) {
 		m.fullRedrawCount++
-		var buffer strings.Builder
-		buffer.WriteString("\x1b[?2026h") // Begin synchronized output
+		output := newBoundedTerminalWriter(m.terminal.Write)
+		output.append("\x1b[?2026h") // Begin synchronized output
 		if clear {
-			buffer.WriteString(m.deleteKittyImages(m.previousKittyImageIds))
-			buffer.WriteString("\x1b[2J\x1b[H\x1b[3J") // Clear screen, home, then clear scrollback
+			output.append(m.deleteKittyImages(m.previousKittyImageIds))
+			output.append("\x1b[2J\x1b[H\x1b[3J") // Clear screen, home, then clear scrollback
 		}
 		for i := 0; i < len(newLines); i++ {
 			if i > 0 {
-				buffer.WriteString("\r\n")
+				output.append("\r\n")
 			}
 			line := newLines[i]
 			isImage := IsImageLine(line)
@@ -333,18 +407,18 @@ func (m *TuiMainScreen) doRender() error {
 			}
 			if imageReservedRows > 1 && imageReservedRows <= height {
 				for row := 1; row < imageReservedRows; row++ {
-					buffer.WriteString("\r\n")
+					output.append("\r\n")
 				}
-				buffer.WriteString(fmt.Sprintf("\x1b[%dA", imageReservedRows-1))
-				buffer.WriteString(line)
-				buffer.WriteString(fmt.Sprintf("\x1b[%dB", imageReservedRows-1))
+				output.append(fmt.Sprintf("\x1b[%dA", imageReservedRows-1))
+				output.append(line)
+				output.append(fmt.Sprintf("\x1b[%dB", imageReservedRows-1))
 				i += imageReservedRows - 1
 				continue
 			}
-			buffer.WriteString(line)
+			output.append(line)
 		}
-		buffer.WriteString("\x1b[?2026l") // End synchronized output
-		m.terminal.Write(buffer.String())
+		output.append("\x1b[?2026l") // End synchronized output
+		output.flush()
 		m.cursorRow = maxInt(0, len(newLines)-1)
 		m.hardwareCursorRow = m.cursorRow
 		// Reset max lines when clearing, otherwise track growth
@@ -362,12 +436,15 @@ func (m *TuiMainScreen) doRender() error {
 		m.previousHeight = height
 	}
 
-	debugRedraw := os.Getenv("PI_DEBUG_REDRAW") == "1"
+	redrawLogDirectory := ""
+	if os.Getenv("PI_TUI_DEBUG_REDRAW") == "1" {
+		redrawLogDirectory = m.logDirectory
+	}
 	logRedraw := func(reason string) {
-		if !debugRedraw || m.logDirectory == "" {
+		if redrawLogDirectory == "" {
 			return
 		}
-		logPath := filepath.Join(m.logDirectory, "pi-debug.log")
+		logPath := filepath.Join(redrawLogDirectory, "pi-tui-debug.log")
 		msg := fmt.Sprintf("[%s] fullRender: %s (prev=%d, new=%d, height=%d)\n",
 			time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), reason, len(m.previousLines), len(newLines), height)
 		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
@@ -404,7 +481,7 @@ func (m *TuiMainScreen) doRender() error {
 
 	// Content shrunk below the working area and no overlays - re-render to clear empty rows
 	// (overlays need the padding, so only do this when no overlays are active)
-	// Configurable via setClearOnShrink() or PI_CLEAR_ON_SHRINK=0 env var
+	// Configurable via setClearOnShrink()
 	if m.clearOnShrink && len(newLines) < m.maxLinesRendered && len(m.overlayStack) == 0 {
 		logRedraw(fmt.Sprintf("clearOnShrink (maxLinesRendered=%d)", m.maxLinesRendered))
 		fullRender(true)
@@ -455,9 +532,9 @@ func (m *TuiMainScreen) doRender() error {
 	// All changes are in deleted lines (nothing to render, just clear)
 	if firstChanged >= len(newLines) {
 		if len(m.previousLines) > len(newLines) {
-			var buffer strings.Builder
-			buffer.WriteString("\x1b[?2026h")
-			buffer.WriteString(m.deleteChangedKittyImages(firstChanged, lastChanged))
+			output := newBoundedTerminalWriter(m.terminal.Write)
+			output.append("\x1b[?2026h")
+			output.append(m.deleteChangedKittyImages(firstChanged, lastChanged))
 			// Move to end of new content (clamp to 0 for empty content)
 			targetRow := maxInt(0, len(newLines)-1)
 			if targetRow < prevViewportTop {
@@ -467,11 +544,11 @@ func (m *TuiMainScreen) doRender() error {
 			}
 			lineDiff := computeLineDiff(targetRow)
 			if lineDiff > 0 {
-				buffer.WriteString(fmt.Sprintf("\x1b[%dB", lineDiff))
+				output.append(fmt.Sprintf("\x1b[%dB", lineDiff))
 			} else if lineDiff < 0 {
-				buffer.WriteString(fmt.Sprintf("\x1b[%dA", -lineDiff))
+				output.append(fmt.Sprintf("\x1b[%dA", -lineDiff))
 			}
-			buffer.WriteString("\r")
+			output.append("\r")
 			// Clear extra lines without scrolling
 			extraLines := len(m.previousLines) - len(newLines)
 			if extraLines > height {
@@ -484,20 +561,20 @@ func (m *TuiMainScreen) doRender() error {
 				clearStartOffset = 1
 			}
 			if extraLines > 0 && clearStartOffset > 0 {
-				buffer.WriteString(fmt.Sprintf("\x1b[%dB", clearStartOffset))
+				output.append(fmt.Sprintf("\x1b[%dB", clearStartOffset))
 			}
 			for i := 0; i < extraLines; i++ {
-				buffer.WriteString("\r\x1b[2K")
+				output.append("\r\x1b[2K")
 				if i < extraLines-1 {
-					buffer.WriteString("\x1b[1B")
+					output.append("\x1b[1B")
 				}
 			}
 			moveBack := maxInt(0, extraLines-1+clearStartOffset)
 			if moveBack > 0 {
-				buffer.WriteString(fmt.Sprintf("\x1b[%dA", moveBack))
+				output.append(fmt.Sprintf("\x1b[%dA", moveBack))
 			}
-			buffer.WriteString("\x1b[?2026l")
-			m.terminal.Write(buffer.String())
+			output.append("\x1b[?2026l")
+			output.flush()
 			m.cursorRow = targetRow
 			m.hardwareCursorRow = targetRow
 		}
@@ -519,10 +596,10 @@ func (m *TuiMainScreen) doRender() error {
 	}
 
 	// Render from first changed line to end
-	// Build buffer with all updates wrapped in synchronized output
-	var buffer strings.Builder
-	buffer.WriteString("\x1b[?2026h") // Begin synchronized output
-	buffer.WriteString(m.deleteChangedKittyImages(firstChanged, lastChanged))
+	// Keep updates wrapped in synchronized output while writing bounded chunks.
+	output := newBoundedTerminalWriter(m.terminal.Write)
+	output.append("\x1b[?2026h") // Begin synchronized output
+	output.append(m.deleteChangedKittyImages(firstChanged, lastChanged))
 	prevViewportBottom := prevViewportTop + height - 1
 	moveTargetRow := firstChanged
 	if appendStart {
@@ -532,10 +609,10 @@ func (m *TuiMainScreen) doRender() error {
 		currentScreenRow := maxInt(0, minInt(height-1, hardwareCursorRow-prevViewportTop))
 		moveToBottom := height - 1 - currentScreenRow
 		if moveToBottom > 0 {
-			buffer.WriteString(fmt.Sprintf("\x1b[%dB", moveToBottom))
+			output.append(fmt.Sprintf("\x1b[%dB", moveToBottom))
 		}
 		scroll := moveTargetRow - prevViewportBottom
-		buffer.WriteString(strings.Repeat("\r\n", scroll))
+		output.append(strings.Repeat("\r\n", scroll))
 		prevViewportTop += scroll
 		viewportTop += scroll
 		hardwareCursorRow = moveTargetRow
@@ -544,15 +621,15 @@ func (m *TuiMainScreen) doRender() error {
 	// Move cursor to first changed line (use hardwareCursorRow for actual position)
 	lineDiff := computeLineDiff(moveTargetRow)
 	if lineDiff > 0 {
-		buffer.WriteString(fmt.Sprintf("\x1b[%dB", lineDiff)) // Move down
+		output.append(fmt.Sprintf("\x1b[%dB", lineDiff)) // Move down
 	} else if lineDiff < 0 {
-		buffer.WriteString(fmt.Sprintf("\x1b[%dA", -lineDiff)) // Move up
+		output.append(fmt.Sprintf("\x1b[%dA", -lineDiff)) // Move up
 	}
 
 	if appendStart {
-		buffer.WriteString("\r\n") // Move to column 0
+		output.append("\r\n") // Move to column 0
 	} else {
-		buffer.WriteString("\r")
+		output.append("\r")
 	}
 
 	// Only render changed lines (firstChanged to lastChanged), not all lines to end
@@ -560,7 +637,7 @@ func (m *TuiMainScreen) doRender() error {
 	renderEnd := minInt(lastChanged, len(newLines)-1)
 	for i := firstChanged; i <= renderEnd; i++ {
 		if i > firstChanged {
-			buffer.WriteString("\r\n")
+			output.append("\r\n")
 		}
 		line := newLines[i]
 		isImage := IsImageLine(line)
@@ -576,21 +653,24 @@ func (m *TuiMainScreen) doRender() error {
 				return nil
 			}
 
-			buffer.WriteString("\x1b[2K")
+			output.append("\x1b[2K")
 			for row := 1; row < imageReservedRows; row++ {
-				buffer.WriteString("\r\n\x1b[2K")
+				output.append("\r\n\x1b[2K")
 			}
-			buffer.WriteString(fmt.Sprintf("\x1b[%dA", imageReservedRows-1))
-			buffer.WriteString(line)
-			buffer.WriteString(fmt.Sprintf("\x1b[%dB", imageReservedRows-1))
+			output.append(fmt.Sprintf("\x1b[%dA", imageReservedRows-1))
+			output.append(line)
+			output.append(fmt.Sprintf("\x1b[%dB", imageReservedRows-1))
 			i += imageReservedRows - 1
 			continue
 		}
 
-		buffer.WriteString("\x1b[2K") // Clear current line
+		output.append("\x1b[2K") // Clear current line
 		if !isImage && VisibleWidth(line) > width {
 			// Log all lines to crash file for debugging
-			crashLogPath := filepath.Join(m.logDirectory, "pi-crash.log")
+			crashLogPath := filepath.Join(m.logDirectory, "pi-tui-crash.log")
+			if m.logDirectory == "" {
+				crashLogPath = filepath.Join(os.TempDir(), "pi-tui-crash.log")
+			}
 			var crashData strings.Builder
 			crashData.WriteString(fmt.Sprintf("Crash at %s\n", time.Now().UTC().Format("2006-01-02T15:04:05.000Z")))
 			crashData.WriteString(fmt.Sprintf("Terminal width: %d\n", width))
@@ -614,7 +694,7 @@ func (m *TuiMainScreen) doRender() error {
 				"Debug log written to: %s",
 				i, VisibleWidth(line), width, crashLogPath)
 		}
-		buffer.WriteString(line)
+		output.append(line)
 	}
 
 	// Track where cursor ended up after rendering
@@ -625,18 +705,18 @@ func (m *TuiMainScreen) doRender() error {
 		// Move to end of new content first if we stopped before it
 		if renderEnd < len(newLines)-1 {
 			moveDown := len(newLines) - 1 - renderEnd
-			buffer.WriteString(fmt.Sprintf("\x1b[%dB", moveDown))
+			output.append(fmt.Sprintf("\x1b[%dB", moveDown))
 			finalCursorRow = len(newLines) - 1
 		}
 		extraLines := len(m.previousLines) - len(newLines)
 		for i := len(newLines); i < len(m.previousLines); i++ {
-			buffer.WriteString("\r\n\x1b[2K")
+			output.append("\r\n\x1b[2K")
 		}
 		// Move cursor back to end of new content
-		buffer.WriteString(fmt.Sprintf("\x1b[%dA", extraLines))
+		output.append(fmt.Sprintf("\x1b[%dA", extraLines))
 	}
 
-	buffer.WriteString("\x1b[?2026l") // End synchronized output
+	output.append("\x1b[?2026l") // End synchronized output
 
 	if os.Getenv("PI_TUI_DEBUG") == "1" {
 		debugDir := "/tmp/tui"
@@ -645,12 +725,11 @@ func (m *TuiMainScreen) doRender() error {
 		var debugData strings.Builder
 		debugData.WriteString(fmt.Sprintf("firstChanged: %d\nviewportTop: %d\ncursorRow: %d\nheight: %d\nlineDiff: %d\nhardwareCursorRow: %d\nrenderEnd: %d\nfinalCursorRow: %d\ncursorPos: %s\nnewLines.length: %d\npreviousLines.length: %d\n",
 			firstChanged, viewportTop, m.cursorRow, height, lineDiff, hardwareCursorRow, renderEnd, finalCursorRow, cursorPosString(cursorPos), len(newLines), len(m.previousLines)))
-		debugData.WriteString("\n=== buffer ===\n" + strconv.Quote(buffer.String()) + "\n")
+		debugData.WriteString(fmt.Sprintf("\n=== buffer ===\n[%d chars written in bounded chunks]\n", output.length()))
 		_ = os.WriteFile(debugPath, []byte(debugData.String()), 0o644)
 	}
 
-	// Write entire buffer at once
-	m.terminal.Write(buffer.String())
+	output.flush()
 
 	// Track cursor position for next render
 	// cursorRow tracks end of content (for viewport calculation)

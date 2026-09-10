@@ -13,17 +13,22 @@ package utils
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/ZoroSpace/pig/codingagent"
+	"github.com/samber/lo"
 )
 
 const (
@@ -73,7 +78,8 @@ var toolsCatalog = map[string]toolConfig{
 				if architecture == "arm64" {
 					archStr = "aarch64"
 				}
-				return fmt.Sprintf("fd-v%s-%s-unknown-linux-gnu.tar.gz", version, archStr)
+				// pi (v0.85.1): fd switched to the static musl build on Linux.
+				return fmt.Sprintf("fd-v%s-%s-unknown-linux-musl.tar.gz", version, archStr)
 			} else if plat == "win32" {
 				archStr := "x86_64"
 				if architecture == "arm64" {
@@ -97,10 +103,12 @@ var toolsCatalog = map[string]toolConfig{
 				}
 				return fmt.Sprintf("ripgrep-%s-%s-apple-darwin.tar.gz", version, archStr)
 			} else if plat == "linux" {
+				// pi (v0.85.1): both architectures use the static musl build.
+				archStr := "x86_64"
 				if architecture == "arm64" {
-					return fmt.Sprintf("ripgrep-%s-aarch64-unknown-linux-gnu.tar.gz", version)
+					archStr = "aarch64"
 				}
-				return fmt.Sprintf("ripgrep-%s-x86_64-unknown-linux-musl.tar.gz", version)
+				return fmt.Sprintf("ripgrep-%s-%s-unknown-linux-musl.tar.gz", version, archStr)
 			} else if plat == "win32" {
 				archStr := "x86_64"
 				if architecture == "arm64" {
@@ -169,54 +177,47 @@ func GetToolPath(tool string) string {
 	return ""
 }
 
-// getLatestVersion fetches the latest release version from GitHub (pi:
-// getLatestVersion).
-func getLatestVersion(ctx context.Context, repo string) (string, error) {
+// getLatestVersion resolves the latest release version from the release page
+// redirect (pi: getLatestVersion, v0.85.1). The api.github.com releases
+// endpoint counts against the anonymous API quota (60 requests/hour per IP),
+// which is permanently exhausted behind shared egress IPs such as corporate
+// proxies and CI runners. The web endpoint answers with a redirect to the
+// tagged release at no quota cost and lives on the same origin as the binary
+// download itself.
+func GetLatestVersion(ctx context.Context, repo string) (string, error) {
 	timeout := int64(networkTimeoutMs)
 	resp, err := FetchWithRetry(ctx, http.MethodGet,
-		fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo),
+		fmt.Sprintf("https://github.com/%s/releases/latest", repo),
 		map[string]string{"User-Agent": codingagent.AppName + "-coding-agent"},
-		&FetchRetryOptions{TimeoutMs: &timeout})
+		&FetchRetryOptions{TimeoutMs: &timeout, NoRedirect: lo.ToPtr(true)})
 	if err != nil {
 		return "", err
 	}
 	defer resp.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("GitHub API error: %d", resp.StatusCode)
-	}
-	tag := extractJSONString(string(body), "tag_name")
-	if tag == "" {
-		return "", fmt.Errorf("GitHub API error: missing tag_name")
-	}
-	return strings.TrimPrefix(tag, "v"), nil
-}
+	// Only the status and headers matter here; the body is drained by Close.
 
-// extractJSONString reads one top-level string field without a full JSON
-// struct (the only field consumed is tag_name).
-func extractJSONString(body string, field string) string {
-	key := "\"" + field + "\""
-	idx := strings.Index(body, key)
-	if idx < 0 {
-		return ""
+	location := ""
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		location = resp.Header.Get("Location")
 	}
-	rest := body[idx+len(key):]
-	colon := strings.Index(rest, ":")
-	if colon < 0 {
-		return ""
+	if location == "" {
+		return "", fmt.Errorf("Failed to resolve latest %s release: HTTP %d without redirect", repo, resp.StatusCode)
 	}
-	rest = strings.TrimLeft(rest[colon+1:], " \t\r\n")
-	if len(rest) == 0 || rest[0] != '"' {
-		return ""
+
+	// pi: new URL(location, "https://github.com").pathname.split("/").pop().
+	parsed, err := url.Parse(location)
+	tag := ""
+	if err == nil {
+		tag = path.Base(parsed.Path)
 	}
-	end := strings.IndexByte(rest[1:], '"')
-	if end < 0 {
-		return ""
+	if tag == "" || tag == "/" || tag == "." || !strings.Contains(location, "/releases/tag/") {
+		return "", fmt.Errorf("Failed to resolve latest %s release: unexpected redirect to %s", repo, location)
 	}
-	return rest[1 : 1+end]
+	decoded, err := url.PathUnescape(tag)
+	if err != nil {
+		decoded = tag
+	}
+	return strings.TrimPrefix(decoded, "v"), nil
 }
 
 // downloadFile downloads url to dest (pi: downloadFile).
@@ -228,7 +229,7 @@ func downloadFile(ctx context.Context, url string, dest string) error {
 	}
 	defer resp.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("Failed to download: %d", resp.StatusCode)
+		return fmt.Errorf("Download failed with HTTP %d: %s", resp.StatusCode, url)
 	}
 	file, err := os.Create(dest)
 	if err != nil {
@@ -343,12 +344,17 @@ func downloadTool(ctx context.Context, tool string) (string, error) {
 	plat := goPlatform()
 	architecture := goArch()
 
-	version, err := getLatestVersion(ctx, config.repo)
-	if err != nil {
-		return "", err
-	}
+	// pi (v0.85.1): fd is pinned on darwin/x64, so skip the version lookup
+	// there.
+	var version string
 	if tool == "fd" && plat == "darwin" && architecture == "x64" {
 		version = "10.3.0"
+	} else {
+		var err error
+		version, err = GetLatestVersion(ctx, config.repo)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	assetName := config.getAssetName(version, plat, architecture)
@@ -497,7 +503,21 @@ func EnsureTool(ctx context.Context, tool string, onStatus func(status ToolStatu
 	report(ToolStatus{Type: "info", Message: fmt.Sprintf("%s not found. Downloading...", config.name)})
 	path, err := downloadTool(ctx, tool)
 	if err != nil {
-		report(ToolStatus{Type: "warning", Message: fmt.Sprintf("Failed to download %s: %v", config.name, err)})
+		// pi (v0.85.1): include the error cause chain — fetch failures
+		// surface as a bare "fetch failed" TypeError with the actionable
+		// detail hidden in the cause. Depth-capped against circular chains.
+		var messages []string
+		for current, depth := error(err), 0; current != nil && depth < 5; current, depth = errors.Unwrap(current), depth+1 {
+			message := current.Error()
+			if !slices.Contains(messages, message) {
+				messages = append(messages, message)
+			}
+		}
+		detail := fmt.Sprintf("%v", err)
+		if len(messages) > 0 {
+			detail = strings.Join(messages, ": ")
+		}
+		report(ToolStatus{Type: "warning", Message: fmt.Sprintf("Failed to download %s: %s", config.name, detail)})
 		return ""
 	}
 	report(ToolStatus{Type: "info", Message: fmt.Sprintf("%s installed to %s", config.name, path)})

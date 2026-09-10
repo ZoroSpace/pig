@@ -919,6 +919,15 @@ func (t *ansiCodeTracker) HasActiveCodes() bool {
 		t.activeLink != nil
 }
 
+// getActiveBackgroundCode returns the active background color as a full SGR
+// sequence, or "" when none is active (pi: AnsiCodeTracker.getActiveBackgroundCode).
+func (t *ansiCodeTracker) getActiveBackgroundCode() string {
+	if t.bgColor != "" {
+		return "\x1b[" + t.bgColor + "m"
+	}
+	return ""
+}
+
 // GetLineEndReset gets reset codes for attributes that need to be turned off
 // at line end. Underline must be closed to prevent bleeding into padding.
 // Active OSC 8 hyperlinks must be closed and re-opened on the next line.
@@ -944,6 +953,14 @@ func updateTrackerFromText(text string, tracker *ansiCodeTracker) {
 			i++
 		}
 	}
+}
+
+// GetActiveBackgroundAnsi returns only the background color active at the end
+// of an ANSI-styled string (pi: getActiveBackgroundAnsi).
+func GetActiveBackgroundAnsi(text string) string {
+	tracker := &ansiCodeTracker{}
+	updateTrackerFromText(text, tracker)
+	return tracker.getActiveBackgroundCode()
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 const (
@@ -93,9 +95,12 @@ type SelectList struct {
 	items         []SelectItem
 	filteredItems []SelectItem
 	selectedIndex int
-	maxVisible    int
-	theme         SelectListTheme
-	layout        SelectListLayoutOptions
+	// mousePressedIndex tracks the item pressed for click confirmation
+	// (pi: mousePressedIndex?).
+	mousePressedIndex *int
+	maxVisible        int
+	theme             SelectListTheme
+	layout            SelectListLayoutOptions
 
 	// OnSelect is called on confirm (pi: public onSelect?).
 	OnSelect func(item SelectItem)
@@ -149,6 +154,70 @@ func (s *SelectList) SetSelectedIndex(index int) {
 // Invalidate clears cached render state (pi: invalidate — no cached state).
 func (s *SelectList) Invalidate() {}
 
+// HandleMouse implements MouseHandler (pi: SelectList.handleMouse): wheel
+// moves the selection, left press/click select and confirm.
+func (s *SelectList) HandleMouse(event *TuiMouseEvent) *TuiMouseEventResult {
+	if len(s.filteredItems) == 0 {
+		return nil
+	}
+	if event.Type == MouseEventTypeWheel && event.WheelDelta != nil {
+		delta := 1
+		if *event.WheelDelta < 0 {
+			delta = -1
+		}
+		previousIndex := s.selectedIndex
+		s.selectedIndex = clampInt(s.selectedIndex+delta, 0, len(s.filteredItems)-1)
+		if s.selectedIndex != previousIndex {
+			s.notifySelectionChange()
+		}
+		return &TuiMouseEventResult{Handled: true, Render: lo.ToPtr(s.selectedIndex != previousIndex)}
+	}
+	// Hover must not change selection: the visible range is centered on it.
+	if event.Button != MouseButtonLeft || (event.Type != MouseEventTypePress && event.Type != MouseEventTypeClick) {
+		return nil
+	}
+	startIndex, endIndex := s.getVisibleRange()
+	itemIndex := startIndex + event.Y
+	if itemIndex < startIndex || itemIndex >= endIndex {
+		return nil
+	}
+
+	if event.Type == MouseEventTypePress {
+		s.mousePressedIndex = &itemIndex
+		if s.selectedIndex != itemIndex {
+			s.selectedIndex = itemIndex
+			s.notifySelectionChange()
+		}
+		return &TuiMouseEventResult{Handled: true, Focus: true}
+	}
+	// click
+	clickedIndex := itemIndex
+	if s.mousePressedIndex != nil {
+		clickedIndex = *s.mousePressedIndex
+	}
+	s.mousePressedIndex = nil
+	changed := s.selectedIndex != clickedIndex
+	s.selectedIndex = clickedIndex
+	if changed {
+		s.notifySelectionChange()
+	}
+	if s.selectedIndex >= 0 && s.selectedIndex < len(s.filteredItems) && s.OnSelect != nil {
+		s.OnSelect(s.filteredItems[s.selectedIndex])
+	}
+	return &TuiMouseEventResult{Handled: true}
+}
+
+// getVisibleRange computes the visible item window centered on the selection
+// (pi: getVisibleRange).
+func (s *SelectList) getVisibleRange() (int, int) {
+	startIndex := maxInt(0, minInt(s.selectedIndex-s.maxVisible/2, len(s.filteredItems)-s.maxVisible))
+	endIndex := startIndex + s.maxVisible
+	if endIndex > len(s.filteredItems) {
+		endIndex = len(s.filteredItems)
+	}
+	return startIndex, endIndex
+}
+
 // Render implements Component (pi: render).
 func (s *SelectList) Render(width int) []string {
 	lines := []string{}
@@ -162,11 +231,7 @@ func (s *SelectList) Render(width int) []string {
 	primaryColumnWidth := s.getPrimaryColumnWidth()
 
 	// Calculate visible range with scrolling
-	startIndex := clampInt(s.selectedIndex-s.maxVisible/2, 0, len(s.filteredItems)-s.maxVisible)
-	endIndex := startIndex + s.maxVisible
-	if endIndex > len(s.filteredItems) {
-		endIndex = len(s.filteredItems)
-	}
+	startIndex, endIndex := s.getVisibleRange()
 
 	// Render visible items
 	for i := startIndex; i < endIndex; i++ {

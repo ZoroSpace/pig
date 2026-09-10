@@ -3,9 +3,22 @@
 package components
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/ZoroSpace/pig/codingagent/core"
 	"github.com/ZoroSpace/pig/tui"
 )
+
+// CustomEditorOptions carries the editor options plus the working-status
+// embed flag (pi: CustomEditorOptions = EditorOptions & { embedWorkingStatus
+// ?: boolean }, v0.85.1).
+type CustomEditorOptions struct {
+	tui.EditorOptions
+	// EmbedWorkingStatus renders the streaming working status in the editor's
+	// top border instead of a standalone row (pi: embedWorkingStatus).
+	EmbedWorkingStatus bool
+}
 
 // CustomEditor embeds the tui Editor and intercepts app keybindings before
 // editor handling (pi: class CustomEditor extends Editor).
@@ -15,6 +28,11 @@ type CustomEditor struct {
 	keybindings *core.KeybindingsManager
 	// actionHandlers maps app actions to handlers (pi: actionHandlers).
 	actionHandlers map[core.AppKeybinding]func()
+
+	workingStatusIndicator *WorkingStatusIndicator
+	// EmbedWorkingStatus reports whether the working status is rendered in
+	// the editor top border (pi: readonly embedWorkingStatus).
+	EmbedWorkingStatus bool
 
 	// Special handlers that can be dynamically replaced (pi: public fields).
 	OnEscape func()
@@ -27,13 +45,82 @@ type CustomEditor struct {
 }
 
 // NewCustomEditor builds the editor (pi: constructor).
-func NewCustomEditor(tui_ tui.TUI, editorTheme tui.EditorTheme, keybindings *core.KeybindingsManager, options *tui.EditorOptions) *CustomEditor {
+func NewCustomEditor(tui_ tui.TUI, editorTheme tui.EditorTheme, keybindings *core.KeybindingsManager, options *CustomEditorOptions) *CustomEditor {
 	e := &CustomEditor{
-		Editor:         tui.NewEditor(tui_, editorTheme, options),
+		Editor:         tui.NewEditor(tui_, editorTheme, unwrapEditorOptions(options)),
 		keybindings:    keybindings,
 		actionHandlers: map[core.AppKeybinding]func(){},
 	}
+	if options != nil {
+		e.EmbedWorkingStatus = options.EmbedWorkingStatus
+	}
+	// pi overrides protected renderTopBorder; pig injects the override as a
+	// callback seam (see tui.Editor.TopBorderOverride).
+	e.Editor.TopBorderOverride = e.renderTopBorder
 	return e
+}
+
+// unwrapEditorOptions flattens CustomEditorOptions into the tui options
+// shape (pig helper; pi spreads the object).
+func unwrapEditorOptions(options *CustomEditorOptions) *tui.EditorOptions {
+	if options == nil {
+		return nil
+	}
+	return &options.EditorOptions
+}
+
+// SetWorkingStatusIndicator attaches the streaming indicator to embed in the
+// top border (pi: setWorkingStatusIndicator; nil = none).
+func (e *CustomEditor) SetWorkingStatusIndicator(indicator *WorkingStatusIndicator) {
+	e.workingStatusIndicator = indicator
+}
+
+// renderTopBorder renders the top border with the working status embedded
+// (pi: protected renderTopBorder override, v0.85.1). Returns ok=false to
+// fall through to the default border (the super call equivalent).
+func (e *CustomEditor) renderTopBorder(width int, hiddenLineCount int) (string, bool) {
+	if !e.EmbedWorkingStatus || e.workingStatusIndicator == nil || width <= 0 {
+		return "", false
+	}
+
+	status := e.workingStatusIndicator.RenderInBorder(maxInt(1, width-5))
+	statusWidth := tui.VisibleWidth(status)
+	if statusWidth == 0 {
+		return "", false
+	}
+
+	var overflowLabel string
+	if hiddenLineCount > 0 {
+		overflowLabel = fmt.Sprintf(" ↑ %d more ", hiddenLineCount)
+	}
+	overflowLabelWidth := tui.VisibleWidth(overflowLabel)
+	overflowStart := (width - overflowLabelWidth) / 2
+	canFitOverflow := func() bool {
+		return overflowLabel != "" && overflowLabelWidth+2 <= width && overflowStart-(3+statusWidth+1) >= 1
+	}
+
+	if overflowLabel != "" && !canFitOverflow() {
+		status = e.workingStatusIndicator.RenderSpinnerInBorder(width)
+		statusWidth = tui.VisibleWidth(status)
+	}
+
+	if canFitOverflow() {
+		leftBlockWidth := 3 + statusWidth + 1
+		return e.BorderColor("── ") + status + e.BorderColor(
+			" "+strings.Repeat("─", overflowStart-leftBlockWidth)+overflowLabel+strings.Repeat("─", width-overflowStart-overflowLabelWidth),
+		), true
+	}
+
+	if width >= statusWidth+5 {
+		return e.BorderColor("── ") + status + e.BorderColor(" "+strings.Repeat("─", width-statusWidth-4)), true
+	}
+
+	status = e.workingStatusIndicator.RenderSpinnerInBorder(width)
+	statusWidth = tui.VisibleWidth(status)
+	prefixWidth := minInt(3, maxInt(0, width-statusWidth))
+	return e.BorderColor(strings.Repeat("─", prefixWidth)) +
+		status +
+		e.BorderColor(strings.Repeat("─", maxInt(0, width-prefixWidth-statusWidth))), true
 }
 
 // OnAction registers a handler for an app action (pi: onAction).

@@ -303,3 +303,66 @@ func TestSessionManagerLabels(t *testing.T) {
 		}
 	})
 }
+
+func TestForkPreservesCompactionWhenBoundaryLabelRemoved(t *testing.T) {
+	// pi regression #8989: createBranchedSession re-chains the retained path
+	// past removed labels; a compaction whose firstKeptEntryId pointed at the
+	// removed boundary label must be remapped to the first real entry after
+	// it, or the branch loses the pre-compaction context.
+	session, err := InMemorySession("", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldID, err := session.AppendMessage(userMsg("old"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labelID, err := session.AppendLabelChange(oldID, lo.ToPtr("checkpoint"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	keptID, err := session.AppendMessage(userMsg("kept"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.AppendCompaction("summary", labelID, 100, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	leafID, err := session.AppendMessage(userMsg("after"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := session.CreateBranchedSession(leafID); err != nil {
+		t.Fatal(err)
+	}
+
+	compaction, ok := session.GetEntry(compactionIDOf(session, "summary")).(*CompactionEntry)
+	if !ok || compaction == nil {
+		t.Fatal("expected a compaction entry")
+	}
+	if compaction.FirstKeptEntryID != keptID {
+		t.Fatalf("firstKeptEntryId = %q, want %q", compaction.FirstKeptEntryID, keptID)
+	}
+	context := session.BuildSessionContext()
+	if len(context.Messages) != 3 {
+		t.Fatalf("messages = %d", len(context.Messages))
+	}
+	roles := []string{}
+	for _, message := range context.Messages {
+		roles = append(roles, string(message.MessageRole()))
+	}
+	if roles[0] != "compactionSummary" || roles[1] != "user" || roles[2] != "user" {
+		t.Fatalf("roles = %v", roles)
+	}
+}
+
+// compactionIDOf finds the compaction entry id by its summary text.
+func compactionIDOf(session *SessionManager, summary string) string {
+	for _, entry := range session.GetEntries() {
+		if compaction, ok := entry.(*CompactionEntry); ok && compaction.Summary == summary {
+			return entry.Base().ID
+		}
+	}
+	return ""
+}

@@ -10,6 +10,9 @@
 //     when currently unset (Go os.Environ scan for the case-insensitive key
 //     is unnecessary here; Go's http transport reads the upper-case vars,
 //     matching Node's upper-case convention).
+//   - v0.85.1 adds undici's proxyTunnel:true (keep HTTP origins on CONNECT
+//     tunnels as before Undici 8.7): Node-undici-specific, no Go equivalent
+//     — Go's http.Transport always proxies https over CONNECT.
 package core
 
 import (

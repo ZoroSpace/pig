@@ -41,9 +41,13 @@ type ToolExecutionResult struct {
 type ToolExecutionComponent struct {
 	tui.Container
 
-	contentBox              *tui.Box
-	contentText             *tui.Text
-	selfRenderContainer     *tui.Container
+	contentBox          *tui.Box
+	contentText         *tui.Text
+	contentTextRegion   *tui.MouseRegion
+	selfRenderContainer *tui.Container
+	// selfRenderHeight is the last rendered height of the self-render
+	// container, used to route mouse events (pi: selfRenderHeight).
+	selfRenderHeight        int
 	callRendererComponent   tui.Component
 	resultRendererComponent tui.Component
 	rendererState           any
@@ -51,26 +55,32 @@ type ToolExecutionComponent struct {
 	// detection lands (pi: Image[]/Spacer[]; getCapabilities().images is
 	// always falsy until then, so the branches are unreachable — structure
 	// kept at its source position).
-	imageComponents       []tui.Component
-	imageSpacers          []tui.Component
-	toolName              string
-	toolCallID            string
-	args                  any
-	expanded              bool
-	showImages            bool
-	imageWidthCells       int
-	isPartial             bool
-	toolDefinition        *tools.ToolDefinition
-	builtInToolDefinition *tools.ToolDefinition
-	ui                    tui.TUI
-	cwd                   string
-	executionStarted      bool
-	argsComplete          bool
-	result                *ToolExecutionResult
-	convertedImages       map[int]ToolExecutionResult
-	hideComponent         bool
+	imageComponents  []tui.Component
+	imageSpacers     []tui.Component
+	toolName         string
+	toolCallID       string
+	args             any
+	expanded         bool
+	showImages       bool
+	imageWidthCells  int
+	isPartial        bool
+	toolDefinition   *tools.ToolDefinition
+	ui               tui.TUI
+	cwd              string
+	executionStarted bool
+	argsComplete     bool
+	result           *ToolExecutionResult
+	convertedImages  map[int]imageConversion
+	hideComponent    bool
 
 	mu sync.Mutex
+}
+
+// imageConversion is pi's convertedImages value shape { data, mimeType };
+// populated by the Phase 8 Kitty transcoder.
+type imageConversion struct {
+	Data     string
+	MimeType string
 }
 
 // NewToolExecutionComponent builds the component (pi: constructor).
@@ -84,34 +94,29 @@ func NewToolExecutionComponent(
 	cwd string,
 ) *ToolExecutionComponent {
 	c := &ToolExecutionComponent{
-		toolName:              toolName,
-		toolCallID:            toolCallID,
-		args:                  args,
-		toolDefinition:        toolDefinition,
-		builtInToolDefinition: tools.CreateAllToolDefinitions(cwd, nil)[tools.ToolName(toolName)],
-		showImages:            options.ShowImages == nil || *options.ShowImages,
-		imageWidthCells:       60,
-		isPartial:             true,
-		ui:                    ui,
-		cwd:                   cwd,
-		rendererState:         map[string]any{},
-		convertedImages:       map[int]ToolExecutionResult{},
+		toolName:        toolName,
+		toolCallID:      toolCallID,
+		args:            args,
+		toolDefinition:  toolDefinition,
+		showImages:      options.ShowImages == nil || *options.ShowImages,
+		imageWidthCells: 60,
+		isPartial:       true,
+		ui:              ui,
+		cwd:             cwd,
+		rendererState:   map[string]any{},
+		convertedImages: map[int]imageConversion{},
 	}
 	if options.ImageWidthCells != nil {
 		c.imageWidthCells = *options.ImageWidthCells
 	}
 
 	// Resolve the shared renderer state (pig addition: pi initializes a
-	// plain {} object; a built-in definition with typed state gets its
-	// struct, extension tools keep the map).
-	effective := c.toolDefinition
-	if effective == nil || effective.NewRenderState == nil {
-		if c.builtInToolDefinition != nil && c.builtInToolDefinition.NewRenderState != nil {
-			effective = c.builtInToolDefinition
-		}
-	}
-	if effective != nil && effective.NewRenderState != nil {
-		c.rendererState = effective.NewRenderState()
+	// plain {} object; a definition with typed state gets its struct,
+	// extension tools keep the map). The built-in fallback lookup is gone in
+	// v0.85.1: the caller merges built-in renderers via tools.
+	// WithBuiltInRenderers (pi: withBuiltInRenderers).
+	if c.toolDefinition != nil && c.toolDefinition.NewRenderState != nil {
+		c.rendererState = c.toolDefinition.NewRenderState()
 	}
 
 	c.AddChild(tui.NewSpacer(1))
@@ -122,6 +127,7 @@ func NewToolExecutionComponent(
 	// rendering when no tool definition exists.
 	c.contentBox = tui.NewBox(1, 1, func(text string) string { return theme.Bg("toolPendingBg", text) })
 	c.contentText = tui.NewText("", 1, 1, func(text string) string { return theme.Bg("toolPendingBg", text) })
+	c.contentTextRegion = c.createResultRegion(c.contentText)
 	c.selfRenderContainer = &tui.Container{}
 
 	if c.hasRendererDefinition() {
@@ -131,72 +137,41 @@ func NewToolExecutionComponent(
 			c.AddChild(c.contentBox)
 		}
 	} else {
-		c.AddChild(c.contentText)
+		c.AddChild(c.contentTextRegion)
 	}
 
 	c.updateDisplay()
 	return c
 }
 
-// getCallRenderer resolves the call renderer (pi: getCallRenderer).
+// getCallRenderer resolves the call renderer (pi: getCallRenderer; v0.85.1
+// dropped the built-in fallback — the caller merges via
+// tools.WithBuiltInRenderers).
 func (c *ToolExecutionComponent) getCallRenderer() func(any, tools.UITheme, tools.ToolRenderContext) tui.Component {
-	if c.builtInToolDefinition == nil {
-		if c.toolDefinition != nil {
-			return c.toolDefinition.RenderCall
-		}
+	if c.toolDefinition == nil {
 		return nil
 	}
-	if c.toolDefinition == nil {
-		return c.builtInToolDefinition.RenderCall
-	}
-	if c.toolDefinition.RenderCall != nil {
-		return c.toolDefinition.RenderCall
-	}
-	return c.builtInToolDefinition.RenderCall
+	return c.toolDefinition.RenderCall
 }
 
 // getResultRenderer resolves the result renderer (pi: getResultRenderer).
 func (c *ToolExecutionComponent) getResultRenderer() func(tools.ToolRenderResult, tools.ToolRenderResultOptions, tools.UITheme, tools.ToolRenderContext) tui.Component {
-	if c.builtInToolDefinition == nil {
-		if c.toolDefinition != nil {
-			return c.toolDefinition.RenderResult
-		}
+	if c.toolDefinition == nil {
 		return nil
 	}
-	if c.toolDefinition == nil {
-		return c.builtInToolDefinition.RenderResult
-	}
-	if c.toolDefinition.RenderResult != nil {
-		return c.toolDefinition.RenderResult
-	}
-	return c.builtInToolDefinition.RenderResult
+	return c.toolDefinition.RenderResult
 }
 
 // hasRendererDefinition reports whether any definition is in play (pi:
 // hasRendererDefinition).
 func (c *ToolExecutionComponent) hasRendererDefinition() bool {
-	return c.builtInToolDefinition != nil || c.toolDefinition != nil
+	return c.toolDefinition != nil
 }
 
 // getRenderShell resolves the shell mode (pi: getRenderShell).
 func (c *ToolExecutionComponent) getRenderShell() string {
-	if c.builtInToolDefinition == nil {
-		if c.toolDefinition != nil && c.toolDefinition.RenderShell != "" {
-			return c.toolDefinition.RenderShell
-		}
-		return "default"
-	}
-	if c.toolDefinition == nil {
-		if c.builtInToolDefinition.RenderShell != "" {
-			return c.builtInToolDefinition.RenderShell
-		}
-		return "default"
-	}
-	if c.toolDefinition.RenderShell != "" {
+	if c.toolDefinition != nil && c.toolDefinition.RenderShell != "" {
 		return c.toolDefinition.RenderShell
-	}
-	if c.builtInToolDefinition.RenderShell != "" {
-		return c.builtInToolDefinition.RenderShell
 	}
 	return "default"
 }
@@ -224,6 +199,28 @@ func (c *ToolExecutionComponent) getRenderContext(lastComponent tui.Component, i
 func (c *ToolExecutionComponent) invalidateAndRequestRender() {
 	c.Invalidate()
 	c.ui.RequestRender(false)
+}
+
+// createResultRegion wraps a child with click-to-expand mouse handling (pi:
+// createResultRegion).
+func (c *ToolExecutionComponent) createResultRegion(component tui.Component) *tui.MouseRegion {
+	return tui.NewMouseRegion(component, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
+		c.mu.Lock()
+		hasResult := c.result != nil
+		c.mu.Unlock()
+		if !hasResult || event.Type != tui.MouseEventTypeClick || event.Button != tui.MouseButtonLeft {
+			return nil
+		}
+		c.SetExpanded(!c.expandedLocked())
+		return &tui.TuiMouseEventResult{Handled: true}
+	})
+}
+
+// expandedLocked reads the expanded flag (pig: c.expanded is mutex-guarded).
+func (c *ToolExecutionComponent) expandedLocked() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.expanded
 }
 
 // createCallFallback builds the no-renderer call row (pi:
@@ -354,6 +351,7 @@ func (c *ToolExecutionComponent) Render(width int) []string {
 
 	if c.hasRendererDefinition() && c.getRenderShell() == "self" {
 		contentLines := c.selfRenderContainer.Render(width)
+		c.selfRenderHeight = len(contentLines)
 		if len(contentLines) == 0 && len(c.imageComponents) == 0 {
 			return nil
 		}
@@ -375,6 +373,26 @@ func (c *ToolExecutionComponent) Render(width int) []string {
 	}
 
 	return c.Container.Render(width)
+}
+
+// HandleMouse routes mouse events in the self-render shell into the
+// self-render container (pi: handleMouse override; the leading blank line is
+// not part of the self-render content).
+func (c *ToolExecutionComponent) HandleMouse(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
+	c.mu.Lock()
+	selfShell := c.hasRendererDefinition() && c.getRenderShell() == "self"
+	selfRenderHeight := c.selfRenderHeight
+	c.mu.Unlock()
+	if !selfShell {
+		return c.Container.HandleMouse(event)
+	}
+	if event.Y <= 0 || event.Y > selfRenderHeight {
+		return nil
+	}
+	shifted := *event
+	shifted.Y = event.Y - 1
+	shifted.Height = selfRenderHeight
+	return c.selfRenderContainer.HandleMouse(&shifted)
 }
 
 // updateDisplay rebuilds the child tree (pi: updateDisplay).
@@ -399,12 +417,15 @@ func (c *ToolExecutionComponent) updateDisplay() {
 			c.contentBox.Clear()
 		}
 		// Box and Container have parallel AddChild surfaces (Box owns its
-		// children directly); addChild targets the active shell variant.
+		// children directly); addChild targets the active shell variant. Each
+		// rendered child is wrapped in a click-to-expand region (pi:
+		// createResultRegion).
 		addChild := func(component tui.Component) {
+			wrapped := c.createResultRegion(component)
 			if selfShell {
-				c.selfRenderContainer.AddChild(component)
+				c.selfRenderContainer.AddChild(wrapped)
 			} else {
-				c.contentBox.AddChild(component)
+				c.contentBox.AddChild(wrapped)
 			}
 		}
 
@@ -485,8 +506,8 @@ func (c *ToolExecutionComponent) updateDisplay() {
 				imageData := img.Data
 				imageMimeType := img.MimeType
 				if hasConverted {
-					imageData = converted.Content[0].(types.ImageContent).Data
-					imageMimeType = converted.Content[0].(types.ImageContent).MimeType
+					imageData = converted.Data
+					imageMimeType = converted.MimeType
 				}
 				_ = imageData
 				_ = imageMimeType

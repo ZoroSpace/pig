@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/agent"
+	harness "github.com/ZoroSpace/pig/agent/harness"
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/auth"
 	"github.com/ZoroSpace/pig/ai/types"
@@ -188,7 +189,14 @@ func createAgentTestSession(t *testing.T, options *createAgentTestSessionOptions
 		streamFn = ai.StreamSimple
 	}
 	agentOptions := agent.AgentOptions{
-		StreamFn:     streamFn,
+		StreamFn: streamFn,
+		// pi's createHarness runs through the SDK assembly, which installs
+		// the coding-agent convertToLlm (custom/compaction/branch-summary
+		// roles project to user messages); defaultConvertToLlm would drop
+		// them (pi: defaultConvertToLlm filters the same three roles, and
+		// createAgentSession overrides it — mirror that here).
+
+		ConvertToLlm: harness.ConvertToLlm,
 		InitialState: &agent.AgentState{Model: model, SystemPrompt: "Test", ThinkingLevel: cfg.ThinkingLevel},
 	}
 	if cfg.GetAPIKey {

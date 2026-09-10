@@ -51,6 +51,21 @@ type ToolExecuteContext interface {
 	GetSessionFile() *string
 	// GetThinkingLevel is pi's ctx.thinkingLevel; "" when unset.
 	GetThinkingLevel() string
+	// GetCwd is pi's ctx.cwd (v0.85.1: the tools resolve paths against it
+	// when provided, falling back to the definition-captured cwd); "" =
+	// undefined.
+	GetCwd() string
+}
+
+// executeCwd resolves pi's `ctx?.cwd || cwd` (v0.85.1): the tool context's
+// cwd wins when provided.
+func executeCwd(toolCtx ToolExecuteContext, cwd string) string {
+	if toolCtx != nil {
+		if ctxCwd := toolCtx.GetCwd(); ctxCwd != "" {
+			return ctxCwd
+		}
+	}
+	return cwd
 }
 
 // ============================================================================

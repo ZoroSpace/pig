@@ -1,680 +1,542 @@
-// pi: test/harness/session/jsonl-storage.test.ts — per-session jsonl storage
-// round trips, concurrency, failure injection, and payload validation.
-//
-// Deviations:
-//   - reopen() resolves the session's JsonlSessionMetadata via repo.List()
-//     (pi uses the generic session.getMetadata(), whose jsonl re-widening
-//     the Go base interface does not carry).
-//   - "rejects non-JSON payloads": the cyclic-object case ports via a
-//     self-referencing map (encoding/json rejects cycles); the
-//     effectiveArgs-with-undefined case is TS-only (undefined is not a JSON
-//     value in Go's data model) and is skipped.
+// pi: test/harness/jsonl-storage.test.ts — JsonlStorage snapshot creation,
+// persistence, fork-source snapshots, and torn-tail repair.
 package jsonl_test
 
 import (
-	"github.com/samber/lo"
-	"sort"
-	"sync"
+	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
-	"github.com/ZoroSpace/pig/agent"
+	"github.com/ZoroSpace/pig/agent/harness"
+	"github.com/ZoroSpace/pig/agent/harness/env"
 	"github.com/ZoroSpace/pig/agent/harness/session"
 	jsonl "github.com/ZoroSpace/pig/agent/harness/session/jsonl"
+	pigtesting "github.com/ZoroSpace/pig/agent/harness/session/testing"
 	"github.com/ZoroSpace/pig/ai/types"
 )
 
-// userMessage builds a user message (pi: userMessage).
-func userMessage(text string) agent.AgentMessage {
-	return types.UserMessage{
-		Role:      types.RoleUser,
-		Content:   types.UserContent{Parts: []types.Content{types.NewTextContent(text)}},
-		Timestamp: 1,
+// harnessFS aliases harness.FileSystem for local brevity.
+type harnessFS = harness.FileSystem
+
+const harnessFileKindDirectory = harness.FileKindDirectory
+
+const storageNow = int64(1_700_000_000_000)
+
+func storageHeader(id string) jsonl.JsonlStorageHeader {
+	return jsonl.JsonlStorageHeader{
+		V: jsonl.JSONLFormatVersion, Kind: "header", ID: id,
+		StorageVersion: jsonl.JSONLStorageVersion, CreatedAt: storageNow, Cwd: "/workspace",
 	}
 }
 
-// storageCreateUsage mirrors the TS storage-test usage builder.
-func storageCreateUsage(multiplier float64) types.Usage {
-	return types.Usage{
-		Input:       int64(multiplier),
-		Output:      int64(multiplier * 2),
-		CacheRead:   int64(multiplier * 3),
-		CacheWrite:  int64(multiplier * 4),
-		TotalTokens: int64(multiplier * 10),
-		Cost: types.Cost{
-			Input:      multiplier * 0.1,
-			Output:     multiplier * 0.2,
-			CacheRead:  multiplier * 0.3,
-			CacheWrite: multiplier * 0.4,
-			Total:      multiplier,
-		},
-	}
-}
-
-func TestRoundTripsEveryEntryTypeAndBoundedBranchQueries(t *testing.T) {
-	root := t.TempDir()
-	repository := createRepository(root)
-	s, err := repository.Create(&jsonl.JsonlSessionCreateOptions{
-		SessionCreateOptions: session.SessionCreateOptions{ID: lo.ToPtr("entries")},
-		Cwd:                  root,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var committed []session.Entry
-	appendEntry := func(entry session.Entry) {
-		t.Helper()
-		committedEntry, err := s.AppendEntry(entry, "main")
-		if err != nil {
-			t.Fatal(err)
-		}
-		committed = append(committed, committedEntry)
-	}
-
-	appendEntry(&session.MessageEntry{
-		EntryBase: session.EntryBase{Type: session.EntryTypeMessage, ID: "message"},
-		Message:   userMessage("question"),
-	})
-	appendEntry(&session.MessageEntry{
-		EntryBase: session.EntryBase{Type: session.EntryTypeMessage, ID: "assistant-tool-call"},
-		Message: types.AssistantMessage{
-			Role: types.RoleAssistant,
-			Content: []types.Content{
-				types.NewTextContent("I'll inspect it."),
-				types.NewToolCall("call-1", "read", map[string]any{"path": "README.md"}),
-			},
-			API:        types.ApiAnthropicMessages,
-			Provider:   "anthropic",
-			Model:      "claude-sonnet-4-5",
-			Usage:      storageCreateUsage(1),
-			StopReason: types.StopReasonToolUse,
-			Timestamp:  2,
-		},
-	})
-	terminate := true
-	appendEntry(&session.MessageEntry{
-		EntryBase: session.EntryBase{Type: session.EntryTypeMessage, ID: "tool-result"},
-		Message: types.ToolResultMessage{
-			Role:       types.RoleToolResult,
-			ToolCallID: "call-1",
-			ToolName:   "read",
-			Content:    []types.Content{types.NewTextContent("contents")},
-			Details:    map[string]any{"path": "README.md"},
-			Usage:      lo.ToPtr(storageCreateUsage(2)),
-			IsError:    false,
-			Timestamp:  3,
-		},
-		Terminate: &terminate,
-	})
-	appendEntry(&session.ModelChangeEntry{
-		EntryBase: session.EntryBase{Type: session.EntryTypeModelChange, ID: "model"},
-		Provider:  "anthropic",
-		ModelID:   "claude-sonnet-4-5",
-	})
-	appendEntry(&session.ThinkingLevelEntry{
-		EntryBase:     session.EntryBase{Type: session.EntryTypeThinkingLevelChange, ID: "thinking"},
-		ThinkingLevel: "high",
-	})
-	appendEntry(&session.ActiveToolsEntry{
-		EntryBase:       session.EntryBase{Type: session.EntryTypeActiveToolsChange, ID: "tools"},
-		ActiveToolNames: []string{"read", "bash"},
-	})
-	appendEntry(&session.CompactionEntry{
-		EntryBase:    session.EntryBase{Type: session.EntryTypeCompaction, ID: "compaction"},
-		Summary:      "summary",
-		RetainedTail: []agent.AgentMessage{userMessage("retained")},
-		TokensBefore: 123,
-		Details:      map[string]any{"source": "test"},
-		Usage:        lo.ToPtr(storageCreateUsage(1)),
-	})
-	appendEntry(&session.BranchSummaryEntry{
-		EntryBase: session.EntryBase{Type: session.EntryTypeBranchSummary, ID: "branch-summary"},
-		FromID:    "message",
-		Summary:   "branch",
-		Details:   map[string]any{"reason": "navigation"},
-		Usage:     lo.ToPtr(storageCreateUsage(2)),
-	})
-	appendEntry(&session.CustomEntry{
-		EntryBase:  session.EntryBase{Type: session.EntryTypeCustom, ID: "custom"},
-		CustomType: "note",
-		Data:       map[string]any{"nested": map[string]any{"value": 1}},
-	})
-
-	restored := reopen(t, root, s)
-	restoredEntries, err := restored.FindEntries(&session.EntryQuery{Order: session.OrderOldestFirst})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, restoredEntries, committed)
-
-	branchEntries, err := restored.FindEntriesOnBranch(&session.BranchQuery{
-		BranchBounds: session.BranchBounds{StopAtType: lo.ToPtr(session.EntryTypeCompaction)},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, entryIDList(branchEntries), []string{"custom", "branch-summary", "compaction"})
-
-	pagedEntries, err := restored.FindEntries(&session.EntryQuery{
-		Order:  session.OrderOldestFirst,
-		Cursor: &session.EntryCursor{AfterSeq: committed[5].Base().Seq},
-		Limit:  lo.ToPtr(2),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, entryIDList(pagedEntries), []string{"compaction", "branch-summary"})
-
-	noteEntries, err := restored.FindEntries(&session.EntryQuery{CustomType: lo.ToPtr("note")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, entryIDList(noteEntries), []string{"custom"})
-
-	stats, err := restored.GetStats()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, stats, session.SessionStats{MessageCount: 3})
-
-	// Mutating a returned entry must not touch storage state (pi: the
-	// structuredClone boundary checks).
-	custom, err := restored.GetEntry("custom")
-	if err != nil {
-		t.Fatal(err)
-	}
-	customData := custom.(*session.CustomEntry).Data.(map[string]any)
-	customData["nested"].(map[string]any)["value"] = 99
-	again, err := restored.GetEntry("custom")
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, again, committed[len(committed)-1])
-	refetched, err := restored.FindEntries(&session.EntryQuery{Order: session.OrderOldestFirst})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, refetched, committed)
-}
-
-func TestRoundTripsEveryRecordTypeRecoveryProjectionAndLedgerStatistics(t *testing.T) {
-	root := t.TempDir()
-	repository := createRepository(root)
-	s, err := repository.Create(&jsonl.JsonlSessionCreateOptions{
-		SessionCreateOptions: session.SessionCreateOptions{ID: lo.ToPtr("records")},
-		Cwd:                  root,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.AppendCustomEntry("anchor", nil); err != nil {
-		t.Fatal(err)
-	}
-	var records []session.LaneRecord
-	appendRecord := func(record session.LaneRecord) {
-		t.Helper()
-		committedRecord, err := s.AppendRecord(record)
-		if err != nil {
-			t.Fatal(err)
-		}
-		records = append(records, committedRecord)
-	}
-
-	appendRecord(&session.OperationStartedRecord{
-		RecordBase:   session.RecordBase{Type: session.RecordTypeOperationStarted, ID: "run", Lane: "main"},
-		SourceLeafID: lo.ToPtr("anchor"),
-		Intent: &session.RunIntent{
-			Kind:           session.OperationIntentRun,
-			OriginalPrompt: []agent.AgentMessage{userMessage("prompt")},
-			InitialMessages: []session.Entry{&session.MessageEntry{
-				EntryBase: session.EntryBase{Type: session.EntryTypeMessage, ID: "initial"},
-				Message:   userMessage("initial"),
-			}},
-			SystemPromptOverride: lo.ToPtr("system"),
-			ResumeData:           map[string]any{"extension": map[string]any{"version": 1}},
-		},
-	})
-	appendRecord(&session.QueueEnqueuedRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeQueueEnqueued, ID: "steer", Lane: "main"},
-		Queue:      session.QueueSteer,
-		RunID:      lo.ToPtr("run"),
-		Target: &session.MessageEntry{
-			EntryBase: session.EntryBase{Type: session.EntryTypeMessage, ID: "steer-message"},
-			Message:   userMessage("steer"),
-		},
-	})
-	appendRecord(&session.QueueEnqueuedRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeQueueEnqueued, ID: "follow-up", Lane: "main"},
-		Queue:      session.QueueFollowUp,
-		RunID:      lo.ToPtr("run"),
-		Target: &session.MessageEntry{
-			EntryBase: session.EntryBase{Type: session.EntryTypeMessage, ID: "follow-up-message"},
-			Message:   userMessage("follow up"),
-		},
-	})
-	appendRecord(&session.StepAttemptRecord{
-		RecordBase:    session.RecordBase{Type: session.RecordTypeStepAttempt, ID: "assistant-attempt", Lane: "main"},
-		RunID:         "run",
-		Step:          session.OperationStepAssistant,
-		Attempt:       1,
-		ResultEntryID: "assistant-result",
-	})
-	appendRecord(&session.ToolStartedRecord{
-		RecordBase:       session.RecordBase{Type: session.RecordTypeToolStarted, ID: "tool", Lane: "main"},
-		RunID:            "run",
-		AssistantEntryID: "assistant-result",
-		ToolIndex:        0,
-		ToolCallID:       "call-1",
-		ToolName:         "read",
-		EffectiveArgs:    map[string]any{"path": "README.md"},
-		ResultEntryID:    "tool-result",
-		Replay:           "safe",
-	})
-	appendRecord(&session.WriteDeferredRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeWriteDeferred, ID: "deferred-write", Lane: "main"},
-		RunID:      "run",
-		Target: &session.CustomEntry{
-			EntryBase:  session.EntryBase{Type: session.EntryTypeCustom, ID: "deferred-entry"},
-			CustomType: "fact",
-			Data:       map[string]any{"value": true},
-		},
-	})
-	stop := types.StopReasonStop
-	deferred := types.StopReasonDeferred
-	appendRecord(&session.UsageRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeUsage, ID: "assistant-usage", Lane: "main"},
-		Usage:      storageCreateUsage(1),
-		Cause:      session.UsageCauseAssistant,
-		RunID:      lo.ToPtr("run"),
-		EntryID:    lo.ToPtr("assistant-result"),
-		Attempt:    lo.ToPtr(1),
-		StopReason: &stop,
-	})
-	appendRecord(&session.UsageRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeUsage, ID: "deferred-usage", Lane: "main"},
-		Usage:      storageCreateUsage(2),
-		Cause:      session.UsageCauseDeferredFetch,
-		RunID:      lo.ToPtr("run"),
-		EntryID:    lo.ToPtr("deferred-result"),
-		Attempt:    lo.ToPtr(1),
-		StopReason: &deferred,
-	})
-	appendRecord(&session.UsageRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeUsage, ID: "tool-usage", Lane: "main"},
-		Usage:      storageCreateUsage(3),
-		Cause:      session.UsageCauseTool,
-		RunID:      lo.ToPtr("run"),
-		EntryID:    lo.ToPtr("tool-result"),
-		ToolCallID: "call-1",
-	})
-	appendRecord(&session.UsageRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeUsage, ID: "hook-usage", Lane: "main"},
-		Usage:      storageCreateUsage(4),
-		Cause:      session.UsageCauseHook,
-		EntryID:    lo.ToPtr("hook-result"),
-	})
-	appendRecord(&session.UsageRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeUsage, ID: "adjustment", Lane: "main"},
-		Usage:      storageCreateUsage(5),
-		Cause:      session.UsageCauseAdjustment,
-		Details:    map[string]any{"reason": "correction"},
-	})
-	appendRecord(&session.AbortRequestedRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeAbortRequested, ID: "abort", Lane: "main"},
-		RunID:      "run",
-	})
-	appendRecord(&session.OperationFinishedRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeOperationFinished, ID: "run-finished", Lane: "main"},
-		RunID:      "run",
-		Outcome:    "aborted",
-	})
-	appendRecord(&session.QueueEnqueuedRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeQueueEnqueued, ID: "next-run", Lane: "main"},
-		Queue:      session.QueueNextRun,
-		Target: &session.MessageEntry{
-			EntryBase: session.EntryBase{Type: session.EntryTypeMessage, ID: "next-message"},
-			Message:   userMessage("next"),
-		},
-	})
-	appendRecord(&session.QueueCancelledRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeQueueCancelled, ID: "queue-cancelled", Lane: "main"},
-		EntryID:    "next-message",
-	})
-	appendRecord(&session.OperationStartedRecord{
-		RecordBase:   session.RecordBase{Type: session.RecordTypeOperationStarted, ID: "compaction", Lane: "main"},
-		SourceLeafID: lo.ToPtr("anchor"),
-		Intent: &session.CompactionIntent{
-			Kind:               session.OperationIntentCompaction,
-			CustomInstructions: lo.ToPtr("short"),
-			ResultEntryID:      "compaction-result",
-		},
-	})
-	manual := session.CompactionReasonManual
-	appendRecord(&session.StepAttemptRecord{
-		RecordBase:       session.RecordBase{Type: session.RecordTypeStepAttempt, ID: "compaction-attempt", Lane: "main"},
-		RunID:            "compaction",
-		Step:             session.OperationStepCompaction,
-		Attempt:          1,
-		ResultEntryID:    "compaction-result",
-		CompactionReason: &manual,
-	})
-	appendRecord(&session.OperationFinishedRecord{
-		RecordBase: session.RecordBase{Type: session.RecordTypeOperationFinished, ID: "compaction-finished", Lane: "main"},
-		RunID:      "compaction",
-		Outcome:    "completed",
-	})
-	appendRecord(&session.OperationStartedRecord{
-		RecordBase:   session.RecordBase{Type: session.RecordTypeOperationStarted, ID: "navigation", Lane: "main"},
-		SourceLeafID: lo.ToPtr("anchor"),
-		Intent: &session.NavigationIntent{
-			Kind:               session.OperationIntentNavigation,
-			TargetID:           nil,
-			Summarize:          true,
-			CustomInstructions: lo.ToPtr("summarize"),
-			Label:              lo.ToPtr("checkpoint"),
-			SummaryEntryID:     lo.ToPtr("navigation-summary"),
-		},
-	})
-	appendRecord(&session.StepAttemptRecord{
-		RecordBase:    session.RecordBase{Type: session.RecordTypeStepAttempt, ID: "branch-attempt", Lane: "main"},
-		RunID:         "navigation",
-		Step:          session.OperationStepBranchSummary,
-		Attempt:       1,
-		ResultEntryID: "navigation-summary",
-	})
-
-	restored := reopen(t, root, s)
-	restoredRecords, err := restored.FindRecords(&session.RecordQuery{Order: session.OrderOldestFirst})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, restoredRecords, records)
-
-	runRecords, err := restored.FindRecords(&session.RecordQuery{
-		Type:          lo.ToPtr(session.RecordTypeOperationStarted),
-		OperationKind: lo.ToPtr(session.OperationIntentRun),
-		Limit:         lo.ToPtr(1),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, recordIDList(runRecords), []string{"run"})
-
-	compactionRecords, err := restored.FindRecords(&session.RecordQuery{
-		RunID: lo.ToPtr("compaction"),
-		Order: session.OrderOldestFirst,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, recordIDList(compactionRecords), []string{"compaction", "compaction-attempt", "compaction-finished"})
-
-	usageRecords, err := restored.FindRecords(&session.RecordQuery{
-		Type:     lo.ToPtr(session.RecordTypeUsage),
-		AfterSeq: lo.ToPtr(records[6].Base().Seq),
-		Limit:    lo.ToPtr(2),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, recordIDList(usageRecords), []string{"adjustment", "hook-usage"})
-
-	openOperations, err := restored.FindOpenOperations("main", lo.ToPtr(2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var openIDs []string
-	for _, record := range openOperations {
-		openIDs = append(openIDs, record.ID)
-	}
-	assertJSONEqual(t, openIDs, []string{"navigation"})
-
-	stats, err := restored.GetStats()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, stats, session.SessionStats{
-		CachedTokens:   45,
-		UncachedTokens: 75,
-		TotalTokens:    150,
-		CostTotal:      15,
-	})
-
-	// Mutating the decoded intent must not touch storage state.
-	started, err := restored.FindRecords(&session.RecordQuery{
-		Type:          lo.ToPtr(session.RecordTypeOperationStarted),
-		OperationKind: lo.ToPtr(session.OperationIntentRun),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	startedRecord := started[0].(*session.OperationStartedRecord)
-	startedRecord.Intent.(*session.RunIntent).OriginalPrompt = append(
-		startedRecord.Intent.(*session.RunIntent).OriginalPrompt, userMessage("mutated"))
-	refetched, err := restored.FindRecords(&session.RecordQuery{Order: session.OrderOldestFirst})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, refetched, records)
-}
-
-func TestPersistsConcurrentCrossLaneWritesInSharedSequenceOrder(t *testing.T) {
-	root := t.TempDir()
-	repository := createRepository(root)
-	s, err := repository.Create(&jsonl.JsonlSessionCreateOptions{
-		SessionCreateOptions: session.SessionCreateOptions{ID: lo.ToPtr("concurrent")},
-		Cwd:                  root,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rootCommitted, err := s.AppendEntry(&session.CustomEntry{
-		EntryBase:  session.EntryBase{Type: session.EntryTypeCustom, ID: "root"},
-		CustomType: "root",
-	}, "main")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.CreateLane("thread", &rootCommitted.Base().ID); err != nil {
-		t.Fatal(err)
-	}
-
-	type result struct {
-		id  string
-		seq int64
-	}
-	results := make([]result, 4)
-	var wg sync.WaitGroup
-	specs := []struct {
-		id   string
-		lane string
-	}{
-		{"main-1", "main"},
-		{"thread-1", "thread"},
-		{"main-2", "main"},
-		{"thread-2", "thread"},
-	}
-	for i, spec := range specs {
-		wg.Add(1)
-		go func(i int, spec struct {
-			id   string
-			lane string
-		}) {
-			defer wg.Done()
-			entry, err := s.AppendEntry(&session.CustomEntry{
-				EntryBase:  session.EntryBase{Type: session.EntryTypeCustom, ID: spec.id},
-				CustomType: "note",
-			}, spec.lane)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			results[i] = result{id: entry.Base().ID, seq: entry.Base().Seq}
-		}(i, spec)
-	}
-	wg.Wait()
-	seqs := []int64{results[0].seq, results[1].seq, results[2].seq, results[3].seq}
-	idsBySeq := []string{}
-	sortedSeqs := append([]int64{}, seqs...)
-	sort.Slice(sortedSeqs, func(a, b int) bool { return sortedSeqs[a] < sortedSeqs[b] })
-	for _, seq := range sortedSeqs {
-		for _, r := range results {
-			if r.seq == seq {
-				idsBySeq = append(idsBySeq, r.id)
-			}
-		}
-	}
-
-	restored := reopen(t, root, s)
-	log, err := restored.GetLog(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var concurrent []string
-	var logSeqs []int64
-	for _, item := range log {
-		logSeqs = append(logSeqs, item.Seq)
-		if item.Kind == "entry" && item.Entry.Base().ID != "root" {
-			concurrent = append(concurrent, item.Entry.Base().ID)
-		}
-	}
-	assertJSONEqual(t, concurrent, idsBySeq)
-	uniqueSeqs := map[int64]struct{}{}
-	for _, item := range log {
-		if item.Kind == "entry" && item.Entry.Base().ID != "root" {
-			uniqueSeqs[item.Entry.Base().Seq] = struct{}{}
-		}
-	}
-	if len(uniqueSeqs) != 4 {
-		t.Fatalf("unique seqs = %d, want 4", len(uniqueSeqs))
-	}
-	assertJSONEqual(t, logSeqs, []int64{1, 2, 3, 4, 5, 6})
-}
-
-func TestRejectsNonJSONPayloadsWithoutChangingTheDurablePrefix(t *testing.T) {
-	root := t.TempDir()
-	repository := createRepository(root)
-	s, err := repository.Create(&jsonl.JsonlSessionCreateOptions{
-		SessionCreateOptions: session.SessionCreateOptions{ID: lo.ToPtr("validation")},
-		Cwd:                  root,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	metadataPath := metadataPathFor(t, repository, "validation")
-	prefix := readSessionFile(t, metadataPath)
-
-	cyclic := map[string]any{}
-	cyclic["self"] = cyclic
-	_, err = s.AppendCustomEntry("invalid", cyclic)
-	requireSessionError(t, err, session.CodeInvalidPayload)
-	if readSessionFile(t, metadataPath) != prefix {
-		t.Fatal("durable prefix changed after rejected payload")
-	}
-
-	restored := reopen(t, root, s)
-	log, err := restored.GetLog(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(log) != 0 {
-		t.Fatalf("log length = %d, want 0", len(log))
-	}
-	valid, err := restored.AppendEntry(&session.CustomEntry{
-		EntryBase:  session.EntryBase{Type: session.EntryTypeCustom, ID: "valid"},
-		CustomType: "note",
-		Data:       map[string]any{"value": 1},
-	}, "main")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if valid.Base().Seq != 1 {
-		t.Fatalf("valid seq = %d, want 1", valid.Base().Seq)
-	}
-	verified := reopen(t, root, restored)
-	entry, err := verified.GetEntry("valid")
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertJSONEqual(t, entry, valid)
-}
-
-func TestDoesNotAdvanceStateOrPoisonTheWriteQueueAfterAnAppendFailure(t *testing.T) {
-	root := t.TempDir()
-	fs := newInjectedFS(root)
-	fs.failAppendFile = 1
-	repository := repoWithFS(root, fs)
-	s, err := repository.Create(&jsonl.JsonlSessionCreateOptions{
-		SessionCreateOptions: session.SessionCreateOptions{ID: lo.ToPtr("append-failure")},
-		Cwd:                  root,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := s.AppendCustomEntry("rejected", nil); err == nil {
-		t.Fatal("expected storage failure")
-	} else {
-		requireSessionError(t, err, session.CodeStorage)
-	}
-	log, err := s.GetLog(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(log) != 0 {
-		t.Fatalf("log length = %d, want 0", len(log))
-	}
-	committed, err := s.AppendEntry(&session.CustomEntry{
-		EntryBase:  session.EntryBase{Type: session.EntryTypeCustom, ID: "committed"},
-		CustomType: "note",
-	}, "main")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if committed.Base().Seq != 1 {
-		t.Fatalf("committed seq = %d, want 1", committed.Base().Seq)
-	}
-
-	reopened := openByID(t, createRepository(root), "append-failure")
-	reopenedLog, err := reopened.GetLog(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(reopenedLog) != 1 || reopenedLog[0].Kind != "entry" || reopenedLog[0].Seq != 1 {
-		t.Fatalf("reopened log = %+v, want single entry seq 1", reopenedLog)
-	}
-	assertJSONEqual(t, reopenedLog[0].Entry, committed)
-}
-
-// --- shared small helpers used by both storage and repo tests ---
-
-func entryIDList(entries []session.Entry) []string {
-	ids := make([]string, len(entries))
-	for i, entry := range entries {
-		ids[i] = entry.Base().ID
-	}
-	return ids
-}
-
-func recordIDList(records []session.LaneRecord) []string {
-	ids := make([]string, len(records))
-	for i, record := range records {
-		ids[i] = record.Base().ID
-	}
-	return ids
-}
-
-// metadataPathFor lists the repo and returns the session file path for id.
-func metadataPathFor(t *testing.T, repository *jsonl.JsonlSessionRepo, id string) string {
+func storageOptions(t *testing.T, path string) (harnessFS, *jsonl.JsonlStorageOptions) {
 	t.Helper()
-	listed, err := repository.List(nil)
+	root := t.TempDir()
+	fileSystem := env.NewNodeExecutionEnv(env.NodeExecutionEnvOptions{Cwd: root})
+	return fileSystem, &jsonl.JsonlStorageOptions{FileSystem: fileSystem, Path: path, Now: func() int64 { return storageNow }}
+}
+
+func readTextFile(t *testing.T, fs harnessFS, path string) string {
+	t.Helper()
+	content, err := fs.ReadTextFile(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := range listed {
-		if listed[i].ID == id {
-			return listed[i].Path
+	return content
+}
+
+func fileExists(t *testing.T, fs harnessFS, path string) bool {
+	t.Helper()
+	exists, err := fs.Exists(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return exists
+}
+
+func storedValue(address session.Value, value any, seq int64) session.StoredValue {
+	return session.StoredValue{Address: address, Value: value, Seq: seq}
+}
+
+func preparedSnapshot() session.ForkDestinationSnapshot {
+	userMessage := types.UserMessage{
+		Role: types.RoleUser, Content: types.UserContent{Parts: []types.Content{types.NewTextContent("hello")}}, Timestamp: 1,
+	}
+	root := &session.MessageEntry{Message: userMessage}
+	root.ID = "root"
+	root.Type = session.EntryTypeMessage
+	root.Seq = 1
+	root.Timestamp = storageNow
+	return session.ForkDestinationSnapshot{
+		Entries: map[string]session.Entry{
+			"root": root,
+		},
+		ScalarValues: []session.StoredValue{
+			storedValue(session.BranchTip("main"), "root", 2),
+			storedValue(session.LaneStateAddress("main"), session.LaneState{Inbox: []session.InboxItem{}}, 3),
+			storedValue(session.SessionNameAddress, "forked", 4),
+		},
+		NextSeq: 9,
+	}
+}
+
+func storageUserEntry(id string, text string) *session.MessageEntry {
+	entry := &session.MessageEntry{
+		Message: types.UserMessage{
+			Role: types.RoleUser, Content: types.UserContent{Parts: []types.Content{types.NewTextContent(text)}}, Timestamp: 1,
+		},
+	}
+	entry.ID = id
+	entry.Type = session.EntryTypeMessage
+	return entry
+}
+
+func storageCustomEntry(id, customType string) *session.CustomEntry {
+	entry := &session.CustomEntry{}
+	entry.ID = id
+	entry.Type = session.EntryTypeCustom
+	entry.CustomType = &customType
+	return entry
+}
+
+func storageUsageRow() session.UsageRow {
+	return session.UsageRow{
+		ID: "usage", EntryID: strPtr("root"), Adjustment: false,
+		Usage: types.Usage{Input: 1, Output: 2, TotalTokens: 3, Cost: types.Cost{}},
+	}
+}
+
+func strPtr(s string) *string { return &s }
+
+func TestSnapshotCreationAtomicallyPublishesAdvancesAndReopens(t *testing.T) {
+	ctx := context.Background()
+	fileSystem, options := storageOptions(t, "fork.jsonl")
+	storage, err := jsonl.CreateJsonlStorageFromForkSnapshot(options, storageHeader("fork"), preparedSnapshot(), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimRight(readTextFile(t, fileSystem, "fork.jsonl"), "\n"), "\n")
+	for _, line := range lines[1:] {
+		var parsed any
+		if err := json.Unmarshal([]byte(line), &parsed); err != nil {
+			t.Fatal(err)
+		}
+		if _, isArray := parsed.([]any); isArray {
+			t.Fatal("snapshot writes must be one line each")
 		}
 	}
-	t.Fatalf("session %s not found", id)
-	return ""
+	entry, err := storage.GetEntries([]string{"root"}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := entry["root"]; e == nil || e.Base().Timestamp != storageNow {
+		t.Fatalf("root entry = %v", e)
+	}
+	tip, _ := storage.GetValue(session.BranchTip("main"), ctx)
+	if tip == nil || tip.Value != "root" {
+		t.Fatalf("tip = %v", tip)
+	}
+	state, _ := storage.GetValue(session.LaneStateAddress("main"), ctx)
+	pigtesting.AssertJSONEqual(t, "lane state", state.Value, session.LaneState{Inbox: []session.InboxItem{}})
+	name, _ := storage.GetValue(session.SessionNameAddress, ctx)
+	if name == nil || name.Value != "forked" {
+		t.Fatalf("name = %v", name)
+	}
+	stats, _ := storage.GetStats(ctx)
+	pigtesting.AssertJSONEqual(t, "stats", stats, session.SessionStats{MessageCount: 1, Usage: types.Usage{}})
+	usage, _ := storage.ScanUsage(session.UsageScan{Order: "asc"}, ctx)
+	if len(usage) != 0 {
+		t.Fatalf("usage = %v", usage)
+	}
+	result, err := storage.Commit([]session.Write{session.SetValue(session.SessionNameAddress, "updated")}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.FirstSeq != 9 {
+		t.Fatalf("firstSeq = %d", result.FirstSeq)
+	}
+	if fileExists(t, fileSystem, "fork.jsonl.tmp") {
+		t.Fatal("temp file must be cleaned up")
+	}
+	_ = storage.Close(ctx)
+
+	reopened, err := jsonl.OpenJsonlStorage(options, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := reopened.GetEntries([]string{"root"}, ctx)
+	if _, ok := entries["root"]; !ok {
+		t.Fatal("root must survive reopen")
+	}
+	name, _ = reopened.GetValue(session.SessionNameAddress, ctx)
+	if name == nil || name.Value != "updated" {
+		t.Fatalf("reopened name = %v", name)
+	}
+	next, _ := reopened.Commit(nil, ctx)
+	if next.FirstSeq != 10 {
+		t.Fatalf("next firstSeq = %d", next.FirstSeq)
+	}
+	_ = reopened.Close(ctx)
+}
+
+func TestSnapshotCreationRemovesTheTemporaryFileWhenPublicationFails(t *testing.T) {
+	ctx := context.Background()
+	fileSystem, options := storageOptions(t, "blocked.jsonl")
+	if err := fileSystem.CreateDir(ctx, "blocked.jsonl", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := jsonl.CreateJsonlStorageFromForkSnapshot(options, storageHeader("blocked"), preparedSnapshot(), ctx); err == nil {
+		t.Fatal("publication onto a directory must fail")
+	} else if !strings.Contains(err.Error(), "Failed to publish JSONL storage") {
+		t.Fatalf("err = %v", err)
+	}
+	if fileExists(t, fileSystem, "blocked.jsonl.tmp") {
+		t.Fatal("temp file must be removed on failure")
+	}
+	info, err := fileSystem.FileInfo(ctx, "blocked.jsonl")
+	if err != nil || info.Kind != harnessFileKindDirectory {
+		t.Fatalf("blocked.jsonl = %v, %v", info, err)
+	}
+}
+
+func TestReplaysWholeListDeletionWithoutResurrectingEarlierAppends(t *testing.T) {
+	ctx := context.Background()
+	_, options := storageOptions(t, "list-delete.jsonl")
+	events := session.MustList("test.events", "")
+	storage, err := jsonl.CreateJsonlStorage(options, storageHeader("list-delete"), nil, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storage.Commit([]session.Write{
+		session.AppendList(events, "first"), session.AppendList(events, "second"),
+	}, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storage.Commit([]session.Write{session.DeleteList(events)}, ctx); err != nil {
+		t.Fatal(err)
+	}
+	_ = storage.Close(ctx)
+
+	reopened, err := jsonl.OpenJsonlStorage(options, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	elements, _ := reopened.ReadList(events, nil, ctx)
+	if len(elements) != 0 {
+		t.Fatalf("elements = %v", elements)
+	}
+	recreated, _ := reopened.Commit([]session.Write{session.AppendList(events, "after")}, ctx)
+	if recreated.FirstSeq != 4 {
+		t.Fatalf("firstSeq = %d", recreated.FirstSeq)
+	}
+	elements, _ = reopened.ReadList(events, nil, ctx)
+	pigtesting.AssertJSONEqual(t, "recreated", elements, []session.ListElement{{Seq: 4, Value: "after"}})
+	_ = reopened.Close(ctx)
+}
+
+func TestWritesOneLinePerTransactionAndReplaysStampedState(t *testing.T) {
+	ctx := context.Background()
+	fileSystem, options := storageOptions(t, "session.jsonl")
+	storage, err := jsonl.CreateJsonlStorage(options, storageHeader("round-trip"), nil, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	committed, err := storage.Commit([]session.Write{
+		session.InsertEntry(storageUserEntry("root", "hello")),
+		session.SetValue(session.BranchTip("main"), "root"),
+		session.InsertUsage(storageUsageRow()),
+	}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storage.Commit([]session.Write{session.SetValue(session.SessionNameAddress, "name")}, ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimRight(readTextFile(t, fileSystem, "session.jsonl"), "\n"), "\n")
+	var headerLine jsonl.JsonlStorageHeader
+	if err := json.Unmarshal([]byte(lines[0]), &headerLine); err != nil {
+		t.Fatal(err)
+	}
+	pigtesting.AssertJSONEqual(t, "header", headerLine, storageHeader("round-trip"))
+	var firstTransaction []any
+	if err := json.Unmarshal([]byte(lines[1]), &firstTransaction); err != nil {
+		t.Fatal(err)
+	}
+	if len(firstTransaction) != 3 {
+		t.Fatalf("first transaction length = %d", len(firstTransaction))
+	}
+	var secondTransaction any
+	if err := json.Unmarshal([]byte(lines[2]), &secondTransaction); err != nil {
+		t.Fatal(err)
+	}
+	if _, isArray := secondTransaction.([]any); isArray {
+		t.Fatal("second transaction must be a single object")
+	}
+	_ = storage.Close(ctx)
+
+	reopened, err := jsonl.OpenJsonlStorage(options, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := reopened.GetEntries([]string{"root"}, ctx)
+	want := storageUserEntry("root", "hello")
+	want.Base().Seq = committed.Seqs[0]
+	want.Base().Timestamp = committed.Timestamp
+	pigtesting.AssertJSONEqual(t, "root", entries["root"], want)
+	tip, _ := reopened.GetValue(session.BranchTip("main"), ctx)
+	pigtesting.AssertJSONEqual(t, "tip", tip, session.StoredValue{Address: session.BranchTip("main"), Value: "root", Seq: committed.Seqs[1]})
+	usage, _ := reopened.ScanUsage(session.UsageScan{Order: "asc"}, ctx)
+	rows := []any{}
+	for _, row := range usage {
+		rows = append(rows, map[string]any{"id": row.ID, "seq": row.Seq})
+	}
+	pigtesting.AssertJSONEqual(t, "usage", rows, []any{map[string]any{"id": "usage", "seq": committed.Seqs[2]}})
+	historicalStats := session.SessionStats{
+		MessageCount: 1,
+		Usage:        types.Usage{Input: 1, Output: 2, TotalTokens: 3, Cost: types.Cost{}},
+	}
+	stats, _ := reopened.GetStats(ctx)
+	pigtesting.AssertJSONEqual(t, "stats", stats, historicalStats)
+	next, _ := reopened.Commit(nil, ctx)
+	if next.FirstSeq != 5 {
+		t.Fatalf("firstSeq = %d", next.FirstSeq)
+	}
+	pigtesting.AssertJSONEqual(t, "next stats", next.Stats, historicalStats)
+	_ = reopened.Close(ctx)
+}
+
+func TestCapturesOneSerializedBoundaryBetweenCommits(t *testing.T) {
+	ctx := context.Background()
+	_, options := storageOptions(t, "session.jsonl")
+	storage, err := jsonl.CreateJsonlStorage(options, storageHeader("snapshot"), nil, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storage.Commit([]session.Write{
+		session.InsertEntry(storageCustomEntry("root", "root")),
+		session.SetValue(session.BranchTip("main"), "root"),
+	}, ctx); err != nil {
+		t.Fatal(err)
+	}
+	captured, err := storage.CaptureForkSource(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storage.Commit([]session.Write{
+		session.InsertEntry(storageCustomEntry("child", "child")),
+		session.SetValue(session.BranchTip("main"), "child"),
+	}, ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	ids := []string{}
+	for _, entry := range captured.Entries {
+		ids = append(ids, entry.Base().ID)
+	}
+	pigtesting.AssertJSONEqual(t, "captured entries", ids, []string{"root"})
+	var tipValue any
+	for _, stored := range captured.ScalarValues {
+		if stored.Address.Namespace == session.BranchTip("main").Namespace && stored.Address.Key == "main" {
+			tipValue = stored.Value
+		}
+	}
+	if tipValue != "root" {
+		t.Fatalf("captured tip = %v", tipValue)
+	}
+	entries, _ := storage.GetEntries([]string{"child"}, ctx)
+	if _, ok := entries["child"]; !ok {
+		t.Fatal("child must be committed")
+	}
+	tip, _ := storage.GetValue(session.BranchTip("main"), ctx)
+	if tip == nil || tip.Value != "child" {
+		t.Fatalf("tip = %v", tip)
+	}
+	_ = storage.Close(ctx)
+}
+
+func seedTornFile(t *testing.T) (harnessFS, *jsonl.JsonlStorageOptions, string) {
+	t.Helper()
+	ctx := context.Background()
+	fileSystem, options := storageOptions(t, "session.jsonl")
+	storage, err := jsonl.CreateJsonlStorage(options, storageHeader("torn"), nil, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storage.Commit([]session.Write{session.InsertEntry(storageUserEntry("kept", "kept"))}, ctx); err != nil {
+		t.Fatal(err)
+	}
+	_ = storage.Close(ctx)
+	prefix := readTextFile(t, fileSystem, "session.jsonl")
+	return fileSystem, options, prefix
+}
+
+func tornEntryLine(t *testing.T, id string) string {
+	t.Helper()
+	entry := storageUserEntry(id, id)
+	entry.Base().Seq = 2
+	entry.Base().Timestamp = storageNow
+	data, err := json.Marshal(session.CommittedEntryWrite{Entry: entry})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestDiscardsAnUnterminatedFinalObjectLineAndTruncatesBeforeAdmittingWrites(t *testing.T) {
+	ctx := context.Background()
+	fileSystem, options, prefix := seedTornFile(t)
+	if err := fileSystem.AppendFile(ctx, "session.jsonl", []byte(tornEntryLine(t, "torn"))); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := jsonl.OpenJsonlStorage(options, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := reopened.GetEntries([]string{"kept", "torn"}, ctx)
+	if _, ok := entries["torn"]; ok {
+		t.Fatal("torn entry must be discarded")
+	}
+	if _, ok := entries["kept"]; !ok {
+		t.Fatal("kept entry must survive")
+	}
+	if got := readTextFile(t, fileSystem, "session.jsonl"); got != prefix {
+		t.Fatal("file must be truncated back to the complete prefix")
+	}
+	if fileExists(t, fileSystem, "session.jsonl.tmp") {
+		t.Fatal("temp file must be cleaned up")
+	}
+
+	next, err := reopened.Commit([]session.Write{session.InsertEntry(storageUserEntry("after", "after"))}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.FirstSeq != 2 {
+		t.Fatalf("firstSeq = %d", next.FirstSeq)
+	}
+	entries, _ = reopened.GetEntries([]string{"after"}, ctx)
+	if entries["after"] == nil || entries["after"].Base().Seq != 2 {
+		t.Fatalf("after = %v", entries["after"])
+	}
+	_ = reopened.Close(ctx)
+}
+
+func TestDiscardsATornArrayLineWhollyIncludingListElements(t *testing.T) {
+	ctx := context.Background()
+	fileSystem, options, prefix := seedTornFile(t)
+	events := session.MustList("test.events", "")
+	first := storageUserEntry("torn-a", "torn-a")
+	first.Base().Seq = 2
+	first.Base().Timestamp = storageNow
+	firstWrite, err := json.Marshal(session.CommittedEntryWrite{Entry: first})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valueWrite, err := json.Marshal(session.CommittedValueSetWrite{Seq: 3, Namespace: session.SessionNameAddress.Namespace, Key: session.SessionNameAddress.Key, Value: "lost"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listWrite, err := json.Marshal(session.CommittedListAppendWrite{Seq: 4, Namespace: events.Namespace, Key: events.Key, Value: "lost"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	torn := "[" + string(firstWrite) + "," + string(valueWrite) + "," + string(listWrite) + "]"
+	if err := fileSystem.AppendFile(ctx, "session.jsonl", []byte(torn)); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := jsonl.OpenJsonlStorage(options, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := reopened.GetEntries([]string{"torn-a"}, ctx)
+	if _, ok := entries["torn-a"]; ok {
+		t.Fatal("torn array line must be discarded wholly")
+	}
+	if stored, _ := reopened.GetValue(session.SessionNameAddress, ctx); stored != nil {
+		t.Fatal("value from torn line must be discarded")
+	}
+	elements, _ := reopened.ReadList(events, nil, ctx)
+	if len(elements) != 0 {
+		t.Fatal("list elements from torn line must be discarded")
+	}
+	if got := readTextFile(t, fileSystem, "session.jsonl"); got != prefix {
+		t.Fatal("file must be truncated back to the prefix")
+	}
+	_ = reopened.Close(ctx)
+}
+
+func requireOpenError(t *testing.T, options *jsonl.JsonlStorageOptions, match string, corrupted string, fileSystem harnessFS) {
+	t.Helper()
+	_, err := jsonl.OpenJsonlStorage(options, context.Background())
+	if err == nil || !strings.Contains(err.Error(), match) {
+		t.Fatalf("err = %v, want match %q", err, match)
+	}
+	if got := readTextFile(t, fileSystem, options.Path); got != corrupted {
+		t.Fatal("corrupted file must not be rewritten")
+	}
+}
+
+func TestRejectsAMalformedInteriorLineWithoutRewriting(t *testing.T) {
+	fileSystem, options, prefix := seedTornFile(t)
+	corrupted := prefix + "not-json\n" + marshalValueSet(t, "after") + "\n"
+	if err := fileSystem.WriteFile(context.Background(), "session.jsonl", []byte(corrupted)); err != nil {
+		t.Fatal(err)
+	}
+	requireOpenError(t, options, "line 3", corrupted, fileSystem)
+}
+
+func TestRejectsTheUnsupportedPreWP01ScalarRecordSpelling(t *testing.T) {
+	fileSystem, options, prefix := seedTornFile(t)
+	legacyKind := "reg" + "ister"
+	corrupted := prefix + `{"kind":"` + legacyKind + `","op":"set","seq":2,"namespace":"legacy.value","key":"state","value":true}` + "\n"
+	if err := fileSystem.WriteFile(context.Background(), "session.jsonl", []byte(corrupted)); err != nil {
+		t.Fatal(err)
+	}
+	requireOpenError(t, options, "line 3", corrupted, fileSystem)
+}
+
+func TestRejectsACompleteMalformedFinalLineWithoutRewriting(t *testing.T) {
+	fileSystem, options, prefix := seedTornFile(t)
+	corrupted := prefix + "not-json\n"
+	if err := fileSystem.WriteFile(context.Background(), "session.jsonl", []byte(corrupted)); err != nil {
+		t.Fatal(err)
+	}
+	requireOpenError(t, options, "line 3", corrupted, fileSystem)
+}
+
+func TestRejectsACompleteFinalLineWithInvalidTransactionFraming(t *testing.T) {
+	fileSystem, options, prefix := seedTornFile(t)
+	corrupted := prefix + `{"kind":"nope","seq":2}` + "\n"
+	if err := fileSystem.WriteFile(context.Background(), "session.jsonl", []byte(corrupted)); err != nil {
+		t.Fatal(err)
+	}
+	requireOpenError(t, options, "line 3", corrupted, fileSystem)
+}
+
+func TestRejectsAnUnterminatedHeader(t *testing.T) {
+	fileSystem, options := storageOptions(t, "session.jsonl")
+	headerJSON, err := json.Marshal(storageHeader("torn"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fileSystem.WriteFile(context.Background(), "session.jsonl", headerJSON[:len(headerJSON)-4]); err != nil {
+		t.Fatal(err)
+	}
+	_, err = jsonl.OpenJsonlStorage(options, context.Background())
+	if err == nil || !strings.Contains(err.Error(), "missing header") {
+		t.Fatalf("err = %v, want missing header", err)
+	}
+}
+
+func marshalValueSet(t *testing.T, value string) string {
+	t.Helper()
+	data, err := json.Marshal(session.CommittedValueSetWrite{Seq: 3, Namespace: session.SessionNameAddress.Namespace, Key: session.SessionNameAddress.Key, Value: value})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

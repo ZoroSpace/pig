@@ -30,17 +30,34 @@ func isEnabled(enabledIds []string, id string) bool {
 	return enabledIds == nil || containsString(enabledIds, id)
 }
 
-// toggleEnabled toggles one id (pi: toggle).
-func toggleEnabled(enabledIds []string, id string) []string {
+// normalizeEnabledIds collapses an explicit list back to nil (= all
+// enabled) when it covers every available model (pi: normalizeEnabled,
+// v0.85.1).
+func normalizeEnabledIds(result []string, allIds []string) []string {
+	if len(result) == len(allIds) && everyIn(result, allIds) {
+		return nil
+	}
+	return result
+}
+
+// toggleEnabled toggles one id (pi: toggle, v0.85.1). From the all-enabled
+// state the first toggle disables only this id; re-enabling the last
+// disabled id restores the all-enabled state.
+func toggleEnabled(enabledIds []string, allIds []string, id string) []string {
 	if enabledIds == nil {
-		// First toggle: start with only this one
-		return []string{id}
+		out := []string{}
+		for _, modelID := range allIds {
+			if modelID != id {
+				out = append(out, modelID)
+			}
+		}
+		return out
 	}
 	index := indexOfString(enabledIds, id)
 	if index >= 0 {
 		return append(append([]string{}, enabledIds[:index]...), enabledIds[index+1:]...)
 	}
-	return append(append([]string{}, enabledIds...), id)
+	return normalizeEnabledIds(append(append([]string{}, enabledIds...), id), allIds)
 }
 
 // enableAllIds enables targets (pi: enableAll). Result nil = all enabled.
@@ -225,7 +242,7 @@ func NewScopedModelsSelectorComponent(config ScopedModelsConfig, callbacks Scope
 	s.AddChild(tui.NewSpacer(1))
 	s.AddChild(tui.NewText(theme.Fg("accent", theme.Bold("Model Configuration")), 0, 0))
 	s.AddChild(tui.NewText(theme.Fg("muted", fmt.Sprintf("Session-only. %s to save to settings.",
-		coretools.KeyText(core.AppKeybindingModelsSave))), 0, 0))
+		coretools.KeyDisplayText(core.AppKeybindingModelsSave))), 0, 0))
 	s.AddChild(tui.NewSpacer(1))
 
 	// Search input
@@ -342,12 +359,12 @@ func (s *ScopedModelsSelectorComponent) getFooterText() string {
 		}
 	}
 	parts := []string{
-		fmt.Sprintf("%s toggle", coretools.KeyText("tui.select.confirm")),
-		fmt.Sprintf("%s all", coretools.KeyText(core.AppKeybindingModelsEnableAll)),
-		fmt.Sprintf("%s clear", coretools.KeyText(core.AppKeybindingModelsClearAll)),
-		fmt.Sprintf("%s provider", coretools.KeyText(core.AppKeybindingModelsToggleProvider)),
-		fmt.Sprintf("%s/%s reorder", coretools.KeyText(core.AppKeybindingModelsReorderUp), coretools.KeyText(core.AppKeybindingModelsReorderDown)),
-		fmt.Sprintf("%s save", coretools.KeyText(core.AppKeybindingModelsSave)),
+		fmt.Sprintf("%s toggle", coretools.KeyDisplayText("tui.select.confirm")),
+		fmt.Sprintf("%s all", coretools.KeyDisplayText(core.AppKeybindingModelsEnableAll)),
+		fmt.Sprintf("%s clear", coretools.KeyDisplayText(core.AppKeybindingModelsClearAll)),
+		fmt.Sprintf("%s provider", coretools.KeyDisplayText(core.AppKeybindingModelsToggleProvider)),
+		fmt.Sprintf("%s/%s reorder", coretools.KeyDisplayText(core.AppKeybindingModelsReorderUp), coretools.KeyDisplayText(core.AppKeybindingModelsReorderDown)),
+		fmt.Sprintf("%s save", coretools.KeyDisplayText(core.AppKeybindingModelsSave)),
 		countText,
 	}
 	if s.isDirty {
@@ -409,7 +426,6 @@ func (s *ScopedModelsSelectorComponent) updateList() {
 		len(s.filteredItems)-s.maxVisible,
 	))
 	endIndex := minInt(startIndex+s.maxVisible, len(s.filteredItems))
-	allEnabled := s.enabledIds == nil
 
 	for i := startIndex; i < endIndex; i++ {
 		item := s.filteredItems[i]
@@ -422,26 +438,27 @@ func (s *ScopedModelsSelectorComponent) updateList() {
 		if item.model != nil {
 			id = item.model.ID
 		}
-		modelText := id
+		// v0.85.1 rendering: enabled marker moves before the id,
+		// unavailable models render struck through, and the all-enabled
+		// state no longer suppresses markers.
+		styledID := id
+		if item.model == nil {
+			styledID = theme.Strikethrough(id)
+		}
+		modelText := styledID
 		if isSelected {
-			modelText = theme.Fg("accent", id)
+			modelText = theme.Fg("accent", styledID)
 		}
 		providerBadgeText := " [unavailable]"
 		if item.model != nil {
 			providerBadgeText = fmt.Sprintf(" [%s]", item.model.Provider)
 		}
 		providerBadge := theme.Fg("muted", providerBadgeText)
-		status := ""
-		if item.model == nil {
-			status = theme.Fg("dim", " ✗")
-		} else if !allEnabled {
-			if item.enabled {
-				status = theme.Fg("success", " ✓")
-			} else {
-				status = theme.Fg("dim", " ✗")
-			}
+		status := "  "
+		if item.model != nil && item.enabled {
+			status = theme.Fg("accent", "✓ ")
 		}
-		s.listContainer.AddChild(tui.NewText(prefix+modelText+providerBadge+status, 0, 0))
+		s.listContainer.AddChild(tui.NewText(prefix+status+modelText+providerBadge, 0, 0))
 	}
 
 	// Add scroll indicator if needed
@@ -524,7 +541,7 @@ func (s *ScopedModelsSelectorComponent) HandleInput(data string) {
 	if kb.Matches(data, "tui.select.confirm") {
 		if s.selectedIndex < len(s.filteredItems) {
 			item := s.filteredItems[s.selectedIndex]
-			s.enabledIds = toggleEnabled(s.enabledIds, item.fullID)
+			s.enabledIds = toggleEnabled(s.enabledIds, s.allIds, item.fullID)
 			s.isDirty = true
 			s.refresh()
 			s.notifyChange()

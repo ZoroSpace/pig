@@ -168,3 +168,60 @@ func mustGetwdForPrompt() string {
 	}
 	return cwd
 }
+
+func TestBuildSystemPromptSkillsToolFallback(t *testing.T) {
+	// pi (v0.85.1): skills are included when read OR bash is available, and
+	// the section names the tool that will read them.
+	testSkill := Skill{
+		Name:        "test-skill",
+		Description: "A test skill.",
+		FilePath:    "/skills/test-skill/SKILL.md",
+		BaseDir:     "/skills/test-skill",
+	}
+
+	t.Run("includes skills with only bash in the default prompt", func(t *testing.T) {
+		prompt := BuildSystemPrompt(BuildSystemPromptOptions{
+			SelectedTools: []string{"bash"},
+			ContextFiles:  []ContextFile{},
+			Skills:        []Skill{testSkill},
+			Cwd:           mustGetwdForPrompt(),
+		})
+		if !strings.Contains(prompt, "<available_skills>") {
+			t.Fatalf("prompt missing skills section: %q", prompt)
+		}
+		if !strings.Contains(prompt, "<name>test-skill</name>") {
+			t.Fatalf("prompt missing skill name: %q", prompt)
+		}
+		if !strings.Contains(prompt, "Use bash to load a skill's file") {
+			t.Fatalf("prompt missing bash instruction: %q", prompt)
+		}
+	})
+
+	t.Run("includes skills with only bash in the custom prompt", func(t *testing.T) {
+		prompt := BuildSystemPrompt(BuildSystemPromptOptions{
+			CustomPrompt:  "Custom system prompt",
+			SelectedTools: []string{"bash"},
+			ContextFiles:  []ContextFile{},
+			Skills:        []Skill{testSkill},
+			Cwd:           mustGetwdForPrompt(),
+		})
+		if !strings.Contains(prompt, "<available_skills>") {
+			t.Fatalf("prompt missing skills section: %q", prompt)
+		}
+		if !strings.Contains(prompt, "Use bash to load a skill's file") {
+			t.Fatalf("prompt missing bash instruction: %q", prompt)
+		}
+	})
+
+	t.Run("omits skills without read or bash", func(t *testing.T) {
+		prompt := BuildSystemPrompt(BuildSystemPromptOptions{
+			SelectedTools: []string{"write"},
+			ContextFiles:  []ContextFile{},
+			Skills:        []Skill{testSkill},
+			Cwd:           mustGetwdForPrompt(),
+		})
+		if strings.Contains(prompt, "<available_skills>") {
+			t.Fatalf("prompt should omit skills: %q", prompt)
+		}
+	})
+}

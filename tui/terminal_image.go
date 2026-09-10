@@ -42,9 +42,21 @@ type TerminalCapabilities struct {
 var (
 	capabilitiesMu        sync.Mutex
 	cachedCapabilities    *TerminalCapabilities
+	capabilityOverrides   TerminalCapabilityOverrides
 	cellDimensionsMu      sync.Mutex
 	currentCellDimensions *CellDimensions
 )
+
+// TerminalCapabilityOverrides carries user-forced capability overrides (pi:
+// Partial<TerminalCapabilities> in setCapabilityOverrides; nil fields leave
+// auto-detection in force). Images mirrors pi's boolean | "kitty" |
+// "iterm2" | null union flattened for Go: nil = no override, false = force
+// off (pi images:null), true/"kitty"/"iterm2" = force on.
+type TerminalCapabilityOverrides struct {
+	Images     any
+	TrueColor  *bool
+	Hyperlinks *bool
+}
 
 // CellDimensions is the terminal cell size in pixels.
 type CellDimensions struct {
@@ -69,13 +81,32 @@ func SetCellDimensions(dims CellDimensions) {
 
 // GetCapabilities returns the cached terminal capabilities. Detection is
 // deferred to Phase 8; until then the default (no images) is returned.
+// Capability overrides set via SetCapabilityOverrides are applied on top
+// (pi: getCapabilities spreads capabilityOverrides over detection).
 func GetCapabilities() TerminalCapabilities {
 	capabilitiesMu.Lock()
 	defer capabilitiesMu.Unlock()
 	if cachedCapabilities == nil {
-		cachedCapabilities = &TerminalCapabilities{}
+		caps := TerminalCapabilities{}
+		applyCapabilityOverrides(&caps, capabilityOverrides)
+		cachedCapabilities = &caps
 	}
 	return *cachedCapabilities
+}
+
+// applyCapabilityOverrides spreads non-empty overrides over caps (pig helper
+// for pi's `{...detected, ...capabilityOverrides}` spread; typed fields need
+// explicit per-field logic).
+func applyCapabilityOverrides(caps *TerminalCapabilities, overrides TerminalCapabilityOverrides) {
+	if overrides.Images != nil {
+		caps.Images = overrides.Images
+	}
+	if overrides.TrueColor != nil {
+		caps.TrueColor = *overrides.TrueColor
+	}
+	if overrides.Hyperlinks != nil {
+		caps.Hyperlinks = *overrides.Hyperlinks
+	}
 }
 
 // ResetCapabilitiesCache drops the cached capabilities.
@@ -91,6 +122,39 @@ func SetCapabilities(caps TerminalCapabilities) {
 	defer capabilitiesMu.Unlock()
 	c := caps
 	cachedCapabilities = &c
+}
+
+// SetCapabilityOverrides overrides selected auto-detected capabilities (pi:
+// setCapabilityOverrides). Takes effect on the next capability cache fill.
+func SetCapabilityOverrides(overrides TerminalCapabilityOverrides) {
+	capabilitiesMu.Lock()
+	defer capabilitiesMu.Unlock()
+	if capabilityOverridesEqual(capabilityOverrides, overrides) {
+		return
+	}
+	capabilityOverrides = overrides
+	cachedCapabilities = nil
+}
+
+// capabilityOverridesEqual reports shallow equality (pi: field comparison
+// early-return in setCapabilityOverrides).
+func capabilityOverridesEqual(a, b TerminalCapabilityOverrides) bool {
+	if a.Images != b.Images {
+		return false
+	}
+	if (a.TrueColor == nil) != (b.TrueColor == nil) {
+		return false
+	}
+	if a.TrueColor != nil && *a.TrueColor != *b.TrueColor {
+		return false
+	}
+	if (a.Hyperlinks == nil) != (b.Hyperlinks == nil) {
+		return false
+	}
+	if a.Hyperlinks != nil && *a.Hyperlinks != *b.Hyperlinks {
+		return false
+	}
+	return true
 }
 
 // Hyperlink wraps text in an OSC 8 hyperlink sequence (pi:

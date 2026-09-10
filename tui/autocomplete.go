@@ -192,8 +192,9 @@ type fdEntry struct {
 }
 
 // walkDirectoryWithFd walks the directory tree with fd (fast, respects
-// .gitignore).
-func walkDirectoryWithFd(ctx context.Context, baseDir string, fdPath string, query string, maxResults int) []fdEntry {
+// .gitignore). maxDepth optionally limits recursion depth (pi: maxDepth?,
+// --max-depth).
+func walkDirectoryWithFd(ctx context.Context, baseDir string, fdPath string, query string, maxResults int, maxDepth ...int) []fdEntry {
 	args := []string{
 		"--base-directory", baseDir,
 		"--max-results", fmt.Sprintf("%d", maxResults),
@@ -204,6 +205,10 @@ func walkDirectoryWithFd(ctx context.Context, baseDir string, fdPath string, que
 		"--exclude", ".git",
 		"--exclude", ".git/*",
 		"--exclude", ".git/**",
+	}
+
+	if len(maxDepth) > 0 {
+		args = append(args, "--max-depth", fmt.Sprintf("%d", maxDepth[0]))
 	}
 
 	if strings.Contains(toDisplayPath(query), "/") {
@@ -249,6 +254,20 @@ func walkDirectoryWithFd(ctx context.Context, baseDir string, fdPath string, que
 	}
 
 	return results
+}
+
+// countPathSegments counts non-empty slash-separated segments (pi:
+// path.split("/").filter(Boolean).length). Note: pi's final tiebreak is
+// localeCompare; pig uses bytewise < (ordering stable within the ASCII
+// filename surface).
+func countPathSegments(path string) int {
+	count := 0
+	for _, seg := range strings.Split(path, "/") {
+		if seg != "" {
+			count++
+		}
+	}
+	return count
 }
 
 // AutocompleteItem is one suggestion entry (pi: AutocompleteItem).
@@ -914,6 +933,15 @@ type scoredFdEntry struct {
 	score int
 }
 
+// getBaseDirSuggestions suggests direct children of the base directory (pi:
+// private getBaseDirSuggestions — max-depth 1 walk).
+func (p *CombinedAutocompleteProvider) getBaseDirSuggestions(ctx context.Context, baseDir string, query string) []fdEntry {
+	if p.fdPath == "" || ctx.Err() != nil {
+		return []fdEntry{}
+	}
+	return walkDirectoryWithFd(ctx, baseDir, p.fdPath, query, 100, 1)
+}
+
 // getFuzzyFileSuggestions performs fuzzy file search using fd (fast, respects
 // .gitignore) (pi: private getFuzzyFileSuggestions).
 func (p *CombinedAutocompleteProvider) getFuzzyFileSuggestions(ctx context.Context, query string, isQuotedPrefix bool) []AutocompleteItem {
@@ -928,7 +956,23 @@ func (p *CombinedAutocompleteProvider) getFuzzyFileSuggestions(ctx context.Conte
 		fdBaseDir = scopedQuery.baseDir
 		fdQuery = scopedQuery.query
 	}
-	entries := walkDirectoryWithFd(ctx, fdBaseDir, p.fdPath, fdQuery, 100)
+	// v0.85.1: shallow base-dir suggestions first, then recursive results
+	// deduplicated by path.
+	baseDirEntries := p.getBaseDirSuggestions(ctx, fdBaseDir, fdQuery)
+	recursiveEntries := walkDirectoryWithFd(ctx, fdBaseDir, p.fdPath, fdQuery, 100)
+	seenPaths := make(map[string]bool, len(baseDirEntries))
+	for _, entry := range baseDirEntries {
+		seenPaths[entry.path] = true
+	}
+	entries := make([]fdEntry, 0, len(baseDirEntries)+len(recursiveEntries))
+	entries = append(entries, baseDirEntries...)
+	for _, entry := range recursiveEntries {
+		if seenPaths[entry.path] {
+			continue
+		}
+		seenPaths[entry.path] = true
+		entries = append(entries, entry)
+	}
 	if ctx.Err() != nil {
 		return []AutocompleteItem{}
 	}
@@ -944,7 +988,25 @@ func (p *CombinedAutocompleteProvider) getFuzzyFileSuggestions(ctx context.Conte
 		}
 	}
 
-	sort.SliceStable(scoredEntries, func(a, b int) bool { return scoredEntries[a].score > scoredEntries[b].score })
+	sort.SliceStable(scoredEntries, func(a, b int) bool {
+		scoreDiff := scoredEntries[a].score - scoredEntries[b].score
+		if scoreDiff != 0 {
+			return scoreDiff > 0
+		}
+		// v0.85.1 tiebreakers: shallower paths first, then shorter, then
+		// lexicographic.
+		aDepth := countPathSegments(toDisplayPath(scoredEntries[a].entry.path))
+		bDepth := countPathSegments(toDisplayPath(scoredEntries[b].entry.path))
+		if aDepth != bDepth {
+			return aDepth < bDepth
+		}
+		aLen := len(scoredEntries[a].entry.path)
+		bLen := len(scoredEntries[b].entry.path)
+		if aLen != bLen {
+			return aLen < bLen
+		}
+		return scoredEntries[a].entry.path < scoredEntries[b].entry.path
+	})
 	if len(scoredEntries) > 20 {
 		scoredEntries = scoredEntries[:20]
 	}

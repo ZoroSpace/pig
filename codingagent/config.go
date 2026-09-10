@@ -164,8 +164,10 @@ func GetBundledInteractiveAssetPath(name string) string {
 // has no npm name).
 const PackageName = "@earendil-works/pi-coding-agent"
 
-// AppName is the product name (pi: APP_NAME = piConfig.name || "pi").
-const AppName = "pi"
+// AppName is the product name (pi: APP_NAME = piConfig.name || "pi"; pig
+// deviates: "pig" — per user decision 2026-09-10, pig rebrands its own
+// product name instead of keeping pi's).
+const AppName = "pig"
 
 // AppTitle is the display title (pi: APP_TITLE = piConfig.name ? APP_NAME :
 // "π"; pig has no piConfig rename hook → the "π" branch).
@@ -177,8 +179,9 @@ const AppTitle = "π"
 const ConfigDirName = ".pig"
 
 // Version is the product version (pi: VERSION = pkg.version || "0.0.0";
+// pig pins the pi baseline version it tracks — user decision 2026-09-10;
 // ldflags injection arrives with the packaging batch).
-const Version = "0.0.0"
+const Version = "0.85.1"
 
 // EnvAgentDir is the env var overriding the agent config dir (pi:
 // ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`; pig deviates:

@@ -34,6 +34,9 @@ type FetchRetryOptions struct {
 	// AttemptTimeoutMs aborts only the current attempt so a hung connection
 	// can be retried (pi: attemptTimeoutMs; millis).
 	AttemptTimeoutMs *int64
+	// NoRedirect stops at the first redirect response (pi: fetch's
+	// redirect:"manual" option, v0.85.1); the 3xx response is returned as-is.
+	NoRedirect *bool
 }
 
 // FetchResponse is the minimal response surface needed by callers. The
@@ -55,6 +58,11 @@ func (r *FetchResponse) Close() {
 	if r.cancel != nil {
 		r.cancel()
 	}
+}
+
+// fetchDo is the HTTP round-trip seam (tests stub it to fake responses).
+var fetchDo = func(client *http.Client, req *http.Request) (*http.Response, error) {
+	return client.Do(req)
 }
 
 // FetchWithRetry fetches a management HTTP resource with a bounded immediate
@@ -101,7 +109,13 @@ func FetchWithRetry(ctx context.Context, method string, url string, headers map[
 		for key, value := range headers {
 			req.Header.Set(key, value)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		client := http.DefaultClient
+		if options != nil && options.NoRedirect != nil && *options.NoRedirect {
+			client = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			}}
+		}
+		resp, err := fetchDo(client, req)
 		if err != nil {
 			// Transport failures retry within the budget.
 			if attempt < maxRetries && ctx.Err() == nil {

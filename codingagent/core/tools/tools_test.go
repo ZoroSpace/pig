@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ZoroSpace/pig/agent"
@@ -331,8 +332,9 @@ func TestWriteTool(t *testing.T) {
 	t.Run("should write file contents", func(t *testing.T) {
 		testFile := filepath.Join(testDir, "write-test.txt")
 		result := execTool(t, writeTool, "test-call-3", map[string]any{"path": testFile, "content": "Test content"})
-		if !strings.Contains(textOf(result), "Successfully wrote") || !strings.Contains(textOf(result), testFile) {
-			t.Fatalf("output = %q", textOf(result))
+		// pi (v0.85.1): the success message dropped the byte count.
+		if got, want := textOf(result), "Successfully wrote to "+testFile; got != want {
+			t.Fatalf("output = %q, want %q", got, want)
 		}
 		if result.Details != nil {
 			t.Fatal("unexpected details")
@@ -815,14 +817,24 @@ func TestBashTool(t *testing.T) {
 				return &code, nil
 			},
 		}
+		// The update throttle fires from a timer goroutine; guard the slice
+		// against the read below (race detector).
+		var updatesMu sync.Mutex
 		var updates []agent.AgentToolResult
 		bash := CreateBashTool(testDir, &BashToolOptions{Operations: &operations})
 		result, err := bash.ExecuteWithToolContext(context.Background(), "test-call-chatty-updates", map[string]any{"command": "chatty"},
-			func(update agent.AgentToolResult) { updates = append(updates, update) }, nil)
+			func(update agent.AgentToolResult) {
+				updatesMu.Lock()
+				updates = append(updates, update)
+				updatesMu.Unlock()
+			}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(updates) >= 25 {
+		updatesMu.Lock()
+		updateCount := len(updates)
+		updatesMu.Unlock()
+		if updateCount >= 25 {
 			t.Fatalf("update count = %d", len(updates))
 		}
 		if !strings.Contains(textOf(result), "line 4999") {
@@ -1553,4 +1565,127 @@ func splitLinesKeepingEndings(content string) []string {
 		out = append(out, content[start:])
 	}
 	return out
+}
+
+// fakeToolCtx is pi's fakeCtx(cwd): an ExtensionContext stub carrying only
+// the cwd (v0.85.1 ctx.cwd resolution).
+type fakeToolCtx struct {
+	cwd string
+}
+
+func (c *fakeToolCtx) GetModel() *types.Model   { return nil }
+func (c *fakeToolCtx) GetSessionID() string     { return "" }
+func (c *fakeToolCtx) GetSessionFile() *string  { return nil }
+func (c *fakeToolCtx) GetThinkingLevel() string { return "" }
+func (c *fakeToolCtx) GetCwd() string           { return c.cwd }
+
+func TestToolCwdResolution(t *testing.T) {
+	testDir := newTestDir(t)
+	ctxCwd := &fakeToolCtx{cwd: testDir}
+
+	t.Run("read uses ctx.cwd when provided", func(t *testing.T) {
+		testFile := filepath.Join(testDir, "ctx-cwd-read.txt")
+		if err := os.WriteFile(testFile, []byte("hello from ctx.cwd"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		definition := CreateReadToolDefinition("/", nil)
+		result, err := definition.Execute(context.Background(), "test-read-ctx-cwd", map[string]any{"path": "ctx-cwd-read.txt"}, nil, ctxCwd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if output := textOf(result); !strings.Contains(output, "hello from ctx.cwd") {
+			t.Fatalf("output = %q", output)
+		}
+	})
+
+	t.Run("write uses ctx.cwd when provided", func(t *testing.T) {
+		definition := CreateWriteToolDefinition("/", nil)
+		_, err := definition.Execute(context.Background(), "test-write-ctx-cwd", map[string]any{"path": "ctx-cwd-write.txt", "content": "written via ctx.cwd"}, nil, ctxCwd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content, err := os.ReadFile(filepath.Join(testDir, "ctx-cwd-write.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(content) != "written via ctx.cwd" {
+			t.Fatalf("content = %q", string(content))
+		}
+	})
+
+	t.Run("edit uses ctx.cwd when provided", func(t *testing.T) {
+		testFile := filepath.Join(testDir, "ctx-cwd-edit.txt")
+		if err := os.WriteFile(testFile, []byte("old text"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		definition := CreateEditToolDefinition("/", nil)
+		_, err := definition.Execute(context.Background(), "test-edit-ctx-cwd", map[string]any{
+			"path":  "ctx-cwd-edit.txt",
+			"edits": []any{map[string]any{"oldText": "old text", "newText": "new text"}},
+		}, nil, ctxCwd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content, err := os.ReadFile(testFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(content) != "new text" {
+			t.Fatalf("content = %q", string(content))
+		}
+	})
+
+	t.Run("grep uses ctx.cwd when provided", func(t *testing.T) {
+		testFile := filepath.Join(testDir, "ctx-cwd-grep.txt")
+		if err := os.WriteFile(testFile, []byte("match in ctx.cwd"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		definition := CreateGrepToolDefinition("/", nil)
+		result, err := definition.Execute(context.Background(), "test-grep-ctx-cwd", map[string]any{"pattern": "match"}, nil, ctxCwd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if output := textOf(result); !strings.Contains(output, "ctx-cwd-grep.txt") {
+			t.Fatalf("output = %q", output)
+		}
+	})
+
+	t.Run("find uses ctx.cwd when provided", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(testDir, "ctx-cwd-find.txt"), []byte("find me"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		definition := CreateFindToolDefinition("/", nil)
+		result, err := definition.Execute(context.Background(), "test-find-ctx-cwd", map[string]any{"pattern": "ctx-cwd-find.txt"}, nil, ctxCwd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if output := textOf(result); !strings.Contains(output, "ctx-cwd-find.txt") {
+			t.Fatalf("output = %q", output)
+		}
+	})
+
+	t.Run("ls uses ctx.cwd when provided", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(testDir, "ctx-cwd-ls.txt"), []byte("list me"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		definition := CreateLsToolDefinition("/", nil)
+		result, err := definition.Execute(context.Background(), "test-ls-ctx-cwd", map[string]any{}, nil, ctxCwd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if output := textOf(result); !strings.Contains(output, "ctx-cwd-ls.txt") {
+			t.Fatalf("output = %q", output)
+		}
+	})
+
+	t.Run("bash uses ctx.cwd when provided", func(t *testing.T) {
+		definition := CreateBashToolDefinition("/", &BashToolOptions{})
+		result, err := definition.Execute(context.Background(), "test-bash-ctx-cwd", map[string]any{"command": "pwd"}, nil, ctxCwd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if output := textOf(result); !strings.Contains(output, testDir) {
+			t.Fatalf("output = %q, want %q", output, testDir)
+		}
+	})
 }

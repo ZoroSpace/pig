@@ -1,7 +1,11 @@
 // tui/settings_list.go (pi: packages/tui/src/components/settings-list.ts)
 package tui
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/samber/lo"
+)
 
 // SettingItem is one row of a SettingsList (pi: SettingItem).
 type SettingItem struct {
@@ -48,11 +52,14 @@ type SettingsList struct {
 	filteredItems []*SettingItem
 	theme         SettingsListTheme
 	selectedIndex int
-	maxVisible    int
-	onChange      func(id string, newValue string)
-	onCancel      func()
-	searchInput   *Input
-	searchEnabled bool
+	// mousePressedIndex tracks the item pressed for click confirmation
+	// (pi: mousePressedIndex?).
+	mousePressedIndex *int
+	maxVisible        int
+	onChange          func(id string, newValue string)
+	onCancel          func()
+	searchInput       *Input
+	searchEnabled     bool
 
 	// Submenu state
 	submenuComponent    Component
@@ -125,6 +132,87 @@ func (l *SettingsList) Invalidate() {
 	}
 }
 
+// HandleMouse implements MouseHandler (pi: SettingsList.handleMouse):
+// submenu rows take priority, then the search row, then wheel/press/click on
+// items.
+func (l *SettingsList) HandleMouse(event *TuiMouseEvent) *TuiMouseEventResult {
+	if l.submenuComponent != nil {
+		if mh, ok := l.submenuComponent.(MouseHandler); ok {
+			result := mh.HandleMouse(event)
+			if result != nil {
+				out := *result
+				out.Focus = true
+				return &out
+			}
+		}
+		return nil
+	}
+
+	if l.searchEnabled && l.searchInput != nil {
+		if event.Y == 0 {
+			result := l.searchInput.HandleMouse(event)
+			if result != nil {
+				out := *result
+				out.Focus = true
+				return &out
+			}
+			return nil
+		}
+		if event.Y == 1 {
+			return nil
+		}
+	}
+
+	displayItems := l.displayItems()
+	if len(displayItems) == 0 {
+		return nil
+	}
+	if event.Type == MouseEventTypeWheel && event.WheelDelta != nil {
+		delta := 1
+		if *event.WheelDelta < 0 {
+			delta = -1
+		}
+		previousIndex := l.selectedIndex
+		l.selectedIndex = clampInt(l.selectedIndex+delta, 0, len(displayItems)-1)
+		return &TuiMouseEventResult{Handled: true, Render: lo.ToPtr(l.selectedIndex != previousIndex)}
+	}
+	// Hover must not change selection: the visible range is centered on it.
+	if event.Button != MouseButtonLeft || (event.Type != MouseEventTypePress && event.Type != MouseEventTypeClick) {
+		return nil
+	}
+
+	rowOffset := 0
+	if l.searchEnabled {
+		rowOffset = 2
+	}
+	startIndex, endIndex := l.getVisibleRange(displayItems)
+	itemIndex := startIndex + event.Y - rowOffset
+	if itemIndex < startIndex || itemIndex >= endIndex {
+		return nil
+	}
+	if event.Type == MouseEventTypePress {
+		l.mousePressedIndex = &itemIndex
+		l.selectedIndex = itemIndex
+		return &TuiMouseEventResult{Handled: true, Focus: true}
+	}
+	// click
+	if l.mousePressedIndex != nil {
+		l.selectedIndex = *l.mousePressedIndex
+	} else {
+		l.selectedIndex = itemIndex
+	}
+	l.mousePressedIndex = nil
+	l.activateItem()
+	return &TuiMouseEventResult{Handled: true}
+}
+
+// getVisibleRange computes the visible item window centered on the selection
+// (pi: getVisibleRange).
+func (l *SettingsList) getVisibleRange(displayItems []*SettingItem) (int, int) {
+	startIndex := maxInt(0, minInt(l.selectedIndex-l.maxVisible/2, len(displayItems)-l.maxVisible))
+	return startIndex, minInt(startIndex+l.maxVisible, len(displayItems))
+}
+
 // Render implements Component (pi: render).
 func (l *SettingsList) Render(width int) []string {
 	// If submenu is active, render it instead
@@ -158,8 +246,7 @@ func (l *SettingsList) renderMainList(width int) []string {
 	}
 
 	// Calculate visible range with scrolling
-	startIndex := maxInt(0, minInt(l.selectedIndex-l.maxVisible/2, len(displayItems)-l.maxVisible))
-	endIndex := minInt(startIndex+l.maxVisible, len(displayItems))
+	startIndex, endIndex := l.getVisibleRange(displayItems)
 
 	// Calculate max label width for alignment
 	maxLabelWidth := 0

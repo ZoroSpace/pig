@@ -94,6 +94,7 @@ type SettingsConfig struct {
 	TuiMode                 core.TuiMode
 	FullscreenExitOutput    core.FullscreenExitOutput
 	FullscreenScrollbar     core.ScrollViewScrollbar
+	FullscreenCopyOnSelect  bool
 	Warnings                core.WarningSettings
 }
 
@@ -132,6 +133,7 @@ type SettingsCallbacks struct {
 	OnTuiModeChange                func(mode core.TuiMode)
 	OnFullscreenExitOutputChange   func(output core.FullscreenExitOutput)
 	OnFullscreenScrollbarChange    func(mode core.ScrollViewScrollbar)
+	OnFullscreenCopyOnSelectChange func(enabled bool)
 	OnWarningsChange               func(warnings core.WarningSettings)
 	OnCancel                       func()
 }
@@ -227,24 +229,30 @@ func modelItemLabel(model ai.Model) string {
 // Theme submenu support
 // =============================================================================
 
-func themeItems(availableThemes []string) []tui.SelectItem {
+func themeItems(availableThemes []string, currentTheme string) []tui.SelectItem {
 	items := make([]tui.SelectItem, 0, len(availableThemes))
 	for _, name := range availableThemes {
-		items = append(items, tui.SelectItem{Value: name, Label: name})
+		// Mark the current theme in the label (v0.85.1) so it stays visible
+		// while browsing.
+		label := "  " + name
+		if name == currentTheme {
+			label = "✓ " + name
+		}
+		items = append(items, tui.SelectItem{Value: name, Label: label})
 	}
 	return items
 }
 
 const automaticThemeValue = "/"
 
-func singleModeThemeItems(availableThemes []string) []tui.SelectItem {
+func singleModeThemeItems(availableThemes []string, currentTheme string) []tui.SelectItem {
 	return append([]tui.SelectItem{
 		{
 			Value:       automaticThemeValue,
-			Label:       "Automatic",
+			Label:       "  Automatic",
 			Description: "Use separate themes for light and dark terminal appearance",
 		},
-	}, themeItems(availableThemes)...)
+	}, themeItems(availableThemes, currentTheme)...)
 }
 
 func preferredTheme(availableThemes []string, preferred string, fallback string) string {
@@ -368,7 +376,7 @@ func (t *ThemeSubmenu) showSingleMenu() {
 	menu := NewSelectSubmenu(
 		"Theme",
 		"Select a theme, or choose Automatic to follow terminal appearance.",
-		singleModeThemeItems(t.availableThemes),
+		singleModeThemeItems(t.availableThemes, t.singleTheme),
 		t.singleTheme,
 		func(value string) {
 			if value == automaticThemeValue {
@@ -503,7 +511,7 @@ func (t *ThemeSubmenu) createThemeSelect(
 	return NewSelectSubmenu(
 		title,
 		description,
-		themeItems(t.availableThemes),
+		themeItems(t.availableThemes, currentValue),
 		currentValue,
 		onSelect,
 		func() {
@@ -657,7 +665,7 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 		{
 			Id:           "cache-miss-notices",
 			Label:        "Cache miss notices",
-			Description:  "Show transcript notices for significant prompt-cache misses and compaction costs",
+			Description:  "Show transcript notices for cache costs and provider recovery diagnostics",
 			CurrentValue: boolSettingValue(config.ShowCacheMissNotices),
 			Values:       []string{"true", "false"},
 		},
@@ -802,18 +810,23 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 							} else {
 								levels = []agent.ThinkingLevel{ai.ModelThinkingOff}
 							}
+							activeLevel := currentModelThinkingLevels[context["model"]]
 							items := make([]tui.SelectItem, 0, len(levels)+1)
 							for _, level := range levels {
+								label := "  " + string(level)
+								if level == activeLevel {
+									label = "✓ " + string(level)
+								}
 								items = append(items, tui.SelectItem{
 									Value:       string(level),
-									Label:       string(level),
+									Label:       label,
 									Description: thinkingDescriptions[level],
 								})
 							}
 							if _, has := currentModelThinkingLevels[context["model"]]; has {
 								items = append(items, tui.SelectItem{
 									Value:       clearOverrideValue,
-									Label:       "(clear override)",
+									Label:       "  (clear override)",
 									Description: "Revert to global default (" + string(config.ThinkingLevel) + ")",
 								})
 							}
@@ -871,6 +884,13 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 			Description:  "Scrollbar behavior in fullscreen mode; has no effect in regular mode",
 			CurrentValue: string(config.FullscreenScrollbar),
 			Values:       []string{"auto", "always", "hidden"},
+		},
+		{
+			Id:           "fullscreen-copy-on-select",
+			Label:        "Fullscreen copy on select",
+			Description:  "Automatically copy selected text in fullscreen mode; disable to copy selections with Ctrl+X",
+			CurrentValue: boolSettingValue(config.FullscreenCopyOnSelect),
+			Values:       []string{"true", "false"},
 		},
 		{
 			Id:           "theme",
@@ -1168,6 +1188,10 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 			case "fullscreen-scrollbar":
 				if callbacks.OnFullscreenScrollbarChange != nil {
 					callbacks.OnFullscreenScrollbarChange(core.ScrollViewScrollbar(newValue))
+				}
+			case "fullscreen-copy-on-select":
+				if callbacks.OnFullscreenCopyOnSelectChange != nil {
+					callbacks.OnFullscreenCopyOnSelectChange(newValue == "true")
 				}
 			case "theme":
 				if callbacks.OnThemeChange != nil {

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
@@ -85,6 +86,12 @@ type ExtensionRunner struct {
 	sessionManager *SessionManager
 	modelRegistry  *ModelRegistry
 	errorListeners []ExtensionErrorListener
+	// uiPrompt tracking for the blocking UI-prompt events (pi: uiPromptDepth
+	// + activeUIPrompt, v0.85.1). Mutex-guarded because prompt wrappers run
+	// on extension handler goroutines.
+	uiPromptMu     sync.Mutex
+	uiPromptDepth  int
+	activeUIPrompt *UIPromptStartEvent
 	// shortcutDiagnostics accumulates shortcut conflict warnings from
 	// GetShortcuts (pi: shortcutDiagnostics).
 	shortcutDiagnostics []ResourceDiagnostic
@@ -217,12 +224,114 @@ func (r *ExtensionRunner) BindCommandContext(actions *ExtensionCommandContextAct
 // SetUIContext binds the UI context (pi: setUIContext). nil uiContext keeps
 // the no-op context (pi: `if (uiContext)`).
 func (r *ExtensionRunner) SetUIContext(uiContext ExtensionUIContext, mode ExtensionMode) {
+	// pi (v0.85.1): wrap the UI context so blocking prompts emit
+	// ui_prompt_start/ui_prompt_end.
 	if uiContext != nil {
-		r.uiContext = uiContext
+		r.uiContext = r.wrapUIPromptContext(uiContext)
 	}
 	if mode != "" {
 		r.mode = mode
 	}
+}
+
+// wrapUIPromptContext wraps the five blocking dialog methods with UI-prompt
+// event emission (pi: wrapUIPromptContext).
+func (r *ExtensionRunner) wrapUIPromptContext(ui ExtensionUIContext) ExtensionUIContext {
+	return &uiPromptContextWrapper{ExtensionUIContext: ui, r: r}
+}
+
+// withUIPrompt tracks one nested blocking prompt and emits start/end events
+// (pi: withUIPrompt; the promise finally collapses into a deferred finish).
+func (r *ExtensionRunner) withUIPrompt(ctx context.Context, kind UIPromptKind, title *string, run func()) {
+	r.uiPromptMu.Lock()
+	outer := r.uiPromptDepth == 0
+	r.uiPromptDepth++
+	if outer {
+		r.activeUIPrompt = &UIPromptStartEvent{Type: "ui_prompt_start", Reason: "ui_prompt", Kind: kind, Title: title}
+		event := r.activeUIPrompt
+		r.uiPromptMu.Unlock()
+		r.emitUIPromptEvent(ctx, event)
+	} else {
+		r.uiPromptMu.Unlock()
+	}
+
+	defer func() {
+		r.uiPromptMu.Lock()
+		r.uiPromptDepth--
+		if r.uiPromptDepth > 0 {
+			r.uiPromptMu.Unlock()
+			return
+		}
+		r.uiPromptDepth = 0
+		prompt := r.activeUIPrompt
+		if prompt == nil {
+			prompt = &UIPromptStartEvent{Type: "ui_prompt_start", Reason: "ui_prompt", Kind: kind, Title: title}
+		}
+		r.activeUIPrompt = nil
+		r.uiPromptMu.Unlock()
+		r.emitUIPromptEvent(ctx, &UIPromptEndEvent{Type: "ui_prompt_end", Reason: "ui_prompt", Kind: prompt.Kind, Title: prompt.Title})
+	}()
+
+	run()
+}
+
+// emitUIPromptEvent fires the prompt event off the current call stack (pi:
+// queueMicrotask(() => void this.emit(event))).
+func (r *ExtensionRunner) emitUIPromptEvent(ctx context.Context, event ExtensionEvent) {
+	go func() {
+		_, _ = r.Emit(context.WithoutCancel(ctx), event)
+	}()
+}
+
+// uiPromptContextWrapper delegates to the wrapped UI context, emitting
+// ui_prompt events around the blocking dialog methods.
+type uiPromptContextWrapper struct {
+	ExtensionUIContext
+	r *ExtensionRunner
+}
+
+func (w *uiPromptContextWrapper) Select(ctx context.Context, title string, options []string, opts *ExtensionUIDialogOptions) (string, bool) {
+	var choice string
+	var ok bool
+	w.r.withUIPrompt(ctx, UIPromptKindSelect, &title, func() {
+		choice, ok = w.ExtensionUIContext.Select(ctx, title, options, opts)
+	})
+	return choice, ok
+}
+
+func (w *uiPromptContextWrapper) Confirm(ctx context.Context, title string, message string, opts *ExtensionUIDialogOptions) bool {
+	var confirmed bool
+	w.r.withUIPrompt(ctx, UIPromptKindConfirm, &title, func() {
+		confirmed = w.ExtensionUIContext.Confirm(ctx, title, message, opts)
+	})
+	return confirmed
+}
+
+func (w *uiPromptContextWrapper) Input(ctx context.Context, title string, placeholder string, opts *ExtensionUIDialogOptions) (string, bool) {
+	var value string
+	var ok bool
+	w.r.withUIPrompt(ctx, UIPromptKindInput, &title, func() {
+		value, ok = w.ExtensionUIContext.Input(ctx, title, placeholder, opts)
+	})
+	return value, ok
+}
+
+func (w *uiPromptContextWrapper) Editor(ctx context.Context, title string, prefill string) (string, bool) {
+	var text string
+	var ok bool
+	w.r.withUIPrompt(ctx, UIPromptKindEditor, &title, func() {
+		text, ok = w.ExtensionUIContext.Editor(ctx, title, prefill)
+	})
+	return text, ok
+}
+
+func (w *uiPromptContextWrapper) Custom(ctx context.Context, factory ExtensionCustomFactory, options *ExtensionCustomOptions) any {
+	var result any
+	// pi: custom wraps with kind "custom" and no title.
+	w.r.withUIPrompt(ctx, UIPromptKindCustom, nil, func() {
+		result = w.ExtensionUIContext.Custom(ctx, factory, options)
+	})
+	return result
 }
 
 // HasUI reports whether dialog-capable UI is available (pi: hasUI).
@@ -600,11 +709,11 @@ func (r *ExtensionRunner) CreateCommandContext() *ExtensionCommandContext {
 }
 
 // Emit dispatches one event to all matching handlers in registration order,
-// short-circuiting on a cancel result from session_before_* events (pi:
-// emit). With no extensions (this batch) it always returns nil: the ctx
-// creation is skipped rather than built-and-discarded (declared deviation —
-// Go has no property getters to guard).
+// returning the last non-nil handler result; a cancel result from
+// session_before_* events short-circuits (pi: emit — the result variable is
+// overwritten by each handler, and cancel results abort the dispatch).
 func (r *ExtensionRunner) Emit(ctx context.Context, event ExtensionEvent) (any, error) {
+	var lastResult any
 	for _, ext := range r.extensions {
 		handlers := ext.Handlers[event.EventType()]
 		if len(handlers) == 0 {
@@ -628,9 +737,12 @@ func (r *ExtensionRunner) Emit(ctx context.Context, event ExtensionEvent) (any, 
 			if before, ok := result.(*SessionBeforeTreeResult); ok && before.Cancel {
 				return before, nil
 			}
+			if result != nil {
+				lastResult = result
+			}
 		}
 	}
-	return nil, nil
+	return lastResult, nil
 }
 
 // EmitMessageEnd runs message_end handlers and returns the replacement

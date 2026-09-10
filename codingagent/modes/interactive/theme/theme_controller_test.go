@@ -214,3 +214,43 @@ func TestInteractiveThemeController(t *testing.T) {
 		}
 	})
 }
+
+// fakeDisposableControllerTUI records the unsubscribe function returned by
+// OnTerminalColorSchemeChange (pi: unsubscribeTerminalColorScheme, v0.85.1).
+type fakeDisposableControllerTUI struct {
+	fakeControllerTUI
+	unsubscribeCalled int
+}
+
+func (f *fakeDisposableControllerTUI) OnTerminalColorSchemeChange(listener func(scheme tui.TerminalColorScheme)) func() {
+	f.colorSchemeListener = listener
+	return func() { f.unsubscribeCalled++ }
+}
+
+// pi: "disables terminal appearance updates when disposed" (v0.85.1).
+func TestInteractiveThemeControllerDispose(t *testing.T) {
+	t.Cleanup(func() { theme.InitTheme("dark", false) })
+
+	ui := &fakeDisposableControllerTUI{}
+	scheme := tui.TerminalColorScheme("light")
+	ui.queryTerminalColorSchemeResult = &scheme
+	manager := newSettingsManager(t, core.Settings{"theme": "light/dark"})
+	controller := theme.NewInteractiveThemeController(ui, theme.InteractiveThemeControllerOptions{
+		GetSettingsManager:  func() theme.ThemeSettingsManager { return manager },
+		ShowError:           func(string) {},
+		OnChanged:           func() {},
+		InitialThemeSetting: "light/dark",
+	})
+	if err := controller.ApplyFromSettings(); err != nil {
+		t.Fatal(err)
+	}
+
+	controller.Dispose()
+
+	if last := ui.setNotificationsCalls[len(ui.setNotificationsCalls)-1]; last {
+		t.Fatal("expected notifications disabled after dispose")
+	}
+	if ui.unsubscribeCalled != 1 {
+		t.Fatalf("unsubscribe called %d times, want 1", ui.unsubscribeCalled)
+	}
+}

@@ -1,79 +1,33 @@
-// pi: src/harness/session/context.ts — session context assembly: derive the
-// LLM-facing message list plus live state (model/thinking/tools) from a
-// branch path.
+// pi: harness/session/context.ts — session context assembly (v0.85.1: the
+// model/thinking/tools state extraction moved to lane configuration values;
+// only message projection remains here).
 //
 // Deviations:
-//   - TS async-free helpers keep their signatures; pi's
-//     `timestamp: string | number` parameters are int64 ms here (see
+//   - pi's `timestamp: string | number` parameters are int64 ms here (see
 //     harness/messages.go note).
-//   - SessionContextModel is the anonymous `{ provider, modelId }` shape.
-//   - Entry transforms/projectors operate on []session.Entry (pi:
-//     readonly Entry[]).
+//   - pi's async projector contract (EntryProjector returning
+//     Promise<AgentMessage[] | undefined>) collapses to a synchronous
+//     callback per §3.4; buildSessionContext stays synchronous.
 package session
 
 import (
+	"context"
+
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/agent/harness"
 	"github.com/ZoroSpace/pig/ai/types"
 )
 
-// SessionContextModel names the provider/model active when the context was
-// built (pi: `{ provider, modelId }`).
-type SessionContextModel struct {
-	Provider string `json:"provider"`
-	ModelID  string `json:"modelId"`
-}
-
-// SessionContext is the assembled LLM context for one branch path (pi:
-// SessionContext). ActiveToolNames is nil when no active_tools_change entry
-// narrowed the toolset.
-type SessionContext struct {
-	Messages        []agent.AgentMessage `json:"messages"`
-	ThinkingLevel   string               `json:"thinkingLevel"`
-	Model           *SessionContextModel `json:"model"`
-	ActiveToolNames []string             `json:"activeToolNames"`
-}
-
-// ContextEntryTransform rewrites the context entry list before projection
-// (pi: ContextEntryTransform).
-type ContextEntryTransform = func(entries []Entry) []Entry
-
-// CustomEntryContextMessageProjector projects one custom entry into context
-// messages (pi: CustomEntryContextMessageProjector). Returning nil drops the
-// entry.
-type CustomEntryContextMessageProjector = func(entry *CustomEntry, index int, entries []Entry) []agent.AgentMessage
-
 // SessionContextBuildOptions parameterizes context assembly (pi:
 // SessionContextBuildOptions).
 type SessionContextBuildOptions struct {
-	EntryTransforms []ContextEntryTransform
-	EntryProjectors map[string]CustomEntryContextMessageProjector
+	EntryProjectors map[string]EntryProjector
 }
 
-// deriveSessionContextState walks the path for the latest model/thinking/
-// tool state (pi: deriveSessionContextState).
-func deriveSessionContextState(pathEntries []Entry) (thinkingLevel string, model *SessionContextModel, activeToolNames []string) {
-	thinkingLevel = "off"
-	for _, entry := range pathEntries {
-		switch e := entry.(type) {
-		case *ThinkingLevelEntry:
-			thinkingLevel = e.ThinkingLevel
-		case *ModelChangeEntry:
-			model = &SessionContextModel{Provider: e.Provider, ModelID: e.ModelID}
-		case *MessageEntry:
-			if assistant, ok := e.Message.(types.AssistantMessage); ok {
-				model = &SessionContextModel{Provider: string(assistant.Provider), ModelID: assistant.Model}
-			}
-		case *ActiveToolsEntry:
-			activeToolNames = append([]string{}, e.ActiveToolNames...)
-		}
-	}
-	return thinkingLevel, model, activeToolNames
-}
-
-// DefaultContextEntryTransform replaces the pre-compaction history with the
-// compaction summary entry itself (pi: defaultContextEntryTransform).
-func DefaultContextEntryTransform(pathEntries []Entry) []Entry {
+// BuildContextEntries keeps everything after the last compaction entry,
+// replacing the pre-compaction history with the compaction entry itself (pi:
+// buildContextEntries).
+func BuildContextEntries(pathEntries []Entry) []Entry {
 	var compaction *CompactionEntry
 	compactionIndex := -1
 	for index := len(pathEntries) - 1; index >= 0; index-- {
@@ -91,34 +45,36 @@ func DefaultContextEntryTransform(pathEntries []Entry) []Entry {
 	return result
 }
 
-// BuildContextEntries applies the default transform plus caller transforms
-// (pi: buildContextEntries).
-func BuildContextEntries(pathEntries []Entry, options *SessionContextBuildOptions) []Entry {
-	entries := DefaultContextEntryTransform(pathEntries)
-	if options != nil {
-		for _, transform := range options.EntryTransforms {
-			entries = transform(entries)
-		}
+// isContextMessage filters messages that do not belong in the model context
+// (pi: isContextMessage).
+func isContextMessage(message agent.AgentMessage) bool {
+	assistant, ok := assistantMessageOf(message)
+	if !ok {
+		return true
 	}
-	return entries
+	return assistant.StopReason != types.StopReasonError &&
+		assistant.StopReason != types.StopReasonAborted &&
+		assistant.StopReason != types.StopReasonDeferred
 }
 
 // SessionEntryToContextMessages projects one entry into context messages
 // (pi: sessionEntryToContextMessages).
-func SessionEntryToContextMessages(entry Entry, index int, entries []Entry, options *SessionContextBuildOptions) []agent.AgentMessage {
+func SessionEntryToContextMessages(entry Entry) []agent.AgentMessage {
 	switch e := entry.(type) {
 	case *MessageEntry:
-		if assistant, ok := e.Message.(types.AssistantMessage); ok {
-			if assistant.StopReason == types.StopReasonDeferred {
-				return nil
-			}
+		if isContextMessage(e.Message) {
+			return []agent.AgentMessage{e.Message}
 		}
-		return []agent.AgentMessage{e.Message}
+		return nil
 	case *CompactionEntry:
 		messages := []agent.AgentMessage{
 			harness.CreateCompactionSummaryMessage(e.Summary, e.TokensBefore, e.Timestamp),
 		}
-		messages = append(messages, e.RetainedTail...)
+		for _, message := range e.RetainedTail {
+			if isContextMessage(message) {
+				messages = append(messages, message)
+			}
+		}
 		return messages
 	case *BranchSummaryEntry:
 		if e.Summary != "" {
@@ -128,30 +84,42 @@ func SessionEntryToContextMessages(entry Entry, index int, entries []Entry, opti
 		}
 		return nil
 	case *CustomEntry:
-		if options != nil {
-			if projector, ok := options.EntryProjectors[e.CustomType]; ok {
-				return projector(e, index, entries)
-			}
-		}
 		return nil
 	default:
 		return nil
 	}
 }
 
+// fromIDString dereferences an optional fromId; nil becomes the zero string
+// (see harness/messages.go: BranchSummaryMessage.FromID is a plain string).
+func fromIDString(fromID *string) string {
+	if fromID == nil {
+		return ""
+	}
+	return *fromID
+}
+
 // BuildSessionContext assembles the LLM context for one branch path (pi:
 // buildSessionContext).
-func BuildSessionContext(pathEntries []Entry, options *SessionContextBuildOptions) SessionContext {
-	thinkingLevel, model, activeToolNames := deriveSessionContextState(pathEntries)
-	contextEntries := BuildContextEntries(pathEntries, options)
+func BuildSessionContext(pathEntries []Entry, options *SessionContextBuildOptions, ctx context.Context) ([]agent.AgentMessage, error) {
+	if options == nil {
+		options = &SessionContextBuildOptions{}
+	}
+	entries := BuildContextEntries(pathEntries)
 	messages := []agent.AgentMessage{}
-	for index, entry := range contextEntries {
-		messages = append(messages, SessionEntryToContextMessages(entry, index, contextEntries, options)...)
+	for _, entry := range entries {
+		custom, ok := entry.(*CustomEntry)
+		if !ok {
+			messages = append(messages, SessionEntryToContextMessages(entry)...)
+			continue
+		}
+		if projector, ok := options.EntryProjectors[custom.Base().CustomTypeOrValue()]; ok {
+			projected, err := projector(*custom, ctx)
+			if err != nil {
+				return nil, err
+			}
+			messages = append(messages, projected...)
+		}
 	}
-	return SessionContext{
-		Messages:        messages,
-		ThinkingLevel:   thinkingLevel,
-		Model:           model,
-		ActiveToolNames: activeToolNames,
-	}
+	return messages, nil
 }

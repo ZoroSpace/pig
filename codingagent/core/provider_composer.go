@@ -433,12 +433,11 @@ func applyModelsJSON(providerID string, baseModels []ai.Model, config *ModelsJso
 	}
 	for _, definition := range config.Models {
 		existingIndex := slices.IndexFunc(models, func(model ai.Model) bool { return model.ID == definition.ID })
-		var defaults *ai.Model
-		if existingIndex >= 0 {
-			defaults = &models[existingIndex]
-		} else if len(models) > 0 {
-			defaults = &models[0]
+		defaultAPI := definition.API
+		if defaultAPI == "" {
+			defaultAPI = config.API
 		}
+		defaults := findModelDefaults(models, definition.ID, ai.Api(defaultAPI))
 		model, err := modelFromJSON(providerID, definition, config, defaults)
 		if err != nil {
 			return nil, err
@@ -450,6 +449,28 @@ func applyModelsJSON(providerID string, baseModels []ai.Model, config *ModelsJso
 		}
 	}
 	return models, nil
+}
+
+// findModelDefaults locates the defaults template for a models.json /
+// extension model definition (pi: findModelDefaults, v0.85.1): exact id
+// match, then same-api match, then any openai-completions model, then the
+// first model; nil when the list is empty.
+func findModelDefaults(models []ai.Model, modelID string, api ai.Api) *ai.Model {
+	if idx := slices.IndexFunc(models, func(model ai.Model) bool { return model.ID == modelID }); idx >= 0 {
+		return &models[idx]
+	}
+	if api != "" {
+		if idx := slices.IndexFunc(models, func(model ai.Model) bool { return model.API == api }); idx >= 0 {
+			return &models[idx]
+		}
+	}
+	if idx := slices.IndexFunc(models, func(model ai.Model) bool { return model.API == "openai-completions" }); idx >= 0 {
+		return &models[idx]
+	}
+	if len(models) > 0 {
+		return &models[0]
+	}
+	return nil
 }
 
 // applyExtension overlays an extension provider config onto models (pi:
@@ -472,20 +493,11 @@ func applyExtension(providerID string, models []ai.Model, config *ProviderConfig
 	}
 	out := make([]ai.Model, 0, len(config.Models))
 	for _, definition := range config.Models {
-		var defaults *ai.Model
-		for i := range models {
-			if models[i].ID == definition.ID {
-				defaults = &models[i]
-				break
-			}
-		}
-		if defaults == nil && len(models) > 0 {
-			defaults = &models[0]
-		}
 		api := string(definition.API)
 		if api == "" {
 			api = string(config.API)
 		}
+		defaults := findModelDefaults(models, definition.ID, ai.Api(api))
 		if api == "" && defaults != nil {
 			api = string(defaults.API)
 		}

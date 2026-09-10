@@ -29,19 +29,154 @@
 package tui
 
 import (
-	"os"
-	"path/filepath"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ZoroSpace/pig/utils"
 )
 
 // minRenderInterval is the minimum interval between throttled renders
 // (pi: TuiBase.MIN_RENDER_INTERVAL_MS).
 const minRenderInterval = 16 * time.Millisecond
+
+// =============================================================================
+// Mouse events
+// =============================================================================
+
+// TuiMouseEventType is the normalized mouse event kind (pi:
+// TuiMouseEventType).
+type TuiMouseEventType = string
+
+const (
+	MouseEventTypePress   TuiMouseEventType = "press"
+	MouseEventTypeRelease TuiMouseEventType = "release"
+	MouseEventTypeMove    TuiMouseEventType = "move"
+	MouseEventTypeDrag    TuiMouseEventType = "drag"
+	MouseEventTypeClick   TuiMouseEventType = "click"
+	MouseEventTypeWheel   TuiMouseEventType = "wheel"
+)
+
+// TuiMouseButton is the normalized mouse button (pi: TuiMouseButton).
+type TuiMouseButton = string
+
+const (
+	MouseButtonLeft   TuiMouseButton = "left"
+	MouseButtonMiddle TuiMouseButton = "middle"
+	MouseButtonRight  TuiMouseButton = "right"
+	MouseButtonNone   TuiMouseButton = "none"
+)
+
+// TuiMouseEvent is a normalized cell-based mouse event. Coordinates are
+// zero-based (pi: TuiMouseEvent).
+type TuiMouseEvent struct {
+	Type   TuiMouseEventType
+	Button TuiMouseButton
+	// Coordinates local to the receiving component.
+	X int
+	Y int
+	// Absolute terminal coordinates.
+	ScreenX int
+	ScreenY int
+	// Current component bounds.
+	Width  int
+	Height int
+	Shift  bool
+	Alt    bool
+	Ctrl   bool
+	// Logical lines. Negative values scroll up. (pi: wheelDelta?)
+	WheelDelta *int
+	// Consecutive click count when type is click. (pi: clickCount?)
+	ClickCount *int
+}
+
+// TuiMouseEventResult is the result returned by a component's mouse handler
+// (pi: TuiMouseEventResult). The dispatch-result members (HasTarget/Target/
+// FocusTarget) are only set by DispatchMouseEvent; handlers themselves return
+// the plain result and DispatchMouseEvent folds it into a dispatch result.
+type TuiMouseEventResult struct {
+	// Handled stops propagation and suppresses renderer-level fallback
+	// behavior. (pi: handled?)
+	Handled bool
+	// Capture routes subsequent drag/release events to this component.
+	// Implies handled. (pi: capture?)
+	Capture bool
+	// Focus gives keyboard focus to this component. Implies handled.
+	// (pi: focus?)
+	Focus bool
+	// Render explicitly requests or suppresses a render. Move and release
+	// default to false; press, click, drag, and wheel default to true.
+	// Nil = unset (pi: render? → *bool).
+	Render *bool
+
+	// --- Dispatch result members (pi: TuiMouseDispatchResult) ---
+
+	// HasTarget mirrors pi's `"target" in result` discrimination.
+	HasTarget bool
+	// Target is the exact dispatch target retained for later
+	// retargeting (pi: TuiMouseDispatchResult.target).
+	Target *TuiMouseDispatchTarget
+	// FocusTarget is the keyboard focus target, which may be a delegating
+	// parent container (pi: TuiMouseDispatchResult.focusTarget?).
+	FocusTarget Component
+}
+
+// TuiMouseDispatchTarget is internal target metadata used by containers and
+// alternate-screen dispatch (pi: TuiMouseDispatchTarget).
+type TuiMouseDispatchTarget struct {
+	Component Component
+	OriginX   int
+	OriginY   int
+	Width     int
+	Height    int
+}
+
+// DispatchMouseEvent dispatches an event to a component and retains the exact
+// target and coordinate transform. Containers use this when forwarding events
+// to nested children (pi: dispatchMouseEvent).
+func DispatchMouseEvent(component Component, event *TuiMouseEvent) *TuiMouseEventResult {
+	handler, ok := component.(MouseHandler)
+	if !ok {
+		return nil
+	}
+	result := handler.HandleMouse(event)
+	if result == nil {
+		return nil
+	}
+	if result.HasTarget {
+		return result
+	}
+	if !result.Handled && !result.Capture && !result.Focus {
+		return nil
+	}
+	out := *result
+	out.Handled = true
+	if result.Focus {
+		out.FocusTarget = component
+	}
+	out.Target = &TuiMouseDispatchTarget{
+		Component: component,
+		OriginX:   event.ScreenX - event.X,
+		OriginY:   event.ScreenY - event.Y,
+		Width:     event.Width,
+		Height:    event.Height,
+	}
+	out.HasTarget = true
+	return &out
+}
+
+// RetargetMouseEvent recreates local coordinates for a previously dispatched
+// mouse target (pi: retargetMouseEvent).
+func RetargetMouseEvent(event *TuiMouseEvent, target *TuiMouseDispatchTarget) *TuiMouseEvent {
+	out := *event
+	out.X = event.ScreenX - target.OriginX
+	out.Y = event.ScreenY - target.OriginY
+	out.Width = target.Width
+	out.Height = target.Height
+	return &out
+}
 
 // =============================================================================
 // Component model
@@ -61,6 +196,13 @@ type Component interface {
 // keyboard input when they have focus (pi: handleInput?).
 type InputHandler interface {
 	HandleInput(data string)
+}
+
+// MouseHandler is the optional capability for components that receive
+// normalized mouse events (pi: handleMouse?).
+type MouseHandler interface {
+	Component
+	HandleMouse(event *TuiMouseEvent) *TuiMouseEventResult
 }
 
 // KeyReleaseOptIn is the optional capability marking components that want to
@@ -165,6 +307,15 @@ type OverlayUnfocusOptions struct {
 	Target Component
 }
 
+// OverlayBounds is the last rendered terminal-relative overlay rectangle
+// (pi: OverlayBounds).
+type OverlayBounds struct {
+	Row    int
+	Col    int
+	Width  int
+	Height int
+}
+
 // OverlayHandle is returned by ShowOverlay for controlling the overlay.
 type OverlayHandle interface {
 	// Hide permanently removes the overlay (cannot be shown again).
@@ -180,6 +331,9 @@ type OverlayHandle interface {
 	Unfocus(options *OverlayUnfocusOptions)
 	// IsFocused reports whether this overlay currently has focus.
 	IsFocused() bool
+	// GetBounds returns the most recent rendered bounds for a visible
+	// overlay (pi: getBounds). Nil when not currently rendered/visible.
+	GetBounds() *OverlayBounds
 }
 
 // TuiInputListenerResult is the result of an input listener
@@ -221,9 +375,24 @@ type CursorPosition struct {
 	Col int
 }
 
+// containerMouseChild is one child entry in the cached mouse layout.
+type containerMouseChild struct {
+	component Component
+	height    int
+}
+
+// containerMouseLayout caches child heights for mouse hit-testing (pi:
+// Container.mouseLayout).
+type containerMouseLayout struct {
+	width    int
+	children []containerMouseChild
+}
+
 // Container is a component that contains other components.
 type Container struct {
 	Children []Component
+
+	mouseLayout *containerMouseLayout
 }
 
 func (c *Container) AddChild(component Component) {
@@ -257,12 +426,56 @@ func (c *Container) Invalidate() {
 	}
 }
 
+// HandleMouse implements MouseHandler: hit-test children by their rendered
+// heights and forward the event with child-local coordinates (pi:
+// Container.handleMouse).
+//
+// Deviation note: pi's focus override check reads `this.handleInput` on the
+// outermost instance; in Go, promoted Container.HandleMouse only sees the
+// *Container method set. No current component embeds Container while defining
+// HandleInput; if one appears it should override HandleMouse.
+func (c *Container) HandleMouse(event *TuiMouseEvent) *TuiMouseEventResult {
+	if event.Y < 0 || event.Y >= event.Height {
+		return nil
+	}
+	var mouseChildren []containerMouseChild
+	if c.mouseLayout != nil && c.mouseLayout.width == event.Width {
+		mouseChildren = c.mouseLayout.children
+	} else {
+		for _, component := range c.Children {
+			mouseChildren = append(mouseChildren, containerMouseChild{component: component, height: len(component.Render(event.Width))})
+		}
+	}
+	childY := 0
+	for _, child := range mouseChildren {
+		if event.Y >= childY && event.Y < childY+child.height {
+			childEvent := *event
+			childEvent.Y = event.Y - childY
+			childEvent.Height = child.height
+			result := DispatchMouseEvent(child.component, &childEvent)
+			if result != nil && result.Focus {
+				if _, ok := Component(c).(InputHandler); ok {
+					out := *result
+					out.FocusTarget = Component(c)
+					return &out
+				}
+			}
+			return result
+		}
+		childY += child.height
+	}
+	return nil
+}
+
 func (c *Container) Render(width int) []string {
 	var lines []string
+	var mouseChildren []containerMouseChild
 	for _, child := range c.Children {
 		childLines := child.Render(width)
+		mouseChildren = append(mouseChildren, containerMouseChild{component: child, height: len(childLines)})
 		lines = append(lines, childLines...)
 	}
+	c.mouseLayout = &containerMouseLayout{width: width, children: mouseChildren}
 	return lines
 }
 
@@ -376,6 +589,19 @@ type overlayStackEntry struct {
 	preFocus   Component
 	hidden     bool
 	focusOrder int
+	// bounds is the last rendered terminal-relative rectangle (pi:
+	// OverlayStackEntry.bounds).
+	bounds *OverlayBounds
+}
+
+// renderedOverlayLayout is one visible overlay's rendered geometry (pi:
+// RenderedOverlayLayout).
+type renderedOverlayLayout struct {
+	entry  *overlayStackEntry
+	row    int
+	col    int
+	width  int
+	height int
 }
 
 const (
@@ -440,9 +666,10 @@ type TuiBase struct {
 	logDirectory string
 
 	// Overlay stack for modal components rendered on top of base content
-	focusOrderCounter   int
-	overlayStack        []*overlayStackEntry
-	overlayFocusRestore overlayFocusRestoreState
+	focusOrderCounter      int
+	overlayStack           []*overlayStackEntry
+	renderedOverlayLayouts []renderedOverlayLayout
+	overlayFocusRestore    overlayFocusRestoreState
 }
 
 func newTuiBase(terminal Terminal, mode TuiMode, self tuiSubclass, showHardwareCursor *bool, logDirectory string) *TuiBase {
@@ -451,18 +678,14 @@ func newTuiBase(terminal Terminal, mode TuiMode, self tuiSubclass, showHardwareC
 		terminal: terminal,
 		self:     self,
 	}
-	b.showHardwareCursor = os.Getenv("PI_HARDWARE_CURSOR") == "1"
-	b.clearOnShrink = os.Getenv("PI_CLEAR_ON_SHRINK") == "1"
-	if logDirectory != "" {
-		b.logDirectory = logDirectory
-	} else if env := os.Getenv("PIG_CODING_AGENT_DIR"); env != "" { // pig: renamed from PI_CODING_AGENT_DIR (codingagent.EnvAgentDir; tui is a leaf, literal kept in sync)
-		b.logDirectory = env
-	} else {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			b.logDirectory = filepath.Join(home, ".pig", "agent") // pig: .pi → .pig
-		}
-	}
+	// v0.85.1: PI_HARDWARE_CURSOR / PI_CLEAR_ON_SHRINK env reads removed —
+	// both default to false and are only settable via the setters.
+	b.showHardwareCursor = false
+	b.clearOnShrink = false
+	// v0.85.1: logDirectory has no env fallback (pi: logDirectory?: string).
+	// An empty logDirectory disables debug logging; crash dumps fall back to
+	// the OS temp directory (pi-tui-crash.log, see tui_main_screen.go).
+	b.logDirectory = logDirectory
 	if showHardwareCursor != nil {
 		b.showHardwareCursor = *showHardwareCursor
 	}
@@ -508,8 +731,8 @@ func (b *TuiBase) GetClearOnShrink() bool {
 }
 
 // SetClearOnShrink sets whether to trigger full re-render when content
-// shrinks. When true (default), empty rows are cleared when content shrinks.
-// When false, empty rows remain (reduces redraws on slower terminals).
+// shrinks. When true, empty rows are cleared when content shrinks. When
+// false (default), empty rows remain (reduces redraws on slower terminals).
 func (b *TuiBase) SetClearOnShrink(enabled bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -863,6 +1086,25 @@ func (h *overlayHandleImpl) IsFocused() bool {
 	return h.t.focusedComponent == h.component
 }
 
+// GetBounds returns the most recent rendered bounds for a visible overlay
+// (pi: OverlayHandle.getBounds).
+func (h *overlayHandleImpl) GetBounds() *OverlayBounds {
+	h.t.mu.Lock()
+	defer h.t.mu.Unlock()
+	found := false
+	for _, e := range h.t.overlayStack {
+		if e == h.entry {
+			found = true
+			break
+		}
+	}
+	if !found || !h.t.isOverlayVisibleLocked(h.entry) || h.entry.bounds == nil {
+		return nil
+	}
+	out := *h.entry.bounds
+	return &out
+}
+
 // HideOverlay hides the topmost overlay and restores previous focus.
 func (b *TuiBase) HideOverlay() {
 	b.lock(func() {
@@ -921,6 +1163,48 @@ func (b *TuiBase) isOverlayFocused() bool {
 		}
 	}
 	return false
+}
+
+// resolveMouseFocusTarget keeps overlay containers as keyboard focus owners
+// when a nested control is clicked (pi: TuiBase.resolveMouseFocusTarget).
+// Called with b.mu held (input dispatch path).
+func (b *TuiBase) resolveMouseFocusTargetLocked(component Component) Component {
+	for index := len(b.overlayStack) - 1; index >= 0; index-- {
+		overlay := b.overlayStack[index]
+		if b.isOverlayVisibleLocked(overlay) && b.containsComponent(overlay.component, component) {
+			return overlay.component
+		}
+	}
+	return component
+}
+
+// dispatchMouseToOverlayLocked dispatches to the visually topmost overlay
+// under the pointer (pi: TuiBase.dispatchMouseToOverlay). Called with b.mu
+// held (input dispatch path).
+func (b *TuiBase) dispatchMouseToOverlayLocked(event *TuiMouseEvent) (hit bool, result *TuiMouseEventResult) {
+	for index := len(b.renderedOverlayLayouts) - 1; index >= 0; index-- {
+		layout := b.renderedOverlayLayouts[index]
+		if event.ScreenX < layout.col || event.ScreenX >= layout.col+layout.width ||
+			event.ScreenY < layout.row || event.ScreenY >= layout.row+layout.height {
+			continue
+		}
+		layoutEvent := *event
+		layoutEvent.X = event.ScreenX - layout.col
+		layoutEvent.Y = event.ScreenY - layout.row
+		layoutEvent.Width = layout.width
+		layoutEvent.Height = layout.height
+		result := DispatchMouseEvent(layout.entry.component, &layoutEvent)
+		if result == nil {
+			return true, nil
+		}
+		if result.Focus {
+			out := *result
+			out.FocusTarget = layout.entry.component
+			result = &out
+		}
+		return true, result
+	}
+	return false, nil
 }
 
 // isOverlayVisibleLocked checks if an overlay entry is currently visible.
@@ -998,18 +1282,11 @@ func (b *TuiBase) RemoveInputListener(listener TuiInputListener) {
 	defer b.mu.Unlock()
 	for i, l := range b.inputListeners {
 		// Listeners are function values; compare by identity via pointer.
-		if sameFuncValue(l, listener) {
+		if utils.SameFuncValue(l, listener) {
 			b.inputListeners = append(b.inputListeners[:i], b.inputListeners[i+1:]...)
 			return
 		}
 	}
-}
-
-// sameFuncValue reports whether two listener func values refer to the same
-// closure (Go func values are not comparable; compare code pointers, matching
-// JS Set identity semantics for our single-registration usage).
-func sameFuncValue(a, b TuiInputListener) bool {
-	return a != nil && b != nil && reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
 
 func (b *TuiBase) OnTerminalColorSchemeChange(listener func(scheme TerminalColorScheme)) func() {
@@ -1023,7 +1300,7 @@ func (b *TuiBase) removeTerminalColorSchemeListener(listener func(scheme Termina
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for i, l := range b.terminalColorSchemeListeners {
-		if reflect.ValueOf(l).Pointer() == reflect.ValueOf(listener).Pointer() {
+		if utils.SameFuncValue(l, listener) {
 			b.terminalColorSchemeListeners = append(b.terminalColorSchemeListeners[:i], b.terminalColorSchemeListeners[i+1:]...)
 			return
 		}
@@ -1611,6 +1888,7 @@ func resolveAnchorCol(anchor OverlayAnchor, width int, availWidth int, marginLef
 }
 
 type renderedOverlay struct {
+	entry        *overlayStackEntry
 	overlayLines []string
 	row          int
 	col          int
@@ -1621,10 +1899,15 @@ type renderedOverlay struct {
 // focusOrder, higher = on top).
 func (b *TuiBase) compositeOverlays(lines []string, termWidth int, termHeight int) []string {
 	if len(b.overlayStack) == 0 {
+		b.renderedOverlayLayouts = nil
 		return lines
 	}
 	result := make([]string, len(lines))
 	copy(result, lines)
+
+	for _, entry := range b.overlayStack {
+		entry.bounds = nil
+	}
 
 	// Pre-render all visible overlays and calculate positions
 	var rendered []renderedOverlay
@@ -1660,9 +1943,16 @@ func (b *TuiBase) compositeOverlays(lines []string, termWidth int, termHeight in
 
 		// Get final row/col with actual overlay height
 		finalLayout := b.resolveOverlayLayout(options, len(overlayLines), termWidth, termHeight)
+		entry.bounds = &OverlayBounds{Row: finalLayout.row, Col: finalLayout.col, Width: layout.width, Height: len(overlayLines)}
 
-		rendered = append(rendered, renderedOverlay{overlayLines: overlayLines, row: finalLayout.row, col: finalLayout.col, w: layout.width})
+		rendered = append(rendered, renderedOverlay{entry: entry, overlayLines: overlayLines, row: finalLayout.row, col: finalLayout.col, w: layout.width})
 		minLinesNeeded = maxInt(minLinesNeeded, finalLayout.row+len(overlayLines))
+	}
+	b.renderedOverlayLayouts = b.renderedOverlayLayouts[:0]
+	for _, r := range rendered {
+		b.renderedOverlayLayouts = append(b.renderedOverlayLayouts, renderedOverlayLayout{
+			entry: r.entry, row: r.row, col: r.col, width: r.w, height: len(r.overlayLines),
+		})
 	}
 
 	// Pad to at least terminal height so overlays have screen-relative positions.

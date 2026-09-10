@@ -949,10 +949,12 @@ func TestAgentLoopUsesPrepareNextTurnSnapshotBeforeContinuing(t *testing.T) {
 	agentContext := AgentContext{SystemPrompt: "first prompt", Tools: []*AgentTool{tool}}
 
 	prepared := false
+	prepareCalls := 0
 	config := AgentLoopConfig{
 		Model:        createModel(),
 		ConvertToLlm: identityConverter,
 		PrepareNextTurn: func(context PrepareNextTurnContext) *AgentLoopTurnUpdate {
+			prepareCalls++
 			if prepared {
 				return nil
 			}
@@ -988,6 +990,9 @@ func TestAgentLoopUsesPrepareNextTurnSnapshotBeforeContinuing(t *testing.T) {
 
 	if llmCalls != 2 {
 		t.Fatalf("llmCalls = %d, want 2", llmCalls)
+	}
+	if prepareCalls != 1 {
+		t.Fatalf("prepareCalls = %d, want 1", prepareCalls)
 	}
 	if convertedSecondTurnSystemPrompt != "second prompt" {
 		t.Fatalf("second turn system prompt = %q, want %q", convertedSecondTurnSystemPrompt, "second prompt")

@@ -478,8 +478,14 @@ func (r *AgentSessionRuntime) Fork(ctx context.Context, entryID string, options 
 	}
 
 	sessionManager := r.session.SessionManager
+	// pi (v0.85.1): teardown BEFORE newSession/createBranchedSession so the
+	// replacement session sees the pre-fork file state; parentSession uses
+	// the previous session file captured above.
+	if err := r.teardownCurrent(ctx, "fork", sessionManager.GetSessionFile()); err != nil {
+		return nil, err
+	}
 	if targetLeafID == "" {
-		parent := r.session.SessionFile()
+		parent := previousSessionFile
 		var parentPtr *string
 		if parent != "" {
 			parentPtr = &parent
@@ -491,9 +497,6 @@ func (r *AgentSessionRuntime) Fork(ctx context.Context, entryID string, options 
 		if _, err := sessionManager.CreateBranchedSession(targetLeafID); err != nil {
 			return nil, err
 		}
-	}
-	if err := r.teardownCurrent(ctx, "fork", sessionManager.GetSessionFile()); err != nil {
-		return nil, err
 	}
 	result, err := r.createRuntime(CreateAgentSessionRuntimeFactoryOptions{
 		Cwd:               r.Cwd(),
@@ -537,6 +540,22 @@ func (r *AgentSessionRuntime) ImportFromJsonl(ctx context.Context, inputPath str
 	}
 
 	destinationPath := filepath.Join(sessionDir, filepath.Base(resolvedPath))
+	// pi (v0.85.1): when importing into the sessions dir, never overwrite an
+	// existing session — pick a unique -<n> suffix instead, and copy with
+	// COPYFILE_EXCL semantics.
+	sourceAlreadyStored := filepath.Clean(destinationPath) == resolvedPath
+	if !sourceAlreadyStored {
+		ext := filepath.Ext(destinationPath)
+		name := strings.TrimSuffix(filepath.Base(destinationPath), ext)
+		suffix := 1
+		for {
+			if _, err := os.Stat(destinationPath); err != nil {
+				break
+			}
+			destinationPath = filepath.Join(sessionDir, fmt.Sprintf("%s-%d%s", name, suffix, ext))
+			suffix++
+		}
+	}
 	cancelled, err := r.emitBeforeSwitch(ctx, "resume", destinationPath)
 	if err != nil {
 		return false, err
@@ -546,12 +565,21 @@ func (r *AgentSessionRuntime) ImportFromJsonl(ctx context.Context, inputPath str
 	}
 
 	previousSessionFile := r.session.SessionFile()
-	if filepath.Clean(destinationPath) != resolvedPath {
+	if !sourceAlreadyStored {
 		data, err := os.ReadFile(resolvedPath)
 		if err != nil {
 			return false, err
 		}
-		if err := os.WriteFile(destinationPath, data, 0o644); err != nil {
+		// pi: copyFileSync(..., COPYFILE_EXCL) — fail instead of overwriting.
+		out, err := os.OpenFile(destinationPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err != nil {
+			return false, err
+		}
+		if _, err := out.Write(data); err != nil {
+			out.Close()
+			return false, err
+		}
+		if err := out.Close(); err != nil {
 			return false, err
 		}
 	}

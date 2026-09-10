@@ -11,6 +11,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -815,4 +816,78 @@ func TestCombinedAutocompleteProviderQuotedPathCompletion(t *testing.T) {
 			t.Errorf("applied = %q, want %q", applied.Lines[0], "\"my folder/test.txt\"")
 		}
 	})
+}
+
+// pi v0.85.1: "ranks shallower same-score @ matches before deeper matches"
+func TestCombinedAutocompleteProviderRanksShallowerSameScoreAtMatchesBeforeDeeperMatches(t *testing.T) {
+	fdPath := resolveFdPath()
+	if fdPath == "" {
+		t.Skip("fd is not available")
+	}
+
+	baseDir := t.TempDir()
+	setupFolder(t, baseDir, folderStructure{
+		dirs: []string{
+			"scope/aaa/venv/lib/python3.12/site-packages/pkg/core/profile",
+			"scope/projects",
+		},
+	})
+
+	provider := NewCombinedAutocompleteProvider(nil, baseDir, fdPath)
+	line := "@scope/pro"
+	result := provider.GetSuggestions(context.Background(), []string{line}, 0, len(line), AutocompleteGetSuggestionsOptions{})
+
+	values := []string{}
+	for _, item := range result.Items {
+		values = append(values, item.Value)
+	}
+	if len(values) == 0 || values[0] != "@scope/projects/" {
+		t.Fatalf("values[0] = %q, want @scope/projects/", values)
+	}
+	found := false
+	for _, value := range values {
+		if value == "@scope/aaa/venv/lib/python3.12/site-packages/pkg/core/profile/" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("deep profile match missing from %q", values)
+	}
+}
+
+// pi v0.85.1: "includes scoped direct children when recursive @ matches are
+// flooded"
+func TestCombinedAutocompleteProviderIncludesScopedDirectChildrenWhenRecursiveAtMatchesAreFlooded(t *testing.T) {
+	fdPath := resolveFdPath()
+	if fdPath == "" {
+		t.Skip("fd is not available")
+	}
+
+	baseDir := t.TempDir()
+	dirs := []string{"scope/projects"}
+	for index := 0; index < 250; index++ {
+		dirs = append(dirs, fmt.Sprintf("scope/a%03d/venv/lib/python3.12/site-packages/pkg/core/profile", index+1))
+	}
+	setupFolder(t, baseDir, folderStructure{dirs: dirs})
+
+	provider := NewCombinedAutocompleteProvider(nil, baseDir, fdPath)
+	line := "@scope/pro"
+	result := provider.GetSuggestions(context.Background(), []string{line}, 0, len(line), AutocompleteGetSuggestionsOptions{})
+
+	values := []string{}
+	for _, item := range result.Items {
+		values = append(values, item.Value)
+	}
+	if len(values) == 0 || values[0] != "@scope/projects/" {
+		t.Fatalf("values[0] = %q, want @scope/projects/", values)
+	}
+	found := false
+	for _, value := range values {
+		if strings.Contains(value, "/profile/") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("deep fuzzy matches missing after direct children: %q", values)
+	}
 }

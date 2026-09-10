@@ -489,6 +489,24 @@ const updateSummarizationPrompt = `The messages above are NEW conversation messa
 
 ` + updateSummarizationInstructions
 
+// GetSummarizationFailure returns an error message when a summarization
+// response cannot safely be persisted (pi: getSummarizationFailure,
+// v0.85.1). A length stop contains partial text and must not become a
+// session checkpoint; "" = no failure.
+func GetSummarizationFailure(response *types.AssistantMessage, label string) string {
+	if response.StopReason == types.StopReasonError {
+		errorMessage := response.ErrorMessage
+		if errorMessage == "" {
+			errorMessage = "Unknown error"
+		}
+		return label + " failed: " + errorMessage
+	}
+	if response.StopReason == types.StopReasonLength {
+		return label + " failed: generation hit the token cap and the summary is incomplete"
+	}
+	return ""
+}
+
 // createSummarizationOptions builds the stream options for one summarization
 // request (pi: createSummarizationOptions; the signal member is dropped —
 // cancellation travels as ctx).
@@ -557,7 +575,8 @@ func CompleteSummarization(
 	if requestOptions.SessionID == "" {
 		requestOptions.SessionID = ai.UUIDv7()
 	}
-	requestOptions.ToolChoice = types.ToolChoiceNone
+	// pi (v0.85.1): toolChoice:"none" dropped from the summarization request
+	// options.
 	produce := func() (*types.AssistantMessage, error) {
 		if streamFn != nil {
 			result := streamFn(ctx, model, llmContext, &requestOptions).Result()
@@ -700,12 +719,10 @@ func GenerateSummaryWithUsage(
 		return nil, err
 	}
 
-	if response.StopReason == types.StopReasonError {
-		errorMessage := response.ErrorMessage
-		if errorMessage == "" {
-			errorMessage = "Unknown error"
-		}
-		return nil, fmt.Errorf("Summarization failed: %s", errorMessage)
+	// pi (v0.85.1): a length stop contains partial text and must not become
+	// a session checkpoint, so it fails like an error.
+	if failure := GetSummarizationFailure(response, "Summarization"); failure != "" {
+		return nil, errors.New(failure)
 	}
 	for _, block := range response.Content {
 		if block.ContentKind() == types.KindToolCall {
@@ -1021,12 +1038,8 @@ func generateTurnPrefixSummary(
 		return nil, err
 	}
 
-	if response.StopReason == types.StopReasonError {
-		errorMessage := response.ErrorMessage
-		if errorMessage == "" {
-			errorMessage = "Unknown error"
-		}
-		return nil, fmt.Errorf("Turn prefix summarization failed: %s", errorMessage)
+	if failure := GetSummarizationFailure(response, "Turn prefix summarization"); failure != "" {
+		return nil, errors.New(failure)
 	}
 	for _, block := range response.Content {
 		if block.ContentKind() == types.KindToolCall {

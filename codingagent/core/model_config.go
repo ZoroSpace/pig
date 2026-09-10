@@ -417,6 +417,10 @@ func validateOpenAICompletionsCompatFields(value map[string]any, path string, er
 			expectBool(entry, path+"."+key, errs)
 		}
 	}
+	// pi (v0.85.1): vllmPriority — top-level priority request field.
+	if entry, present := value["vllmPriority"]; present {
+		expectNumber(entry, path+".vllmPriority", errs)
+	}
 	if entry, present := value["maxTokensField"]; present {
 		if s, ok := entry.(string); !ok || (s != "max_completion_tokens" && s != "max_tokens") {
 			*errs = append(*errs, schemaError{path: path + ".maxTokensField", message: `expected "max_completion_tokens" or "max_tokens"`})
@@ -460,7 +464,7 @@ func validateOpenAIResponsesCompatFields(value map[string]any, path string, errs
 	allowed := map[string]bool{
 		"supportsDeveloperRole": true, "sessionAffinityFormat": true, "supportsLongCacheRetention": true,
 		"supportsStrictMode": true, "supportsOpenAIGrammarTools": true, "supportsAdditionalTools": true,
-		"supportsToolSearch": true,
+		"supportsToolSearch": true, "supportsMaxOutputTokens": true,
 	}
 	matches := true
 	for key := range value {
@@ -472,7 +476,7 @@ func validateOpenAIResponsesCompatFields(value map[string]any, path string, errs
 	if !matches {
 		return false
 	}
-	for _, key := range []string{"supportsDeveloperRole", "supportsLongCacheRetention", "supportsStrictMode", "supportsOpenAIGrammarTools", "supportsAdditionalTools", "supportsToolSearch"} {
+	for _, key := range []string{"supportsDeveloperRole", "supportsLongCacheRetention", "supportsStrictMode", "supportsOpenAIGrammarTools", "supportsAdditionalTools", "supportsToolSearch", "supportsMaxOutputTokens"} {
 		if entry, present := value[key]; present {
 			expectBool(entry, path+"."+key, errs)
 		}
@@ -490,7 +494,7 @@ func validateAnthropicMessagesCompatFields(value map[string]any, path string, er
 		"supportsEagerToolInputStreaming": true, "supportsLongCacheRetention": true,
 		"sendSessionAffinityHeaders": true, "supportsCacheControlOnTools": true,
 		"supportsTemperature": true, "forceAdaptiveThinking": true, "allowEmptySignature": true,
-		"supportsStrictTools": true, "supportsToolReferences": true,
+		"supportsStrictTools": true, "supportsMidConvoEffort": true, "supportsToolReferences": true,
 	}
 	matches := true
 	for key := range value {

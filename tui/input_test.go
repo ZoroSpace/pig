@@ -9,7 +9,11 @@
 
 package tui
 
-import "testing"
+import (
+	"github.com/samber/lo"
+	"strings"
+	"testing"
+)
 
 func TestInputSubmit(t *testing.T) {
 	t.Run("submits value including backslash on Enter", func(t *testing.T) {
@@ -44,6 +48,29 @@ func TestInputSubmit(t *testing.T) {
 }
 
 func TestInputRender(t *testing.T) {
+	t.Run("supports a custom prompt and styled placeholder", func(t *testing.T) {
+		input := NewInput(&InputOptions{
+			Prompt:           lo.ToPtr(""),
+			Placeholder:      "Find transcript",
+			PlaceholderStyle: func(text string) string { return "\x1b[2m" + text + "\x1b[22m" },
+		})
+		input.Focused = true
+
+		empty := input.Render(20)[0]
+		if !strings.Contains(empty, "\x1b[2m") {
+			t.Errorf("placeholder not styled: %q", empty)
+		}
+		if got := strings.TrimRight(StripTerminalSequences(empty), " "); got != "Find transcript" {
+			t.Errorf("placeholder text = %q, want Find transcript", got)
+		}
+
+		input.HandleInput("n")
+		populated := input.Render(20)[0]
+		if got := strings.TrimRight(StripTerminalSequences(populated), " "); got != "n" {
+			t.Errorf("populated text = %q, want n", got)
+		}
+	})
+
 	t.Run("does not overflow with wide CJK and fullwidth text", func(t *testing.T) {
 		width := 93
 		cases := []string{

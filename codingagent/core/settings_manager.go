@@ -50,6 +50,7 @@ import (
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/codingagent"
 	"github.com/ZoroSpace/pig/codingagent/utils"
+	"github.com/ZoroSpace/pig/tui"
 	"github.com/samber/lo"
 )
 
@@ -70,7 +71,7 @@ import (
 //	branchSummary?: BranchSummarySettings
 //	retry?: RetrySettings
 //	hideThinkingBlock?: boolean
-//	showCacheMissNotices?: boolean                       — default false
+//	showCacheMissNotices?: boolean                       — default false - show cache cost and provider recovery notices
 //	externalEditor?: string                              — takes precedence over VISUAL/EDITOR
 //	shellPath?: string                                   — supports leading ~ expansion
 //	quietStartup?: boolean
@@ -107,6 +108,7 @@ import (
 //	tuiMode?: TuiMode                                    — default "regular"
 //	fullscreenExitOutput?: FullscreenExitOutput          — default "transcript"
 //	fullscreenScrollbar?: ScrollViewScrollbar            — default "auto"
+//	fullscreenCopyOnSelect?: boolean                     — default true; no effect in regular TUI mode (v0.85.1)
 type Settings map[string]any
 
 // SettingsScope selects which settings layer a storage operation targets.
@@ -280,7 +282,20 @@ type TerminalSettings struct {
 	ImageWidthCells      *int64 // default: 60 (preferred inline image width in terminal cells)
 	ClearOnShrink        *bool  // default: false (clear empty rows when content shrinks)
 	ShowTerminalProgress *bool  // default: false (OSC 9;4 terminal progress indicators)
+	// Hyperlinks / Images / TrueColor mirror pi's boolean | "auto" unions
+	// (Images additionally "kitty" | "iterm2"; false forces off). pig keeps
+	// the raw JSON values in the settings map; v0.85.1 additions.
+	Hyperlinks any
+	Images     any
+	TrueColor  any
 }
+
+// TerminalCapabilityOverrides is the user-forced subset of terminal
+// capabilities (pi: Partial<TerminalCapabilities> from
+// getTerminalCapabilityOverrides; the canonical type lives in pi-tui, so
+// pig aliases tui.TerminalCapabilityOverrides; pi's images:null force-off
+// maps to Images=false here).
+type TerminalCapabilityOverrides = tui.TerminalCapabilityOverrides
 
 // ImageSettings holds the image handling settings shape (pi: ImageSettings).
 type ImageSettings struct {
@@ -2217,6 +2232,40 @@ func (m *SettingsManager) GetThinkingBudgets() (*ThinkingBudgetsSettings, bool) 
 	return result, true
 }
 
+// GetTerminalCapabilityOverrides returns user-forced terminal capability
+// overrides (pi: getTerminalCapabilityOverrides, v0.85.1).
+func (m *SettingsManager) GetTerminalCapabilityOverrides() TerminalCapabilityOverrides {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	var overrides TerminalCapabilityOverrides
+	terminal, ok := settingsObject(m.settings, "terminal")
+	if !ok {
+		return overrides
+	}
+	if images, present := terminal["images"]; present {
+		switch v := images.(type) {
+		case bool:
+			if v {
+				overrides.Images = true
+			} else {
+				// pi: images === false → images: null (force off).
+				overrides.Images = false
+			}
+		case string:
+			if v == "kitty" || v == "iterm2" {
+				overrides.Images = v
+			}
+		}
+	}
+	if value, present := settingsBool(terminal, "trueColor"); present {
+		overrides.TrueColor = &value
+	}
+	if value, present := settingsBool(terminal, "hyperlinks"); present {
+		overrides.Hyperlinks = &value
+	}
+	return overrides
+}
+
 // GetShowImages returns whether inline images show (pi: getShowImages).
 func (m *SettingsManager) GetShowImages() bool {
 	m.mutex.Lock()
@@ -2397,6 +2446,29 @@ func (m *SettingsManager) SetFullscreenScrollbar(mode ScrollViewScrollbar) {
 	defer m.mutex.Unlock()
 	m.globalSettings["fullscreenScrollbar"] = string(mode)
 	m.markModified("fullscreenScrollbar", "")
+	m.save()
+}
+
+// GetFullscreenCopyOnSelect returns whether selecting text in the fullscreen
+// transcript copies to the clipboard (pi: getFullscreenCopyOnSelect —
+// v0.85.1; default true; no effect in regular TUI mode).
+func (m *SettingsManager) GetFullscreenCopyOnSelect() bool {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	enabled, ok := settingsBool(m.settings, "fullscreenCopyOnSelect")
+	if !ok {
+		return true
+	}
+	return enabled
+}
+
+// SetFullscreenCopyOnSelect records the fullscreen copy-on-select toggle (pi:
+// setFullscreenCopyOnSelect — v0.85.1).
+func (m *SettingsManager) SetFullscreenCopyOnSelect(enabled bool) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.globalSettings["fullscreenCopyOnSelect"] = enabled
+	m.markModified("fullscreenCopyOnSelect", "")
 	m.save()
 }
 

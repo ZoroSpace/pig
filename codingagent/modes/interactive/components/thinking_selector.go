@@ -69,9 +69,15 @@ func NewThinkingSelectorComponent(
 		if level == defaultThinkingLevel {
 			description = description + " · default"
 		}
+		// Mark the current level in the label (v0.85.1) so it stays visible
+		// while browsing.
+		label := "  " + string(level)
+		if level == currentLevel {
+			label = "✓ " + string(level)
+		}
 		s.allItems = append(s.allItems, tui.SelectItem{
 			Value:       string(level),
-			Label:       string(level),
+			Label:       label,
 			Description: description,
 		})
 	}
@@ -95,7 +101,10 @@ func NewThinkingSelectorComponent(
 	s.selectListChildIndex = len(s.Children)
 	s.AddChild(s.selectList)
 	s.AddChild(tui.NewSpacer(1))
-	s.AddChild(tui.NewText(theme.Fg("dim", "  Enter to select · Ctrl+S to set as default · Esc to cancel"), 0, 0))
+	s.AddChild(tui.NewText(theme.Fg("dim",
+		"  "+coretools.KeyDisplayText("tui.select.confirm")+" to select · "+
+			coretools.KeyDisplayText(core.AppKeybindingThinkingSave)+" to set as default · "+
+			coretools.KeyDisplayText("tui.select.cancel")+" to cancel"), 0, 0))
 
 	// Add bottom border
 	s.AddChild(NewDynamicBorder(nil))
@@ -126,8 +135,10 @@ func (s *ThinkingSelectorComponent) buildSelectList(items []tui.SelectItem, pres
 func (s *ThinkingSelectorComponent) applyFilter(query string) {
 	filtered := s.allItems
 	if query != "" {
+		// v0.85.1 matches on the raw value instead of the label so the ✓
+		// marker does not pollute fuzzy scoring.
 		filtered = tui.FuzzyFilter(s.allItems, query, func(item tui.SelectItem) string {
-			return item.Label + " " + item.Description
+			return item.Value + " " + item.Description
 		})
 	}
 	selectedValue := agent.ThinkingLevel("")
@@ -141,14 +152,14 @@ func (s *ThinkingSelectorComponent) applyFilter(query string) {
 
 // HandleInput implements InputHandler.
 func (s *ThinkingSelectorComponent) HandleInput(keyData string) {
-	if tui.MatchesKey(keyData, tui.KeyCtrl("s")) && s.onSelectAsDefault != nil {
+	kb := tui.GetKeybindings()
+	if kb.Matches(keyData, core.AppKeybindingThinkingSave) && s.onSelectAsDefault != nil {
 		if item := s.selectList.GetSelectedItem(); item != nil {
 			s.onSelectAsDefault(agent.ThinkingLevel(item.Value))
 		}
 		return
 	}
 
-	kb := tui.GetKeybindings()
 	isNav := kb.Matches(keyData, "tui.select.up") ||
 		kb.Matches(keyData, "tui.select.down") ||
 		kb.Matches(keyData, "tui.select.confirm") ||

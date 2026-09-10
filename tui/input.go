@@ -17,6 +17,17 @@ import (
 	"strings"
 )
 
+// InputOptions configures an Input (pi: InputOptions).
+type InputOptions struct {
+	// Prompt rendered before the value (pi: prompt?; TS `?? ""` keeps an
+	// explicit empty prompt, so pig uses *string). Default "> ".
+	Prompt *string
+	// Placeholder rendered when the value is empty (pi: placeholder?).
+	Placeholder string
+	// PlaceholderStyle styles the placeholder text (pi: placeholderStyle?).
+	PlaceholderStyle func(text string) string
+}
+
 // inputState is the undo snapshot of the Input component (pi: InputState).
 type inputState struct {
 	Value  string
@@ -34,6 +45,14 @@ func cloneInputState(s inputState) inputState {
 type Input struct {
 	value  string
 	cursor int // Cursor position in the value (byte offset)
+
+	prompt           string
+	placeholder      string
+	placeholderStyle func(text string) string
+	// renderedStartColumn is the first visible column of the last render;
+	// used by mouse hit-testing to map pointer columns back into the value
+	// (pi: renderedStartColumn).
+	renderedStartColumn int
 
 	// OnSubmit is called when the user submits (pi: public onSubmit?).
 	OnSubmit func(value string)
@@ -56,12 +75,25 @@ type Input struct {
 	undoStack *UndoStack[inputState]
 }
 
-// NewInput creates an input component (pi: constructor with field
-// initializers).
-func NewInput() *Input {
-	return &Input{
-		undoStack: NewUndoStack(cloneInputState),
+// NewInput creates an input component (pi: constructor with an optional
+// InputOptions parameter → variadic to keep existing NewInput() callers
+// working).
+func NewInput(options ...*InputOptions) *Input {
+	i := &Input{
+		prompt:           "> ",
+		undoStack:        NewUndoStack(cloneInputState),
+		placeholderStyle: func(text string) string { return text },
 	}
+	if len(options) > 0 && options[0] != nil {
+		if options[0].Prompt != nil {
+			i.prompt = *options[0].Prompt
+		}
+		i.placeholder = options[0].Placeholder
+		if options[0].PlaceholderStyle != nil {
+			i.placeholderStyle = options[0].PlaceholderStyle
+		}
+	}
+	return i
 }
 
 // GetValue returns the current value (pi: getValue).
@@ -468,6 +500,30 @@ func (i *Input) handlePaste(pastedText string) {
 // Invalidate clears cached render state (pi: invalidate — no cached state).
 func (i *Input) Invalidate() {}
 
+// HandleMouse implements MouseHandler (pi: Input.handleMouse). A left press
+// on the input row positions the cursor under the pointer.
+func (i *Input) HandleMouse(event *TuiMouseEvent) *TuiMouseEventResult {
+	if event.Type != MouseEventTypePress || event.Button != MouseButtonLeft || event.Y != 0 {
+		return nil
+	}
+	// pi quirk ported verbatim: the visible column offset subtracts the
+	// default "> " prompt width (2) rather than the configured prompt width.
+	visibleColumn := max(0, event.X-2)
+	targetColumn := i.renderedStartColumn + visibleColumn
+	currentColumn := 0
+	i.cursor = len(i.value)
+	for _, g := range graphemeSegmentData(i.value) {
+		nextColumn := currentColumn + VisibleWidth(g.Segment)
+		if targetColumn < nextColumn {
+			i.cursor = g.Index
+			break
+		}
+		currentColumn = nextColumn
+	}
+	i.lastAction = ""
+	return &TuiMouseEventResult{Handled: true, Focus: true}
+}
+
 // GetFocused reports the current focus state (pi: Focusable.focused).
 func (i *Input) GetFocused() bool { return i.Focused }
 
@@ -477,15 +533,33 @@ func (i *Input) SetFocused(focused bool) { i.Focused = focused }
 // Render implements Component (pi: render).
 func (i *Input) Render(width int) []string {
 	// Calculate visible window
-	prompt := "> "
-	availableWidth := width - len(prompt)
+	availableWidth := width - VisibleWidth(i.prompt)
 
 	if availableWidth <= 0 {
-		return []string{prompt}
+		return []string{TruncateToWidth(i.prompt, width, "", false)}
+	}
+
+	if len(i.value) == 0 && i.placeholder != "" {
+		placeholder := TruncateToWidth(i.placeholder, availableWidth, "", false)
+		graphemes := graphemeSegmentData(placeholder)
+		atCursor := " " // Character at cursor, or space if empty
+		if len(graphemes) > 0 {
+			atCursor = graphemes[0].Segment
+		}
+		afterCursor := placeholder[len(atCursor):]
+		marker := ""
+		if i.Focused {
+			marker = CursorMarker
+		}
+		cursorChar := fmt.Sprintf("\x1b[7m%s\x1b[27m", i.placeholderStyle(atCursor))
+		textWithCursor := marker + cursorChar + i.placeholderStyle(afterCursor)
+		padding := strings.Repeat(" ", max(0, availableWidth-VisibleWidth(textWithCursor)))
+		return []string{i.prompt + textWithCursor + padding}
 	}
 
 	visibleText := ""
 	cursorDisplay := i.cursor
+	i.renderedStartColumn = 0
 	totalWidth := VisibleWidth(i.value)
 
 	if totalWidth < availableWidth {
@@ -515,6 +589,7 @@ func (i *Input) Render(width int) []string {
 				startCol = max(0, cursorCol-halfWidth)
 			}
 
+			i.renderedStartColumn = startCol
 			visibleText = SliceByColumn(i.value, startCol, scrollWidth, true)
 			beforeCursor := SliceByColumn(i.value, startCol, max(0, cursorCol-startCol), true)
 			cursorDisplay = len(beforeCursor)
@@ -555,7 +630,7 @@ func (i *Input) Render(width int) []string {
 	// Calculate visual width
 	visualLength := VisibleWidth(textWithCursor)
 	padding := strings.Repeat(" ", max(0, availableWidth-visualLength))
-	line := prompt + textWithCursor + padding
+	line := i.prompt + textWithCursor + padding
 
 	return []string{line}
 }

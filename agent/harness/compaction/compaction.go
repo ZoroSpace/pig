@@ -114,6 +114,15 @@ func getMessageFromEntry(entry session.Entry) agent.AgentMessage {
 	}
 }
 
+// fromIDValue dereferences an optional fromId (pi: string | null → the
+// plain-string BranchSummaryMessage field).
+func fromIDValue(fromID *string) string {
+	if fromID == nil {
+		return ""
+	}
+	return *fromID
+}
+
 // getMessageFromEntryForCompaction projects an entry for compaction input,
 // skipping prior compaction summaries (pi: getMessageFromEntryForCompaction).
 func getMessageFromEntryForCompaction(entry session.Entry) agent.AgentMessage {
@@ -420,8 +429,7 @@ func findValidCutPoints(entries []session.Entry, startIndex int, endIndex int) [
 			case types.RoleToolResult:
 				// Not a cut point.
 			}
-		case *session.ThinkingLevelEntry, *session.ModelChangeEntry, *session.ActiveToolsEntry,
-			*session.CompactionEntry, *session.CustomEntry:
+		case *session.CompactionEntry, *session.CustomEntry:
 			// Not a cut point.
 		}
 		if _, ok := entry.(*session.BranchSummaryEntry); ok {
@@ -805,6 +813,7 @@ func PrepareCompaction(pathEntries []session.Entry, settings CompactionSettings)
 				Message: message,
 			}
 			entry.ID = id
+			entry.Type = session.EntryTypeMessage
 			entry.Seq = prevCompaction.Seq
 			entry.Timestamp = agentMessageTimestamp(message)
 			if index == 0 {
@@ -820,7 +829,11 @@ func PrepareCompaction(pathEntries []session.Entry, settings CompactionSettings)
 	}
 	boundaryEnd := len(compactableEntries)
 
-	tokensBefore := EstimateContextTokens(session.BuildSessionContext(pathEntries, nil).Messages).Tokens
+	contextMessages, err := session.BuildSessionContext(pathEntries, nil, context.Background())
+	if err != nil {
+		return nil, err
+	}
+	tokensBefore := EstimateContextTokens(contextMessages).Tokens
 
 	cutPoint := FindCutPoint(compactableEntries, 0, boundaryEnd, settings.KeepRecentTokens)
 	historyEnd := cutPoint.FirstKeptEntryIndex

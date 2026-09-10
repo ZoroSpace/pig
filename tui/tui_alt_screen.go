@@ -53,6 +53,16 @@ const (
 	doubleClickIntervalMs                    = 500
 )
 
+// altWheelScrollMultiplier scales wheel scrolling while Alt is held (pi:
+// ALT_WHEEL_SCROLL_MULTIPLIER).
+const altWheelScrollMultiplier = 5
+
+// terminalWordSelectionJoiners keeps paths and kebab-case tokens whole during
+// word selection (pi: TERMINAL_WORD_SELECTION_JOINERS). Regular mode
+// delegates double-click selection to the terminal emulator; fullscreen owns
+// mouse selection, so mirror common terminal word-selection behavior.
+var terminalWordSelectionJoiners = map[string]bool{"/": true, "-": true}
+
 var osc133PromptStartRegex = regexp.MustCompile(`^\x1b\]133;A(?:\x07|\x1b\\)`)
 
 // altScreenPlatform mirrors process.platform (package var = test seam).
@@ -105,6 +115,15 @@ type altWheelEvent struct {
 	direction int // -1 | 1
 	x         int
 	y         int
+	button    int
+}
+
+// altScrollToEndIndicatorRect is the last rendered jump-to-end indicator
+// rectangle (pi: ScrollToEndIndicatorRect).
+type altScrollToEndIndicatorRect struct {
+	row    int
+	column int
+	width  int
 }
 
 type altScrollbarDrag struct {
@@ -128,6 +147,7 @@ const (
 
 type altActiveSearch struct {
 	component     *AltScreenSearchComponent
+	index         *AltScreenSearchIndex
 	overlay       OverlayHandle
 	query         string
 	matches       []AltScreenSearchMatch
@@ -156,11 +176,21 @@ type TuiAltScreenOptions struct {
 	SearchMatchStyle func(text string) string
 	// SearchCurrentMatchStyle styles the current transcript search match.
 	SearchCurrentMatchStyle func(text string) string
+	// SearchNavigationButtonStyle styles a transcript search navigation
+	// button (v0.85.1). Nil = identity.
+	SearchNavigationButtonStyle func(text string, hovered bool) string
+	// ScrollToEndIndicator renders a clickable jump-to-end label. It is
+	// centered on the last row of a follow-end primary scroll view while
+	// that view is scrolled away from its end (v0.85.1).
+	ScrollToEndIndicator func() string
 	// OpenUrl opens an OSC 8 hyperlink activated with a primary-button click.
 	OpenUrl func(url string)
 	// OnRightClickPaste handles an unmodified secondary-button press for
 	// clipboard paste. Currently enabled on Windows only.
 	OnRightClickPaste func()
+	// CopyOnSelect automatically copies selected text to the clipboard on
+	// mouse release (default: true) (v0.85.1).
+	CopyOnSelect *bool
 	// CopySelection copies selected text to the system clipboard. Return
 	// true on success; the caller flashes an error otherwise. When nil, the
 	// selection is copied via an OSC 52 write. (pi: Promise<boolean> → sync.)
@@ -175,6 +205,12 @@ type altImplicitDocument struct {
 
 func (d *altImplicitDocument) Render(width int) []string {
 	return d.t.TuiBase.Container.Render(width)
+}
+
+// HandleMouse implements MouseHandler: dispatch via the base container
+// (pi: implicitDocument.handleMouse = super.handleMouse).
+func (d *altImplicitDocument) HandleMouse(event *TuiMouseEvent) *TuiMouseEventResult {
+	return d.t.TuiBase.Container.HandleMouse(event)
 }
 
 func (d *altImplicitDocument) Invalidate() {
@@ -215,17 +251,44 @@ type TuiAltScreen struct {
 	selectionPressActive         bool
 	scrollbarDrag                *altScrollbarDrag
 	scrollbarHover               *ScrollView
+	scrollToEndIndicatorRect     *altScrollToEndIndicatorRect
 	activeSearch                 *altActiveSearch
 	pressedUrl                   string
 	selectionDragged             bool
 
-	wheelScrollLines        int
-	mouseEnabled            bool
-	searchMatchStyle        func(text string) string
-	searchCurrentMatchStyle func(text string) string
-	openUrl                 func(url string)
-	onRightClickPaste       func()
-	copySelection           func(text string) bool
+	// Component-level mouse gesture state (v0.85.1).
+	mouseCapture       *TuiMouseDispatchTarget
+	mousePressTarget   *TuiMouseDispatchTarget
+	mousePressPoint    *altPoint
+	mousePressMoved    bool
+	lastComponentClick *altComponentClick
+
+	wheelScrollLines            int
+	mouseEnabled                bool
+	searchMatchStyle            func(text string) string
+	searchCurrentMatchStyle     func(text string) string
+	searchNavigationButtonStyle func(text string, hovered bool) string
+	scrollToEndIndicator        func() string
+	openUrl                     func(url string)
+	onRightClickPaste           func()
+	copyOnSelect                bool
+	copySelection               func(text string) bool
+}
+
+// altPoint is a pointer cell coordinate.
+type altPoint struct {
+	x int
+	y int
+}
+
+// altComponentClick tracks the last component click for double/triple click
+// counting (pi: lastComponentClick).
+type altComponentClick struct {
+	timestamp int64
+	count     int
+	component Component
+	x         int
+	y         int
 }
 
 // NewTuiAltScreen creates a TuiAltScreen (pi constructor; showHardwareCursor
@@ -244,6 +307,7 @@ func NewTuiAltScreen(terminal Terminal, showHardwareCursor *bool, logDirectory s
 	mouseEnabled := true
 	searchMatchStyle := func(text string) string { return "\x1b[4m" + text + "\x1b[24m" }
 	searchCurrentMatchStyle := func(text string) string { return "\x1b[1;7m" + text + "\x1b[22;27m" }
+	copyOnSelect := true
 	if options != nil {
 		wheelScrollLines = maxInt(1, options.WheelScrollLines)
 		if options.Mouse != nil {
@@ -255,14 +319,25 @@ func NewTuiAltScreen(terminal Terminal, showHardwareCursor *bool, logDirectory s
 		if options.SearchCurrentMatchStyle != nil {
 			searchCurrentMatchStyle = options.SearchCurrentMatchStyle
 		}
+		if options.SearchNavigationButtonStyle != nil {
+			t.searchNavigationButtonStyle = options.SearchNavigationButtonStyle
+		}
+		t.scrollToEndIndicator = options.ScrollToEndIndicator
+		if options.CopyOnSelect != nil {
+			copyOnSelect = *options.CopyOnSelect
+		}
 		t.openUrl = options.OpenUrl
 		t.onRightClickPaste = options.OnRightClickPaste
 		t.copySelection = options.CopySelection
+	}
+	if t.searchNavigationButtonStyle == nil {
+		t.searchNavigationButtonStyle = func(text string, hovered bool) string { return text }
 	}
 	t.wheelScrollLines = wheelScrollLines
 	t.mouseEnabled = mouseEnabled
 	t.searchMatchStyle = searchMatchStyle
 	t.searchCurrentMatchStyle = searchCurrentMatchStyle
+	t.copyOnSelect = copyOnSelect
 	t.AddInputListener(func(data string) *TuiInputListenerResult { return t.handleViewportInput(data) })
 	return t
 }
@@ -347,6 +422,8 @@ func (t *TuiAltScreen) beforeTerminalStart() {
 	t.lastClick = nil
 	t.pressedUrl = ""
 	t.selectionDragged = false
+	t.clearComponentMouseGesture()
+	t.lastComponentClick = nil
 	t.resetRenderState()
 	term := strings.ToLower(os.Getenv("TERM"))
 	// Multiplexers can lag when every pointer movement is forwarded. Button-motion
@@ -379,6 +456,7 @@ func (t *TuiAltScreen) beforeTerminalStop(options TuiStopOptions) {
 	t.selectionPressActive = false
 	t.stopScrollbarHover()
 	t.stopScrollbarDrag()
+	t.clearComponentMouseGesture()
 	t.flashes.Dispose()
 	if !t.altScreenActive {
 		return
@@ -588,16 +666,18 @@ func (t *TuiAltScreen) scrollToPrompt(direction int) {
 	}
 }
 
-func (t *TuiAltScreen) openSearch() {
+func (t *TuiAltScreen) toggleSearch() {
 	if t.activeSearch != nil {
-		if t.activeSearch.overlay != nil {
-			t.activeSearch.overlay.Focus()
-		}
+		t.closeSearch()
 		return
 	}
-	component := NewAltScreenSearchComponent(func(query string) { t.updateSearchQuery(query) })
+	component := NewAltScreenSearchComponent(
+		func(query string) { t.updateSearchQuery(query) },
+		t.searchNavigationButtonStyle,
+	)
 	search := &altActiveSearch{
 		component:     component,
+		index:         NewAltScreenSearchIndex(),
 		query:         "",
 		matches:       nil,
 		selectedIndex: -1,
@@ -608,9 +688,45 @@ func (t *TuiAltScreen) openSearch() {
 	search.overlay = t.ShowOverlay(component, &OverlayOptions{
 		Anchor:   OverlayAnchorTopRight,
 		Width:    "40%",
-		MinWidth: 24,
+		MinWidth: 32,
 		Margin:   1,
 	})
+}
+
+// getSearchNavigationDirectionAt resolves which search navigation button
+// covers the screen cell (x, y) (pi: getSearchNavigationDirectionAt).
+// Returns -1 | 1 | 0 (none).
+func (t *TuiAltScreen) getSearchNavigationDirectionAt(x int, y int) int {
+	search := t.activeSearch
+	if search == nil || search.overlay == nil {
+		return 0
+	}
+	bounds := search.overlay.GetBounds()
+	if bounds == nil {
+		return 0
+	}
+	if x < bounds.Col || x >= bounds.Col+bounds.Width || y < bounds.Row || y >= bounds.Row+bounds.Height {
+		return 0
+	}
+	return search.component.GetNavigationDirectionAt(y-bounds.Row, x-bounds.Col)
+}
+
+// handleSearchMouseEvent handles clicks on the search navigation buttons and
+// hover updates (pi: handleSearchMouseEvent). Returns true when consumed.
+func (t *TuiAltScreen) handleSearchMouseEvent(event altSgrMouseEvent) bool {
+	search := t.activeSearch
+	if search == nil {
+		return false
+	}
+	direction := t.getSearchNavigationDirectionAt(event.x, event.y)
+	if search.component.SetHoveredNavigationDirection(direction) {
+		t.requestRenderLocked(false)
+	}
+	if direction == 0 || event.release || (event.button&32) != 0 || (event.button&3) != 0 {
+		return false
+	}
+	t.navigateSearch(direction)
+	return true
 }
 
 func (t *TuiAltScreen) closeSearch() {
@@ -678,30 +794,46 @@ func (t *TuiAltScreen) refreshSearch(layout *LayoutFrame) bool {
 	}
 
 	shouldRevealSelection := search.selectionMode != altSearchModeRetain
-	matches := FindAltScreenSearchMatches(lines, search.query)
+	result := search.index.Search(lines, search.query)
+	matches := result.Matches
+	search.matches = matches
+	if !result.Changed && search.selectionMode == altSearchModeRetain {
+		return false
+	}
+
 	exactIndex := -1
-	if search.selectedKey != "" {
-		for i, match := range matches {
-			if GetAltScreenSearchMatchKey(match) == search.selectedKey {
-				exactIndex = i
-				break
+	if result.Changed {
+		if search.selectedKey != "" {
+			for i, match := range matches {
+				if GetAltScreenSearchMatchKey(match) == search.selectedKey {
+					exactIndex = i
+					break
+				}
 			}
 		}
+	} else {
+		exactIndex = search.selectedIndex
 	}
 	selectedIndex := -1
 	if len(matches) > 0 {
 		if search.selectionMode == altSearchModeQuery {
-			for i, match := range matches {
+			// Binary search for the first match at or below the anchor row.
+			low, high := 0, len(matches)
+			for low < high {
+				middle := low + (high-low)/2
 				row := 0
-				if len(match.Segments) > 0 {
-					row = match.Segments[0].Row
+				if len(matches[middle].Segments) > 0 {
+					row = matches[middle].Segments[0].Row
 				}
-				if row >= search.anchorRow {
-					selectedIndex = i
-					break
+				if row < search.anchorRow {
+					low = middle + 1
+				} else {
+					high = middle
 				}
 			}
-			if selectedIndex < 0 {
+			if low < len(matches) {
+				selectedIndex = low
+			} else {
 				selectedIndex = 0
 			}
 		} else if search.selectionMode == altSearchModeNext {
@@ -735,7 +867,6 @@ func (t *TuiAltScreen) refreshSearch(layout *LayoutFrame) bool {
 		}
 	}
 
-	search.matches = matches
 	search.selectedIndex = selectedIndex
 	if selectedIndex >= 0 {
 		search.selectedKey = GetAltScreenSearchMatchKey(matches[selectedIndex])
@@ -790,6 +921,15 @@ func (t *TuiAltScreen) shouldDeferViewportInputToOverlay() bool {
 		t.focusedComponent == t.activeSearch.component)
 }
 
+// clearComponentMouseGesture resets the component-level mouse gesture state
+// (pi: clearComponentMouseGesture).
+func (t *TuiAltScreen) clearComponentMouseGesture() {
+	t.mouseCapture = nil
+	t.mousePressTarget = nil
+	t.mousePressPoint = nil
+	t.mousePressMoved = false
+}
+
 func (t *TuiAltScreen) handleViewportInput(data string) *TuiInputListenerResult {
 	if data == focusOut {
 		hadActiveSelection := t.selectionPressActive
@@ -797,9 +937,14 @@ func (t *TuiAltScreen) handleViewportInput(data string) *TuiInputListenerResult 
 		t.selectionPressActive = false
 		t.stopSelectionAutoScroll()
 		t.stopScrollbarHover()
+		if t.activeSearch != nil && t.activeSearch.component.SetHoveredNavigationDirection(0) {
+			t.requestRenderLocked(false)
+		}
 		t.stopScrollbarDrag()
 		t.pressedUrl = ""
 		t.selectionDragged = false
+		t.clearComponentMouseGesture()
+		t.lastComponentClick = nil
 		if hadActiveSelection {
 			t.selectionAnchor = nil
 			t.selectionFocus = nil
@@ -817,6 +962,17 @@ func (t *TuiAltScreen) handleViewportInput(data string) *TuiInputListenerResult 
 	}
 
 	if wheelEvent, ok := t.parseWheelEvent(data); ok {
+		event := t.createMouseEvent(MouseEventTypeWheel, wheelEvent.button, wheelEvent.x, wheelEvent.y, intPtr(wheelEvent.direction*t.getWheelScrollLines(wheelEvent.button)), nil)
+		hit, result := t.dispatchMouseToOverlayLocked(event)
+		if !hit {
+			result = t.dispatchMouseToLayoutLocked(event)
+		}
+		if result != nil {
+			if t.applyMouseDispatchResult(event, result) {
+				t.requestRenderLocked(false)
+			}
+			return &TuiInputListenerResult{Consume: true}
+		}
 		if t.shouldDeferViewportInputToOverlay() {
 			return nil
 		}
@@ -824,16 +980,7 @@ func (t *TuiAltScreen) handleViewportInput(data string) *TuiInputListenerResult 
 		return &TuiInputListenerResult{Consume: true}
 	}
 	if mouseEvent, ok := t.parseSgrMouseEvent(data); ok {
-		if t.handleRightClickPaste(mouseEvent) {
-			return &TuiInputListenerResult{Consume: true}
-		}
-		handled := t.handleScrollbarMouseEvent(mouseEvent)
-		if t.scrollbarDrag == nil {
-			t.updateScrollbarHover(mouseEvent.x, mouseEvent.y)
-		}
-		if !handled {
-			t.handleSelectionMouseEvent(mouseEvent)
-		}
+		t.handleMouseEvent(mouseEvent)
 		return &TuiInputListenerResult{Consume: true}
 	}
 	if t.isMouseSequence(data) {
@@ -844,7 +991,7 @@ func (t *TuiAltScreen) handleViewportInput(data string) *TuiInputListenerResult 
 	isRelease := IsKeyRelease(data)
 	if keybindings.Matches(data, "tui.altScreen.search") {
 		if !isRelease {
-			t.openSearch()
+			t.toggleSearch()
 		}
 		return &TuiInputListenerResult{Consume: true}
 	}
@@ -935,6 +1082,255 @@ func (t *TuiAltScreen) handleViewportInput(data string) *TuiInputListenerResult 
 	return nil
 }
 
+// decodeMouseButton maps the SGR button code bits 0-1 to the normalized
+// button (pi: decodeMouseButton).
+func (t *TuiAltScreen) decodeMouseButton(button int) TuiMouseButton {
+	switch button & 3 {
+	case 0:
+		return MouseButtonLeft
+	case 1:
+		return MouseButtonMiddle
+	case 2:
+		return MouseButtonRight
+	default:
+		return MouseButtonNone
+	}
+}
+
+// createMouseEvent builds a normalized screen-space mouse event from a raw
+// SGR event (pi: createMouseEvent). wheelDelta/clickCount may be nil.
+func (t *TuiAltScreen) createMouseEvent(eventType TuiMouseEventType, button int, x int, y int, wheelDelta *int, clickCount *int) *TuiMouseEvent {
+	event := &TuiMouseEvent{
+		Type:    eventType,
+		Button:  MouseButtonNone,
+		X:       x,
+		Y:       y,
+		ScreenX: x,
+		ScreenY: y,
+		Width:   maxInt(1, t.terminal.Columns()),
+		Height:  maxInt(1, t.terminal.Rows()),
+		Shift:   (button & 4) != 0,
+		Alt:     (button & 8) != 0,
+		Ctrl:    (button & 16) != 0,
+	}
+	if eventType != MouseEventTypeWheel {
+		event.Button = t.decodeMouseButton(button)
+	}
+	event.WheelDelta = wheelDelta
+	event.ClickCount = clickCount
+	return event
+}
+
+// dispatchMouseToLayoutLocked dispatches the event to the deepest layout box
+// under the pointer, outermost-layer first (pi: dispatchMouseToLayout).
+// Called with the TUI lock held.
+func (t *TuiAltScreen) dispatchMouseToLayoutLocked(event *TuiMouseEvent) *TuiMouseEventResult {
+	if t.currentLayout == nil {
+		return nil
+	}
+	visited := map[Component]bool{}
+	boxes := GetLayoutBoxesAt(t.currentLayout, event.ScreenX, event.ScreenY)
+	for _, box := range boxes {
+		if visited[box.Component] {
+			continue
+		}
+		// Skip plain layout containers: every current LayoutComponent
+		// (Stack/VStack/HStack/ScrollView) relies on Container's promoted
+		// default mouse dispatch, which assumes full-width stacked children
+		// and is wrong inside an absolutely-positioned layout (pi:
+		// handleMouse === Container.prototype.handleMouse). Go method values
+		// are not comparable and neither reflect route expresses the TS
+		// identity check (Value.Method...Pointer collapses to one shared
+		// stub; Type.Method.Func.Pointer wraps promoted methods), so the
+		// layout-node protocol is the gate itself. A LayoutComponent that
+		// performs its own layout mouse dispatch must opt in explicitly
+		// (e.g. a LayoutMouseHandler capability interface) instead of this
+		// gate.
+		if GetLayoutNode(box.Component) != nil {
+			continue
+		}
+		visited[box.Component] = true
+		boxEvent := *event
+		boxEvent.X = event.ScreenX - box.Rect.X
+		boxEvent.Y = event.ScreenY - box.Rect.Y
+		boxEvent.Width = box.Rect.Width
+		boxEvent.Height = box.Rect.Height
+		result := DispatchMouseEvent(box.Component, &boxEvent)
+		if result != nil {
+			return result
+		}
+	}
+	return nil
+}
+
+// applyMouseDispatchResult applies focus/capture/render semantics of a
+// dispatch result and reports whether a render is requested (pi:
+// applyMouseDispatchResult).
+func (t *TuiAltScreen) applyMouseDispatchResult(event *TuiMouseEvent, result *TuiMouseEventResult) bool {
+	focusCandidate := result.Target.Component
+	if result.FocusTarget != nil {
+		focusCandidate = result.FocusTarget
+	}
+	focusTarget := t.resolveMouseFocusTargetLocked(focusCandidate)
+	focusChanged := result.Focus && t.focusedComponent != focusTarget
+	if result.Focus {
+		t.setFocusInternalLocked(focusTarget, true)
+	}
+	if result.Capture {
+		t.mouseCapture = result.Target
+	}
+	if result.Render != nil {
+		return *result.Render
+	}
+	return focusChanged ||
+		event.Type == MouseEventTypePress ||
+		event.Type == MouseEventTypeClick ||
+		event.Type == MouseEventTypeDrag ||
+		event.Type == MouseEventTypeWheel
+}
+
+// dispatchMouseToTarget re-dispatches an event to a retained target (pi:
+// dispatchMouseToTarget).
+func (t *TuiAltScreen) dispatchMouseToTarget(event *TuiMouseEvent, target *TuiMouseDispatchTarget) *TuiMouseEventResult {
+	return DispatchMouseEvent(target.Component, RetargetMouseEvent(event, target))
+}
+
+// getComponentClickCount counts consecutive clicks on the same component cell
+// for double/triple click gestures (pi: getComponentClickCount).
+func (t *TuiAltScreen) getComponentClickCount(target *TuiMouseDispatchTarget, x int, y int) int {
+	now := time.Now().UnixMilli()
+	previous := t.lastComponentClick
+	count := 1
+	if previous != nil &&
+		now-previous.timestamp <= doubleClickIntervalMs &&
+		previous.component == target.Component &&
+		previous.x == x &&
+		previous.y == y {
+		count = (previous.count % 3) + 1
+	}
+	t.lastComponentClick = &altComponentClick{timestamp: now, count: count, component: target.Component, x: x, y: y}
+	return count
+}
+
+// clearTextSelection clears the screen-level text selection (pi:
+// clearTextSelection).
+func (t *TuiAltScreen) clearTextSelection() {
+	t.stopSelectionAutoScroll()
+	t.selectionPressActive = false
+	t.selectionAnchor = nil
+	t.selectionFocus = nil
+	t.selectionGranularity = altGranularityCharacter
+	t.selectionInitialRange = nil
+	t.pressedUrl = ""
+	t.selectionDragged = false
+}
+
+// handleMouseEvent is the top-level component-mouse state machine (pi:
+// handleMouseEvent). Called with the TUI lock held.
+func (t *TuiAltScreen) handleMouseEvent(raw altSgrMouseEvent) {
+	isMotion := (raw.button & 32) != 0
+	eventType := MouseEventTypePress
+	if raw.release {
+		eventType = MouseEventTypeRelease
+	} else if isMotion {
+		if t.decodeMouseButton(raw.button) == MouseButtonNone {
+			eventType = MouseEventTypeMove
+		} else {
+			eventType = MouseEventTypeDrag
+		}
+	}
+	event := t.createMouseEvent(eventType, raw.button, raw.x, raw.y, nil, nil)
+
+	if t.mouseCapture != nil || t.mousePressTarget != nil {
+		target := t.mousePressTarget
+		if t.mouseCapture != nil {
+			target = t.mouseCapture
+		}
+		if t.mousePressPoint != nil && (raw.x != t.mousePressPoint.x || raw.y != t.mousePressPoint.y) {
+			t.mousePressMoved = true
+			t.lastComponentClick = nil
+		}
+		render := false
+		targetResult := t.dispatchMouseToTarget(event, target)
+		if targetResult != nil {
+			render = t.applyMouseDispatchResult(event, targetResult)
+		}
+		if raw.release {
+			if !t.mousePressMoved && t.mousePressPoint != nil &&
+				t.mousePressPoint.x == raw.x && t.mousePressPoint.y == raw.y {
+				clickEvent := t.createMouseEvent(MouseEventTypeClick, raw.button, raw.x, raw.y, nil,
+					intPtr(t.getComponentClickCount(target, raw.x, raw.y)))
+				clickResult := t.dispatchMouseToTarget(clickEvent, target)
+				if clickResult != nil {
+					render = t.applyMouseDispatchResult(clickEvent, clickResult) || render
+				}
+			}
+			t.clearComponentMouseGesture()
+		}
+		if render {
+			t.requestRenderLocked(false)
+		}
+		return
+	}
+
+	if t.handleSearchMouseEvent(raw) {
+		return
+	}
+
+	hit, overlayResult := t.dispatchMouseToOverlayLocked(event)
+	if !hit {
+		if t.handleScrollToEndIndicatorMouseEvent(raw) {
+			return
+		}
+		scrollbarHandled := t.handleScrollbarMouseEvent(raw)
+		if t.scrollbarDrag == nil {
+			t.updateScrollbarHover(raw.x, raw.y)
+		}
+		if scrollbarHandled {
+			return
+		}
+	} else {
+		t.stopScrollbarHover()
+	}
+
+	result := overlayResult
+	if !hit {
+		result = t.dispatchMouseToLayoutLocked(event)
+	}
+	if result != nil {
+		render := t.applyMouseDispatchResult(event, result)
+		if eventType == MouseEventTypePress {
+			t.clearTextSelection()
+			t.mousePressTarget = result.Target
+			t.mousePressPoint = &altPoint{x: raw.x, y: raw.y}
+			t.mousePressMoved = false
+		}
+		if render {
+			t.requestRenderLocked(false)
+		}
+		return
+	}
+
+	if t.handleRightClickPaste(raw) {
+		return
+	}
+	t.handleSelectionMouseEvent(raw)
+}
+
+// handleScrollToEndIndicatorMouseEvent activates the jump-to-end indicator on
+// press (pi: handleScrollToEndIndicatorMouseEvent).
+func (t *TuiAltScreen) handleScrollToEndIndicatorMouseEvent(event altSgrMouseEvent) bool {
+	rect := t.scrollToEndIndicatorRect
+	if rect == nil || event.release || (event.button&32) != 0 || (event.button&3) != 0 {
+		return false
+	}
+	if event.y != rect.row || event.x < rect.column || event.x >= rect.column+rect.width {
+		return false
+	}
+	t.scrollToBottomLocked()
+	return true
+}
+
 var sgrWheelRegex = regexp.MustCompile(`^\x1b\[<(\d+);(\d+);(\d+)[Mm]$`)
 var sgrMouseRegex = regexp.MustCompile(`^\x1b\[<(\d+);(\d+);(\d+)([Mm])$`)
 
@@ -954,7 +1350,7 @@ func (t *TuiAltScreen) parseWheelEvent(data string) (altWheelEvent, bool) {
 		if direction == 0 {
 			dir = -1
 		}
-		return altWheelEvent{direction: dir, x: x - 1, y: y - 1}, true
+		return altWheelEvent{direction: dir, x: x - 1, y: y - 1, button: button}, true
 	}
 	if len(data) == 6 && strings.HasPrefix(data, "\x1b[M") {
 		button := int(data[3]) - 32
@@ -969,13 +1365,23 @@ func (t *TuiAltScreen) parseWheelEvent(data string) (altWheelEvent, bool) {
 		if direction == 0 {
 			dir = -1
 		}
-		return altWheelEvent{direction: dir, x: int(data[4]) - 33, y: int(data[5]) - 33}, true
+		return altWheelEvent{direction: dir, x: int(data[4]) - 33, y: int(data[5]) - 33, button: button}, true
 	}
 	return altWheelEvent{}, false
 }
 
+// getWheelScrollLines returns the wheel step, scaled 5x while Alt is held
+// (pi: getWheelScrollLines; SGR mouse button codes use bit 3 (value 8) for
+// the Alt modifier).
+func (t *TuiAltScreen) getWheelScrollLines(button int) int {
+	if (button & 8) != 0 {
+		return t.wheelScrollLines * altWheelScrollMultiplier
+	}
+	return t.wheelScrollLines
+}
+
 func (t *TuiAltScreen) routeWheel(event altWheelEvent) {
-	remaining := event.direction * t.wheelScrollLines
+	remaining := event.direction * t.getWheelScrollLines(event.button)
 	seen := map[*ScrollView]bool{}
 	var scrollViews []*ScrollView
 	if t.currentLayout != nil {
@@ -1022,7 +1428,7 @@ func (t *TuiAltScreen) handleRightClickPaste(event altSgrMouseEvent) bool {
 	return true
 }
 
-func (t *TuiAltScreen) getScrollbarTargetAt(x int, y int) *altScrollbarTarget {
+func (t *TuiAltScreen) getScrollbarTargetAt(x int, y int, includeHiddenAuto bool) *altScrollbarTarget {
 	if t.hasOverlayLocked() || t.currentLayout == nil {
 		return nil
 	}
@@ -1030,12 +1436,12 @@ func (t *TuiAltScreen) getScrollbarTargetAt(x int, y int) *altScrollbarTarget {
 		box := GetScrollViewBox(t.currentLayout, scrollView)
 		var geometry *ScrollbarGeometry
 		if box != nil {
-			geometry = GetScrollbarGeometry(box)
+			geometry = GetScrollbarGeometry(box, includeHiddenAuto)
 		}
 		if geometry != nil &&
 			x == geometry.Column &&
-			y >= geometry.ThumbTop &&
-			y < geometry.ThumbTop+geometry.ThumbHeight {
+			y >= geometry.TrackTop &&
+			y < geometry.TrackTop+geometry.TrackHeight {
 			return &altScrollbarTarget{scrollView: scrollView, geometry: geometry}
 		}
 	}
@@ -1057,7 +1463,7 @@ func (t *TuiAltScreen) setScrollbarHover(scrollView *ScrollView) {
 
 func (t *TuiAltScreen) updateScrollbarHover(x int, y int) {
 	var target *ScrollView
-	if hit := t.getScrollbarTargetAt(x, y); hit != nil {
+	if hit := t.getScrollbarTargetAt(x, y, true); hit != nil {
 		target = hit.scrollView
 	}
 	t.setScrollbarHover(target)
@@ -1065,6 +1471,18 @@ func (t *TuiAltScreen) updateScrollbarHover(x int, y int) {
 
 func (t *TuiAltScreen) stopScrollbarHover() {
 	t.setScrollbarHover(nil)
+}
+
+// scrollScrollbarToPointer scrolls the view so the thumb tracks the pointer
+// (pi: scrollScrollbarToPointer).
+func (t *TuiAltScreen) scrollScrollbarToPointer(scrollView *ScrollView, geometry *ScrollbarGeometry, pointerY int, grabOffset int) {
+	maxThumbOffset := geometry.TrackHeight - geometry.ThumbHeight
+	thumbOffset := clampInt(pointerY-geometry.TrackTop-grabOffset, 0, maxThumbOffset)
+	scrollTop := 0
+	if maxThumbOffset != 0 {
+		scrollTop = int(math.Round(float64(thumbOffset) / float64(maxThumbOffset) * float64(geometry.MaxScrollTop)))
+	}
+	scrollView.ScrollTo(scrollTop, nil)
 }
 
 func (t *TuiAltScreen) handleScrollbarMouseEvent(event altSgrMouseEvent) bool {
@@ -1082,13 +1500,7 @@ func (t *TuiAltScreen) handleScrollbarMouseEvent(event altSgrMouseEvent) bool {
 			geometry = GetScrollbarGeometry(box)
 		}
 		if geometry != nil {
-			maxThumbOffset := geometry.TrackHeight - geometry.ThumbHeight
-			thumbOffset := clampInt(event.y-geometry.TrackTop-t.scrollbarDrag.grabOffset, 0, maxThumbOffset)
-			scrollTop := 0
-			if maxThumbOffset != 0 {
-				scrollTop = int(math.Round(float64(thumbOffset) / float64(maxThumbOffset) * float64(geometry.MaxScrollTop)))
-			}
-			t.scrollbarDrag.scrollView.ScrollTo(scrollTop, nil)
+			t.scrollScrollbarToPointer(t.scrollbarDrag.scrollView, geometry, event.y, t.scrollbarDrag.grabOffset)
 		}
 		return true
 	}
@@ -1096,7 +1508,7 @@ func (t *TuiAltScreen) handleScrollbarMouseEvent(event altSgrMouseEvent) bool {
 	if event.release || (event.button&32) != 0 || (event.button&3) != 0 {
 		return false
 	}
-	target := t.getScrollbarTargetAt(event.x, event.y)
+	target := t.getScrollbarTargetAt(event.x, event.y, false)
 	if target == nil {
 		return false
 	}
@@ -1110,9 +1522,16 @@ func (t *TuiAltScreen) handleScrollbarMouseEvent(event altSgrMouseEvent) bool {
 	t.pressedUrl = ""
 	t.selectionDragged = false
 	t.setScrollbarHover(target.scrollView)
+	onThumb := event.y >= target.geometry.ThumbTop && event.y < target.geometry.ThumbTop+target.geometry.ThumbHeight
+	grabOffset := int(math.Floor(float64(target.geometry.ThumbHeight) / 2))
+	if onThumb {
+		grabOffset = event.y - target.geometry.ThumbTop
+	} else {
+		t.scrollScrollbarToPointer(target.scrollView, target.geometry, event.y, grabOffset)
+	}
 	t.scrollbarDrag = &altScrollbarDrag{
 		scrollView: target.scrollView,
-		grabOffset: event.y - target.geometry.ThumbTop,
+		grabOffset: grabOffset,
 	}
 	return true
 }
@@ -1176,19 +1595,53 @@ func (t *TuiAltScreen) getSelectionSourceLine(point altSelectionPoint) string {
 
 func (t *TuiAltScreen) getWordSelection(point altSelectionPoint) *altSelectionRange {
 	line := StripTerminalSequences(t.getSelectionSourceLine(point))
+	type wordSegment struct {
+		start      int
+		end        int
+		selectable bool
+		joiner     bool
+	}
+	var segments []wordSegment
 	start := 0
-	segmenter := GetWordSegmenter()
-	for _, segment := range segmenter.Segments(line) {
-		end := start + VisibleWidth(segment)
-		if point.col >= start && point.col < end {
-			return &altSelectionRange{
-				start: altSelectionPoint{row: point.row, col: start, scrollView: point.scrollView, boundary: point.boundary},
-				end:   altSelectionPoint{row: point.row, col: end, scrollView: point.scrollView, boundary: true},
-			}
-		}
+	// wordSegmentData provides isWordLike (pi: segment.isWordLike) for the
+	// joiner logic below.
+	for _, segment := range wordSegmentData(line) {
+		end := start + VisibleWidth(segment.Segment)
+		joiner := terminalWordSelectionJoiners[segment.Segment]
+		segments = append(segments, wordSegment{
+			start:      start,
+			end:        end,
+			selectable: segment.IsWordLike || joiner,
+			joiner:     joiner,
+		})
 		start = end
 	}
-	return nil
+	clickedSegmentIndex := -1
+	for index, segment := range segments {
+		if point.col >= segment.start && point.col < segment.end {
+			clickedSegmentIndex = index
+			break
+		}
+	}
+	if clickedSegmentIndex < 0 {
+		return nil
+	}
+
+	canJoin := func(left wordSegment, right wordSegment) bool {
+		return left.selectable && right.selectable && (left.joiner || right.joiner)
+	}
+	selectionStart := segments[clickedSegmentIndex].start
+	selectionEnd := segments[clickedSegmentIndex].end
+	for index := clickedSegmentIndex; index > 0 && canJoin(segments[index-1], segments[index]); index-- {
+		selectionStart = segments[index-1].start
+	}
+	for index := clickedSegmentIndex; index < len(segments)-1 && canJoin(segments[index], segments[index+1]); index++ {
+		selectionEnd = segments[index+1].end
+	}
+	return &altSelectionRange{
+		start: altSelectionPoint{row: point.row, col: selectionStart, scrollView: point.scrollView, boundary: point.boundary},
+		end:   altSelectionPoint{row: point.row, col: selectionEnd, scrollView: point.scrollView, boundary: true},
+	}
 }
 
 func (t *TuiAltScreen) getLineSelection(point altSelectionPoint) altSelectionRange {
@@ -1353,11 +1806,12 @@ func (t *TuiAltScreen) handleSelectionMouseEvent(event altSgrMouseEvent) {
 			return
 		}
 		t.updateSelectionFocus(point)
-		clickedUrl := ""
-		if !t.selectionDragged &&
+		isClick := !t.selectionDragged &&
 			t.selectionAnchor.scrollView == point.scrollView &&
 			t.selectionAnchor.row == point.row &&
-			t.selectionAnchor.col == point.col {
+			t.selectionAnchor.col == point.col
+		clickedUrl := ""
+		if isClick {
 			clickedUrl = t.pressedUrl
 		}
 		t.pressedUrl = ""
@@ -1371,7 +1825,28 @@ func (t *TuiAltScreen) handleSelectionMouseEvent(event altSgrMouseEvent) {
 			t.requestRenderLocked(false)
 			return
 		}
-		t.copySelectionToClipboard()
+		if isClick {
+			clickCount := 1
+			if t.lastClick != nil {
+				clickCount = t.lastClick.count
+			}
+			clickEvent := t.createMouseEvent(MouseEventTypeClick, event.button, event.x, event.y, nil, intPtr(clickCount))
+			hit, overlayResult := t.dispatchMouseToOverlayLocked(clickEvent)
+			if !hit {
+				overlayResult = t.dispatchMouseToLayoutLocked(clickEvent)
+			}
+			if overlayResult != nil {
+				render := t.applyMouseDispatchResult(clickEvent, overlayResult)
+				t.clearTextSelection()
+				if render {
+					t.requestRenderLocked(false)
+				}
+				return
+			}
+		}
+		if t.copyOnSelect {
+			t.copySelectionToClipboard()
+		}
 		t.requestRenderLocked(false)
 		return
 	}
@@ -1495,19 +1970,21 @@ func (t *TuiAltScreen) getSelectionColumns(
 	return maxInt(minColumn, start), minInt(maxColumn, end)
 }
 
-func (t *TuiAltScreen) copySelectionToClipboard() {
+// getActiveSelectionText returns the selected text, or "" when no non-empty
+// selection exists (pi: getActiveSelectionText).
+func (t *TuiAltScreen) getActiveSelectionText() string {
 	selection := t.getSelectionBounds()
 	if selection == nil {
-		return
+		return ""
 	}
 	var sourceLines []string
 	if selection.start.scrollView != nil {
 		if t.currentLayout == nil {
-			return
+			return ""
 		}
 		box := GetScrollViewBox(t.currentLayout, selection.start.scrollView)
 		if box == nil || box.ScrollContentLines == nil {
-			return
+			return ""
 		}
 		sourceLines = box.ScrollContentLines
 	} else {
@@ -1523,10 +2000,12 @@ func (t *TuiAltScreen) copySelectionToClipboard() {
 		text := StripTerminalSequences(SliceByColumn(line, start, maxInt(0, end-start), true))
 		lines = append(lines, jsTrimEnd(text))
 	}
-	text := strings.Join(lines, "\n")
-	if len(text) == 0 {
-		return
-	}
+	return strings.Join(lines, "\n")
+}
+
+// copyTextToClipboard copies text via the injected clipboard path or OSC 52
+// and flashes the result (pi: copyTextToClipboard).
+func (t *TuiAltScreen) copyTextToClipboard(text string) bool {
 	// Prefer an injected clipboard implementation (native clipboard + platform tools with a
 	// verified success path) when the host app provides one. A bare OSC 52 write can show
 	// "Copied!" while leaving the system clipboard untouched (e.g. macOS Terminal.app, tmux
@@ -1538,10 +2017,56 @@ func (t *TuiAltScreen) copySelectionToClipboard() {
 		} else {
 			t.flashLocked("Copy failed")
 		}
-		return
+		return ok
 	}
 	t.terminal.Write("\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte(text)) + "\x07")
 	t.flashLocked("Copied!")
+	return true
+}
+
+// copySelectionToClipboard copies the active selection (pi:
+// copySelectionToClipboard → boolean).
+func (t *TuiAltScreen) copySelectionToClipboard() bool {
+	text := t.getActiveSelectionText()
+	if text == "" {
+		return false
+	}
+	return t.copyTextToClipboard(text)
+}
+
+// GetCopyOnSelect reports whether selection copies on release (pi:
+// getCopyOnSelect).
+func (t *TuiAltScreen) GetCopyOnSelect() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.copyOnSelect
+}
+
+// SetCopyOnSelect toggles copy-on-select (pi: setCopyOnSelect).
+func (t *TuiAltScreen) SetCopyOnSelect(enabled bool) {
+	t.lock(func() { t.copyOnSelect = enabled })
+}
+
+// HasActiveSelection reports whether a non-empty text selection exists (pi:
+// hasActiveSelection).
+func (t *TuiAltScreen) HasActiveSelection() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.getActiveSelectionText() != ""
+}
+
+// CopyActiveSelectionToClipboard copies the active selection, if any (pi:
+// copyActiveSelectionToClipboard). Reports success.
+func (t *TuiAltScreen) CopyActiveSelectionToClipboard() bool {
+	var ok bool
+	t.lock(func() {
+		text := t.getActiveSelectionText()
+		if text == "" {
+			return
+		}
+		ok = t.copyTextToClipboard(text)
+	})
+	return ok
 }
 
 func (t *TuiAltScreen) applySearchTextHighlight(text string, current bool) string {
@@ -1597,8 +2122,30 @@ func (t *TuiAltScreen) applySearchHighlights(screen []string, layout *LayoutFram
 	if scrollbarColumn < 0 {
 		maxColumn = minInt(minInt(t.terminal.Columns(), box.Rect.X+box.Rect.Width), box.Clip.X+box.Clip.Width)
 	}
-	for matchIndex := range search.matches {
-		for _, segment := range search.matches[matchIndex].Segments {
+	minContentRow := scrollView.ScrollTop() + minRow - box.Rect.Y
+	maxContentRow := scrollView.ScrollTop() + maxRow - box.Rect.Y - 1
+	// Binary search for the first match whose last segment row reaches the
+	// visible window (v0.85.1).
+	low, high := 0, len(search.matches)
+	for low < high {
+		middle := low + (high-low)/2
+		match := search.matches[middle]
+		lastRow := -1
+		if len(match.Segments) > 0 {
+			lastRow = match.Segments[len(match.Segments)-1].Row
+		}
+		if lastRow < minContentRow {
+			low = middle + 1
+		} else {
+			high = middle
+		}
+	}
+	for matchIndex := low; matchIndex < len(search.matches); matchIndex++ {
+		match := search.matches[matchIndex]
+		if len(match.Segments) > 0 && match.Segments[0].Row > maxContentRow {
+			break
+		}
+		for _, segment := range match.Segments {
 			row := box.Rect.Y + segment.Row - scrollView.ScrollTop()
 			if row < minRow || row >= maxRow {
 				continue
@@ -1731,6 +2278,55 @@ func (t *TuiAltScreen) isMouseSequence(data string) bool {
 	return len(data) == 6 && strings.HasPrefix(data, "\x1b[M")
 }
 
+// compositeScrollToEndIndicator composites the clickable jump-to-end label
+// on the last row of the follow-end primary scroll view while it is scrolled
+// away from the end (pi: compositeScrollToEndIndicator).
+func (t *TuiAltScreen) compositeScrollToEndIndicator(screen []string, layout *LayoutFrame, width int) []string {
+	t.scrollToEndIndicatorRect = nil
+	scrollView := layout.PrimaryScrollView
+	if scrollView == nil {
+		scrollView = t.implicitScrollView
+	}
+	if t.scrollToEndIndicator == nil || !scrollView.FollowEnd() || scrollView.IsFollowingEnd() {
+		return screen
+	}
+	box := GetScrollViewBox(layout, scrollView)
+	clip := (*LayoutRect)(nil)
+	if box != nil {
+		clip = &box.Clip
+	}
+	if clip == nil || clip.Width <= 0 || clip.Height <= 0 {
+		return screen
+	}
+	row := clip.Y + clip.Height - 1
+	if row >= len(screen) || IsImageLine(sliceOrEmpty(screen, row)) {
+		return screen
+	}
+	scrollbarColumn := -1
+	if box != nil {
+		if geometry := GetScrollbarGeometry(box); geometry != nil {
+			scrollbarColumn = geometry.Column
+		}
+	}
+	availableWidth := 0
+	if scrollbarColumn >= 0 {
+		availableWidth = maxInt(0, scrollbarColumn-clip.X)
+	} else {
+		availableWidth = maxInt(0, clip.X+clip.Width-clip.X)
+	}
+	text := TruncateToWidth(t.scrollToEndIndicator(), availableWidth, "", false)
+	textWidth := VisibleWidth(text)
+	if textWidth == 0 {
+		return screen
+	}
+	column := clip.X + (availableWidth-textWidth)/2
+	result := make([]string, len(screen))
+	copy(result, screen)
+	result[row] = CompositeTuiLine(sliceOrEmpty(result, row), text, column, textWidth, width)
+	t.scrollToEndIndicatorRect = &altScrollToEndIndicatorRect{row: row, column: column, width: textWidth}
+	return result
+}
+
 func (t *TuiAltScreen) compositeFlashes(screen []string, width int, height int) []string {
 	flashLines := t.flashes.Render(width)
 	if len(flashLines) > height {
@@ -1778,6 +2374,7 @@ func (t *TuiAltScreen) doRender() error {
 		screen[i] = osc133ZonePrefixRegex.ReplaceAllString(line, "")
 	}
 	screen = t.applySearchHighlights(screen, nextLayout)
+	screen = t.compositeScrollToEndIndicator(screen, nextLayout, width)
 	screen = t.compositeOverlays(screen, width, height)
 	if len(screen) > height {
 		screen = screen[len(screen)-height:]

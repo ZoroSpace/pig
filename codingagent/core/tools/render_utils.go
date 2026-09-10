@@ -172,3 +172,37 @@ func RenderToolPath(rawPath *string, theme UITheme, cwd string, emptyFallback st
 	}
 	return LinkPath(theme.Fg("accent", ShortenPath(value)), value, cwd)
 }
+
+// rawPathFromArgs is str(args?.file_path ?? args?.path) over raw args; nil =
+// null. Shared by the edit/read/write/ls renderers (pig helper; pi inlines
+// the expression per renderer).
+func rawPathFromArgs(args any) *string {
+	m, ok := args.(map[string]any)
+	if !ok {
+		return nil
+	}
+	value, has := m["path"]
+	if filePathValue, is := m["file_path"]; is && filePathValue != nil {
+		// pi: args?.file_path ?? args?.path (?? skips null/undefined)
+		value, has = filePathValue, true
+	}
+	if !has {
+		return nil
+	}
+	if s, isString := value.(string); isString {
+		return &s
+	}
+	if value == nil {
+		empty := ""
+		return &empty
+	}
+	return nil
+}
+
+// sameStringPtr compares optional keys (pi: !== on string | undefined).
+func sameStringPtr(a *string, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}

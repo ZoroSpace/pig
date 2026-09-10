@@ -342,12 +342,20 @@ func buildDebouncePattern(triggerCharacters []string) *regexp.Regexp {
 	return regexp.MustCompile(`(?:^|[ \t])(?:@(?:"[^"]*|[^\s]*)|[` + strings.Join(escapedWithoutAt, "") + `][^\s]*)$`)
 }
 
-// createScrollBorder renders a scroll indicator line.
+// createScrollBorder renders a scroll indicator line (v0.85.1: centered
+// label when the width admits it, legacy left-aligned indicator otherwise).
 func createScrollBorder(direction string, hiddenLineCount int, width int) string {
 	availableWidth := width
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
+	label := fmt.Sprintf(" %s %d more ", direction, hiddenLineCount)
+	labelWidth := VisibleWidth(label)
+	if labelWidth+2 <= availableWidth {
+		leftWidth := (availableWidth - labelWidth) / 2
+		return strings.Repeat("─", leftWidth) + label + strings.Repeat("─", availableWidth-leftWidth-labelWidth)
+	}
+
 	indicator := fmt.Sprintf("─── %s %d more ", direction, hiddenLineCount)
 	remaining := availableWidth - VisibleWidth(indicator)
 	if remaining >= 0 {
@@ -385,6 +393,11 @@ type Editor struct {
 	paddingX  int
 	lastWidth int // last render width for cursor navigation
 
+	// Render geometry for cursor navigation and mouse hit-testing (pi:
+	// renderedVisibleLineCount / renderedAutocompleteHeight).
+	renderedVisibleLineCount   int
+	renderedAutocompleteHeight int
+
 	// mu guards editor state against the autocomplete request machinery
 	// (see file header "Concurrency adaptation").
 	mu sync.Mutex
@@ -397,6 +410,13 @@ type Editor struct {
 
 	// BorderColor can be changed dynamically (pi: public borderColor).
 	BorderColor func(text string) string
+
+	// TopBorderOverride optionally replaces the default top border (pig
+	// addition: pi overrides protected renderTopBorder in CustomEditor; Go
+	// embedding has no virtual dispatch, so the override is injected as a
+	// callback. Return ok=false to fall through to the default border —
+	// that is the equivalent of calling super.renderTopBorder).
+	TopBorderOverride func(width int, hiddenLineCount int) (string, bool)
 
 	// Autocomplete support (pi: autocompleteProvider family).
 	autocompleteProvider          AutocompleteProvider
@@ -737,6 +757,31 @@ func (e *Editor) setTextInternal(text string, cursorPlacement string) {
 // Invalidate implements Component (no cached state to invalidate currently).
 func (e *Editor) Invalidate() {}
 
+// renderTopBorder renders the top border with an optional scroll indicator
+// (pi: protected renderTopBorder).
+func (e *Editor) renderTopBorder(width int, hiddenLineCount int) string {
+	if e.TopBorderOverride != nil {
+		if line, ok := e.TopBorderOverride(width, hiddenLineCount); ok {
+			return line
+		}
+	}
+	border := strings.Repeat("─", width)
+	if hiddenLineCount > 0 {
+		border = createScrollBorder("↑", hiddenLineCount, width)
+	}
+	return e.BorderColor(border)
+}
+
+// renderBottomBorder renders the bottom border with an optional scroll
+// indicator (pi: protected renderBottomBorder).
+func (e *Editor) renderBottomBorder(width int, hiddenLineCount int) string {
+	border := strings.Repeat("─", width)
+	if hiddenLineCount > 0 {
+		border = createScrollBorder("↓", hiddenLineCount, width)
+	}
+	return e.BorderColor(border)
+}
+
 // Render implements Component.
 func (e *Editor) Render(width int) []string {
 	maxPadding := (width - 1) / 2
@@ -762,10 +807,9 @@ func (e *Editor) Render(width int) []string {
 		layoutWidth = 1
 	}
 
-	// Store for cursor navigation (must match wrapping width)
+	// Store last render width for cursor navigation (must match wrapping
+	// width) plus render geometry for mouse hit-testing (v0.85.1).
 	e.lastWidth = layoutWidth
-
-	horizontal := e.BorderColor("─")
 
 	// Layout the text
 	layoutLines := e.layoutText(layoutWidth)
@@ -813,18 +857,14 @@ func (e *Editor) Render(width int) []string {
 	if len(visibleLines) > maxVisibleLines {
 		visibleLines = visibleLines[:maxVisibleLines]
 	}
+	e.renderedVisibleLineCount = len(visibleLines)
 
 	result := make([]string, 0, len(visibleLines)+2)
 	leftPadding := strings.Repeat(" ", paddingX)
 	rightPadding := leftPadding
 
 	// Render top border (with scroll indicator if scrolled down)
-	if e.scrollOffset > 0 {
-		border := createScrollBorder("↑", e.scrollOffset, width)
-		result = append(result, e.BorderColor(border))
-	} else {
-		result = append(result, strings.Repeat(horizontal, width))
-	}
+	result = append(result, e.renderTopBorder(width, e.scrollOffset))
 
 	// Render each visible layout line
 	// Emit hardware cursor marker when focused so TUI can position the
@@ -886,16 +926,13 @@ func (e *Editor) Render(width int) []string {
 
 	// Render bottom border (with scroll indicator if more content below)
 	linesBelow := len(layoutLines) - (e.scrollOffset + len(visibleLines))
-	if linesBelow > 0 {
-		border := createScrollBorder("↓", linesBelow, width)
-		result = append(result, e.BorderColor(border))
-	} else {
-		result = append(result, strings.Repeat(horizontal, width))
-	}
+	result = append(result, e.renderBottomBorder(width, linesBelow))
 
 	// pi: add autocomplete list if active
+	e.renderedAutocompleteHeight = 0
 	if e.autocompleteState != "" && e.autocompleteList != nil {
 		autocompleteResult := e.autocompleteList.Render(contentWidth)
+		e.renderedAutocompleteHeight = len(autocompleteResult)
 		for _, line := range autocompleteResult {
 			lineWidth := VisibleWidth(line)
 			linePadding := strings.Repeat(" ", max(0, contentWidth-lineWidth))
@@ -903,6 +940,110 @@ func (e *Editor) Render(width int) []string {
 		}
 	}
 
+	return result
+}
+
+// HandleMouse implements MouseHandler (pi: Editor.handleMouse): clicks on
+// the autocomplete dropdown are forwarded to the list; a click gesture on
+// an editor row positions the cursor. Press/drag/release stay unhandled so
+// the renderer's screen-level text selection can run over the editor rows.
+// Must be called under the lock (pig: state mutation serialized like
+// handleInputLocked).
+func (e *Editor) handleMouseLocked(event *TuiMouseEvent) *TuiMouseEventResult {
+	autocompleteStartRow := e.renderedVisibleLineCount + 2
+	if e.autocompleteState != "" && e.autocompleteList != nil &&
+		event.Y >= autocompleteStartRow && event.Y < autocompleteStartRow+e.renderedAutocompleteHeight {
+		maxPadding := (event.Width - 1) / 2
+		if maxPadding < 0 {
+			maxPadding = 0
+		}
+		paddingX := e.paddingX
+		if paddingX > maxPadding {
+			paddingX = maxPadding
+		}
+		contentWidth := max(1, event.Width-paddingX*2)
+		listEvent := *event
+		listEvent.X = event.X - paddingX
+		listEvent.Y = event.Y - autocompleteStartRow
+		listEvent.Width = contentWidth
+		listEvent.Height = e.renderedAutocompleteHeight
+		var result *TuiMouseEventResult
+		if mh, ok := Component(e.autocompleteList).(MouseHandler); ok {
+			result = mh.HandleMouse(&listEvent)
+		}
+		if result != nil {
+			out := *result
+			out.Focus = true
+			return &out
+		}
+		return nil
+	}
+
+	// Leave press/drag/release unhandled so the renderer's screen-level text
+	// selection can run over the editor rows (drag to select, release to
+	// copy). The renderer synthesizes a click when press and release land on
+	// the same cell without movement, which is the gesture that positions
+	// the cursor.
+	if event.Type != MouseEventTypeClick || event.Button != MouseButtonLeft {
+		return nil
+	}
+	if event.Y <= 0 || event.Y > e.renderedVisibleLineCount {
+		return &TuiMouseEventResult{Handled: true, Focus: true}
+	}
+
+	visualLines := e.buildVisualLineMap(e.lastWidth)
+	visualLineIndex := e.scrollOffset + event.Y - 1
+	if visualLineIndex < 0 || visualLineIndex >= len(visualLines) {
+		return &TuiMouseEventResult{Handled: true, Focus: true}
+	}
+	visualLine := visualLines[visualLineIndex]
+	logicalLine := ""
+	if visualLine.LogicalLine < len(e.state.Lines) {
+		logicalLine = e.state.Lines[visualLine.LogicalLine]
+	}
+	chunkEnd := visualLine.StartCol + visualLine.Length
+	chunk := logicalLine[visualLine.StartCol:chunkEnd]
+	maxPadding := (event.Width - 1) / 2
+	if maxPadding < 0 {
+		maxPadding = 0
+	}
+	paddingX := e.paddingX
+	if paddingX > maxPadding {
+		paddingX = maxPadding
+	}
+	targetColumn := max(0, event.X-paddingX)
+	visibleColumn := 0
+	targetIndex := len(chunk)
+	lastGraphemeIndex := 0
+	for _, grapheme := range e.segment(chunk, "grapheme") {
+		nextColumn := visibleColumn + VisibleWidth(grapheme.Segment)
+		lastGraphemeIndex = grapheme.Index
+		if targetColumn < nextColumn {
+			targetIndex = grapheme.Index
+			break
+		}
+		visibleColumn = nextColumn
+	}
+	isLastSegment := visualLineIndex == len(visualLines)-1 ||
+		visualLines[visualLineIndex+1].LogicalLine != visualLine.LogicalLine
+	if !isLastSegment && targetIndex == len(chunk) && len(chunk) > 0 {
+		targetIndex = lastGraphemeIndex
+	}
+
+	e.state.CursorLine = visualLine.LogicalLine
+	e.setCursorCol(visualLine.StartCol + targetIndex)
+	e.lastAction = ""
+	e.exitHistoryBrowsing()
+	if e.autocompleteState != "" {
+		e.updateAutocomplete()
+	}
+	return &TuiMouseEventResult{Handled: true, Focus: true}
+}
+
+// HandleMouse implements MouseHandler.
+func (e *Editor) HandleMouse(event *TuiMouseEvent) *TuiMouseEventResult {
+	var result *TuiMouseEventResult
+	e.lock(func() { result = e.handleMouseLocked(event) })
 	return result
 }
 
@@ -2648,7 +2789,30 @@ func (e *Editor) createAutocompleteList(prefix string, items []AutocompleteItem)
 	for i, item := range items {
 		selectItems[i] = SelectItem{Value: item.Value, Label: item.Label, Description: item.Description}
 	}
-	return NewSelectList(selectItems, e.autocompleteMaxVisible, e.theme.SelectList, layout)
+	list := NewSelectList(selectItems, e.autocompleteMaxVisible, e.theme.SelectList, layout)
+	// v0.85.1: mouse clicks confirm the completion directly (pi: list.onSelect).
+	list.OnSelect = func(selected SelectItem) {
+		if e.autocompleteProvider == nil {
+			return
+		}
+		e.pushUndoSnapshot()
+		e.lastAction = ""
+		result := e.autocompleteProvider.ApplyCompletion(
+			e.state.Lines,
+			e.state.CursorLine,
+			e.state.CursorCol,
+			autocompleteItemFromSelect(selected),
+			e.autocompletePrefix,
+		)
+		e.state.Lines = result.Lines
+		e.state.CursorLine = result.CursorLine
+		e.setCursorCol(result.CursorCol)
+		e.cancelAutocomplete()
+		if e.OnChange != nil {
+			e.OnChange(e.GetText())
+		}
+	}
+	return list
 }
 
 // tryTriggerAutocomplete issues a regular autocomplete request (pi:

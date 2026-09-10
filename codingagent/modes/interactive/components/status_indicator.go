@@ -3,6 +3,8 @@
 package components
 
 import (
+	"strings"
+
 	"github.com/ZoroSpace/pig/codingagent/core"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
@@ -62,16 +64,65 @@ func (s *StatusIndicator) Dispose() {
 }
 
 // WorkingStatusIndicator is the default streaming indicator (pi: class
-// WorkingStatusIndicator).
-func NewWorkingStatusIndicator(ui tui.TUI, message string, indicator *core.WorkingIndicatorOptions) *StatusIndicator {
-	return NewStatusIndicator(
-		StatusKindWorking,
-		ui,
-		func(spinner string) string { return theme.Fg("accent", spinner) },
-		func(text string) string { return theme.Fg("muted", text) },
-		message,
-		indicator,
-	)
+// WorkingStatusIndicator). Value-embeds StatusIndicator: the Loader state
+// lives behind the embedded pointer, so copies are safe (same reasoning as
+// RetryStatusIndicator).
+type WorkingStatusIndicator struct {
+	StatusIndicator
+}
+
+// NewWorkingStatusIndicator builds the working indicator (pi: constructor;
+// colorFn nil = default accent/muted coloring; when set it colors both the
+// spinner and the message — used to match the editor border color when the
+// indicator is embedded in the editor top border).
+func NewWorkingStatusIndicator(ui tui.TUI, message string, indicator *core.WorkingIndicatorOptions, colorFn func(string) string) *WorkingStatusIndicator {
+	spinnerColorFn := func(spinner string) string { return theme.Fg("accent", spinner) }
+	messageColorFn := func(text string) string { return theme.Fg("muted", text) }
+	if colorFn != nil {
+		spinnerColorFn = colorFn
+		messageColorFn = colorFn
+	}
+	return &WorkingStatusIndicator{
+		StatusIndicator: *NewStatusIndicator(
+			StatusKindWorking,
+			ui,
+			spinnerColorFn,
+			messageColorFn,
+			message,
+			indicator,
+		),
+	}
+}
+
+// RenderInBorder renders the indicator line for embedding into an editor
+// border of the given width (pi: renderInBorder, v0.85.1). Strips the
+// loader's leading blank line and trailing padding.
+func (w *WorkingStatusIndicator) RenderInBorder(width int) string {
+	lines := w.Render(width + 2)
+	line := ""
+	if len(lines) > 1 {
+		line = lines[1]
+	}
+	var trimmed string
+	if strings.HasPrefix(line, " ") {
+		trimmed = strings.TrimRight(line[1:], " ")
+	} else {
+		trimmed = strings.TrimRight(line, " ")
+	}
+	return tui.TruncateToWidth(trimmed, width, "", false)
+}
+
+// RenderSpinnerInBorder renders only the spinner frame, for the narrow
+// fallback when the full message cannot fit (pi: renderSpinnerInBorder,
+// v0.85.1).
+func (w *WorkingStatusIndicator) RenderSpinnerInBorder(width int) string {
+	return tui.TruncateToWidth(w.GetRenderedIndicator(), width, "", false)
+}
+
+// SetIndicator replaces the animation options (pi: setIndicator override on
+// WorkingStatusIndicator; nil restores the default spinner).
+func (w *WorkingStatusIndicator) SetIndicator(indicator *core.WorkingIndicatorOptions) {
+	w.Loader.SetIndicator(workingIndicatorToLoader(indicator))
 }
 
 // RetryStatusIndicator counts down until the retry fires (pi: class

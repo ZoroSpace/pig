@@ -374,5 +374,6 @@ func getCompat(model *types.Model) *resolvedOpenAICompletionsCompat {
 	if compat.SupportsLongCacheRetention != nil {
 		resolved.supportsLongCacheRetention = *compat.SupportsLongCacheRetention
 	}
+	resolved.vllmPriority = compat.VllmPriority
 	return &resolved
 }

@@ -47,6 +47,7 @@ import (
 	aiutils "github.com/ZoroSpace/pig/ai/utils"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/utils"
+	pigutils "github.com/ZoroSpace/pig/utils"
 )
 
 // ============================================================================
@@ -459,6 +460,10 @@ type AgentSession struct {
 	// pendingNextTurnMessages are queued to be included with the next user
 	// prompt as context ("asides").
 	pendingNextTurnMessages []agent.AgentMessage
+	// pendingCustomMessages are context-only custom messages queued during a
+	// run, flushed once the current turn's tool results are in (pi:
+	// _pendingCustomMessages).
+	pendingCustomMessages []agent.AgentMessage
 
 	// compactionAbort context/cancel pairs (pi: AbortController fields).
 	compactionCancel          context.CancelFunc
@@ -641,7 +646,10 @@ func (s *AgentSession) getRequiredRequestAuth(ctx context.Context, model *types.
 }
 
 func (s *AgentSession) getSummarizationRequestAuth(ctx context.Context, model *types.Model) (*requestAuth, error) {
-	if sameStreamFn(s.Agent.StreamFunction, ai.StreamSimple) {
+	// pi: `this.agent.streamFunction === streamSimple`; Go funcs aren't
+	// comparable, so identity goes through utils.SameFuncValue. The SDK path
+	// always wraps streamSimple, so this is false there (matches pi).
+	if pigutils.SameFuncValue(s.Agent.StreamFunction, ai.StreamSimple) {
 		return s.getRequiredRequestAuth(ctx, model)
 	}
 
@@ -661,18 +669,6 @@ func (s *AgentSession) getSummarizationRequestAuth(ctx context.Context, model *t
 		headers: withoutDeletedHeaders(result.Auth.Headers),
 		env:     result.Env,
 	}, nil
-}
-
-// sameStreamFn reports whether two stream functions are the same underlying
-// function (pi: `this.agent.streamFunction === streamSimple`; Go funcs are
-// not comparable, so compare pointers via reflect).
-func sameStreamFn(a, b agent.StreamFn) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	pa := reflect.ValueOf(a).Pointer()
-	pb := reflect.ValueOf(b).Pointer()
-	return pa != 0 && pa == pb
 }
 
 // errorChainContains reports whether err or any wrapped error has exactly the
@@ -779,6 +775,28 @@ func contentEqual(a, b types.Content) bool {
 	return reflect.DeepEqual(a, b)
 }
 
+// compactBeforeNextAssistantResponse runs threshold compaction before the
+// next assistant response when the estimated context exceeds the limit (pi:
+// _compactBeforeNextAssistantResponse, v0.85.1).
+func (s *AgentSession) compactBeforeNextAssistantResponse(ctx context.Context, llmContext *agent.AgentContext) *agent.AgentContext {
+	if llmContext == nil {
+		return llmContext
+	}
+	model := s.Model()
+	settings := s.SettingsManager.GetCompactionSettings()
+	if model == nil || model.ContextWindow <= 0 {
+		return llmContext
+	}
+	if !ShouldCompact(EstimateContextTokens(llmContext.Messages).Tokens, model.ContextWindow, settings) {
+		return llmContext
+	}
+	_, _ = s.runAutoCompactionChecked(ctx, "threshold", false)
+	nextContext := &agent.AgentContext{}
+	*nextContext = *llmContext
+	nextContext.Messages = slices.Clone(s.Agent.State().Messages)
+	return nextContext
+}
+
 // installAgentNextTurnRefresh installs the prepare-next-turn refresh (pi:
 // _installAgentNextTurnRefresh). Overrides the agent's prepareNextTurn with
 // one that refreshes systemPrompt/tools/model/thinkingLevel from agent state.
@@ -791,6 +809,12 @@ func (s *AgentSession) installAgentNextTurnRefresh() {
 		}
 	}
 	s.Agent.PrepareNextTurnWithContext = func(ctx context.Context, turn agent.PrepareNextTurnContext) *agent.AgentLoopTurnUpdate {
+		// pi (v0.85.1): compact before the next assistant response, before the
+		// previous prepareNextTurnWithContext runs.
+		turnContext := s.compactBeforeNextAssistantResponse(ctx, turn.Context)
+		if turn.Context != nil {
+			turn.Context = turnContext
+		}
 		var previousSnapshot *agent.AgentLoopTurnUpdate
 		if previous != nil {
 			previousSnapshot = previous(ctx, turn)
@@ -879,7 +903,9 @@ func (s *AgentSession) getIdleWait() chan struct{} {
 
 func (s *AgentSession) resolveIdleWaitIfIdle() {
 	s.mu.Lock()
-	if s.isAgentRunActive || s.idleWait == nil {
+	// pi (v0.85.1): gate on the full isIdle (run active + compaction), not
+	// just the agent run flag.
+	if s.isAgentRunActive || (s.autoCompactionCancel != nil || s.compactionCancel != nil || s.branchSummaryCancel != nil) || s.idleWait == nil {
 		s.mu.Unlock()
 		return
 	}
@@ -1117,6 +1143,13 @@ func (s *AgentSession) emitExtensionEvent(ctx context.Context, event agent.Agent
 		s.turnIndex++
 		s.mu.Unlock()
 		_, _ = s.extensionRunner.Emit(ctx, &TurnEndEvent{Type: "turn_end", TurnIndex: turnIndex, Message: event.Message, ToolResults: event.ToolResults})
+		// A turn ends after its assistant message and every tool result has
+		// been appended, so this is the first point in the run where a
+		// context-only custom message can be inserted without landing between
+		// a tool call and its result. Flushing after the extension and
+		// listener dispatch above also picks up messages that turn_end
+		// handlers queued (pi, v0.85.1).
+		s.flushPendingCustomMessages()
 	case agent.AgentEventMessageStart:
 		_, _ = s.extensionRunner.Emit(ctx, &MessageStartEvent{Type: "message_start", Message: event.Message})
 	case agent.AgentEventMessageUpdate:
@@ -1235,10 +1268,11 @@ func (s *AgentSession) IsStreaming() bool {
 	return s.isAgentRunActive
 }
 
-// IsIdle reports whether the session has no active agent run, retry,
-// auto-compaction, or queued continuation (pi: get isIdle).
+// IsIdle reports whether the session has no active agent run, compaction,
+// branch summary, retry, or queued continuation (pi: get isIdle; v0.85.1
+// adds the compaction gate).
 func (s *AgentSession) IsIdle() bool {
-	return !s.IsStreaming()
+	return !s.IsStreaming() && !s.IsCompacting()
 }
 
 // SystemPrompt returns the current effective system prompt (includes any
@@ -1388,6 +1422,33 @@ func (s *AgentSession) SetScopedModels(scopedModels []ScopedModel) {
 	s.scopedModels = scopedModels
 }
 
+// addPersistedDefaultToNonEmptyScope adds a persisted default model to a
+// non-empty scope and keeps the enabled-models patterns in sync (pi:
+// _addPersistedDefaultToNonEmptyScope, v0.85.1).
+func (s *AgentSession) addPersistedDefaultToNonEmptyScope(model *types.Model) {
+	if len(s.scopedModels) == 0 {
+		return
+	}
+	for _, scoped := range s.scopedModels {
+		if ai.ModelsAreEqual(&scoped.Model, model) {
+			return
+		}
+	}
+	s.scopedModels = append(s.scopedModels, ScopedModel{Model: *model})
+
+	enabledModels, ok := s.SettingsManager.GetEnabledModels()
+	if !ok || len(enabledModels) == 0 {
+		return
+	}
+	modelReference := string(model.Provider) + "/" + model.ID
+	for _, pattern := range enabledModels {
+		if strings.ToLower(pattern) == strings.ToLower(modelReference) {
+			return
+		}
+	}
+	s.SettingsManager.SetEnabledModels(append(enabledModels, modelReference))
+}
+
 // PromptTemplates returns the file-based prompt templates (pi:
 // get promptTemplates).
 func (s *AgentSession) PromptTemplates() []PromptTemplate {
@@ -1487,6 +1548,7 @@ func (s *AgentSession) runAgentPrompt(ctx context.Context, messages []agent.Agen
 		s.systemPromptOverride = ""
 		s.mu.Unlock()
 		s.flushPendingBashMessages()
+		s.flushPendingCustomMessages()
 		if !settled {
 			s.emitAgentSettled(context.Background())
 		}
@@ -1659,8 +1721,9 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 			return nil
 		}
 
-		// Flush any pending bash messages before the new prompt
+		// Flush any pending bash and custom messages before the new prompt
 		s.flushPendingBashMessages()
+		s.flushPendingCustomMessages()
 
 		// Validate model
 		if s.Model() == nil {
@@ -1993,12 +2056,47 @@ func (s *AgentSession) SendCustomMessage(ctx context.Context, message *CustomMes
 	if triggerTurn {
 		return s.runAgentPrompt(ctx, []agent.AgentMessage{appMessage})
 	}
+	if s.IsStreaming() {
+		// Appending now would put the message between an assistant tool call
+		// and its result, which providers that validate message order reject
+		// on replay. Defer to the end of the turn. Nothing is emitted yet:
+		// message events must not describe messages the session tree does not
+		// contain (pi, v0.85.1).
+		s.mu.Lock()
+		s.pendingCustomMessages = append(s.pendingCustomMessages, appMessage)
+		s.mu.Unlock()
+		return nil
+	}
+	s.appendCustomMessage(appMessage)
+	return nil
+}
+
+// appendCustomMessage appends a custom message to agent state and the
+// session tree, emitting message_start/message_end (pi: _appendCustomMessage).
+func (s *AgentSession) appendCustomMessage(appMessage agent.AgentMessage) {
 	state := s.Agent.State()
 	state.Messages = append(state.Messages, appMessage)
-	_, _ = s.SessionManager.AppendCustomMessageEntry(message.CustomType, message.Content, message.Display, message.Details)
+	custom := appMessage.(harness.CustomMessage)
+	_, _ = s.SessionManager.AppendCustomMessageEntry(custom.CustomType, custom.Content, custom.Display, custom.Details)
 	s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: agent.AgentEventMessageStart, Message: appMessage}})
 	s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: agent.AgentEventMessageEnd, Message: appMessage}})
-	return nil
+}
+
+// flushPendingCustomMessages appends custom messages queued while the agent
+// was running; called once the current turn's tool results are in agent state
+// and session history (pi: _flushPendingCustomMessages).
+func (s *AgentSession) flushPendingCustomMessages() {
+	s.mu.Lock()
+	if len(s.pendingCustomMessages) == 0 {
+		s.mu.Unlock()
+		return
+	}
+	pending := s.pendingCustomMessages
+	s.pendingCustomMessages = nil
+	s.mu.Unlock()
+	for _, appMessage := range pending {
+		s.appendCustomMessage(appMessage)
+	}
 }
 
 // normalizePayloadContent maps pi's `content ?? []` ingestion normalization
@@ -2103,6 +2201,8 @@ func (s *AgentSession) GetResourceLoader() ResourceLoader {
 // (pi: abort).
 func (s *AgentSession) Abort(ctx context.Context) error {
 	s.AbortRetry()
+	s.AbortCompaction()
+	s.AbortBranchSummary()
 	s.Agent.Abort()
 	return s.WaitForIdle(ctx)
 }
@@ -2158,6 +2258,7 @@ func (s *AgentSession) SetModel(ctx context.Context, model *types.Model, options
 	_, _ = s.SessionManager.AppendModelChange(string(model.Provider), model.ID)
 	if options != nil && options.Persist {
 		s.SettingsManager.SetDefaultModelAndProvider(string(model.Provider), model.ID)
+		s.addPersistedDefaultToNonEmptyScope(model)
 	}
 
 	// Apply thinking level for the new model.
@@ -2220,6 +2321,7 @@ func (s *AgentSession) cycleScopedModel(ctx context.Context, direction string, o
 	_, _ = s.SessionManager.AppendModelChange(string(nextModel.Provider), nextModel.ID)
 	if options != nil && options.Persist {
 		s.SettingsManager.SetDefaultModelAndProvider(string(nextModel.Provider), nextModel.ID)
+		s.addPersistedDefaultToNonEmptyScope(&nextModel)
 	}
 
 	// Apply thinking level for the new model.
@@ -2266,6 +2368,7 @@ func (s *AgentSession) cycleAvailableModel(ctx context.Context, direction string
 	_, _ = s.SessionManager.AppendModelChange(string(nextModel.Provider), nextModel.ID)
 	if options != nil && options.Persist {
 		s.SettingsManager.SetDefaultModelAndProvider(string(nextModel.Provider), nextModel.ID)
+		s.addPersistedDefaultToNonEmptyScope(&nextModel)
 	}
 
 	// Apply thinking level for the new model.
@@ -2513,6 +2616,10 @@ func (s *AgentSession) Compact(ctx context.Context, customInstructions string) (
 		s.mu.Lock()
 		s.compactionCancel = nil
 		s.mu.Unlock()
+		// pi (v0.85.1): _clearManualCompactionState also resolves the idle
+		// wait; the sites that cleared before emitting compaction_end are
+		// covered by this defer.
+		s.resolveIdleWaitIfIdle()
 	}()
 
 	fail := func(err error) (*CompactionResult, error) {
@@ -2833,9 +2940,16 @@ func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, wil
 	started := false
 	fromExtension := false
 
-	s.mu.Lock()
-	s.autoCompactionCancel = nil
-	s.mu.Unlock()
+	// pi: finally { this._autoCompactionAbortController = undefined;
+	// this._resolveIdleWaitIfIdle(); } — pig previously cleared the cancel
+	// func at function start, leaving IsCompacting stuck true after a
+	// completed auto-compaction; surfaced by the v0.85.1 isIdle change.
+	defer func() {
+		s.mu.Lock()
+		s.autoCompactionCancel = nil
+		s.mu.Unlock()
+		s.resolveIdleWaitIfIdle()
+	}()
 
 	fail := func(errorMessage string) (bool, error) {
 		if started {
@@ -4025,6 +4139,9 @@ func (s *AgentSession) NavigateTree(ctx context.Context, targetID string, option
 		s.mu.Lock()
 		s.branchSummaryCancel = nil
 		s.mu.Unlock()
+		// pi (v0.85.1): resolve the idle wait after branch summarization
+		// settles.
+		s.resolveIdleWaitIfIdle()
 	}()
 
 	var extensionSummary *SessionBeforeTreeSummary

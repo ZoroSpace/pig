@@ -195,7 +195,7 @@ func getMessageFromEntry(entry SessionEntry) agent.AgentMessage {
 		return harness.CreateCustomMessage(e.CustomType, e.Content, e.Display, e.Details, isoToMillis(e.Timestamp))
 
 	case *BranchSummaryEntry:
-		return harness.CreateBranchSummaryMessage(e.Summary, e.FromID, isoToMillis(e.Timestamp))
+		return harness.CreateBranchSummaryMessage(e.Summary, lo.ToPtr(e.FromID), isoToMillis(e.Timestamp))
 
 	case *CompactionEntry:
 		return harness.CreateCompactionSummaryMessage(e.Summary, e.TokensBefore, isoToMillis(e.Timestamp))
@@ -408,7 +408,14 @@ func GenerateBranchSummary(
 	// retry policy. pi builds requestOptions inline (no reasoning setup —
 	// unlike compaction's createSummarizationOptions).
 	requestOptions := &ai.SimpleStreamOptions{}
-	requestOptions.MaxTokens = lo.ToPtr(int64(2048))
+	// pi (v0.85.1): maxTokens = min(4096, model.maxTokens) — reserved tokens
+	// shrink with the model cap; 0/negative → unbounded (pi uses
+	// Number.POSITIVE_INFINITY for the min).
+	maxTokens := int64(4096)
+	if modelMaxTokens := options.Model.MaxTokens; modelMaxTokens > 0 && modelMaxTokens < maxTokens {
+		maxTokens = modelMaxTokens
+	}
+	requestOptions.MaxTokens = lo.ToPtr(maxTokens)
 	requestOptions.APIKey = options.APIKey
 	requestOptions.Env = options.Env
 	if options.Headers != nil {
@@ -435,12 +442,10 @@ func GenerateBranchSummary(
 	if response.StopReason == types.StopReasonAborted {
 		return &BranchSummaryResult{Aborted: true}, nil
 	}
-	if response.StopReason == types.StopReasonError {
-		errorMessage := response.ErrorMessage
-		if errorMessage == "" {
-			errorMessage = "Summarization failed"
-		}
-		return &BranchSummaryResult{Error: errorMessage}, nil
+	// pi (v0.85.1): shared failure check — a length stop means the summary
+	// is incomplete and must not persist.
+	if failure := GetSummarizationFailure(response, "Branch summarization"); failure != "" {
+		return &BranchSummaryResult{Error: failure}, nil
 	}
 	for _, block := range response.Content {
 		if block.ContentKind() == types.KindToolCall {

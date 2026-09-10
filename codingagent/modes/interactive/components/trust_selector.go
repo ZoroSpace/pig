@@ -126,9 +126,11 @@ func (t *TrustSelectorComponent) updateList() {
 
 		isSelected := i == t.selectedIndex
 		isCurrent := t.isSavedOption(option)
-		checkmark := ""
+		// v0.85.1: the current-decision marker moves before the label and is
+		// accent-colored, so it stays visible while browsing.
+		currentMarker := "  "
 		if isCurrent {
-			checkmark = currentTheme.Fg("success", " ✓")
+			currentMarker = currentTheme.Fg("accent", "✓ ")
 		}
 		prefix := "  "
 		if isSelected {
@@ -138,7 +140,7 @@ func (t *TrustSelectorComponent) updateList() {
 		if isSelected {
 			label = currentTheme.Fg("accent", option.Label)
 		}
-		t.listContainer.AddChild(tui.NewText(prefix+label+checkmark, 1, 0))
+		t.listContainer.AddChild(tui.NewText(prefix+currentMarker+label, 1, 0))
 	}
 }
 

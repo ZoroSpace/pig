@@ -88,22 +88,33 @@ type GenerateBranchSummaryOptions struct {
 	Callbacks *ai.RetryCallbacks
 }
 
+// BranchEntryReader is pi's `Pick<Branch, "findEntries">` capability.
+type BranchEntryReader interface {
+	FindEntries(query *session.BranchScan, ctx context.Context) ([]session.Entry, error)
+}
+
+// SessionEntryReader is pi's `Pick<Session, "getEntry">` capability.
+type SessionEntryReader interface {
+	GetEntry(id string, ctx context.Context) (session.Entry, error)
+}
+
 // CollectEntriesForBranchSummary collects entries that should be summarized
 // before navigating to a different session tree entry (pi:
-// collectEntriesForBranchSummary).
-func CollectEntriesForBranchSummary(sess *session.Session, oldLeafID *string, targetID string) (*CollectEntriesResult, error) {
-	if oldLeafID == nil {
+// collectEntriesForBranchSummary; v0.85.1 takes the branch and session
+// capabilities separately).
+func CollectEntriesForBranchSummary(branch BranchEntryReader, sess SessionEntryReader, oldTipID *string, targetID string, ctx context.Context) (*CollectEntriesResult, error) {
+	if oldTipID == nil {
 		return &CollectEntriesResult{Entries: nil, CommonAncestorID: ""}, nil
 	}
-	oldBranch, err := sess.FindEntriesOnBranch(&session.BranchQuery{BranchBounds: session.BranchBounds{Start: oldLeafID}})
+	oldEntries, err := branch.FindEntries(&session.BranchScan{Start: oldTipID}, ctx)
 	if err != nil {
 		return nil, err
 	}
 	oldPath := map[string]bool{}
-	for _, entry := range oldBranch {
+	for _, entry := range oldEntries {
 		oldPath[entry.Base().ID] = true
 	}
-	targetPath, err := sess.FindEntriesOnBranch(&session.BranchQuery{BranchBounds: session.BranchBounds{Start: &targetID}})
+	targetPath, err := branch.FindEntries(&session.BranchScan{Start: &targetID}, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -116,14 +127,14 @@ func CollectEntriesForBranchSummary(sess *session.Session, oldLeafID *string, ta
 	}
 
 	var entries []session.Entry
-	current := *oldLeafID
+	current := *oldTipID
 	for current != "" && current != commonAncestorID {
-		entry, err := sess.GetEntry(current)
+		entry, err := sess.GetEntry(current, ctx)
 		if err != nil {
 			return nil, err
 		}
 		if entry == nil {
-			return nil, session.NewSessionError(session.CodeInvalidEntry, fmt.Sprintf("Entry %s not found", current))
+			return nil, fmt.Errorf("Corrupt session: entry %s not found", current)
 		}
 		entries = append(entries, entry)
 		// pi: current = entry.parentId; "" ↔ null.
@@ -156,7 +167,7 @@ func getBranchMessageFromEntry(entry session.Entry) agent.AgentMessage {
 	case *session.CompactionEntry:
 		return harness.CreateCompactionSummaryMessage(e.Summary, e.TokensBefore, e.Timestamp)
 	default:
-		// thinking_level_change / model_change / active_tools_change / custom.
+		// custom.
 		return nil
 	}
 }

@@ -135,7 +135,7 @@ func TestToolExecutionBuiltinOverrideRendering(t *testing.T) {
 
 	component := NewToolExecutionComponent("edit", "tool-2",
 		map[string]any{"path": "README.md", "oldText": "before", "newText": "after"},
-		ToolExecutionOptions{}, overrideDefinition, &toolExecutionFakeTUI{}, mustCwd(t))
+		ToolExecutionOptions{}, tools.WithBuiltInRenderers("edit", overrideDefinition), &toolExecutionFakeTUI{}, mustCwd(t))
 	component.UpdateResult(ToolExecutionResult{
 		Content: nil,
 		Details: &tools.EditToolDetails{Diff: "+1 after", FirstChangedLine: intPtr(1)},
@@ -260,7 +260,7 @@ func TestToolExecutionInheritsBuiltinResultRenderer(t *testing.T) {
 	}
 
 	component := NewToolExecutionComponent("read", "tool-4b", map[string]any{"path": "notes.txt"},
-		ToolExecutionOptions{}, overrideDefinition, &toolExecutionFakeTUI{}, mustCwd(t))
+		ToolExecutionOptions{}, tools.WithBuiltInRenderers("read", overrideDefinition), &toolExecutionFakeTUI{}, mustCwd(t))
 	component.UpdateResult(ToolExecutionResult{Content: textContent("hello")}, false)
 	component.SetExpanded(true)
 	rendered := renderedPlain(t, component, 120)
@@ -277,7 +277,7 @@ func TestToolExecutionInheritsBuiltinCallRenderer(t *testing.T) {
 	}
 
 	component := NewToolExecutionComponent("read", "tool-4c", map[string]any{"path": "README.md"},
-		ToolExecutionOptions{}, overrideDefinition, &toolExecutionFakeTUI{}, mustCwd(t))
+		ToolExecutionOptions{}, tools.WithBuiltInRenderers("read", overrideDefinition), &toolExecutionFakeTUI{}, mustCwd(t))
 	component.UpdateResult(ToolExecutionResult{Content: textContent("hello")}, false)
 	rendered := renderedPlain(t, component, 120)
 	if !strings.Contains(rendered, "read") || !strings.Contains(rendered, "README.md") || !strings.Contains(rendered, "override result") {
@@ -431,6 +431,37 @@ func TestToolExecutionNoHighlightingOnReadErrors(t *testing.T) {
 	}
 }
 
+func TestToolExecutionExpandsCollapsedResultOnClick(t *testing.T) {
+	initTestTheme(t)
+	component := NewToolExecutionComponent("read", "tool-click-expand", map[string]any{"path": "notes.txt"},
+		ToolExecutionOptions{}, tools.CreateReadToolDefinition(mustCwd(t), nil), &toolExecutionFakeTUI{}, mustCwd(t))
+	component.UpdateResult(ToolExecutionResult{Content: textContent("hidden content")}, false)
+
+	width := 120
+	lines := component.Render(width)
+	resultRow := -1
+	for i, line := range lines {
+		if strings.Contains(codingagentutils.StripAnsi(line), "notes.txt") {
+			resultRow = i
+			break
+		}
+	}
+	if resultRow < 0 {
+		t.Fatalf("result row not found in %v", lines)
+	}
+	result := component.HandleMouse(&tui.TuiMouseEvent{
+		Type: tui.MouseEventTypeClick, Button: tui.MouseButtonLeft,
+		X: 2, Y: resultRow, ScreenX: 2, ScreenY: resultRow,
+		Width: width, Height: len(lines), ClickCount: ptrInt(1),
+	})
+	if result == nil || !result.Handled {
+		t.Fatalf("click not handled: %v", result)
+	}
+	if rendered := renderedPlain(t, component, width); !strings.Contains(rendered, "hidden content") {
+		t.Fatalf("expected expanded content after click: %q", rendered)
+	}
+}
+
 func TestToolExecutionCollapsesOrdinaryReadResults(t *testing.T) {
 	initTestTheme(t)
 	component := NewToolExecutionComponent("read", "tool-ordinary-read-collapsed", map[string]any{"path": "notes.txt"},
@@ -558,3 +589,6 @@ func TestToolExecutionCompactReadLineRangeOrdering(t *testing.T) {
 		})
 	}
 }
+
+// ptrInt is a local pointer helper for mouse event fields.
+func ptrInt(v int) *int { return &v }

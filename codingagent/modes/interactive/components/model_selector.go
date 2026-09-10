@@ -180,7 +180,10 @@ func NewModelSelectorComponent(
 
 	// Hint
 	if s.onSelectAsDefault != nil {
-		s.AddChild(tui.NewText(theme.Fg("dim", "  Enter to select · Ctrl+S to set as default · Esc to cancel"), 0, 0))
+		s.AddChild(tui.NewText(theme.Fg("dim",
+			"  "+coretools.KeyDisplayText("tui.select.confirm")+" to select · "+
+				coretools.KeyDisplayText(core.AppKeybindingModelsSave)+" to set as default · "+
+				coretools.KeyDisplayText("tui.select.cancel")+" to cancel"), 0, 0))
 	}
 
 	// Add bottom border
@@ -455,25 +458,22 @@ func (s *ModelSelectorComponent) updateList() {
 			defaultBadge = theme.Fg("muted", " · default")
 		}
 
-		var line string
+		// v0.85.1 rendering: cursor + persistent current-model marker (✓
+		// before the id) so the mark stays visible while browsing.
+		cursor := "  "
 		if isSelected {
-			prefix := theme.Fg("accent", "→ ")
-			modelText := item.id
-			providerBadge := theme.Fg("muted", fmt.Sprintf("[%s]", item.provider))
-			checkmark := ""
-			if isCurrent {
-				checkmark = theme.Fg("success", " ✓")
-			}
-			line = prefix + theme.Fg("accent", modelText) + " " + providerBadge + defaultBadge + checkmark
-		} else {
-			modelText := "  " + item.id
-			providerBadge := theme.Fg("muted", fmt.Sprintf("[%s]", item.provider))
-			checkmark := ""
-			if isCurrent {
-				checkmark = theme.Fg("success", " ✓")
-			}
-			line = modelText + " " + providerBadge + defaultBadge + checkmark
+			cursor = theme.Fg("accent", "→ ")
 		}
+		currentMarker := "  "
+		if isCurrent {
+			currentMarker = theme.Fg("accent", "✓ ")
+		}
+		modelText := item.id
+		if isSelected {
+			modelText = theme.Fg("accent", item.id)
+		}
+		providerBadge := theme.Fg("muted", fmt.Sprintf("[%s]", item.provider))
+		line := cursor + currentMarker + modelText + " " + providerBadge + defaultBadge
 
 		s.listContainer.AddChild(tui.NewText(line, 0, 0))
 	}
@@ -555,8 +555,8 @@ func (s *ModelSelectorComponent) HandleInput(keyData string) {
 		// Escape or Ctrl+C
 		s.Dispose()
 		s.onCancel()
-	case tui.MatchesKey(keyData, tui.KeyCtrl("s")) && s.onSelectAsDefault != nil:
-		// Ctrl+S — select and save as default
+	case kb.Matches(keyData, core.AppKeybindingModelsSave) && s.onSelectAsDefault != nil:
+		// Select and save as default
 		if s.selectedIndex < len(s.filteredModels) {
 			s.Dispose()
 			s.onSelectAsDefault(s.filteredModels[s.selectedIndex].model)

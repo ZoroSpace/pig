@@ -57,6 +57,15 @@ func settingsJSONString(t *testing.T, value map[string]any, key string) string {
 	return raw
 }
 
+func settingsJSONBool(t *testing.T, value map[string]any, key string) bool {
+	t.Helper()
+	raw, ok := value[key].(bool)
+	if !ok {
+		t.Fatalf("expected %s to be a bool, got %v", key, value[key])
+	}
+	return raw
+}
+
 func TestSettingsManagerPreservesExternallyAddedSettings(t *testing.T) {
 	t.Run("preserves enabledModels when changing thinking level", func(t *testing.T) {
 		agentDir, projectDir := settingsTestDirs(t)
@@ -574,9 +583,13 @@ func TestSettingsManagerValidatesAndPersistsFullscreenSettings(t *testing.T) {
 	if got := manager.GetFullscreenScrollbar(); got != ScrollViewScrollbarAuto {
 		t.Fatalf("fullscreenScrollbar = %q", got)
 	}
+	if got := manager.GetFullscreenCopyOnSelect(); got != true {
+		t.Fatalf("fullscreenCopyOnSelect = %v", got)
+	}
 
 	manager.SetFullscreenExitOutput(FullscreenExitOutputResumeHint)
 	manager.SetFullscreenScrollbar(ScrollViewScrollbarHidden)
+	manager.SetFullscreenCopyOnSelect(false)
 	manager.Flush()
 	savedSettings := readSettingsJSON(t, filepath.Join(agentDir, "settings.json"))
 	if got := settingsJSONString(t, savedSettings, "fullscreenExitOutput"); got != "resume-hint" {
@@ -584,6 +597,9 @@ func TestSettingsManagerValidatesAndPersistsFullscreenSettings(t *testing.T) {
 	}
 	if got := settingsJSONString(t, savedSettings, "fullscreenScrollbar"); got != "hidden" {
 		t.Fatalf("fullscreenScrollbar = %q", got)
+	}
+	if got := settingsJSONBool(t, savedSettings, "fullscreenCopyOnSelect"); got != false {
+		t.Fatalf("fullscreenCopyOnSelect = %v", got)
 	}
 
 	writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"fullscreenExitOutput":"nothing","fullscreenScrollbar":"sometimes"}`)
@@ -594,6 +610,47 @@ func TestSettingsManagerValidatesAndPersistsFullscreenSettings(t *testing.T) {
 	if got := reloadedManager.GetFullscreenScrollbar(); got != ScrollViewScrollbarAuto {
 		t.Fatalf("fullscreenScrollbar = %q", got)
 	}
+	if got := reloadedManager.GetFullscreenCopyOnSelect(); got != true {
+		t.Fatalf("fullscreenCopyOnSelect = %v", got)
+	}
+}
+
+func TestSettingsManagerTerminalCapabilityOverrides(t *testing.T) {
+	getOverrides := func(terminalJSON string) TerminalCapabilityOverrides {
+		agentDir, projectDir := settingsTestDirs(t)
+		writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"terminal":`+terminalJSON+`}`)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+		return manager.GetTerminalCapabilityOverrides()
+	}
+
+	t.Run("maps explicit values and omits auto values", func(t *testing.T) {
+		forcedOff := getOverrides(`{"images":false,"trueColor":false,"hyperlinks":false}`)
+		if forcedOff.Images != false {
+			t.Fatalf("images = %v, want false (pi null)", forcedOff.Images)
+		}
+		if forcedOff.TrueColor == nil || *forcedOff.TrueColor != false {
+			t.Fatalf("trueColor = %v", forcedOff.TrueColor)
+		}
+		if forcedOff.Hyperlinks == nil || *forcedOff.Hyperlinks != false {
+			t.Fatalf("hyperlinks = %v", forcedOff.Hyperlinks)
+		}
+
+		kitty := getOverrides(`{"images":"kitty","trueColor":true,"hyperlinks":true}`)
+		if kitty.Images != "kitty" {
+			t.Fatalf("images = %v, want kitty", kitty.Images)
+		}
+		if kitty.TrueColor == nil || *kitty.TrueColor != true {
+			t.Fatalf("trueColor = %v", kitty.TrueColor)
+		}
+		if kitty.Hyperlinks == nil || *kitty.Hyperlinks != true {
+			t.Fatalf("hyperlinks = %v", kitty.Hyperlinks)
+		}
+
+		auto := getOverrides(`{"images":"auto","trueColor":"auto","hyperlinks":"auto"}`)
+		if auto.Images != nil || auto.TrueColor != nil || auto.Hyperlinks != nil {
+			t.Fatalf("overrides = %+v, want all nil", auto)
+		}
+	})
 }
 
 func TestSettingsManagerOutputPad(t *testing.T) {

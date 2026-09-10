@@ -209,6 +209,26 @@ func (t *ProcessTerminal) ModifyOtherKeysActive() bool {
 	return t.modifyOtherKeysActive
 }
 
+// refreshTerminalDimensions refreshes terminal dimensions on POSIX platforms
+// by sending SIGWINCH to this process. Best-effort: some environments
+// (restricted seccomp or LSM policies) return EACCES for kill(2); in that
+// case the dimensions refresh is skipped rather than crashing (pi:
+// refreshTerminalDimensions).
+// terminalPlatform and killSelfSignal are test seams for pi's
+// process.platform / process.kill monkey-patching (Go cannot override
+// syscalls).
+var (
+	terminalPlatform = runtime.GOOS
+	killSelfSignal   = func() error { return syscall.Kill(os.Getpid(), syscall.SIGWINCH) }
+)
+
+func refreshTerminalDimensions() {
+	if terminalPlatform == "windows" {
+		return
+	}
+	_ = killSelfSignal()
+}
+
 func (t *ProcessTerminal) Start(onInput func(data string), onResize func()) {
 	t.mu.Lock()
 	t.inputHandler = onInput
@@ -229,8 +249,8 @@ func (t *ProcessTerminal) Start(onInput func(data string), onResize func()) {
 	t.startWinchHandler(onResize)
 
 	// Refresh terminal dimensions - they may be stale after suspend/resume
-	// (SIGWINCH is lost while process is stopped). Unix only.
-	_ = syscall.Kill(os.Getpid(), syscall.SIGWINCH)
+	// (SIGWINCH is lost while process is stopped). Unix only, best-effort.
+	refreshTerminalDimensions()
 
 	// On Windows, enable ENABLE_VIRTUAL_TERMINAL_INPUT so the console sends
 	// VT escape sequences. No Go counterpart — no-op (native helper).

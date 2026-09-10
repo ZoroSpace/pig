@@ -289,7 +289,10 @@ func KillTrackedDetachedChildren() {
 // killProcessTree).
 func KillProcessTree(pid int) {
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
+		// pi (v0.85.1): use the trusted System32 executable so cleanup does
+		// not depend on PATH.
+		taskkill := filepath.Join(systemRoot(), "System32", "taskkill.exe")
+		cmd := exec.Command(taskkill, "/F", "/T", "/PID", strconv.Itoa(pid))
 		cmd.SysProcAttr = spawnSysProcAttr()
 		_ = cmd.Start() // Ignore errors if taskkill fails.
 		return
@@ -298,4 +301,13 @@ func KillProcessTree(pid int) {
 		// Fallback to killing just the child if process group kill fails.
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
+}
+
+// systemRoot resolves the Windows system root (pi:
+// process.env.SystemRoot ?? "C:\\Windows").
+func systemRoot() string {
+	if root := os.Getenv("SystemRoot"); root != "" {
+		return root
+	}
+	return `C:\Windows`
 }

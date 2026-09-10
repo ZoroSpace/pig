@@ -8,10 +8,18 @@
 package core
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/ZoroSpace/pig/ai/types"
 )
 
 func e2eAPIKeyPresent() bool {
@@ -257,5 +265,191 @@ func TestCompactionE2EEmitsCompactionEventsDuringManualCompaction(t *testing.T) 
 	}
 	if messageEndEvents == 0 {
 		t.Fatal("no message_end events")
+	}
+}
+
+func TestCompactDoesNotPersistLengthLimitedSummary(t *testing.T) {
+	// pi regression #7048: a length-stop summary contains partial text and
+	// must fail instead of becoming a session checkpoint.
+	session, sessionManager, settingsManager := createAgentTestSession(t, &createAgentTestSessionOptions{
+		GetAPIKey: true,
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			stream := newMockAssistantStream()
+			msg := testAssistantMessage("partial summar", withStopReason(types.StopReasonLength), withModelRef(model))
+			stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: &msg})
+			stream.Push(types.AssistantMessageEvent{Type: types.EventDone, Reason: types.StopReasonLength, Message: &msg})
+			stream.End()
+			return stream.AssistantMessageEventStream
+		},
+	})
+	settingsManager.ApplyOverrides(Settings{"compaction": map[string]any{"keepRecentTokens": float64(1)}})
+
+	now := time.Now().UnixMilli()
+	if _, err := sessionManager.AppendMessage(types.UserMessage{
+		Role:      types.RoleUser,
+		Content:   types.UserContent{Parts: []types.Content{types.NewTextContent("message to compact")}},
+		Timestamp: now - 1000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	assistant := testAssistantMessage("assistant response to compact", func(m *types.AssistantMessage) {
+		m.Timestamp = now - 500
+		m.Usage = types.Usage{
+			Input:       100,
+			Output:      0,
+			TotalTokens: 100,
+			Cost:        types.Cost{},
+		}
+	})
+	if _, err := sessionManager.AppendMessage(assistant); err != nil {
+		t.Fatal(err)
+	}
+	state := session.Agent.State()
+	state.Messages = sessionManager.BuildSessionContext().Messages
+
+	_, err := session.Compact(context.Background(), "")
+	if err == nil || !strings.Contains(err.Error(), "generation hit the token cap") {
+		t.Fatalf("err = %v, want token cap rejection", err)
+	}
+	compactions := 0
+	for _, entry := range sessionManager.GetEntries() {
+		if _, ok := entry.(*CompactionEntry); ok {
+			compactions++
+		}
+	}
+	if compactions != 0 {
+		t.Fatalf("compaction entries = %d, want 0", compactions)
+	}
+}
+
+func TestCompactsAfterToolResultBeforeNextAssistantRequest(t *testing.T) {
+	// pi (v0.85.1): _compactBeforeNextAssistantResponse runs threshold
+	// compaction between a tool result and the resumed assistant request
+	// inside the same agent run.
+	toolResultText := "large-tool-result:" + strings.Repeat("x", 6800)
+	var mu sync.Mutex
+	var order []string
+	var resumedRequest string
+
+	largeTool := agent.AgentTool{
+		Tool: types.Tool{
+			Name:        "large_result",
+			Description: "Returns enough content to cross the compaction threshold",
+			Parameters:  rawJSON(`{"type":"object","properties":{}}`),
+		},
+		Label: "Large result",
+		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate agent.AgentToolUpdateCallback) (agent.AgentToolResult, error) {
+			return agent.AgentToolResult{
+				Content: []types.Content{types.NewTextContent(toolResultText)},
+				Details: map[string]any{},
+			}, nil
+		},
+	}
+
+	requestCount := 0
+	session, _, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
+		GetAPIKey:         true,
+		BaseToolsOverride: map[string]agent.AgentTool{"large_result": largeTool},
+		Model: func() *types.Model {
+			m := testModel()
+			m.ContextWindow = 2000
+			return m
+		}(),
+		SettingsOverrides: Settings{"compaction": map[string]any{"enabled": true, "reserveTokens": float64(400), "keepRecentTokens": float64(1750)}},
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			mu.Lock()
+			requestCount++
+			n := requestCount
+			mu.Unlock()
+			stream := newMockAssistantStream()
+			go func() {
+				switch n {
+				case 1:
+					msg := testAssistantMessage("old-history:"+strings.Repeat("a", 800), withModelRef(model))
+					stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: &msg})
+					stream.Push(types.AssistantMessageEvent{Type: types.EventDone, Reason: types.StopReasonStop, Message: &msg})
+				case 2:
+					msg := testAssistantMessage("recent-history:"+strings.Repeat("b", 800), withModelRef(model))
+					stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: &msg})
+					stream.Push(types.AssistantMessageEvent{Type: types.EventDone, Reason: types.StopReasonStop, Message: &msg})
+				case 3:
+					message := testAssistantMessage("", withModelRef(model), withStopReason(types.StopReasonToolUse))
+					message.Content = []types.Content{
+						types.ToolCall{Kind: types.KindToolCall, ID: "toolu_large", Name: "large_result", Arguments: map[string]any{}},
+					}
+					partial := message
+					partial.Content = nil
+					stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: &partial})
+					stream.Push(types.AssistantMessageEvent{Type: types.EventDone, Reason: types.StopReasonToolUse, Message: &message})
+				default:
+					mu.Lock()
+					data, _ := json.Marshal(llmContext.Messages)
+					resumedRequest = string(data)
+					mu.Unlock()
+					msg := testAssistantMessage("finished after compaction", withModelRef(model))
+					stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: &msg})
+					stream.Push(types.AssistantMessageEvent{Type: types.EventDone, Reason: types.StopReasonStop, Message: &msg})
+				}
+				stream.End()
+			}()
+			return stream.AssistantMessageEventStream
+		},
+		ExtensionsResult: []*LoadExtensionsResult{{
+			Extensions: []*Extension{
+				{
+					Path:     "compaction-stub",
+					Handlers: map[string][]ExtensionHandler{},
+				},
+			},
+			Runtime: CreateExtensionRuntime(),
+		}},
+	})
+	session.extensionRunner.extensions[0].Handlers["session_before_compact"] = []ExtensionHandler{
+		func(ctx context.Context, extCtx *ExtensionContext, event ExtensionEvent) (any, error) {
+			compactionEvent, ok := event.(*SessionBeforeCompactEvent)
+			if !ok || compactionEvent.Preparation == nil {
+				return nil, fmt.Errorf("unexpected event %T", event)
+			}
+			mu.Lock()
+			order = append(order, "compaction")
+			mu.Unlock()
+			return &SessionBeforeCompactResult{
+				Compaction: &CompactionResult{
+					Summary:          "compacted history",
+					FirstKeptEntryID: compactionEvent.Preparation.FirstKeptEntryID,
+					TokensBefore:     compactionEvent.Preparation.TokensBefore,
+					Details:          map[string]any{},
+				},
+			}, nil
+		},
+	}
+
+	if err := session.Prompt(context.Background(), "seed old history", nil); err != nil {
+		t.Fatal(err)
+	}
+	session.Agent.WaitForIdle()
+	if err := session.Prompt(context.Background(), "seed recent history", nil); err != nil {
+		t.Fatal(err)
+	}
+	session.Agent.WaitForIdle()
+
+	if err := session.Prompt(context.Background(), "run the large tool", nil); err != nil {
+		t.Fatal(err)
+	}
+	session.Agent.WaitForIdle()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Join(order, ",") != "compaction" {
+		t.Fatalf("order = %v, want [compaction]", order)
+	}
+	if !strings.Contains(resumedRequest, "compacted history") {
+		t.Fatalf("resumed request missing compacted summary: %q", resumedRequest)
+	}
+	if !strings.Contains(resumedRequest, "large-tool-result") {
+		t.Fatalf("resumed request missing the kept tool result: %q", resumedRequest)
+	}
+	if session.GetLastAssistantText() != "finished after compaction" {
+		t.Fatalf("last assistant text = %q", session.GetLastAssistantText())
 	}
 }

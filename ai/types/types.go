@@ -388,6 +388,8 @@ const (
 // Deferred and DeferredWindow (empty = provider default).
 type SimpleStreamOptions struct {
 	StreamOptions
+	// ToolChoice is the provider-neutral tool selection for simple
+	// requests. When omitted, adapters use provider-specific behavior.
 	ToolChoice      ToolChoice
 	Reasoning       ThinkingLevel
 	Deferred        bool
@@ -395,11 +397,20 @@ type SimpleStreamOptions struct {
 	ThinkingBudgets *ThinkingBudgets
 }
 
-// StreamFunction is the contract for a provider stream function: request,
-// model, and runtime failures are encoded in the returned stream, never
-// returned as an error. Terminal failure produces a final AssistantMessage
-// with StopReason error or aborted (pi: StreamFunction). ctx carries the
-// caller's cancellation (pi: options.signal).
+// StreamFunction is the contract for a provider stream function (pi:
+// StreamFunction).
+//
+// Contract:
+//   - Must return an AssistantMessageEventStream.
+//   - Direct StreamSimple() calls may throw synchronously when request auth
+//     is missing (pig: the Models entry points return an error; adapter
+//     StreamSimple returns the failure in the stream). Once a stream is
+//     returned, request/model/runtime failures are encoded in that stream,
+//     never returned as an error.
+//   - Error termination must produce an AssistantMessage with StopReason
+//     "error" or "aborted" and errorMessage, emitted via the stream protocol.
+//
+// ctx carries the caller's cancellation (pi: options.signal).
 type StreamFunction func(ctx context.Context, model *Model, llmContext *Context, options *StreamOptions) *AssistantMessageEventStream
 
 // ImagesFunction generates images for one request.
@@ -677,6 +688,9 @@ type AssistantMessage struct {
 	// ResponseID is the provider-specific response/message identifier when
 	// the upstream API exposes one.
 	ResponseID string `json:"responseId,omitempty"`
+	// ProviderThinkingLevel is the exact provider-native effort level used
+	// for this response. Absent for legacy or unmanaged responses.
+	ProviderThinkingLevel string `json:"providerThinkingLevel,omitempty"`
 	// Diagnostics hold redacted provider/runtime diagnostics for failures
 	// and recoveries.
 	Diagnostics []AssistantMessageDiagnostic `json:"diagnostics,omitempty"`
@@ -963,9 +977,24 @@ const (
 //	done             Reason (stop|length|toolUse|deferred), Message
 //	error            Reason (aborted|error), Message
 //
-// Streams emit start before partial updates, then terminate with done
-// carrying the final successful AssistantMessage, or error carrying the final
-// AssistantMessage with StopReason error or aborted and ErrorMessage set.
+// Event protocol for AssistantMessageEventStream (pi: AssistantMessageEvent
+// docs):
+//
+// Successful streams emit start before partial updates and terminate with
+// done. A stream may terminate directly with error when request setup fails
+// before generation starts; after start, failures also terminate with error.
+// Direct StreamSimple() calls throw synchronously when request auth is
+// missing (pig: the Models entry points return an error instead). Updates
+// and done must never appear before start.
+//
+// Partial is the shared live response-so-far helper, not an event-time
+// snapshot (pig deviation: each event carries a snapshot — see
+// ai/api/openai_completions_stream.go syncContent). Text and thinking blocks
+// are empty when their *_start event is emitted and grow only through their
+// corresponding *_delta events until the authoritative *_end. Redacted
+// thinking may be complete at start and emit no deltas. Tool-call arguments
+// at toolcall_start are provider-specific; toolcall_delta carries subsequent
+// JSON updates.
 type AssistantMessageEvent struct {
 	Type         AssistantMessageEventType `json:"type"`
 	ContentIndex int                       `json:"contentIndex,omitempty"`
@@ -1121,6 +1150,13 @@ type OpenAICompletionsCompat struct {
 	// cache retention (prompt_cache_retention "24h" or Anthropic-style
 	// cache_control.ttl "1h", depending on format). Default: true.
 	SupportsLongCacheRetention *bool `json:"supportsLongCacheRetention,omitempty"`
+	// VllmPriority is the vLLM scheduler priority sent as the top-level
+	// `priority` request field (lower values are handled earlier; server
+	// default 0). Only meaningful when vLLM runs with
+	// `--scheduling-policy priority`; useful for keeping background/batch
+	// work from stalling interactive sessions. Off by default; not set on
+	// the generated catalog.
+	VllmPriority *float64 `json:"vllmPriority,omitempty"`
 }
 
 // OpenAIResponsesCompat is missing here by design (pi: compatibility settings
@@ -1157,6 +1193,10 @@ type AnthropicMessagesCompat struct {
 	AllowEmptySignature *bool `json:"allowEmptySignature,omitempty"`
 	// SupportsStrictTools: Anthropic strict tool schemas. Default: false.
 	SupportsStrictTools *bool `json:"supportsStrictTools,omitempty"`
+	// SupportsMidConvoEffort: whether the exact model transport supports
+	// effort-only system messages and thinking binding controls. Default:
+	// false.
+	SupportsMidConvoEffort *bool `json:"supportsMidConvoEffort,omitempty"`
 	// AllowedFallbackModels: models Anthropic may fall back to on
 	// server-side refusal; empty means the fallbacks field must be omitted.
 	AllowedFallbackModels []AnthropicAllowedFallbackModel `json:"allowedFallbackModels,omitempty"`

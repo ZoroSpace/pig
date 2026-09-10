@@ -331,3 +331,55 @@ func someLineStartsWith(lines []string, prefix string) bool {
 }
 
 var _ tui.Component = (*AssistantMessageComponent)(nil)
+
+// pi: "collapses individual thinking runs when clicked" (v0.85.1).
+func TestAssistantMessageCollapsesIndividualThinkingRunsWhenClicked(t *testing.T) {
+	initTestTheme(t)
+
+	component := NewAssistantMessageComponent(createAssistantMessage([]types.Content{
+		&types.ThinkingContent{Kind: types.KindThinking, Thinking: "first reasoning"},
+		&types.TextContent{Kind: types.KindText, Text: "answer"},
+		&types.ThinkingContent{Kind: types.KindThinking, Thinking: "second reasoning"},
+	}, types.StopReasonStop), nil)
+
+	width := 80
+	lines := component.Render(width)
+	firstThinkingRow := -1
+	for i, line := range lines {
+		if strings.Contains(utils.StripAnsi(line), "first reasoning") {
+			firstThinkingRow = i
+			break
+		}
+	}
+	if firstThinkingRow < 0 {
+		t.Fatal("expected first thinking run to render")
+	}
+
+	clickCount := 1
+	event := &tui.TuiMouseEvent{
+		Type:       tui.MouseEventTypeClick,
+		Button:     tui.MouseButtonLeft,
+		X:          1,
+		Y:          firstThinkingRow,
+		ScreenX:    1,
+		ScreenY:    firstThinkingRow,
+		Width:      width,
+		Height:     len(lines),
+		ClickCount: &clickCount,
+	}
+	result := component.HandleMouse(event)
+	if result == nil || !result.Handled {
+		t.Fatal("expected click to be handled")
+	}
+
+	collapsed := rendered(t, component.Render(width))
+	if strings.Contains(collapsed, "first reasoning") {
+		t.Fatal("expected first thinking run to be collapsed")
+	}
+	if !strings.Contains(collapsed, "Thinking...") {
+		t.Fatal("expected collapsed label")
+	}
+	if !strings.Contains(collapsed, "second reasoning") {
+		t.Fatal("expected second thinking run to stay visible")
+	}
+}

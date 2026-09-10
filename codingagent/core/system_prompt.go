@@ -79,6 +79,20 @@ func BuildSystemPrompt(options BuildSystemPromptOptions) string {
 	contextFiles := providedContextFiles
 	skills := providedSkills
 
+	// pi (v0.85.1): skills are appended when a tool capable of reading their
+	// files (read or bash) is available; the section names the tool to use.
+	tools := selectedTools
+	if tools == nil {
+		tools = []string{"read", "bash", "edit", "write"}
+	}
+	skillFileReadTool := ""
+	for _, candidate := range []string{"read", "bash"} {
+		if stringSliceContains(tools, candidate) {
+			skillFileReadTool = candidate
+			break
+		}
+	}
+
 	if customPrompt != "" {
 		prompt := customPrompt
 
@@ -96,10 +110,10 @@ func BuildSystemPrompt(options BuildSystemPromptOptions) string {
 			prompt += "</project_context>\n"
 		}
 
-		// Append skills section (only if read tool is available)
-		customPromptHasRead := selectedTools == nil || stringSliceContains(selectedTools, "read")
-		if customPromptHasRead && len(skills) > 0 {
-			prompt += FormatSkillsForPrompt(skills)
+		// Append skills when a tool capable of reading their files is
+		// available.
+		if skillFileReadTool != "" && len(skills) > 0 {
+			prompt += FormatSkillsForPrompt(skills, skillFileReadTool)
 		}
 
 		prompt += fmt.Sprintf("\nCurrent working directory: %s\n", promptCwd)
@@ -115,10 +129,6 @@ func BuildSystemPrompt(options BuildSystemPromptOptions) string {
 	// Build tools list based on selected tools.
 	// A tool appears in Available tools only when the caller provides a
 	// one-line snippet.
-	tools := selectedTools
-	if tools == nil {
-		tools = []string{"read", "bash", "edit", "write"}
-	}
 	var visibleTools []string
 	for _, name := range tools {
 		if snippet, ok := toolSnippets[name]; ok && snippet != "" {
@@ -150,7 +160,6 @@ func BuildSystemPrompt(options BuildSystemPromptOptions) string {
 	hasGrep := stringSliceContains(tools, "grep")
 	hasFind := stringSliceContains(tools, "find")
 	hasLs := stringSliceContains(tools, "ls")
-	hasRead := stringSliceContains(tools, "read")
 
 	// File exploration guidelines
 	if (hasBash || hasPowerShell) && !hasGrep && !hasFind && !hasLs {
@@ -206,9 +215,10 @@ Guidelines:
 		prompt += "</project_context>\n"
 	}
 
-	// Append skills section (only if read tool is available)
-	if hasRead && len(skills) > 0 {
-		prompt += FormatSkillsForPrompt(skills)
+	// Append skills when a tool capable of reading their files is
+	// available.
+	if skillFileReadTool != "" && len(skills) > 0 {
+		prompt += FormatSkillsForPrompt(skills, skillFileReadTool)
 	}
 
 	prompt += fmt.Sprintf("\nCurrent working directory: %s", promptCwd)

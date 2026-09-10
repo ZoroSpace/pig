@@ -178,16 +178,13 @@ func TestUsesFreshRoutingSessionsWithoutPromptCaching(t *testing.T) {
 		if options.CacheRetention != types.CacheRetentionNone {
 			t.Fatalf("call %d: expected cacheRetention none, got %q", i, options.CacheRetention)
 		}
-		if options.ToolChoice != types.ToolChoiceNone {
-			t.Fatalf("call %d: expected toolChoice none, got %q", i, options.ToolChoice)
-		}
 	}
 	if mock.sessionIDs[0] == mock.sessionIDs[1] {
 		t.Fatal("expected distinct routing session IDs")
 	}
 }
 
-func TestHonorsACallerSuppliedRoutingSessionWithoutPromptCaching(t *testing.T) {
+func TestHonorsCallerSuppliedRoutingSessionAndToolChoiceWithoutPromptCaching(t *testing.T) {
 	mock := newSummaryMock(t, &mockSummaryResponse)
 
 	options := &ai.SimpleStreamOptions{}
@@ -213,8 +210,8 @@ func TestHonorsACallerSuppliedRoutingSessionWithoutPromptCaching(t *testing.T) {
 	if got.CacheRetention != types.CacheRetentionNone {
 		t.Fatalf("expected cacheRetention none, got %q", got.CacheRetention)
 	}
-	if got.ToolChoice != types.ToolChoiceNone {
-		t.Fatalf("expected toolChoice none, got %q", got.ToolChoice)
+	if got.ToolChoice != types.ToolChoiceAuto {
+		t.Fatalf("expected toolChoice auto to be preserved, got %q", got.ToolChoice)
 	}
 }
 
@@ -283,6 +280,47 @@ func TestRejectsToolCallsFromSplitTurnSummaries(t *testing.T) {
 	_, err := Compact(t.Context(), preparation, createTestModel(false, 8192), "test-key", nil, "", "", nil, nil, nil, nil, "")
 	if err == nil || err.Error() != "Turn prefix summarization attempted to call a tool" {
 		t.Fatalf("expected turn prefix tool call rejection, got %v", err)
+	}
+}
+
+func TestRejectsALengthLimitedHistorySummary(t *testing.T) {
+	lengthResponse := mockSummaryResponse
+	lengthResponse.StopReason = types.StopReasonLength
+	lengthResponse.Content = []types.Content{types.NewTextContent("partial")}
+	newSummaryMock(t, &lengthResponse)
+
+	_, err := GenerateSummaryWithUsage(
+		t.Context(),
+		summarizationMessages,
+		createTestModel(false, 8192),
+		2000,
+		"test-key",
+		nil, "", "", "", nil, nil, nil, nil, "",
+	)
+	if err == nil || !strings.Contains(err.Error(), "generation hit the token cap") {
+		t.Fatalf("expected token cap rejection, got %v", err)
+	}
+}
+
+func TestRejectsALengthLimitedSplitTurnSummary(t *testing.T) {
+	lengthResponse := mockSummaryResponse
+	lengthResponse.StopReason = types.StopReasonLength
+	lengthResponse.Content = []types.Content{types.NewTextContent("partial")}
+	newSummaryMock(t, &lengthResponse)
+
+	preparation := &CompactionPreparation{
+		FirstKeptEntryID:    "entry-keep",
+		MessagesToSummarize: nil,
+		TurnPrefixMessages:  summarizationMessages,
+		IsSplitTurn:         true,
+		TokensBefore:        100,
+		FileOps:             CreateFileOps(),
+		Settings:            CompactionSettingsValues{Enabled: true, ReserveTokens: 2000, KeepRecentTokens: 20},
+	}
+
+	_, err := Compact(t.Context(), preparation, createTestModel(false, 8192), "test-key", nil, "", "", nil, nil, nil, nil, "")
+	if err == nil || !strings.Contains(err.Error(), "generation hit the token cap") {
+		t.Fatalf("expected token cap rejection, got %v", err)
 	}
 }
 

@@ -362,7 +362,7 @@ func TestTuiAltScreenInvokesTheRightClickPasteHandlerOnlyOnWindowsOutsideVSCode(
 	tui.Stop(nil)
 }
 
-func TestTuiAltScreenDragsAVisibleScrollbarThumbAndKeepsItVisibleUntilRelease(t *testing.T) {
+func TestTuiAltScreenRevealsAnAutoScrollbarWhenThePointerEntersItsHiddenTrack(t *testing.T) {
 	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(10, 5)}
 	tui := NewTuiAltScreen(terminal, nil, "", nil)
 	scrollView := NewScrollView(
@@ -370,7 +370,7 @@ func TestTuiAltScreenDragsAVisibleScrollbarThumbAndKeepsItVisibleUntilRelease(t 
 		&ScrollViewOptions{
 			Primary:              true,
 			Scrollbar:            ScrollViewScrollbarAuto,
-			ScrollbarHideDelayMs: lo.ToPtr(50),
+			ScrollbarHideDelayMs: lo.ToPtr(20),
 		},
 	)
 	tui.SetLayoutRoot(scrollView)
@@ -380,59 +380,57 @@ func TestTuiAltScreenDragsAVisibleScrollbarThumbAndKeepsItVisibleUntilRelease(t 
 		t.Fatal("expected scrollbar hidden initially")
 	}
 
-	terminal.SendInput("\x1b[<65;10;1M")
+	terminal.SendInput("\x1b[<35;10;3M")
 	terminal.WaitForRender()
-	if scrollView.ScrollTop() != 1 {
-		t.Fatalf("scrollTop = %d, want 1", scrollView.ScrollTop())
-	}
 	if !scrollView.IsScrollbarVisible() {
-		t.Fatal("expected scrollbar visible after wheel")
+		t.Fatal("expected scrollbar visible on track hover")
+	}
+	if !scrollView.IsScrollbarActive() {
+		t.Fatal("expected scrollbar active on track hover")
+	}
+	if !altViewportSome(terminal, func(line string) bool {
+		return strings.ContainsAny(line, "│█")
+	}) {
+		t.Fatalf("expected a scrollbar glyph in viewport: %q", terminal.GetViewport())
 	}
 
-	terminal.SendInput("\x1b[<0;10;1M")
+	terminal.SendInput("\x1b[<35;9;3M")
+	time.Sleep(40 * time.Millisecond)
 	terminal.WaitForRender()
-	time.Sleep(70 * time.Millisecond)
-	if !scrollView.IsScrollbarVisible() {
-		t.Fatal("expected scrollbar visible during drag")
-	}
-
-	terminal.SendInput("\x1b[<32;10;4M")
-	terminal.WaitForRender()
-	if scrollView.ScrollTop() != 15 {
-		t.Fatalf("scrollTop = %d, want 15", scrollView.ScrollTop())
-	}
-	altAssertViewport(t, terminal, []string{"line 16", "line 17", "line 18", "line 19", "line 20"})
-
-	terminal.SendInput("\x1b[<0;10;4m")
-	terminal.WaitForRender()
-	if !scrollView.IsScrollbarVisible() {
-		t.Fatal("expected scrollbar visible right after release")
-	}
-	time.Sleep(70 * time.Millisecond)
-	if !scrollView.IsScrollbarVisible() {
-		t.Fatal("expected scrollbar visible while hovered after release")
-	}
-	terminal.SendInput("\x1b[<35;9;4M")
-	time.Sleep(70 * time.Millisecond)
 	if scrollView.IsScrollbarVisible() {
 		t.Fatal("expected scrollbar hidden after unhover")
 	}
+	tui.Stop(nil)
+}
 
-	terminal.SendInput("\x1b[<64;10;5M")
+func TestTuiAltScreenJumpsToAScrollbarTrackPositionAndContinuesDraggingFromThere(t *testing.T) {
+	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(10, 10)}
+	tui := NewTuiAltScreen(terminal, nil, "", nil)
+	scrollView := NewScrollView(
+		NewText(altTestLines(50), 0, 0),
+		&ScrollViewOptions{Primary: true, Scrollbar: ScrollViewScrollbarAlways},
+	)
+	tui.SetLayoutRoot(scrollView)
+	tui.Start()
 	terminal.WaitForRender()
-	if scrollView.ScrollTop() != 14 {
-		t.Fatalf("scrollTop = %d, want 14", scrollView.ScrollTop())
-	}
-	time.Sleep(70 * time.Millisecond)
-	if !scrollView.IsScrollbarVisible() {
-		t.Fatal("expected scrollbar visible after re-wheel")
-	}
-	terminal.SendInput("\x1b[<35;9;5M")
-	time.Sleep(70 * time.Millisecond)
-	if scrollView.IsScrollbarVisible() {
-		t.Fatal("expected scrollbar hidden after final unhover")
+	if scrollView.ScrollTop() != 0 {
+		t.Fatalf("scrollTop = %d, want 0", scrollView.ScrollTop())
 	}
 
+	terminal.SendInput("\x1b[<0;10;6M")
+	terminal.WaitForRender()
+	if scrollView.ScrollTop() != 20 {
+		t.Fatalf("scrollTop = %d, want 20", scrollView.ScrollTop())
+	}
+
+	terminal.SendInput("\x1b[<32;10;10M")
+	terminal.WaitForRender()
+	if scrollView.ScrollTop() != 40 {
+		t.Fatalf("scrollTop = %d, want 40", scrollView.ScrollTop())
+	}
+
+	terminal.SendInput("\x1b[<0;10;10m")
+	terminal.WaitForRender()
 	if strings.Contains(terminal.eventsJoined(), "\x1b]52;c;") {
 		t.Fatal("drag must not copy to clipboard")
 	}
@@ -610,7 +608,7 @@ func TestTuiAltScreenSearchesTheTranscriptWithCtrlShiftFAndRestoresEditorFocusOn
 		t.Fatal("expected transcript not following end during search")
 	}
 	if !altViewportSome(terminal, func(line string) bool {
-		return strings.Contains(line, "Find transcript") && strings.Contains(line, "2/2")
+		return strings.Contains(line, "2/2")
 	}) {
 		t.Fatalf("missing search overlay 2/2: %q", terminal.GetViewport())
 	}
@@ -631,14 +629,16 @@ func TestTuiAltScreenSearchesTheTranscriptWithCtrlShiftFAndRestoresEditorFocusOn
 	if transcript.ScrollTop() != 0 {
 		t.Fatalf("transcript scrollTop = %d, want 0", transcript.ScrollTop())
 	}
-	if !altViewportSome(terminal, func(line string) bool { return strings.Contains(line, "> needle") }) {
+	if !altViewportSome(terminal, func(line string) bool {
+		return strings.Contains(line, "needle") && strings.Contains(line, "2/2")
+	}) {
 		t.Fatalf("missing search query line: %q", terminal.GetViewport())
 	}
 
 	terminal.SendInput("\x07")
 	terminal.WaitForRender()
 	if !altViewportSome(terminal, func(line string) bool {
-		return strings.Contains(line, "Find transcript") && strings.Contains(line, "1/2")
+		return strings.Contains(line, "1/2")
 	}) {
 		t.Fatalf("missing search overlay 1/2: %q", terminal.GetViewport())
 	}
@@ -649,7 +649,7 @@ func TestTuiAltScreenSearchesTheTranscriptWithCtrlShiftFAndRestoresEditorFocusOn
 	terminal.SendInput("\x1b[103;6u")
 	terminal.WaitForRender()
 	if !altViewportSome(terminal, func(line string) bool {
-		return strings.Contains(line, "Find transcript") && strings.Contains(line, "2/2")
+		return strings.Contains(line, "2/2")
 	}) {
 		t.Fatalf("missing search overlay 2/2 after previous: %q", terminal.GetViewport())
 	}
@@ -660,7 +660,7 @@ func TestTuiAltScreenSearchesTheTranscriptWithCtrlShiftFAndRestoresEditorFocusOn
 	terminal.SendInput("\x1b")
 	terminal.SendInput("x")
 	terminal.WaitForRender()
-	if altViewportSome(terminal, func(line string) bool { return strings.Contains(line, "Find transcript") }) {
+	if altViewportSome(terminal, func(line string) bool { return strings.Contains(line, "┌") }) {
 		t.Fatalf("search overlay should be closed: %q", terminal.GetViewport())
 	}
 	if got := editor.Inputs(); !stringSlicesEqual(got, []string{"x"}) {
@@ -1648,7 +1648,7 @@ func TestTuiAltScreenKeepsViewportScrollingWhileTranscriptSearchIsFocused(t *tes
 
 	terminal.SendInput("\x1b[102;6u")
 	terminal.WaitForRender()
-	if !altViewportSome(terminal, func(line string) bool { return strings.Contains(line, "Find transcript") }) {
+	if !altViewportSome(terminal, func(line string) bool { return strings.Contains(line, "↑ ↓") }) {
 		t.Fatal("expected search overlay")
 	}
 
@@ -1658,7 +1658,7 @@ func TestTuiAltScreenKeepsViewportScrollingWhileTranscriptSearchIsFocused(t *tes
 	if got := tui.ViewportTop(); got >= topBefore {
 		t.Fatalf("viewportTop = %d, want < %d", got, topBefore)
 	}
-	if !altViewportSome(terminal, func(line string) bool { return strings.Contains(line, "Find transcript") }) {
+	if !altViewportSome(terminal, func(line string) bool { return strings.Contains(line, "↑ ↓") }) {
 		t.Fatal("expected search overlay to stay open")
 	}
 	tui.Stop(nil)

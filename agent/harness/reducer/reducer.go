@@ -35,7 +35,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/agent"
-	"github.com/ZoroSpace/pig/agent/harness/session"
+
 	"github.com/ZoroSpace/pig/ai/types"
 )
 
@@ -83,11 +83,11 @@ func corrupt(reason RecordLogCorruptionReason, message string) *RecordLogCorrupt
 type RecordLogSlice struct {
 	Lane string
 	// OpenOperations are the lane's unfinished operation_started records.
-	OpenOperations []session.OperationStartedRecord
-	Records        []session.LaneRecord
+	OpenOperations []OperationStartedRecord
+	Records        []LaneRecord
 	// Entries are operation-owned entries plus entries fetched directly by
 	// provisioned or referenced ids.
-	Entries []session.Entry
+	Entries []Entry
 }
 
 // EffectiveModel is the anonymous `{ provider, modelId }` shape of
@@ -128,7 +128,7 @@ type TerminalFailureState struct {
 type ToolBatchCall struct {
 	ToolIndex    int
 	ToolCall     agent.AgentToolCall
-	Started      *session.ToolStartedRecord
+	Started      *ToolStartedRecord
 	ResultExists bool
 	Terminate    bool
 }
@@ -146,10 +146,10 @@ type ToolBatchState struct {
 // anonymous step shape inside LaneState.operation). CompactionReason is set
 // only when Kind is "compaction" (pi: `compactionReason?`).
 type OperationStepState struct {
-	Kind             session.OperationStep
+	Kind             OperationStep
 	Attempts         int
 	ResultEntryID    string
-	CompactionReason *session.CompactionReason
+	CompactionReason *CompactionReason
 }
 
 // NewestOwnState summarizes the newest operation-owned entry (pi: the
@@ -157,7 +157,7 @@ type OperationStepState struct {
 // nil when pi's optional members are absent.
 type NewestOwnState struct {
 	EntryID    string
-	Type       session.EntryType
+	Type       EntryType
 	Role       *types.Role
 	StopReason *types.StopReason
 }
@@ -174,15 +174,15 @@ type OperationTargets struct {
 // (pi: the anonymous operation shape inside LaneState).
 type LaneOperationState struct {
 	ID                     string
-	Kind                   session.OperationIntentKind
-	Intent                 session.OperationIntent
+	Kind                   OperationIntentKind
+	Intent                 OperationIntent
 	Aborting               bool
 	Step                   *OperationStepState
 	ToolBatch              *ToolBatchState
-	MissingInitialMessages []session.Entry
-	PendingSteer           []session.Entry
-	PendingFollowUp        []session.Entry
-	PendingWrites          []session.Entry
+	MissingInitialMessages []Entry
+	PendingSteer           []Entry
+	PendingFollowUp        []Entry
+	PendingWrites          []Entry
 	Deferred               *types.DeferredHandle
 	OverflowRecoveryUsed   bool
 	NewestOwn              *NewestOwnState
@@ -194,7 +194,7 @@ type LaneState struct {
 	Lane           string
 	LeafID         *string
 	Operation      *LaneOperationState
-	PendingNextRun []session.Entry
+	PendingNextRun []Entry
 }
 
 // LaneReductionInput is the bounded recovery input of one lane (pi:
@@ -206,10 +206,10 @@ type LaneReductionInput struct {
 	LeafID *string
 	// OwnEntries are entries appended by the open operation, oldest first.
 	// Empty when idle.
-	OwnEntries []session.Entry
+	OwnEntries []Entry
 	// ConfigurationEntries are bounded effective-state lookups at the
 	// operation anchor or idle leaf, oldest first.
-	ConfigurationEntries []session.Entry
+	ConfigurationEntries []Entry
 	// Defaults are harness option fallbacks used when no persisted value
 	// exists.
 	Defaults EffectiveLaneConfiguration
@@ -242,12 +242,12 @@ func jsonClone[T any](value T) T {
 
 // cloneEntry deep-copies an entry through the union dispatch (pi:
 // structuredClone on entries).
-func cloneEntry(entry session.Entry) session.Entry {
+func cloneEntry(entry Entry) Entry {
 	raw, err := json.Marshal(entry)
 	if err != nil {
 		return nil
 	}
-	cloned, err := session.DecodeEntry(raw)
+	cloned, err := DecodeEntry(raw)
 	if err != nil {
 		return nil
 	}
@@ -256,12 +256,12 @@ func cloneEntry(entry session.Entry) session.Entry {
 
 // cloneIntent deep-copies an operation intent through the union dispatch (pi:
 // structuredClone).
-func cloneIntent(intent session.OperationIntent) session.OperationIntent {
+func cloneIntent(intent OperationIntent) OperationIntent {
 	raw, err := json.Marshal(intent)
 	if err != nil {
 		return nil
 	}
-	cloned, err := session.DecodeOperationIntent(raw)
+	cloned, err := DecodeOperationIntent(raw)
 	if err != nil {
 		return nil
 	}
@@ -282,24 +282,24 @@ func cloneAssistantMessage(message types.AssistantMessage) (types.AssistantMessa
 	return decoded.(types.AssistantMessage), nil
 }
 
-func bySequenceRecords(values []session.LaneRecord) []session.LaneRecord {
-	out := append([]session.LaneRecord(nil), values...)
+func bySequenceRecords(values []LaneRecord) []LaneRecord {
+	out := append([]LaneRecord(nil), values...)
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].Base().Seq < out[j].Base().Seq
 	})
 	return out
 }
 
-func bySequenceEntries(values []session.Entry) []session.Entry {
-	out := append([]session.Entry(nil), values...)
+func bySequenceEntries(values []Entry) []Entry {
+	out := append([]Entry(nil), values...)
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].Base().Seq < out[j].Base().Seq
 	})
 	return out
 }
 
-func entryValuesByID(m map[string]session.Entry) []session.Entry {
-	out := make([]session.Entry, 0, len(m))
+func entryValuesByID(m map[string]Entry) []Entry {
+	out := make([]Entry, 0, len(m))
 	for _, entry := range m {
 		out = append(out, entry)
 	}
@@ -310,27 +310,27 @@ func entryValuesByID(m map[string]session.Entry) []session.Entry {
 // `"runId" in record && typeof record.runId === "string"`). Optional runId
 // members (queue_enqueued's nextRun variant, queue_cancelled, usage) map to
 // pointer presence.
-func hasRunID(record session.LaneRecord) (string, bool) {
+func hasRunID(record LaneRecord) (string, bool) {
 	switch r := record.(type) {
-	case *session.AbortRequestedRecord:
+	case *AbortRequestedRecord:
 		return r.RunID, true
-	case *session.OperationFinishedRecord:
+	case *OperationFinishedRecord:
 		return r.RunID, true
-	case *session.StepAttemptRecord:
+	case *StepAttemptRecord:
 		return r.RunID, true
-	case *session.ToolStartedRecord:
+	case *ToolStartedRecord:
 		return r.RunID, true
-	case *session.WriteDeferredRecord:
+	case *WriteDeferredRecord:
 		return r.RunID, true
-	case *session.QueueEnqueuedRecord:
+	case *QueueEnqueuedRecord:
 		if r.RunID != nil {
 			return *r.RunID, true
 		}
-	case *session.QueueCancelledRecord:
+	case *QueueCancelledRecord:
 		if r.RunID != nil {
 			return *r.RunID, true
 		}
-	case *session.UsageRecord:
+	case *UsageRecord:
 		if r.RunID != nil {
 			return *r.RunID, true
 		}
@@ -368,8 +368,8 @@ func toolResultOf(message types.Message) (types.ToolResultMessage, bool) {
 
 // assistantMessageOfEntry returns the assistant message when entry is a
 // message entry whose role is "assistant".
-func assistantMessageOfEntry(entry session.Entry) (types.AssistantMessage, bool) {
-	m, ok := entry.(*session.MessageEntry)
+func assistantMessageOfEntry(entry Entry) (types.AssistantMessage, bool) {
+	m, ok := entry.(*MessageEntry)
 	if !ok {
 		return types.AssistantMessage{}, false
 	}
@@ -382,8 +382,8 @@ func assistantMessageOfEntry(entry session.Entry) (types.AssistantMessage, bool)
 
 // toolResultMessageOfEntry returns the tool-result message when entry is a
 // message entry whose role is "toolResult".
-func toolResultMessageOfEntry(entry session.Entry) (types.ToolResultMessage, bool) {
-	m, ok := entry.(*session.MessageEntry)
+func toolResultMessageOfEntry(entry Entry) (types.ToolResultMessage, bool) {
+	m, ok := entry.(*MessageEntry)
 	if !ok {
 		return types.ToolResultMessage{}, false
 	}
@@ -394,15 +394,15 @@ func toolResultMessageOfEntry(entry session.Entry) (types.ToolResultMessage, boo
 	return result, true
 }
 
-func isMessageWithRole(entry session.Entry, role types.Role) bool {
-	m, ok := entry.(*session.MessageEntry)
+func isMessageWithRole(entry Entry, role types.Role) bool {
+	m, ok := entry.(*MessageEntry)
 	if !ok {
 		return false
 	}
 	return m.Message.MessageRole() == role
 }
 
-func entryExists(entriesById map[string]session.Entry, id string) bool {
+func entryExists(entriesById map[string]Entry, id string) bool {
 	_, ok := entriesById[id]
 	return ok
 }
@@ -425,7 +425,7 @@ func toolCallsOf(message types.AssistantMessage) []types.ToolCall {
 // while pig may pair an in-memory construct (nil slice → "content": null)
 // with a JSONL-decoded entry (null → empty slice); one decode round trip
 // erases that JSON-shape drift before comparison.
-func provisionedPayloadJSON(entry session.Entry) []byte {
+func provisionedPayloadJSON(entry Entry) []byte {
 	if normalized := cloneEntry(entry); normalized != nil {
 		entry = normalized
 	}
@@ -447,11 +447,11 @@ func provisionedPayloadJSON(entry session.Entry) []byte {
 	return canonical
 }
 
-func matchesProvisionedEntry(entry session.Entry, target session.Entry) bool {
+func matchesProvisionedEntry(entry Entry, target Entry) bool {
 	return bytes.Equal(provisionedPayloadJSON(entry), provisionedPayloadJSON(target))
 }
 
-func validateExactProvisionedEntry(entriesById map[string]session.Entry, target session.Entry) error {
+func validateExactProvisionedEntry(entriesById map[string]Entry, target Entry) error {
 	if entry, ok := entriesById[target.Base().ID]; ok && !matchesProvisionedEntry(entry, target) {
 		return corrupt(CorruptionProvisionedEntryMismatch,
 			"Provisioned entry "+target.Base().ID+" exists with content different from its intent")
@@ -460,9 +460,9 @@ func validateExactProvisionedEntry(entriesById map[string]session.Entry, target 
 }
 
 func validateResultEntry(
-	entriesById map[string]session.Entry,
+	entriesById map[string]Entry,
 	resultEntryID string,
-	matches func(session.Entry) bool,
+	matches func(Entry) bool,
 	description string,
 ) error {
 	if entry, ok := entriesById[resultEntryID]; ok && !matches(entry) {
@@ -472,12 +472,12 @@ func validateResultEntry(
 	return nil
 }
 
-func validateAttemptReason(record *session.StepAttemptRecord) error {
-	if record.Step == session.OperationStepCompaction {
+func validateAttemptReason(record *StepAttemptRecord) error {
+	if record.Step == OperationStepCompaction {
 		if record.CompactionReason == nil ||
-			(*record.CompactionReason != session.CompactionReasonManual &&
-				*record.CompactionReason != session.CompactionReasonThreshold &&
-				*record.CompactionReason != session.CompactionReasonOverflow) {
+			(*record.CompactionReason != CompactionReasonManual &&
+				*record.CompactionReason != CompactionReasonThreshold &&
+				*record.CompactionReason != CompactionReasonOverflow) {
 			return corrupt(CorruptionInvalidCompactionReason,
 				"Compaction attempt "+record.ID+" has no valid compaction reason")
 		}
@@ -490,7 +490,7 @@ func validateAttemptReason(record *session.StepAttemptRecord) error {
 
 // compactionReasonsEqual compares pi's possibly-undefined compactionReason
 // values (pointer-nil = undefined).
-func compactionReasonsEqual(a, b *session.CompactionReason) bool {
+func compactionReasonsEqual(a, b *CompactionReason) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
@@ -498,11 +498,11 @@ func compactionReasonsEqual(a, b *session.CompactionReason) bool {
 }
 
 func validateAttemptSequence(
-	record *session.StepAttemptRecord,
-	previous *session.StepAttemptRecord,
-	entriesById map[string]session.Entry,
+	record *StepAttemptRecord,
+	previous *StepAttemptRecord,
+	entriesById map[string]Entry,
 ) error {
-	var previousResult session.Entry
+	var previousResult Entry
 	if previous != nil {
 		previousResult = entriesById[previous.ResultEntryID]
 	}
@@ -518,7 +518,7 @@ func validateAttemptSequence(
 			string(record.Step)+" attempt "+record.ID+" is "+strconv.Itoa(record.Attempt)+
 				"; expected "+strconv.Itoa(expectedAttempt))
 	}
-	if !continuesSeries || record.Step == session.OperationStepAssistant || previous == nil {
+	if !continuesSeries || record.Step == OperationStepAssistant || previous == nil {
 		return nil
 	}
 	if record.ResultEntryID != previous.ResultEntryID {
@@ -532,27 +532,27 @@ func validateAttemptSequence(
 	return nil
 }
 
-func validateAttemptResult(entriesById map[string]session.Entry, record *session.StepAttemptRecord) error {
+func validateAttemptResult(entriesById map[string]Entry, record *StepAttemptRecord) error {
 	switch record.Step {
-	case session.OperationStepAssistant:
+	case OperationStepAssistant:
 		return validateResultEntry(entriesById, record.ResultEntryID,
-			func(entry session.Entry) bool { return isMessageWithRole(entry, types.RoleAssistant) },
+			func(entry Entry) bool { return isMessageWithRole(entry, types.RoleAssistant) },
 			"assistant result")
-	case session.OperationStepCompaction:
+	case OperationStepCompaction:
 		return validateResultEntry(entriesById, record.ResultEntryID,
-			func(entry session.Entry) bool { return entry.EntryType() == session.EntryTypeCompaction },
+			func(entry Entry) bool { return entry.EntryType() == EntryTypeCompaction },
 			"compaction result")
-	case session.OperationStepBranchSummary:
+	case OperationStepBranchSummary:
 		return validateResultEntry(entriesById, record.ResultEntryID,
-			func(entry session.Entry) bool { return entry.EntryType() == session.EntryTypeBranchSummary },
+			func(entry Entry) bool { return entry.EntryType() == EntryTypeBranchSummary },
 			"branch-summary result")
 	}
 	return nil
 }
 
 func validateToolStart(
-	record *session.ToolStartedRecord,
-	entriesById map[string]session.Entry,
+	record *ToolStartedRecord,
+	entriesById map[string]Entry,
 	invocations map[string]bool,
 ) error {
 	invocation := record.AssistantEntryID + "\x00" + strconv.Itoa(record.ToolIndex)
@@ -567,7 +567,7 @@ func validateToolStart(
 		return corrupt(CorruptionToolCallMismatch,
 			"Tool start "+record.ID+" does not reference an assistant entry")
 	}
-	assistant, _ := assistantOf(assistantEntry.(*session.MessageEntry).Message)
+	assistant, _ := assistantOf(assistantEntry.(*MessageEntry).Message)
 	toolCalls := toolCallsOf(assistant)
 	if record.ToolIndex >= len(toolCalls) {
 		return corrupt(CorruptionToolCallMismatch,
@@ -580,14 +580,14 @@ func validateToolStart(
 	}
 
 	return validateResultEntry(entriesById, record.ResultEntryID,
-		func(entry session.Entry) bool {
+		func(entry Entry) bool {
 			result, ok := toolResultMessageOfEntry(entry)
 			return ok && result.ToolCallID == record.ToolCallID && result.ToolName == record.ToolName
 		},
 		"tool result")
 }
 
-func validateDeferredHandles(entriesById map[string]session.Entry) error {
+func validateDeferredHandles(entriesById map[string]Entry) error {
 	for _, entry := range entriesById {
 		if assistant, ok := assistantMessageOfEntry(entry); ok &&
 			assistant.StopReason == types.StopReasonDeferred && assistant.Deferred == nil {
@@ -598,22 +598,22 @@ func validateDeferredHandles(entriesById map[string]session.Entry) error {
 	return nil
 }
 
-func validateOperationResult(entriesById map[string]session.Entry, record *session.OperationStartedRecord) error {
+func validateOperationResult(entriesById map[string]Entry, record *OperationStartedRecord) error {
 	switch intent := record.Intent.(type) {
-	case *session.RunIntent:
+	case *RunIntent:
 		for _, target := range intent.InitialMessages {
 			if err := validateExactProvisionedEntry(entriesById, target); err != nil {
 				return err
 			}
 		}
-	case *session.CompactionIntent:
+	case *CompactionIntent:
 		return validateResultEntry(entriesById, intent.ResultEntryID,
-			func(entry session.Entry) bool { return entry.EntryType() == session.EntryTypeCompaction },
+			func(entry Entry) bool { return entry.EntryType() == EntryTypeCompaction },
 			"manual compaction")
-	case *session.NavigationIntent:
+	case *NavigationIntent:
 		if intent.SummaryEntryID != nil {
 			return validateResultEntry(entriesById, *intent.SummaryEntryID,
-				func(entry session.Entry) bool { return entry.EntryType() == session.EntryTypeBranchSummary },
+				func(entry Entry) bool { return entry.EntryType() == EntryTypeBranchSummary },
 				"navigation summary")
 		}
 	}
@@ -629,23 +629,23 @@ func ValidateRecordLog(input *RecordLogSlice) error {
 			"Lane "+input.Lane+" has at least two open operations")
 	}
 
-	entriesById := make(map[string]session.Entry, len(input.Entries))
+	entriesById := make(map[string]Entry, len(input.Entries))
 	for _, entry := range input.Entries {
 		entriesById[entry.Base().ID] = entry
 	}
 	if err := validateDeferredHandles(entriesById); err != nil {
 		return err
 	}
-	starts := make(map[string]*session.OperationStartedRecord)
+	starts := make(map[string]*OperationStartedRecord)
 	finishedAt := make(map[string]int64)
 	abortedAt := make(map[string]int64)
-	queueEnqueues := make(map[string]*session.QueueEnqueuedRecord)
-	latestAttempt := make(map[string]*session.StepAttemptRecord)
+	queueEnqueues := make(map[string]*QueueEnqueuedRecord)
+	latestAttempt := make(map[string]*StepAttemptRecord)
 	toolInvocations := make(map[string]bool)
 	records := bySequenceRecords(input.Records)
 
 	for _, record := range records {
-		if started, ok := record.(*session.OperationStartedRecord); ok {
+		if started, ok := record.(*OperationStartedRecord); ok {
 			starts[started.ID] = started
 			if err := validateOperationResult(entriesById, started); err != nil {
 				return err
@@ -666,11 +666,11 @@ func ValidateRecordLog(input *RecordLogSlice) error {
 		}
 
 		switch r := record.(type) {
-		case *session.OperationFinishedRecord:
+		case *OperationFinishedRecord:
 			finishedAt[r.RunID] = r.Base().Seq
-		case *session.AbortRequestedRecord:
+		case *AbortRequestedRecord:
 			abortedAt[r.RunID] = r.Base().Seq
-		case *session.StepAttemptRecord:
+		case *StepAttemptRecord:
 			if err := validateAttemptReason(r); err != nil {
 				return err
 			}
@@ -681,12 +681,12 @@ func ValidateRecordLog(input *RecordLogSlice) error {
 				return err
 			}
 			latestAttempt[runID] = r
-		case *session.ToolStartedRecord:
+		case *ToolStartedRecord:
 			if err := validateToolStart(r, entriesById, toolInvocations); err != nil {
 				return err
 			}
-		case *session.QueueEnqueuedRecord:
-			if r.Queue != session.QueueNextRun {
+		case *QueueEnqueuedRecord:
+			if r.Queue != QueueNextRun {
 				if abortSeq, aborted := abortedAt[runID]; aborted && r.Base().Seq > abortSeq {
 					return corrupt(CorruptionQueueAfterAbort,
 						string(r.Queue)+" item "+r.Target.Base().ID+" was enqueued after abort")
@@ -696,7 +696,7 @@ func ValidateRecordLog(input *RecordLogSlice) error {
 			if err := validateExactProvisionedEntry(entriesById, r.Target); err != nil {
 				return err
 			}
-		case *session.QueueCancelledRecord:
+		case *QueueCancelledRecord:
 			enqueue, known := queueEnqueues[r.EntryID]
 			if !known ||
 				enqueue.Base().Seq >= r.Base().Seq ||
@@ -705,11 +705,11 @@ func ValidateRecordLog(input *RecordLogSlice) error {
 				return corrupt(CorruptionInvalidQueueCancellation,
 					"Queue cancellation "+r.ID+" has no pending matching enqueue")
 			}
-		case *session.WriteDeferredRecord:
+		case *WriteDeferredRecord:
 			if err := validateExactProvisionedEntry(entriesById, r.Target); err != nil {
 				return err
 			}
-		case *session.UsageRecord:
+		case *UsageRecord:
 			// Usage records carry no structural obligations.
 		}
 	}
@@ -733,7 +733,7 @@ func cloneDefaults(defaults EffectiveLaneConfiguration) EffectiveLaneConfigurati
 
 func deriveEffectiveConfiguration(input *LaneReductionInput) EffectiveLaneConfiguration {
 	configuration := cloneDefaults(input.Defaults)
-	entriesById := make(map[string]session.Entry)
+	entriesById := make(map[string]Entry)
 	for _, entry := range input.ConfigurationEntries {
 		entriesById[entry.Base().ID] = entry
 	}
@@ -743,13 +743,13 @@ func deriveEffectiveConfiguration(input *LaneReductionInput) EffectiveLaneConfig
 
 	for _, entry := range bySequenceEntries(entryValuesByID(entriesById)) {
 		switch e := entry.(type) {
-		case *session.ModelChangeEntry:
+		case *ModelChangeEntry:
 			configuration.Model = EffectiveModel{Provider: e.Provider, ModelID: e.ModelID}
-		case *session.ThinkingLevelEntry:
+		case *ThinkingLevelEntry:
 			configuration.ThinkingLevel = agent.ThinkingLevel(e.ThinkingLevel)
-		case *session.ActiveToolsEntry:
+		case *ActiveToolsEntry:
 			configuration.ActiveToolNames = append([]string(nil), e.ActiveToolNames...)
-		case *session.MessageEntry:
+		case *MessageEntry:
 			if assistant, ok := assistantOf(e.Message); ok {
 				configuration.Model = EffectiveModel{
 					Provider: string(assistant.Provider),
@@ -761,11 +761,11 @@ func deriveEffectiveConfiguration(input *LaneReductionInput) EffectiveLaneConfig
 	return configuration
 }
 
-func deriveNewestOwn(entry session.Entry) *NewestOwnState {
+func deriveNewestOwn(entry Entry) *NewestOwnState {
 	if entry == nil {
 		return nil
 	}
-	if message, ok := entry.(*session.MessageEntry); ok {
+	if message, ok := entry.(*MessageEntry); ok {
 		if assistant, ok := assistantOf(message.Message); ok {
 			return &NewestOwnState{
 				EntryID:    entry.Base().ID,
@@ -786,15 +786,15 @@ func deriveNewestOwn(entry session.Entry) *NewestOwnState {
 
 func deriveToolBatch(
 	operationID string,
-	records []session.LaneRecord,
-	ownEntries []session.Entry,
-	entriesById map[string]session.Entry,
+	records []LaneRecord,
+	ownEntries []Entry,
+	entriesById map[string]Entry,
 	deferredWriteIds map[string]bool,
 ) *ToolBatchState {
-	var assistantEntry *session.MessageEntry
+	var assistantEntry *MessageEntry
 	for i := len(ownEntries) - 1; i >= 0; i-- {
 		if assistant, ok := assistantMessageOfEntry(ownEntries[i]); ok && len(toolCallsOf(assistant)) > 0 {
-			assistantEntry = ownEntries[i].(*session.MessageEntry)
+			assistantEntry = ownEntries[i].(*MessageEntry)
 			break
 		}
 	}
@@ -804,9 +804,9 @@ func deriveToolBatch(
 	assistant, _ := assistantOf(assistantEntry.Message)
 	toolCalls := toolCallsOf(assistant)
 
-	starts := make(map[int]*session.ToolStartedRecord)
+	starts := make(map[int]*ToolStartedRecord)
 	for _, record := range records {
-		if started, ok := record.(*session.ToolStartedRecord); ok &&
+		if started, ok := record.(*ToolStartedRecord); ok &&
 			started.RunID == operationID && started.AssistantEntryID == assistantEntry.Base().ID {
 			starts[started.ToolIndex] = started
 		}
@@ -815,7 +815,7 @@ func deriveToolBatch(
 	calls := make([]ToolBatchCall, 0, len(toolCalls))
 	for toolIndex, toolCall := range toolCalls {
 		started := starts[toolIndex]
-		var result session.Entry
+		var result Entry
 		if started != nil {
 			result = entriesById[started.ResultEntryID]
 		}
@@ -838,7 +838,7 @@ func deriveToolBatch(
 		if started != nil {
 			call.Started = jsonClone(started)
 		}
-		if message, ok := result.(*session.MessageEntry); ok && message.Terminate != nil && *message.Terminate {
+		if message, ok := result.(*MessageEntry); ok && message.Terminate != nil && *message.Terminate {
 			call.Terminate = true
 		}
 		calls = append(calls, call)
@@ -870,7 +870,7 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 
 	records := bySequenceRecords(input.Records)
 	ownEntries := bySequenceEntries(input.OwnEntries)
-	entriesById := make(map[string]session.Entry)
+	entriesById := make(map[string]Entry)
 	for _, entry := range input.Entries {
 		entriesById[entry.Base().ID] = entry
 	}
@@ -879,33 +879,33 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 	}
 	cancelledQueueIds := make(map[string]bool)
 	for _, record := range records {
-		if cancelled, ok := record.(*session.QueueCancelledRecord); ok {
+		if cancelled, ok := record.(*QueueCancelledRecord); ok {
 			cancelledQueueIds[cancelled.EntryID] = true
 		}
 	}
-	var pendingQueueRecords []*session.QueueEnqueuedRecord
+	var pendingQueueRecords []*QueueEnqueuedRecord
 	for _, record := range records {
-		if enqueued, ok := record.(*session.QueueEnqueuedRecord); ok &&
+		if enqueued, ok := record.(*QueueEnqueuedRecord); ok &&
 			!entryExists(entriesById, enqueued.Target.Base().ID) &&
 			!cancelledQueueIds[enqueued.Target.Base().ID] {
 			pendingQueueRecords = append(pendingQueueRecords, enqueued)
 		}
 	}
-	var started *session.OperationStartedRecord
+	var started *OperationStartedRecord
 	if len(input.OpenOperations) > 0 {
 		started = &input.OpenOperations[0]
 	}
 	capturedInitialMessageIds := make(map[string]bool)
 	if started != nil {
-		if run, ok := started.Intent.(*session.RunIntent); ok {
+		if run, ok := started.Intent.(*RunIntent); ok {
 			for _, target := range run.InitialMessages {
 				capturedInitialMessageIds[target.Base().ID] = true
 			}
 		}
 	}
-	var pendingNextRun []session.Entry
+	var pendingNextRun []Entry
 	for _, record := range pendingQueueRecords {
-		if record.Queue == session.QueueNextRun && !capturedInitialMessageIds[record.Target.Base().ID] {
+		if record.Queue == QueueNextRun && !capturedInitialMessageIds[record.Target.Base().ID] {
 			pendingNextRun = append(pendingNextRun, cloneEntry(record.Target))
 		}
 	}
@@ -924,9 +924,9 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 		}, nil
 	}
 
-	var operationRecords []session.LaneRecord
+	var operationRecords []LaneRecord
 	for _, record := range records {
-		if operationStart, ok := record.(*session.OperationStartedRecord); ok {
+		if operationStart, ok := record.(*OperationStartedRecord); ok {
 			if operationStart.ID == started.ID {
 				operationRecords = append(operationRecords, record)
 			}
@@ -938,34 +938,34 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 	}
 	aborting := false
 	for _, record := range operationRecords {
-		if _, ok := record.(*session.AbortRequestedRecord); ok {
+		if _, ok := record.(*AbortRequestedRecord); ok {
 			aborting = true
 		}
 	}
-	var pendingSteer []session.Entry
+	var pendingSteer []Entry
 	if !aborting {
 		for _, record := range pendingQueueRecords {
-			if record.Queue == session.QueueSteer && record.RunID != nil && *record.RunID == started.ID {
+			if record.Queue == QueueSteer && record.RunID != nil && *record.RunID == started.ID {
 				pendingSteer = append(pendingSteer, cloneEntry(record.Target))
 			}
 		}
 	}
-	var pendingFollowUp []session.Entry
+	var pendingFollowUp []Entry
 	if !aborting {
 		for _, record := range pendingQueueRecords {
-			if record.Queue == session.QueueFollowUp && record.RunID != nil && *record.RunID == started.ID {
+			if record.Queue == QueueFollowUp && record.RunID != nil && *record.RunID == started.ID {
 				pendingFollowUp = append(pendingFollowUp, cloneEntry(record.Target))
 			}
 		}
 	}
-	var pendingWrites []session.Entry
+	var pendingWrites []Entry
 	for _, record := range operationRecords {
-		if write, ok := record.(*session.WriteDeferredRecord); ok && !entryExists(entriesById, write.Target.Base().ID) {
+		if write, ok := record.(*WriteDeferredRecord); ok && !entryExists(entriesById, write.Target.Base().ID) {
 			pendingWrites = append(pendingWrites, cloneEntry(write.Target))
 		}
 	}
-	var missingInitialMessages []session.Entry
-	if run, ok := started.Intent.(*session.RunIntent); ok {
+	var missingInitialMessages []Entry
+	if run, ok := started.Intent.(*RunIntent); ok {
 		for _, target := range run.InitialMessages {
 			if !entryExists(entriesById, target.Base().ID) {
 				missingInitialMessages = append(missingInitialMessages, cloneEntry(target))
@@ -973,9 +973,9 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 		}
 	}
 
-	var newestAttempt *session.StepAttemptRecord
+	var newestAttempt *StepAttemptRecord
 	for _, record := range operationRecords {
-		if attempt, ok := record.(*session.StepAttemptRecord); ok {
+		if attempt, ok := record.(*StepAttemptRecord); ok {
 			newestAttempt = attempt
 		}
 	}
@@ -987,25 +987,25 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 			ResultEntryID:    newestAttempt.ResultEntryID,
 			CompactionReason: newestAttempt.CompactionReason,
 		}
-		if newestAttempt.Step != session.OperationStepCompaction {
+		if newestAttempt.Step != OperationStepCompaction {
 			step.CompactionReason = nil
 		}
 	}
 
 	consumedInputIds := make(map[string]bool)
-	if run, ok := started.Intent.(*session.RunIntent); ok {
+	if run, ok := started.Intent.(*RunIntent); ok {
 		for _, target := range run.InitialMessages {
 			consumedInputIds[target.Base().ID] = true
 		}
 	}
 	for _, record := range operationRecords {
-		if enqueued, ok := record.(*session.QueueEnqueuedRecord); ok && enqueued.Queue != session.QueueNextRun {
+		if enqueued, ok := record.(*QueueEnqueuedRecord); ok && enqueued.Queue != QueueNextRun {
 			consumedInputIds[enqueued.Target.Base().ID] = true
 		}
 	}
 	newestConsumedInputSequence := int64(math.MinInt64)
 	for id := range consumedInputIds {
-		if entry, ok := entriesById[id]; ok && entry.EntryType() == session.EntryTypeMessage {
+		if entry, ok := entriesById[id]; ok && entry.EntryType() == EntryTypeMessage {
 			if entry.Base().Seq > newestConsumedInputSequence {
 				newestConsumedInputSequence = entry.Base().Seq
 			}
@@ -1013,16 +1013,16 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 	}
 	overflowRecoveryUsed := false
 	for _, record := range operationRecords {
-		if attempt, ok := record.(*session.StepAttemptRecord); ok &&
-			attempt.Step == session.OperationStepCompaction &&
+		if attempt, ok := record.(*StepAttemptRecord); ok &&
+			attempt.Step == OperationStepCompaction &&
 			attempt.CompactionReason != nil &&
-			*attempt.CompactionReason == session.CompactionReasonOverflow &&
+			*attempt.CompactionReason == CompactionReasonOverflow &&
 			attempt.Base().Seq > newestConsumedInputSequence {
 			overflowRecoveryUsed = true
 		}
 	}
 
-	var newestOwnEntry session.Entry
+	var newestOwnEntry Entry
 	if len(ownEntries) > 0 {
 		newestOwnEntry = ownEntries[len(ownEntries)-1]
 	}
@@ -1037,9 +1037,9 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 	}
 	targets := OperationTargets{}
 	switch intent := started.Intent.(type) {
-	case *session.CompactionIntent:
+	case *CompactionIntent:
 		targets.Result = lo.ToPtr(entryExists(entriesById, intent.ResultEntryID))
-	case *session.NavigationIntent:
+	case *NavigationIntent:
 		if intent.SummaryEntryID != nil {
 			targets.Summary = lo.ToPtr(entryExists(entriesById, *intent.SummaryEntryID))
 		}
@@ -1047,7 +1047,7 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 
 	deferredWriteIds := make(map[string]bool)
 	for _, record := range operationRecords {
-		if write, ok := record.(*session.WriteDeferredRecord); ok {
+		if write, ok := record.(*WriteDeferredRecord); ok {
 			deferredWriteIds[write.Target.Base().ID] = true
 		}
 	}
@@ -1058,14 +1058,14 @@ func ReduceLaneState(input *LaneReductionInput) (*LaneReductionResult, error) {
 			!deferredWriteIds[newestOwnEntry.Base().ID] {
 			producedByStep := false
 			for _, record := range operationRecords {
-				if attempt, ok := record.(*session.StepAttemptRecord); ok && attempt.ResultEntryID == newestOwnEntry.Base().ID {
+				if attempt, ok := record.(*StepAttemptRecord); ok && attempt.ResultEntryID == newestOwnEntry.Base().ID {
 					producedByStep = true
 				}
 			}
 			producedByDeferredFetch := false
 			for _, record := range operationRecords {
-				if usage, ok := record.(*session.UsageRecord); ok &&
-					usage.Cause == session.UsageCauseDeferredFetch &&
+				if usage, ok := record.(*UsageRecord); ok &&
+					usage.Cause == UsageCauseDeferredFetch &&
 					usage.EntryID != nil && *usage.EntryID == newestOwnEntry.Base().ID {
 					producedByDeferredFetch = true
 				}

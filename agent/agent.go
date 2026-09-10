@@ -38,11 +38,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/utils"
 )
 
 // defaultConvertToLlm is the default convertToLlm: pass standard messages
@@ -318,20 +318,14 @@ func (a *Agent) Subscribe(listener func(ctx context.Context, event AgentEvent)) 
 		a.mu.Lock()
 		defer a.mu.Unlock()
 		for index, registered := range a.listeners {
-			if reflectFuncEqual(registered, listener) {
+			// pi: Set.delete on the listener function; Go funcs aren't
+			// comparable, so identity goes through utils.SameFuncValue.
+			if utils.SameFuncValue(registered, listener) {
 				a.listeners = append(a.listeners[:index], a.listeners[index+1:]...)
 				break
 			}
 		}
 	}
-}
-
-// reflectFuncEqual reports whether two func values are the same underlying
-// function (pi: Set.delete on a listener function; Go funcs are not
-// comparable, so compare pointers via reflect).
-func reflectFuncEqual(a, b any) bool {
-	pa := reflect.ValueOf(a).Pointer()
-	return pa != 0 && pa == reflect.ValueOf(b).Pointer()
 }
 
 // State returns the agent state for direct access.

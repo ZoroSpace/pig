@@ -31,12 +31,23 @@ func fillRandomBytes(b []byte) {
 
 // UUIDv7 generates a time-ordered UUIDv7 (pi: uuidv7).
 func UUIDv7() string {
+	return uuidv7At(time.Now().UnixMilli())
+}
+
+// UUIDv7WithTime generates a time-ordered UUIDv7 stamped with the supplied
+// Unix-millisecond timestamp (pi: uuidv7(timestampMs)). Timestamps equal to
+// or older than the module high-water mark fall back to the monotonic
+// counter, matching pi's sequence semantics.
+func UUIDv7WithTime(timestampMs int64) string {
+	return uuidv7At(timestampMs)
+}
+
+func uuidv7At(timestamp int64) string {
 	uuidMu.Lock()
 	defer uuidMu.Unlock()
 
 	var random [16]byte
 	fillRandomBytes(random[:])
-	timestamp := time.Now().UnixMilli()
 
 	if !uuidSequenceSet || timestamp > uuidLastTS {
 		// random[6..9] as a 32-bit big-endian sequence seed.

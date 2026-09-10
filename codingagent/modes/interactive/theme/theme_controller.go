@@ -126,6 +126,16 @@ func (c *InteractiveThemeController) RebindTui() {
 	c.ui.SetTerminalColorSchemeNotifications(c.autoSyncEnabled)
 }
 
+// Dispose stops terminal appearance updates and drops the color-scheme
+// listener subscription (pi: dispose, v0.85.1).
+func (c *InteractiveThemeController) Dispose() {
+	c.setAutoSync(false)
+	if c.terminalColorSchemeUnsubscribe != nil {
+		c.terminalColorSchemeUnsubscribe()
+		c.terminalColorSchemeUnsubscribe = nil
+	}
+}
+
 // ApplyFromSettings resolves the theme from the current setting and applies
 // it (pi: applyFromSettings).
 func (c *InteractiveThemeController) ApplyFromSettings() error {

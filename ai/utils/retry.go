@@ -224,7 +224,9 @@ func RetryAssistantCall(ctx context.Context, produce func() (*types.AssistantMes
 
 		// Normalize aborts during retry backoff to the same AssistantMessage
 		// shape as provider stream aborts, so callers do not need to care when
-		// cancellation happened.
+		// cancellation happened. pi deletes the errorMessage key (not just
+		// undefined); pig's omitempty empty string is the JSON-level
+		// equivalent.
 		select {
 		case <-ctx.Done():
 			if callbacks != nil && callbacks.OnRetryFinished != nil {

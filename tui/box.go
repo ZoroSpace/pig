@@ -24,6 +24,9 @@ type Box struct {
 
 	// Cache for rendered output
 	cache *boxRenderCache
+
+	// Cached child heights for mouse hit-testing (pi: mouseLayout)
+	mouseLayout *containerMouseLayout
 }
 
 // NewBox mirrors pi's constructor defaults (paddingX 1, paddingY 1).
@@ -81,6 +84,40 @@ func (b *Box) Invalidate() {
 	}
 }
 
+// HandleMouse implements MouseHandler: translate pointer coordinates into
+// the padded content area and hit-test children by their rendered heights
+// (pi: Box.handleMouse).
+func (b *Box) HandleMouse(event *TuiMouseEvent) *TuiMouseEventResult {
+	contentWidth := maxInt(1, event.Width-b.paddingX*2)
+	contentY := event.Y - b.paddingY
+	contentX := event.X - b.paddingX
+	if contentY < 0 || contentX < 0 || contentX >= contentWidth {
+		return nil
+	}
+
+	var mouseChildren []containerMouseChild
+	if b.mouseLayout != nil && b.mouseLayout.width == contentWidth {
+		mouseChildren = b.mouseLayout.children
+	} else {
+		for _, component := range b.Children {
+			mouseChildren = append(mouseChildren, containerMouseChild{component: component, height: len(component.Render(contentWidth))})
+		}
+	}
+	childY := 0
+	for _, child := range mouseChildren {
+		if contentY >= childY && contentY < childY+child.height {
+			childEvent := *event
+			childEvent.X = contentX
+			childEvent.Y = contentY - childY
+			childEvent.Width = contentWidth
+			childEvent.Height = child.height
+			return DispatchMouseEvent(child.component, &childEvent)
+		}
+		childY += child.height
+	}
+	return nil
+}
+
 func (b *Box) Render(width int) []string {
 	if len(b.Children) == 0 {
 		return []string{}
@@ -91,12 +128,15 @@ func (b *Box) Render(width int) []string {
 
 	// Render all children
 	childLines := []string{}
+	var mouseChildren []containerMouseChild
 	for _, child := range b.Children {
 		lines := child.Render(contentWidth)
+		mouseChildren = append(mouseChildren, containerMouseChild{component: child, height: len(lines)})
 		for _, line := range lines {
 			childLines = append(childLines, leftPad+line)
 		}
 	}
+	b.mouseLayout = &containerMouseLayout{width: contentWidth, children: mouseChildren}
 
 	if len(childLines) == 0 {
 		return []string{}

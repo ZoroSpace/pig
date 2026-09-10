@@ -867,6 +867,41 @@ type AgentSettledEvent struct {
 
 func (e *AgentSettledEvent) EventType() string { return e.Type }
 
+// UIPromptKind names the blocking user-facing extension UI prompt (pi:
+// UIPromptKind, v0.85.1).
+type UIPromptKind string
+
+const (
+	UIPromptKindSelect  UIPromptKind = "select"
+	UIPromptKindConfirm UIPromptKind = "confirm"
+	UIPromptKindInput   UIPromptKind = "input"
+	UIPromptKindEditor  UIPromptKind = "editor"
+	UIPromptKindCustom  UIPromptKind = "custom"
+)
+
+// UIPromptStartEvent fires when Pi starts waiting on a blocking user-facing
+// extension UI prompt (pi: UIPromptStartEvent, v0.85.1).
+type UIPromptStartEvent struct {
+	Type   string       `json:"type"`
+	Reason string       `json:"reason"`
+	Kind   UIPromptKind `json:"kind"`
+	// Title is the dialog title; nil = pi's omitted optional key.
+	Title *string `json:"title,omitempty"`
+}
+
+func (e *UIPromptStartEvent) EventType() string { return e.Type }
+
+// UIPromptEndEvent fires when Pi is no longer waiting on a blocking
+// user-facing extension UI prompt (pi: UIPromptEndEvent, v0.85.1).
+type UIPromptEndEvent struct {
+	Type   string       `json:"type"`
+	Reason string       `json:"reason"`
+	Kind   UIPromptKind `json:"kind"`
+	Title  *string      `json:"title,omitempty"`
+}
+
+func (e *UIPromptEndEvent) EventType() string { return e.Type }
+
 // TurnStartEvent fires at the start of each turn (pi: TurnStartEvent).
 type TurnStartEvent struct {
 	Type      string `json:"type"`
@@ -1209,6 +1244,10 @@ func (c *ExtensionContext) GetSessionFile() *string {
 }
 
 func (c *ExtensionContext) GetThinkingLevel() string { return string(c.ThinkingLevel) }
+
+// GetCwd is pi's ctx.cwd (v0.85.1): the built-in tools resolve paths
+// against it when provided.
+func (c *ExtensionContext) GetCwd() string { return c.Cwd }
 
 // ContextEvent fires with the message context before each agent loop (pi:
 // ContextEvent).

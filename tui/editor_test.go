@@ -766,6 +766,31 @@ func TestEditorUnicodeTextEditing(t *testing.T) {
 }
 
 func TestEditorScrollIndicators(t *testing.T) {
+	t.Run("centers scroll indicators on wide borders", func(t *testing.T) {
+		width := 40
+		editor := NewEditor(createTestTUI(width, 24), testEditorTheme(), nil)
+		var lines []string
+		for i := 0; i < 20; i++ {
+			lines = append(lines, "line "+itoa(i))
+		}
+		editor.SetText(strings.Join(lines, "\n"))
+
+		editor.Render(width)
+		for i := 0; i < 10; i++ {
+			editor.HandleInput("\x1b[A")
+		}
+
+		got := editor.Render(width)
+		wantTop := strings.Repeat("─", 15) + " ↑ 9 more " + strings.Repeat("─", 15)
+		wantBottom := strings.Repeat("─", 15) + " ↓ 4 more " + strings.Repeat("─", 15)
+		if stripAnsi(got[0]) != wantTop {
+			t.Errorf("top border = %q, want %q", stripAnsi(got[0]), wantTop)
+		}
+		if stripAnsi(got[len(got)-1]) != wantBottom {
+			t.Errorf("bottom border = %q, want %q", stripAnsi(got[len(got)-1]), wantBottom)
+		}
+	})
+
 	t.Run("keeps truncated scroll indicators within width and preserves their color (issue #6962)", func(t *testing.T) {
 		width := 10
 		borderColor := func(text string) string { return "\x1b[35m" + text + "\x1b[39m" }

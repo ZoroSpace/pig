@@ -91,30 +91,18 @@ func createCompactionEntry(summary string, parentID *string, retainedTail []agen
 	}
 }
 
-func createThinkingLevelEntry(level string, parentID *string) *session.ThinkingLevelEntry {
+func createNonCutPointEntry(parentID *string) *session.CustomEntry {
 	nextID++
-	return &session.ThinkingLevelEntry{
+	customType := "note"
+	return &session.CustomEntry{
 		EntryBase: session.EntryBase{
-			ID:        createID(),
-			ParentID:  parentID,
-			Seq:       int64(nextID - 1),
-			Timestamp: 1700000000000,
+			ID:         createID(),
+			ParentID:   parentID,
+			Seq:        int64(nextID - 1),
+			Timestamp:  1700000000000,
+			Type:       session.EntryTypeCustom,
+			CustomType: &customType,
 		},
-		ThinkingLevel: level,
-	}
-}
-
-func createModelChangeEntry(provider, modelID string, parentID *string) *session.ModelChangeEntry {
-	nextID++
-	return &session.ModelChangeEntry{
-		EntryBase: session.EntryBase{
-			ID:        createID(),
-			ParentID:  parentID,
-			Seq:       int64(nextID - 1),
-			Timestamp: 1700000000000,
-		},
-		Provider: provider,
-		ModelID:  modelID,
 	}
 }
 
@@ -203,9 +191,9 @@ func TestFindsACutPointBasedOnTokenDifferences(t *testing.T) {
 }
 
 func TestCoversCutPointAndTurnStartEdgeCases(t *testing.T) {
-	thinking := createThinkingLevelEntry("high", nil)
-	modelChange := createModelChangeEntry("openai", "gpt-4", lo.ToPtr(thinking.ID))
-	result := FindCutPoint([]session.Entry{thinking, modelChange}, 0, 2, 1)
+	filler1 := createNonCutPointEntry(nil)
+	filler2 := createNonCutPointEntry(lo.ToPtr(filler1.ID))
+	result := FindCutPoint([]session.Entry{filler1, filler2}, 0, 2, 1)
 	if result.FirstKeptEntryIndex != 0 || result.TurnStartIndex != -1 || result.IsSplitTurn {
 		t.Fatalf("unexpected result: %+v", result)
 	}
@@ -213,21 +201,21 @@ func TestCoversCutPointAndTurnStartEdgeCases(t *testing.T) {
 	branchSummary := &session.BranchSummaryEntry{
 		EntryBase: session.EntryBase{
 			ID:        createID(),
-			ParentID:  lo.ToPtr(modelChange.ID),
+			ParentID:  lo.ToPtr(filler2.ID),
 			Seq:       int64(nextID),
 			Timestamp: 1700000000000,
 		},
-		FromID:  "branch",
+		FromID:  lo.ToPtr("branch"),
 		Summary: "branch summary",
 	}
-	if got := FindTurnStartIndex([]session.Entry{thinking, branchSummary}, 1, 0); got != 1 {
+	if got := FindTurnStartIndex([]session.Entry{filler1, branchSummary}, 1, 0); got != 1 {
 		t.Fatalf("expected turn start 1, got %d", got)
 	}
-	if got := FindTurnStartIndex([]session.Entry{thinking, modelChange}, 1, 0); got != -1 {
+	if got := FindTurnStartIndex([]session.Entry{filler1, filler2}, 1, 0); got != -1 {
 		t.Fatalf("expected turn start -1, got %d", got)
 	}
 
-	result = FindCutPoint([]session.Entry{thinking, branchSummary}, 0, 2, 1)
+	result = FindCutPoint([]session.Entry{filler1, branchSummary}, 0, 2, 1)
 	if result.FirstKeptEntryIndex != 0 {
 		t.Fatalf("expected first kept 0, got %d", result.FirstKeptEntryIndex)
 	}
@@ -287,7 +275,7 @@ func TestEstimatesTokensAndContextUsageAcrossSupportedMessageRoles(t *testing.T)
 	branchSummaryMessage := harness.BranchSummaryMessage{
 		Role:      harness.RoleBranchSummary,
 		Summary:   "branch",
-		FromID:    "x",
+		FromID:    lo.ToPtr("x"),
 		Timestamp: 1700000000000,
 	}
 	compactionSummaryMessage := harness.CompactionSummaryMessage{
@@ -376,20 +364,6 @@ type unknownMessage struct{}
 
 func (unknownMessage) MessageRole() types.Role { return "unknown" }
 
-func TestTracksModelAndThinkingLevelChangesInBuiltContext(t *testing.T) {
-	user := createMessageEntry(createUserMessage("1"), nil)
-	modelChange := createModelChangeEntry("openai", "gpt-4", lo.ToPtr(user.ID))
-	assistant := createMessageEntry(createAssistantMessage("a", createMockUsage(100, 50, 0, 0)), lo.ToPtr(modelChange.ID))
-	thinkingChange := createThinkingLevelEntry("high", lo.ToPtr(assistant.ID))
-	loaded := session.BuildSessionContext([]session.Entry{user, modelChange, assistant, thinkingChange}, nil)
-	if loaded.Model == nil || loaded.Model.Provider != "anthropic" || loaded.Model.ModelID != "claude-sonnet-4-5" {
-		t.Fatalf("unexpected model: %+v", loaded.Model)
-	}
-	if loaded.ThinkingLevel != "high" {
-		t.Fatalf("expected thinking level high, got %q", loaded.ThinkingLevel)
-	}
-}
-
 func TestPreparesCompactionUsingTheLatestCompactionSummaryAsPreviousSummary(t *testing.T) {
 	u1 := createMessageEntry(createUserMessage("user msg 1"), nil)
 	a1 := createMessageEntry(createAssistantMessage("assistant msg 1", createMockUsage(100, 50, 0, 0)), lo.ToPtr(u1.ID))
@@ -409,7 +383,7 @@ func TestPreparesCompactionUsingTheLatestCompactionSummaryAsPreviousSummary(t *t
 	if len(preparation.RetainedTail) == 0 {
 		t.Fatal("expected a non-empty retained tail")
 	}
-	want := EstimateContextTokens(session.BuildSessionContext(pathEntries, nil).Messages).Tokens
+	want := EstimateContextTokens(mustBuildContextMessages(t, pathEntries)).Tokens
 	if preparation.TokensBefore != want {
 		t.Fatalf("tokensBefore %d != %d", preparation.TokensBefore, want)
 	}
@@ -822,4 +796,13 @@ func TestReturnsACompactionResultWithFileDetails(t *testing.T) {
 		t.Fatalf("expected CompactionDetails, got %T", result.Details)
 	}
 	_ = details // pi asserts only `details` is defined here.
+}
+
+func mustBuildContextMessages(t *testing.T, pathEntries []session.Entry) []agent.AgentMessage {
+	t.Helper()
+	messages, err := session.BuildSessionContext(pathEntries, nil, context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return messages
 }

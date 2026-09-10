@@ -36,6 +36,76 @@ func writeSessionHeader(t *testing.T, file string, cwd string, id string, prefix
 func TestLoadEntriesFromFile(t *testing.T) {
 	tempDir := newTempDir(t)
 
+	t.Run("adds a newline after an unterminated valid record", func(t *testing.T) {
+		file := filepath.Join(tempDir, "unterminated.jsonl")
+		header, err0 := mustJSONLine(map[string]any{
+			"type": "session", "id": "abc", "timestamp": "2025-01-01T00:00:00Z", "cwd": "/tmp",
+		})
+		if err0 != nil {
+			t.Fatal(err0)
+		}
+		message := `{"type":"message","id":"1","parentId":null,"timestamp":"2025-01-01T00:00:01Z","message":{"role":"user","content":"hi","timestamp":1}}`
+		content := header + "\n" + message
+		if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		if entries := LoadEntriesFromFile(file); len(entries) != 2 {
+			t.Fatalf("entries = %d", len(entries))
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != content+"\n" {
+			t.Fatalf("file was not repaired: %q", string(data))
+		}
+	})
+
+	t.Run("adds a newline after an unterminated malformed final fragment", func(t *testing.T) {
+		file := filepath.Join(tempDir, "malformed-tail.jsonl")
+		header, err0 := mustJSONLine(map[string]any{
+			"type": "session", "id": "abc", "timestamp": "2025-01-01T00:00:00Z", "cwd": "/tmp",
+		})
+		if err0 != nil {
+			t.Fatal(err0)
+		}
+		content := header + "\n" + `{"type":"message"`
+		if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		if entries := LoadEntriesFromFile(file); len(entries) != 1 {
+			t.Fatalf("entries = %d", len(entries))
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != content+"\n" {
+			t.Fatalf("file was not repaired: %q", string(data))
+		}
+	})
+
+	t.Run("does not modify an unterminated non-session file", func(t *testing.T) {
+		file := filepath.Join(tempDir, "invalid.jsonl")
+		content := `{"type":"message","id":"1"}`
+		if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		if entries := LoadEntriesFromFile(file); len(entries) != 0 {
+			t.Fatalf("entries = %d", len(entries))
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != content {
+			t.Fatalf("file was modified: %q", string(data))
+		}
+	})
+
 	t.Run("returns empty array for non-existent file", func(t *testing.T) {
 		entries := LoadEntriesFromFile(filepath.Join(tempDir, "nonexistent.jsonl"))
 		if len(entries) != 0 {

@@ -229,6 +229,8 @@ type AgentLoopConfig struct {
 	// If it returns true, the loop emits `agent_end` and exits before polling
 	// steering or follow-up queues, without starting another LLM call. The
 	// current assistant response and any tool executions finish normally.
+	// This callback sees the completed-turn context and runs before
+	// `PrepareNextTurn`.
 	//
 	// Use this to request a graceful stop after the current turn, e.g. before
 	// context gets too full.
@@ -237,9 +239,9 @@ type AgentLoopConfig struct {
 	// without producing a normal event sequence.
 	ShouldStopAfterTurn func(context ShouldStopAfterTurnContext) bool
 
-	// PrepareNextTurn is called after `turn_end` and before the loop decides
-	// whether another provider request should start. Return replacement
-	// context/model/thinking state to affect the next turn in this run.
+	// PrepareNextTurn is called after `turn_end` when the loop will continue,
+	// immediately before the next turn starts. Return replacement
+	// context/model/thinking state to affect that turn.
 	// Return nil to keep using the current context/config.
 	PrepareNextTurn func(context PrepareNextTurnContext) *AgentLoopTurnUpdate
 
@@ -420,7 +422,24 @@ type AgentTool struct {
 	//
 	// If empty, the default execution mode applies.
 	ExecutionMode ToolExecutionMode
+	// Replay is the recovery policy for an effect whose durable intent
+	// exists but whose outcome is unknown (pi: AgentTool.replay).
+	Replay AgentToolReplay
 }
+
+// AgentToolReplay is the recovery policy carried by AgentTool.Replay (pi:
+// `replay?: "never" | "safe"`; closed string union → named type per the
+// ToolExecutionMode precedent).
+type AgentToolReplay string
+
+const (
+	// AgentToolReplayNever means the effect must never be re-issued; its
+	// durable intent may exist but the outcome is unknown.
+	AgentToolReplayNever AgentToolReplay = "never"
+	// AgentToolReplaySafe means re-issuing the effect is safe when its
+	// outcome is unknown.
+	AgentToolReplaySafe AgentToolReplay = "safe"
+)
 
 // AgentContext is the context snapshot passed into the low-level agent loop.
 type AgentContext struct {

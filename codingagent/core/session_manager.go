@@ -604,7 +604,7 @@ func SessionEntryToContextMessages(entry SessionEntry) []agent.AgentMessage {
 	case *BranchSummaryEntry:
 		if e.Summary != "" {
 			return []agent.AgentMessage{
-				harness.CreateBranchSummaryMessage(e.Summary, e.FromID, isoToMillis(e.Timestamp)),
+				harness.CreateBranchSummaryMessage(e.Summary, lo.ToPtr(e.FromID), isoToMillis(e.Timestamp)),
 			}
 		}
 		return nil
@@ -874,7 +874,7 @@ func LoadEntriesFromFile(filePath string) []FileEntry {
 		}
 	}
 
-	// Validate session header.
+	// Validate session header before repairing the file.
 	if len(entries) == 0 {
 		return entries
 	}
@@ -883,6 +883,15 @@ func LoadEntriesFromFile(filePath string) []FileEntry {
 		return nil
 	}
 
+	// pi (v0.85.1): a trailing partial line means the file was cut off
+	// mid-write; terminate it with a newline so the repair is durable.
+	if reader.hadTrailing {
+		f, err := os.OpenFile(resolvedFilePath, os.O_WRONLY|os.O_APPEND, 0o644)
+		if err == nil {
+			_, _ = f.WriteString("\n")
+			_ = f.Close()
+		}
+	}
 	return entries
 }
 
@@ -894,6 +903,9 @@ type sessionLineReader struct {
 	reader  *os.File
 	buf     []byte
 	pending []byte
+	// hadTrailing reports whether the stream ended with an unterminated
+	// line (pi's pending StringDecoder residue after the read loop).
+	hadTrailing bool
 }
 
 func newSessionLineReader(f *os.File, bufSize int) *sessionLineReader {
@@ -916,6 +928,9 @@ func (r *sessionLineReader) next() (string, bool) {
 			if len(r.pending) > 0 {
 				line := string(r.pending)
 				r.pending = nil
+				// pi (v0.85.1): remember the unterminated tail so the caller
+				// can repair the file by appending a newline.
+				r.hadTrailing = true
 				return line, true
 			}
 			return "", false
@@ -1170,6 +1185,12 @@ func newSessionManager(cwd string, sessionDir string, sessionFile string, persis
 		if err := m.setSessionFilePreloaded(sessionFile, preloadedFileEntries); err != nil {
 			return nil, err
 		}
+	} else if len(preloadedFileEntries) > 0 {
+		// pi (v0.85.1): entries held outside the filesystem load directly
+		// instead of starting a fresh session.
+		if err := m.loadEntriesLocked(preloadedFileEntries, options); err != nil {
+			return nil, err
+		}
 	} else {
 		if err := m.newSessionLocked(options); err != nil {
 			return nil, err
@@ -1189,15 +1210,15 @@ func (m *SessionManager) SetSessionFile(sessionFile string) error {
 func (m *SessionManager) setSessionFilePreloaded(sessionFile string, preloadedFileEntries []FileEntry) error {
 	m.sessionFile = utils.ResolvePath(sessionFile, "", nil)
 	if existsPath(m.sessionFile) {
-		m.fileEntries = preloadedFileEntries
-		if m.fileEntries == nil {
-			m.fileEntries = LoadEntriesFromFile(m.sessionFile)
+		entries := preloadedFileEntries
+		if entries == nil {
+			entries = LoadEntriesFromFile(m.sessionFile)
 		}
 
 		// If file was empty, initialize it with a valid session header. If
 		// it was non-empty but did not parse as a pi session, fail without
 		// modifying it.
-		if len(m.fileEntries) == 0 {
+		if len(entries) == 0 {
 			explicitPath := m.sessionFile
 			info, err := os.Stat(explicitPath)
 			if err != nil {
@@ -1217,26 +1238,9 @@ func (m *SessionManager) setSessionFilePreloaded(sessionFile string, preloadedFi
 			return nil
 		}
 
-		var header *SessionHeader
-		for _, entry := range m.fileEntries {
-			if h, ok := entry.(*SessionHeader); ok {
-				header = h
-				break
-			}
+		if err := m.loadEntriesLocked(entries, nil); err != nil {
+			return err
 		}
-		if header != nil {
-			m.sessionID = header.ID
-		} else {
-			m.sessionID = createSessionID()
-		}
-
-		if migrateToCurrentVersion(m.fileEntries) {
-			if err := m.rewriteFileLocked(); err != nil {
-				return err
-			}
-		}
-
-		m.buildIndexLocked()
 		m.flushed = true
 	} else {
 		explicitPath := m.sessionFile
@@ -1299,6 +1303,39 @@ func optionsPtrParentSession(options *NewSessionOptions) *string {
 		return nil
 	}
 	return options.ParentSession
+}
+
+// loadEntriesLocked installs entries into the manager (pi: _loadEntries).
+// With a session header the entries become the session; without one a fresh
+// session is created and the entries are appended after it. Callers hold
+// m.mu (construction / setSessionFilePreloaded paths).
+func (m *SessionManager) loadEntriesLocked(entries []FileEntry, options *NewSessionOptions) error {
+	var header *SessionHeader
+	for _, entry := range entries {
+		if h, ok := entry.(*SessionHeader); ok {
+			header = h
+			break
+		}
+	}
+
+	if header != nil {
+		m.fileEntries = entries
+		m.sessionID = header.ID
+
+		if migrateToCurrentVersion(m.fileEntries) {
+			if err := m.rewriteFileLocked(); err != nil {
+				return err
+			}
+		}
+	} else {
+		if err := m.newSessionLocked(options); err != nil {
+			return err
+		}
+		m.fileEntries = append(m.fileEntries, entries...)
+	}
+
+	m.buildIndexLocked()
+	return nil
 }
 
 func (m *SessionManager) buildIndexLocked() {
@@ -1994,14 +2031,32 @@ func (m *SessionManager) CreateBranchedSession(leafID string) (string, error) {
 	// Filter out LabelEntry from path - we'll recreate them from the
 	// resolved map. Because labels are real tree entries, later entries can
 	// be children of labels; removing labels requires re-chaining the
-	// retained path to avoid orphaned subtrees.
+	// retained path to avoid orphaned subtrees. v0.85.1: if a compaction's
+	// firstKeptEntryId pointed at a removed label, remap it to the first
+	// real entry after that label.
 	var pathWithoutLabels []SessionEntry
+	replacementByLabelID := map[string]string{}
+	var pendingLabelIDs []string
 	var pathParentID *string
 	for _, entry := range path {
-		if _, ok := entry.(*LabelEntry); ok {
+		if label, ok := entry.(*LabelEntry); ok {
+			pendingLabelIDs = append(pendingLabelIDs, label.Base().ID)
 			continue
 		}
-		pathWithoutLabels = append(pathWithoutLabels, cloneEntryWithParent(entry, pathParentID))
+		for _, labelID := range pendingLabelIDs {
+			replacementByLabelID[labelID] = entry.Base().ID
+		}
+		pendingLabelIDs = nil
+		if compaction, ok := entry.(*CompactionEntry); ok {
+			clone := cloneEntryWithParent(entry, pathParentID).(*CompactionEntry)
+			// pi: firstKeptEntryId: replacementByLabelId.get(entry.firstKeptEntryId) ?? entry.firstKeptEntryId.
+			if replacement, remapped := replacementByLabelID[compaction.FirstKeptEntryID]; remapped {
+				clone.FirstKeptEntryID = replacement
+			}
+			pathWithoutLabels = append(pathWithoutLabels, clone)
+		} else {
+			pathWithoutLabels = append(pathWithoutLabels, cloneEntryWithParent(entry, pathParentID))
+		}
 		id := pathWithoutLabels[len(pathWithoutLabels)-1].Base().ID
 		pathParentID = &id
 	}
@@ -2244,15 +2299,20 @@ func ContinueRecentSession(cwd string, sessionDir string) (*SessionManager, erro
 	return newSessionManager(cwd, dir, "", true, nil, nil)
 }
 
-// InMemorySession creates an in-memory session (no file persistence) (pi:
+// InMemorySession creates an in-memory session (no file persistence),
+// optionally from entries held outside the filesystem (pi:
 // SessionManager.inMemory). cwd "" = the process working directory.
-func InMemorySession(cwd string, options *NewSessionOptions) (*SessionManager, error) {
+func InMemorySession(cwd string, options *NewSessionOptions, entries ...[]FileEntry) (*SessionManager, error) {
 	if cwd == "" {
 		if wd, err := os.Getwd(); err == nil {
 			cwd = wd
 		}
 	}
-	return newSessionManager(cwd, "", "", false, options, nil)
+	var preloaded []FileEntry
+	if len(entries) > 0 {
+		preloaded = entries[0]
+	}
+	return newSessionManager(cwd, "", "", false, options, preloaded)
 }
 
 // ForkSession forks a session from another project directory into the
