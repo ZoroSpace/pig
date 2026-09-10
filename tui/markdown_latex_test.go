@@ -64,3 +64,30 @@ func TestMarkdownSwitchesFromRawToRenderedMathWhenDelimiterCloses(t *testing.T) 
 	markdown.SetText(`Map $\mathbb{C}^3$`)
 	assertDeepLines(t, mapStripTrim(markdown.Render(80)), []string{"Map ℂ³"}, "rendered after close")
 }
+
+// Regression (pig-only, 2026-09-10): the StartInline/StartBlock hints
+// returned BYTE indices from strings.Index/FindStringIndex while the
+// cutSrc clipping consumer (jsSlice) works in runes — any multi-byte
+// (CJK) character before a math delimiter made the candidate over-extend
+// past the delimiter and the math never tokenized. pi is unaffected (its
+// indexOf/substring units are consistent UTF-16). Locks the conversion.
+
+func TestMarkdownRendersInlineMathAfterCJKText(t *testing.T) {
+	cases := []struct{ source, want string }{
+		{`公式：$y = x^2 + 2$，以及 $y = x \cdot x + 2$。`, "公式：y = x² + 2，以及 y = x · x + 2。"},
+		{`值：$xy$`, "值：xy"},
+		{`中文说明 \(s \to \infty\) 结束`, "中文说明 s → ∞ 结束"},
+	}
+	for _, c := range cases {
+		markdown := NewMarkdown(c.source, 0, 0, defaultMarkdownTheme, nil, nil)
+		lines := mapStripTrim(markdown.Render(120))
+		assertDeepLines(t, lines, []string{c.want}, c.source)
+	}
+}
+
+func TestMarkdownRendersBlockMathAfterCJKParagraph(t *testing.T) {
+	source := "中文说明如下\n\n\\[\ny = x^2 + 2\n\\]\n\n结束"
+	markdown := NewMarkdown(source, 0, 0, defaultMarkdownTheme, nil, nil)
+	lines := mapStripTrim(markdown.Render(80))
+	assertDeepLines(t, lines, []string{"中文说明如下", "", "y = x² + 2", "", "结束"}, "block after CJK")
+}

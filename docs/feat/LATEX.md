@@ -29,3 +29,7 @@
 
 - pi 侧 `terminal-image.ts` / photon-wazero / WordSegmenter CJK 三项延后不变（见 AGENTS.md）。
 - 下一个延后项若启动 markdown 流式 "switches from raw..." 已随本批收口，markdown_test 头部仅余 VT fg-color 两测（随模拟器 fg 追踪）。
+
+## 追记：CJK 相邻数学不渲染 bug（同日发现并修复）
+
+本批收口后用户实测发现中文字符紧挨 `$`/`\(`/`\[`/`\[` 时数学不渲染——StartInline/StartBlock 提示函数的字节索引与消费端 rune 切片错位（pi UTF-16 单位一致故无此问题，自 T3 markdown 批潜伏）。修复 + 回归测试见 `docs/fix/2026-09-10-cjk-adjacent-inline-math-not-tokenized.md`。**该 bug 与 latex.ts 移植无关，是既有 markdown tokenizer 缺陷，因 LaTeX 渲染才首次可见。**

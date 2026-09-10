@@ -165,10 +165,15 @@ func newMarkdownExtensions() *markedExtensions {
 				if m == nil {
 					return -1
 				}
+				// FindStringIndex returns a BYTE index; the consumer (marked's
+				// cutSrc clipping, jsSlice) works in runes — pi's UTF-16 index is
+				// rune-equivalent here, so convert (fixes CJK before $$ \\[ in a
+				// paragraph swallowing the math block).
+				index := utf8RuneCount(src[:m[0]])
 				if strings.HasPrefix(src[m[0]:], "\n") {
-					return m[0] + 1
+					return index + 1
 				}
-				return m[0]
+				return index
 			},
 		},
 		StartInline: []func(src string) int{
@@ -176,7 +181,11 @@ func newMarkdownExtensions() *markedExtensions {
 				indices := []int{}
 				for _, needle := range []string{"$", "\\(", "\\["} {
 					if i := strings.Index(src, needle); i >= 0 {
-						indices = append(indices, i)
+						// Byte → rune index (see StartBlock note): without the
+						// conversion the inlineText candidate over-extends past
+						// the delimiter whenever multi-byte text (CJK) precedes
+						// it, and inline math after CJK never tokenizes.
+						indices = append(indices, utf8RuneCount(src[:i]))
 					}
 				}
 				if len(indices) == 0 {
