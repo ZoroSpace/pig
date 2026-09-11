@@ -1,6 +1,6 @@
 # 真机验证矩阵（A1/A2/B1/B2 交付面 × 实测状态）
 
-- **设立**：2026-09-11。**背景**：A1/A2/B1/B2 四批的真机冒烟全部依托 DeepSeek 两个兼容端点（`/anthropic` shim + Responses 端点，`deepseek-flash`）；目标 provider 的真实端点、OAuth 流程、provider 特有语义**均未实测**（当前无对应 key/订阅）。
+- **设立**：2026-09-11，落在 `docs/handoffs/`（随批次交接流转；AGENTS.md Dogfooding 约定 ③ 指向本文件）。**背景**：A1/A2/B1/B2 四批的真机冒烟全部依托 DeepSeek 两个兼容端点（`/anthropic` shim + Responses 端点，`deepseek-flash`）；目标 provider 的真实端点、OAuth 流程、provider 特有语义**均未实测**（当前无对应 key/订阅）。
 - **用途**：每拿到一个 key / 订阅，按本表跑对应 probe 销账；发现偏差走 `docs/fix/` 登记 + 回归测试锁定（与 dogfooding bug 同流程）。
 - **状态图例**：
   - ✅ 真机已验（打的是该 provider 的真实端点）
