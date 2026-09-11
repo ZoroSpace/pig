@@ -1,6 +1,6 @@
 # PLAN：anthropic-messages + openai-responses 双 adapter 批（2026-09-11）
 
-- **状态链**：A1 ✅ 2026-09-11（见 `A1.md`）；A2 ✅ 2026-09-11（见 `A2.md`）；B1/B2 待执行（下一批 B1）。执行顺序 A1 → A2 → B1 → B2。
+- **状态链**：A1 ✅ 2026-09-11（见 `A1.md`）；A2 ✅ 2026-09-11（见 `A2.md`）；B1 ✅ 2026-09-11（见 `B1.md`）；B2 ✅ 2026-09-11（见 `B2.md`）。**四个子批全部收口，本文件保留为两批的公共设计输入（DeepSeek 靶子矩阵 + 批次划分），不再更新。**
 - **收批动作**：每个子批完成后按 §3.5 写 `docs/handoffs/A1.md` / `A2.md` / `B1.md` / `B2.md`，并在本文件头部状态链标注。本文件自身保留为两批的公共设计输入（DeepSeek 靶子矩阵 + 批次划分），不随收批删除。
 - **基线**：pi v0.85.1（已核实 2026-09-11 main == tag `d981de122`，无未发版 commit；pig 已完成 S1-S5 同步）。
 
@@ -192,6 +192,6 @@ A1 → A2 → B1 → B2（B1 不依赖 A，可与 A 并行；catalog 再生成�
 
 ## 7. 给人类的建议（不改计划，仅列出）
 
-1. codex-responses（openai-codex-responses.ts + openai-codex provider + GPT-6 Astra 的 codex 侧）建议单列 C 批，排在 B 之后。
-2. opencode / opencode-go / cloudflare-ai-gateway / github-copilot 四家 provider 依赖 catalog 未覆盖的模型数据源，仍按 Phase 2 延后项第 3 条处理，不在 A2/B2 强行铺。
-3. 若冒烟中发现 DeepSeek 端点实际行为与 §0 矩阵不符，以实测为准更新本文件并知会——矩阵来自官方文档快照，未经全量实测。
+1. ~~codex-responses 建议单列 C 批，排在 B 之后。~~ B1/B2 已收口，C 批（openai-codex-responses.ts 54KB + openai-codex provider + GPT-6 Astra codex 侧 + OPENAI_CODEX_ADDITIONAL_TOOLS_MODEL_IDS）成为剩余最大单件。
+2. opencode / opencode-go / cloudflare-ai-gateway / github-copilot 四家 provider 依赖 catalog 未覆盖的模型数据源，仍按 Phase 2 延后项第 3 条处理。
+3. 若冒烟中发现 DeepSeek 端点实际行为与 §0 矩阵不符，以实测为准更新本文件并知会——矩阵来自官方文档快照，未经全量实测。（实测结果：§0.2 矩阵四项全验证通过，包括 input_image 在 function_call_output 中内联。）

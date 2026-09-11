@@ -49,6 +49,29 @@ func main() {
 	}
 }
 
+// combineModels combines the fetched catalogs (models.dev has priority).
+func combineModels(modelsDevModels, openRouterModels, aiGatewayModels []*ai.Model) []*ai.Model {
+	// pi filters xai retired ids and the opencode gpt-5.3-codex-spark alias
+	// here; the opencode providers are unported so only the xai half applies.
+	allModels := make([]*ai.Model, 0, len(modelsDevModels)+len(openRouterModels)+len(aiGatewayModels))
+	for _, model := range modelsDevModels {
+		if model.Provider == ai.ProviderXAI && xaiBuiltinExcludedModelIds[model.ID] {
+			continue
+		}
+		allModels = append(allModels, model)
+	}
+	allModels = append(allModels, openRouterModels...)
+	allModels = append(allModels, aiGatewayModels...)
+	return allModels
+}
+
+// xaiBuiltinExcludedModelIds lists retired/redundant xai ids kept out of the
+// built-in catalog (pi: XAI_BUILTIN_EXCLUDED_MODEL_IDS).
+var xaiBuiltinExcludedModelIds = stringSet(
+	"grok-3", "grok-3-fast", "grok-4.20-0309-non-reasoning", "grok-4.20-0309-reasoning",
+	"grok-build-0.1", "grok-code-fast-1",
+)
+
 // generateModels is the pi generateModels() port for the ported provider set.
 func generateModels(ctx context.Context) error {
 	modelsDevModels, err := loadModelsDevData(ctx)
@@ -76,19 +99,15 @@ func generateModels(ctx context.Context) error {
 		aiGatewayModels = nil
 	}
 
-	// Combine models (models.dev has priority). pi also filters out xai
-	// built-in ids and the opencode gpt-5.3-codex-spark alias here; both
-	// providers are unported, so the filter is a no-op.
-	allModels := make([]*ai.Model, 0, len(modelsDevModels)+len(openRouterModels)+len(aiGatewayModels))
-	allModels = append(allModels, modelsDevModels...)
-	allModels = append(allModels, openRouterModels...)
-	allModels = append(allModels, aiGatewayModels...)
+	// Combine models (models.dev has priority); pi filters xai retired ids
+	// and the opencode gpt-5.3-codex-spark alias here (the latter is a no-op,
+	// opencode providers unported).
+	allModels := combineModels(modelsDevModels, openRouterModels, aiGatewayModels)
 
 	// Temporary overrides until upstream model metadata is corrected (pi).
-	// github-copilot extended context, opencode sonnet/gpt-5.4, openai
-	// short/long-context pricing, cloudflare-ai-gateway pricing, and gpt-5-pro
-	// are skipped (unported providers); the OpenRouter / Vercel gateway
-	// overrides apply.
+	// The github-copilot extended-context and opencode sonnet/gpt-5.4
+	// branches are skipped (providers unported); the OpenRouter / Vercel
+	// gateway overrides apply.
 	for _, candidate := range allModels {
 		if (candidate.Provider == ai.ProviderAnthropic || candidate.Provider == ai.ProviderOpenCode || candidate.Provider == ai.ProviderOpenCodeGo) &&
 			(candidate.ID == "claude-opus-4-6" ||
@@ -96,6 +115,33 @@ func generateModels(ctx context.Context) error {
 				candidate.ID == "claude-opus-4.6" ||
 				candidate.ID == "claude-sonnet-4.6") {
 			candidate.ContextWindow = 1000000
+		}
+		// Keep direct OpenAI requests in the short-context pricing tier by
+		// default. Users can opt into the larger context through model
+		// overrides, so retain long-context cost metadata on the capped models.
+		if candidate.Provider == ai.ProviderOpenAI && openAIShortContextCappedModelIds[candidate.ID] {
+			candidate.ContextWindow = openAILongContextInputThreshold
+			candidate.MaxTokens = 128000
+		}
+		if candidate.Provider == ai.ProviderOpenAI && openAILongContextPricingModelIds[candidate.ID] {
+			standardCost, hasStandard := openAIGpt56StandardCosts[candidate.ID]
+			if hasStandard {
+				candidate.Cost = withOpenAiLongContextPricing(standardCost)
+			} else {
+				candidate.Cost = withOpenAiLongContextPricing(candidate.Cost)
+			}
+		}
+		// Cloudflare AI Gateway passes OpenAI usage through at OpenAI list prices.
+		if candidate.Provider == ai.ProviderCloudflareAIGateway {
+			if standardCost, hasStandard := openAIGpt56StandardCosts[candidate.ID]; hasStandard {
+				candidate.Cost = withOpenAiLongContextPricing(standardCost)
+			}
+		}
+		// models.dev reports gpt-5-pro output as 272000 (a duplicate of the
+		// input sub-limit); the actual max output is 128000. Also propagates
+		// to the derived Azure clone.
+		if candidate.Provider == ai.ProviderOpenAI && candidate.ID == "gpt-5-pro" {
+			candidate.MaxTokens = 128000
 		}
 		if (candidate.Provider == ai.ProviderOpenRouter && openRouterKimiK3ModelIds[candidate.ID]) ||
 			(candidate.Provider == ai.ProviderVercelAIGateway && candidate.ID == "moonshotai/kimi-k3") {
@@ -120,8 +166,8 @@ func generateModels(ctx context.Context) error {
 		}
 	}
 
-	// pi's missingOpenAiModels (gpt-5.6 sol/terra/luna, gpt-5-chat-latest) use
-	// openai-responses and are skipped.
+	// pi's missingOpenAiModels: catalog models absent from models.dev.
+	allModels = append(allModels, missingOpenAiModels()...)
 
 	allModels = append(allModels, deepseekV4Models()...)
 	allModels = append(allModels, antLingModels()...)
@@ -160,7 +206,10 @@ func generateModels(ctx context.Context) error {
 
 	allModels = addOpenRouterAliases(allModels)
 
-	// pi clones Azure Foundry models here (azure-openai-responses); skipped.
+	// Azure Foundry deploys these with larger context windows than OpenAI's
+	// own short-tier defaults (pi: the azureOpenAiModels clone; see
+	// models-sold-directly-by-azure docs).
+	allModels = append(allModels, cloneAzureOpenAIModels(allModels)...)
 
 	for _, model := range allModels {
 		applyOpenAICompletionsCompatMetadata(model)
@@ -168,10 +217,9 @@ func generateModels(ctx context.Context) error {
 		applyModelsDevReasoningOptionMetadata(model)
 		applyThinkingLevelMetadata(model)
 		applyStrictToolCompatMetadata(model)
-		// pi also runs applyOpenAIGrammarToolCompatMetadata,
-		// applyOpenAIToolSearchMetadata, and
-		// applyOpenAIExplicitPromptCacheMetadata — all openai-responses only,
-		// skipped.
+		applyOpenAIGrammarToolCompatMetadata(model)
+		applyOpenAIToolSearchMetadata(model)
+		applyOpenAIExplicitPromptCacheMetadata(model)
 	}
 	applyAnthropicAllowedFallbackModelMetadata(filterAnthropicFallback(allModels))
 

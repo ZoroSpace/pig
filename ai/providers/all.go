@@ -72,7 +72,7 @@ func GetBuiltinModels(provider BuiltinProvider) []ai.Model {
 // githubCopilotProvider, googleProvider, googleVertexProvider,
 // mistralProvider, openaiCodexProvider, opencodeProvider,
 // opencodeGoProvider, qwenTokenPlanProvider, qwenTokenPlanCnProvider,
-// qwenTokenPlanIndividualProvider, radiusProvider, xaiProvider,
+// qwenTokenPlanIndividualProvider, radiusProvider,
 // xiaomiProvider, xiaomiTokenPlanAmsProvider, xiaomiTokenPlanCnProvider,
 // xiaomiTokenPlanSgpProvider.
 func BuiltinProviders() []ai.Provider {
@@ -96,6 +96,7 @@ func BuiltinProviders() []ai.Provider {
 		TogetherProvider(),
 		VercelAIGatewayProvider(),
 		VolcenginePlanProvider(),
+		XaiProvider(),
 		ZaiProvider(),
 		ZaiCodingCNProvider(),
 	}

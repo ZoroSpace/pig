@@ -357,7 +357,7 @@ var openAIResponsesModelSpecs = map[string]responsesModelSpec{
 	// github-copilot provider (pi: data/github-copilot.json).
 	"github-copilot|gpt-5-mini": {
 		provider: "github-copilot", id: "gpt-5-mini", name: "GPT-5 Mini",
-		baseURL: "https://api.individual.githubcopilot.com",
+		baseURL:   "https://api.individual.githubcopilot.com",
 		reasoning: true, input: []types.ModelInput{types.ModelInputText, types.ModelInputImage},
 		cost:          responsesModelCost(0.25, 2, 0.025, 0),
 		contextWindow: 264000, maxTokens: 64000,
@@ -380,7 +380,7 @@ var openAIResponsesModelSpecs = map[string]responsesModelSpec{
 	// cloudflare-ai-gateway provider (pi: data/cloudflare-ai-gateway.json).
 	"cloudflare-ai-gateway|gpt-5.6-sol": {
 		provider: "cloudflare-ai-gateway", id: "gpt-5.6-sol", name: "GPT-5.6 Sol",
-		baseURL: "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+		baseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
 		reasoning: true, input: []types.ModelInput{types.ModelInputText, types.ModelInputImage},
 		cost:          responsesModelCost(2, 10, 0.25, 3.125),
 		contextWindow: 1050000, maxTokens: 128000,
@@ -407,7 +407,7 @@ var openAIResponsesModelSpecs = map[string]responsesModelSpec{
 			types.ModelThinkingMax: responsesNullPtr(),
 		}),
 		compat: responsesCompat(&types.OpenAIResponsesCompat{
-			SessionAffinityFormat:     loFormatPtr("openai-nosession"),
+			SessionAffinityFormat:      loFormatPtr("openai-nosession"),
 			SupportsOpenAIGrammarTools: loBoolPtr(true),
 		}),
 	},

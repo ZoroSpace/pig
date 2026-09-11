@@ -23,6 +23,10 @@ const (
 	ApiOpenAICompletions Api = "openai-completions"
 	ApiAnthropicMessages Api = "anthropic-messages"
 	ApiOpenAIResponses   Api = "openai-responses"
+	// ApiAzureOpenAIResponses is Azure's Responses surface (pi:
+	// "azure-openai-responses"); same event protocol as openai-responses
+	// with Azure deployment/api-version URL conventions.
+	ApiAzureOpenAIResponses Api = "azure-openai-responses"
 )
 
 // ImagesApi identifies an image-generation wire protocol.
@@ -1389,7 +1393,7 @@ func (m *Model) UnmarshalJSON(data []byte) error {
 	switch m.API {
 	case ApiAnthropicMessages:
 		compat = new(AnthropicMessagesCompat)
-	case ApiOpenAIResponses:
+	case ApiOpenAIResponses, ApiAzureOpenAIResponses:
 		compat = new(OpenAIResponsesCompat)
 	default:
 		// openai-completions and untyped custom APIs use the openai shape.

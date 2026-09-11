@@ -23,10 +23,11 @@ type (
 )
 
 const (
-	ApiOpenAICompletions = types.ApiOpenAICompletions
-	ApiAnthropicMessages = types.ApiAnthropicMessages
-	ApiOpenAIResponses   = types.ApiOpenAIResponses
-	ImagesApiOpenRouter  = types.ImagesApiOpenRouter
+	ApiOpenAICompletions    = types.ApiOpenAICompletions
+	ApiAnthropicMessages    = types.ApiAnthropicMessages
+	ApiOpenAIResponses      = types.ApiOpenAIResponses
+	ApiAzureOpenAIResponses = types.ApiAzureOpenAIResponses
+	ImagesApiOpenRouter     = types.ImagesApiOpenRouter
 )
 
 const (

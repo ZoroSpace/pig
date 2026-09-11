@@ -953,6 +953,10 @@ func ProcessResponsesStream(events iter.Seq[*responsesStreamEvent], output *type
 		if hasToolCall && output.StopReason == types.StopReasonStop {
 			output.StopReason = types.StopReasonToolUse
 		}
+		// backfillReasoningSignatures mutated the thinking block's signature
+		// after the last push; refresh the content snapshot so consumers see
+		// the backfilled value (pi: the block is shared by reference).
+		syncContent()
 	}
 
 	for event := range events {

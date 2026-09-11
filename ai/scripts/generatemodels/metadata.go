@@ -308,9 +308,9 @@ func supportsDirectReasoningEffort(model *ai.Model) bool {
 		}
 		return false
 	}
-	// pi's openai-responses / azure / codex branches return true for those
-	// APIs; pig has not ported them (api/types.go Api). Only
-	// openai-completions remains.
+	if model.API == ai.ApiOpenAIResponses || model.API == ai.ApiAzureOpenAIResponses || model.API == ai.Api("openai-codex-responses") {
+		return true
+	}
 	if model.API != ai.ApiOpenAICompletions {
 		return false
 	}
@@ -696,13 +696,132 @@ func applyAnthropicAllowedFallbackModelMetadata(models []*ai.Model) {
 	}
 }
 
-// applyStrictToolCompatMetadata (pi: applyStrictToolCompatMetadata). The
-// openai / cloudflare-ai-gateway openai-responses branch is skipped (unported);
-// the anthropic branch applies.
+// applyStrictToolCompatMetadata (pi: applyStrictToolCompatMetadata).
 func applyStrictToolCompatMetadata(model *ai.Model) {
-	if model.Provider == ai.ProviderAnthropic && model.API == ai.ApiAnthropicMessages {
+	if (model.Provider == ai.ProviderOpenAI || model.Provider == ai.ProviderCloudflareAIGateway) &&
+		model.API == ai.ApiOpenAIResponses {
+		mergeOpenAIResponsesCompat(model, &ai.OpenAIResponsesCompat{SupportsStrictMode: lo.ToPtr(true)})
+	} else if model.Provider == ai.ProviderAnthropic && model.API == ai.ApiAnthropicMessages {
 		mergeAnthropicMessagesCompat(model, &ai.AnthropicMessagesCompat{SupportsStrictTools: lo.ToPtr(true)})
 	}
+}
+
+// mergeOpenAIResponsesCompat merges the pointer fields of compat into
+// model.Compat when model carries an OpenAIResponsesCompat (pi's compat
+// spread: {...model.compat, ...overrides}).
+func mergeOpenAIResponsesCompat(model *ai.Model, compat *ai.OpenAIResponsesCompat) {
+	existing, ok := model.Compat.(*ai.OpenAIResponsesCompat)
+	if !ok || existing == nil {
+		model.Compat = copyOpenAIResponsesCompat(compat)
+		return
+	}
+	if compat.SupportsDeveloperRole != nil {
+		existing.SupportsDeveloperRole = compat.SupportsDeveloperRole
+	}
+	if compat.SessionAffinityFormat != nil {
+		existing.SessionAffinityFormat = compat.SessionAffinityFormat
+	}
+	if compat.SupportsLongCacheRetention != nil {
+		existing.SupportsLongCacheRetention = compat.SupportsLongCacheRetention
+	}
+	if compat.SupportsStrictMode != nil {
+		existing.SupportsStrictMode = compat.SupportsStrictMode
+	}
+	if compat.SupportsOpenAIGrammarTools != nil {
+		existing.SupportsOpenAIGrammarTools = compat.SupportsOpenAIGrammarTools
+	}
+	if compat.SupportsAdditionalTools != nil {
+		existing.SupportsAdditionalTools = compat.SupportsAdditionalTools
+	}
+	if compat.SupportsToolSearch != nil {
+		existing.SupportsToolSearch = compat.SupportsToolSearch
+	}
+	if compat.SupportsExplicitPromptCacheMode != nil {
+		existing.SupportsExplicitPromptCacheMode = compat.SupportsExplicitPromptCacheMode
+	}
+	if compat.SupportsMaxOutputTokens != nil {
+		existing.SupportsMaxOutputTokens = compat.SupportsMaxOutputTokens
+	}
+}
+
+// openAIGrammarToolProviders lists the Responses endpoints verified or
+// documented to pass OpenAI custom grammar tools through (pi:
+// OPENAI_GRAMMAR_TOOL_PROVIDERS). OpenAI rejects `type: "custom"` tools for
+// pre-GPT-5 models (gpt-4.x, gpt-4o, o-series).
+var openAIGrammarToolProviders = stringSet(
+	"openai", "openai-codex", "azure-openai-responses", "github-copilot", "opencode", "cloudflare-ai-gateway",
+)
+
+// openAIGrammarToolApis (pi: OPENAI_GRAMMAR_TOOL_APIS).
+var openAIGrammarToolApis = stringSet(
+	string(ai.ApiOpenAIResponses), string(ai.ApiAzureOpenAIResponses), "openai-codex-responses",
+)
+
+// applyOpenAIGrammarToolCompatMetadata (pi:
+// applyOpenAIGrammarToolCompatMetadata).
+func applyOpenAIGrammarToolCompatMetadata(model *ai.Model) {
+	if !openAIGrammarToolApis[string(model.API)] || !openAIGrammarToolProviders[string(model.Provider)] {
+		return
+	}
+	match := openAIGrammarToolGptRe.FindStringSubmatch(model.ID)
+	if match == nil || match[1] < "5" {
+		return
+	}
+	mergeOpenAIResponsesCompat(model, &ai.OpenAIResponsesCompat{SupportsOpenAIGrammarTools: lo.ToPtr(true)})
+}
+
+// openAIGrammarToolGptRe matches gpt-<N> prefixes (pi:
+// /^gpt-(\d+)/.exec). gpt-5.6 is a leading zero concern; the numeric
+// comparison uses the matched year-major version digit.
+var openAIGrammarToolGptRe = regexp.MustCompile(`^gpt-(\d+)`)
+
+// openAIToolSearchModelIDs lists the models with tool-search verified
+// (pi: OPENAI_TOOL_SEARCH_MODEL_IDS).
+var openAIToolSearchModelIDs = stringSet(
+	"gpt-5.4", "gpt-5.4-mini", "gpt-5.4-pro", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+	"gpt-6-astra",
+)
+
+// openAIAdditionalToolsModelIDs is pi's OPENAI_ADDITIONAL_TOOLS_MODEL_IDS
+// (same set as the tool-search ids).
+var openAIAdditionalToolsModelIDs = openAIToolSearchModelIDs
+
+// openAICodexAdditionalToolsModelIDs is pi's
+// OPENAI_CODEX_ADDITIONAL_TOOLS_MODEL_IDS (the codex branch stays inert
+// until the codex adapter lands).
+var openAICodexAdditionalToolsModelIDs = stringSet(
+	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra",
+)
+
+// applyOpenAIToolSearchMetadata (pi: applyOpenAIToolSearchMetadata).
+func applyOpenAIToolSearchMetadata(model *ai.Model) {
+	isOpenAIResponses := model.Provider == ai.ProviderOpenAI && model.API == ai.ApiOpenAIResponses
+	isOpenAICodex := model.Provider == ai.ProviderID("openai-codex") && model.API == ai.Api("openai-codex-responses")
+	if !(isOpenAIResponses || isOpenAICodex) || !openAIToolSearchModelIDs[model.ID] {
+		return
+	}
+	supportsAdditionalTools := (isOpenAIResponses && openAIAdditionalToolsModelIDs[model.ID]) ||
+		(isOpenAICodex && openAICodexAdditionalToolsModelIDs[model.ID])
+	compat := &ai.OpenAIResponsesCompat{SupportsToolSearch: lo.ToPtr(true)}
+	if supportsAdditionalTools {
+		compat.SupportsAdditionalTools = lo.ToPtr(true)
+	}
+	mergeOpenAIResponsesCompat(model, compat)
+}
+
+// applyOpenAIExplicitPromptCacheMetadata (pi:
+// applyOpenAIExplicitPromptCacheMetadata). OpenAI charges prompt-cache
+// writes starting with the GPT-5.6 family, and exactly those models accept
+// `prompt_cache_options`; older models reject the parameter.
+// https://developers.openai.com/api/docs/guides/prompt-caching
+func applyOpenAIExplicitPromptCacheMetadata(model *ai.Model) {
+	if model.Provider != ai.ProviderOpenAI || model.API != ai.ApiOpenAIResponses {
+		return
+	}
+	if !(model.Cost.CacheWrite > 0) {
+		return
+	}
+	mergeOpenAIResponsesCompat(model, &ai.OpenAIResponsesCompat{SupportsExplicitPromptCacheMode: lo.ToPtr(true)})
 }
 
 // supportsOpenAiXhigh (pi).
@@ -711,14 +830,26 @@ func supportsOpenAiXhigh(modelID string) bool {
 		strings.Contains(modelID, "gpt-5.3") ||
 		strings.Contains(modelID, "gpt-5.4") ||
 		strings.Contains(modelID, "gpt-5.5") ||
-		strings.Contains(modelID, "gpt-5.6")
+		strings.Contains(modelID, "gpt-5.6") ||
+		strings.Contains(modelID, "gpt-6-astra")
 }
 
 // supportsOpenAiMax (pi).
 func supportsOpenAiMax(model *ai.Model) bool {
-	return strings.Contains(model.ID, "gpt-5.6") &&
-		(model.API == ai.ApiOpenAICompletions)
+	return (strings.Contains(model.ID, "gpt-5.6") || strings.Contains(model.ID, "gpt-6-astra")) &&
+		(model.API == ai.ApiOpenAIResponses ||
+			model.API == ai.ApiAzureOpenAIResponses ||
+			model.API == ai.Api("openai-codex-responses") ||
+			model.API == ai.ApiOpenAICompletions)
 }
+
+// openAIResponsesNoneReasoningModels lists the openai models whose off level
+// maps to the provider-native "none" effort (pi:
+// OPENAI_RESPONSES_NONE_REASONING_MODELS).
+var openAIResponsesNoneReasoningModels = stringSet(
+	"gpt-5.1", "gpt-5.2", "gpt-5.3-codex", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano",
+	"gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+)
 
 // isAnthropicAdaptiveThinkingModel (pi).
 func isAnthropicAdaptiveThinkingModel(modelID string) bool {
@@ -754,20 +885,48 @@ func isAnthropicTemperatureUnsupportedModel(modelID string) bool {
 var qwenTokenPlanProviderIds = stringSet("qwen-token-plan", "qwen-token-plan-cn", "qwen-token-plan-individual")
 
 // applyThinkingLevelMetadata (pi: applyThinkingLevelMetadata). Branches for
-// unported providers (openai-responses/azure gpt-5, github-copilot, xai,
-// google/gemini/gemma, openai-codex, opencode-go, opencode grok-build) are
-// skipped; the pi line numbers are noted in comments.
+// unported providers (github-copilot, google/gemini/gemma, openai-codex,
+// opencode-go, opencode grok-build) are skipped; the openai-responses /
+// azure / xai branches apply since B2.
 func applyThinkingLevelMetadata(model *ai.Model) {
-	// pi 860-862: xai openai-responses -> off/minimal null (skipped, xai
-	// uses openai-responses in pi).
+	// pi: openai-responses/azure gpt-5* models mark off unsupported (it is
+	// re-enabled to "none" for the none-reasoning set below).
+	if (model.API == ai.ApiOpenAIResponses || model.API == ai.ApiAzureOpenAIResponses) &&
+		strings.HasPrefix(model.ID, "gpt-5") {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil})
+	}
+	if model.ID == "gpt-6-astra" &&
+		(model.API == ai.ApiOpenAIResponses || model.API == ai.ApiAzureOpenAIResponses || model.API == ai.Api("openai-codex-responses")) {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{
+			ai.ModelThinkingOff:     nil,
+			ai.ModelThinkingMinimal: nil,
+			ai.ModelThinkingLow:     lo.ToPtr("low"),
+			ai.ModelThinkingMedium:  lo.ToPtr("medium"),
+			ai.ModelThinkingHigh:    lo.ToPtr("high"),
+			ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+			ai.ModelThinkingMax:     lo.ToPtr("max"),
+		})
+	}
+	// pi: github-copilot gpt-5* -> minimal "low" (skipped, provider unported).
+	if model.API == ai.ApiOpenAIResponses && model.Provider == ai.ProviderOpenAI &&
+		openAIResponsesNoneReasoningModels[model.ID] {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: lo.ToPtr("none")})
+	}
+	// xAI models without verified effort options must not send the undocumented
+	// "none"/"minimal" efforts.
+	if model.Provider == ai.ProviderXAI && model.API == ai.ApiOpenAIResponses && model.ThinkingLevelMap == nil {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil, ai.ModelThinkingMinimal: nil})
+	}
 	if supportsOpenAiXhigh(model.ID) {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingXHigh: lo.ToPtr("xhigh")})
 	}
 	if supportsOpenAiMax(model) {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingMax: lo.ToPtr("max")})
 	}
-	// pi 869-871: provider "openai" gpt-5.5 -> minimal null (skipped, openai
-	// uses openai-responses in pi).
+	// pi: provider "openai" gpt-5.5 -> minimal null.
+	if model.Provider == ai.ProviderOpenAI && model.ID == "gpt-5.5" {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingMinimal: nil})
+	}
 	if strings.HasSuffix(model.ID, "gpt-5.5-pro") {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil, ai.ModelThinkingMinimal: nil, ai.ModelThinkingLow: nil})
 	}

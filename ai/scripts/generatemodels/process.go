@@ -88,6 +88,18 @@ func copyAnthropicCompat(c *ai.AnthropicMessagesCompat) *ai.AnthropicMessagesCom
 	return &cp
 }
 
+// copyOpenAIResponsesCompat clones an OpenAIResponsesCompat (pi spreads
+// compat objects with {...}); nil passes through.
+func copyOpenAIResponsesCompat(c *ai.OpenAIResponsesCompat) *ai.OpenAIResponsesCompat {
+	if c == nil {
+		return nil
+	}
+	cp := *c
+	return &cp
+}
+
+// cloneOpenAIResponsesCompat copies c (nil-safe).
+
 // withCompat clones c, applies fn to the clone, and returns it.
 func withCompat(c *ai.OpenAICompletionsCompat, fn func(*ai.OpenAICompletionsCompat)) *ai.OpenAICompletionsCompat {
 	cp := copyOpenAICompat(c)
@@ -163,6 +175,78 @@ func processAnthropicModels(data ModelsDevCatalog) []*ai.Model {
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		})
 		recordModelsDevReasoningOptions("anthropic", modelID, m)
+	}
+	return models
+}
+
+// modelsDevOpenAIUnsupportedModelIDs lists models.dev ids OpenAI APIs do not
+// accept (pi: MODELS_DEV_OPENAI_UNSUPPORTED_MODEL_IDS).
+var modelsDevOpenAIUnsupportedModelIDs = stringSet("gpt-5.6")
+
+// xaiResponsesCompat is the xAI Responses compat (pi: XAI_RESPONSES_COMPAT).
+var xaiResponsesCompat = &ai.OpenAIResponsesCompat{
+	SupportsLongCacheRetention: lo.ToPtr(false),
+}
+
+// processOpenAIModels (pi: loadModelsDevData openai block — the openai-responses
+// catalog).
+func processOpenAIModels(data ModelsDevCatalog) []*ai.Model {
+	provider := data["openai"]
+	if provider == nil || provider.Models == nil {
+		return nil
+	}
+	var models []*ai.Model
+	for modelID, m := range provider.Models {
+		if !boolVal(m.ToolCall) {
+			continue
+		}
+		// models.dev lists this alias, but it is not accepted by OpenAI APIs.
+		if modelsDevOpenAIUnsupportedModelIDs[modelID] {
+			continue
+		}
+		models = append(models, &ai.Model{
+			ID:            modelID,
+			Name:          orString(m.Name, modelID),
+			API:           ai.ApiOpenAIResponses,
+			Provider:      ai.ProviderOpenAI,
+			BaseURL:       "https://api.openai.com/v1",
+			Reasoning:     boolVal(m.Reasoning),
+			Input:         inputOf(m),
+			Cost:          modelsDevCostOf(m.Cost),
+			ContextWindow: int64Or(limitContext(m), 4096),
+			MaxTokens:     int64Or(limitOutput(m), 4096),
+		})
+		recordModelsDevReasoningOptions("openai", modelID, m)
+	}
+	return models
+}
+
+// processXaiModels (pi: loadModelsDevData xai block — the openai-responses
+// catalog).
+func processXaiModels(data ModelsDevCatalog) []*ai.Model {
+	provider := data["xai"]
+	if provider == nil || provider.Models == nil {
+		return nil
+	}
+	var models []*ai.Model
+	for modelID, m := range provider.Models {
+		if !boolVal(m.ToolCall) {
+			continue
+		}
+		models = append(models, &ai.Model{
+			ID:            modelID,
+			Name:          orString(m.Name, modelID),
+			API:           ai.ApiOpenAIResponses,
+			Provider:      ai.ProviderXAI,
+			BaseURL:       "https://api.x.ai/v1",
+			Compat:        copyOpenAIResponsesCompat(xaiResponsesCompat),
+			Reasoning:     boolVal(m.Reasoning),
+			Input:         inputOf(m),
+			Cost:          modelsDevCostOf(m.Cost),
+			ContextWindow: int64Or(limitContext(m), 4096),
+			MaxTokens:     int64Or(limitOutput(m), 4096),
+		})
+		recordModelsDevReasoningOptions("xai", modelID, m)
 	}
 	return models
 }
@@ -798,8 +882,7 @@ func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 
 	var models []*ai.Model
 
-	// pi also processes amazon-bedrock, google, google-vertex, openai
-	// (openai-responses), xai (openai-responses), mistral
+	// pi also processes amazon-bedrock, google, google-vertex, mistral
 	// (mistral-conversations), cloudflare-workers-ai, cloudflare-ai-gateway,
 	// github-copilot, opencode/opencode-go, qwen-token-plan, and xiaomi
 	// blocks here; all are skipped (their wire APIs are unported in pig).
@@ -817,6 +900,8 @@ func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 	}
 
 	models = append(models, processAnthropicModels(data)...)
+	models = append(models, processOpenAIModels(data)...)
+	models = append(models, processXaiModels(data)...)
 	models = append(models, processGroqModels(data)...)
 	models = append(models, processCerebrasModels(data)...)
 	models = append(models, processZaiModels(data)...)
