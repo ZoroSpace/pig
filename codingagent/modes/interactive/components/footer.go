@@ -188,17 +188,42 @@ func (f *FooterComponent) Render(width int) []string {
 		if messageEntry, ok := entry.(*core.SessionMessageEntry); ok {
 			switch messageEntry.Message.MessageRole() {
 			case types.RoleAssistant:
-				if assistant, ok := messageEntry.Message.(*types.AssistantMessage); ok {
+				// pig's transcript holds both value messages (runtime appends
+				// via AppendMessage) and pointer messages (jsonl decode);
+				// accept both shapes like GetUsageCostBreakdown does. A
+				// pointer-only assertion here dropped ALL usage stats (↑ ↓ R W
+				// CH $) from the footer — see
+				// docs/fix/2026-09-11-footer-usage-stats-missing.md.
+				assistant, isAssistant := messageEntry.Message.(*types.AssistantMessage)
+				if !isAssistant {
+					value, isValue := messageEntry.Message.(types.AssistantMessage)
+					if isValue {
+						assistant = &value
+					}
+				}
+				if assistant != nil {
 					core.AddUsageToTotals(&usageTotals, assistant.Usage)
 
 					latestPromptTokens := assistant.Usage.Input + assistant.Usage.CacheRead + assistant.Usage.CacheWrite
+					// pi: latestCacheHitRate = latestPromptTokens > 0 ? ... : undefined
+					// (re-assigned on every assistant message, cleared at 0).
 					if latestPromptTokens > 0 {
 						rate := float64(assistant.Usage.CacheRead) / float64(latestPromptTokens) * 100
 						latestCacheHitRate = &rate
+					} else {
+						latestCacheHitRate = nil
 					}
 				}
 			case types.RoleToolResult:
-				if toolResult, ok := messageEntry.Message.(*types.ToolResultMessage); ok && toolResult.Usage != nil {
+				// Both shapes, as above.
+				toolResult, isToolResult := messageEntry.Message.(*types.ToolResultMessage)
+				if !isToolResult {
+					value, isValue := messageEntry.Message.(types.ToolResultMessage)
+					if isValue {
+						toolResult = &value
+					}
+				}
+				if toolResult != nil && toolResult.Usage != nil {
 					core.AddUsageToTotals(&usageTotals, *toolResult.Usage)
 				}
 			}

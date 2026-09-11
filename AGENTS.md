@@ -63,9 +63,11 @@
 
 文件命名：`YYYY-MM-DD-<简短主题>.md`（同日多起可合并一份，主题用 `-` 连接）；文件头部必须标注日期（**精确到分钟**，取自各修复落盘的文件 mtime）、状态、涉及文件路径。
 
-**登记规则（2026-09-10 起）**：后续 fix **不再写入上文「已交付」段**（该段只记批次交付，避免被零散 bug 修复稀释）；每起 fix 完成后，在本小节的「现有文件」列表补一条**一行简要摘要**（现象 + 根因 + 处置），详情一律落对应 `docs/fix/*.md`。
+**登记规则（2026-09-10 起，2026-09-11 补强）**：后续 fix **不再写入上文「已交付」段**（该段只记批次交付，避免被零散 bug 修复稀释）；每起 fix 完成后，在本小节的「现有文件」列表补一条**一行简要摘要**（现象 + 根因 + 处置），详情一律落对应 `docs/fix/*.md`。**每起 fix 必须同时落地回归测试函数**（进对应包的 `_test.go`，由全仓 `go test ./... -race` 自动执行，禁止“只写 fix 文档、无测试锁定”）；回归测试须先用 stash 修复的方式验证其确实能抓到原 bug（修复前 FAIL、修复后 PASS）；fix 文档中写明测试函数名、所在文件与验证方式。
 
 现有文件：
+- `2026-09-11-latex-escaped-byte-rune-index-panic.md`：渲染「中文段落含行内公式 $面积$」即 panic——`latexFindClosingDelimiter`（strings.Index）返回字节偏移被 `latexIsEscaped` 当 []rune 下标，CJK 使字节偏移超过 rune 数越界（与 09-10 提示修复同族反向：那次 byte→rune 转换，这次扫描留在 byte 世界，反斜杠 ASCII 按字节扫描 parity 等价）；修字节向后扫描 + 4 个回归测试函数锁定（详见该文件）
+- `2026-09-11-footer-usage-stats-missing.md`：交互模式 footer 累计 usage 统计（`↑↓R W CH $`）整段消失只剩 `3.0%/1.0M (auto)`——transcript 存值形态消息（runtime append）而 footer 用单边指针断言（同族第四例，`GetUsageCostBreakdown`/`print_mode`/`json_event` 均已双形态）致遍历统计恒零；修双形态兼容 + 顺带对齐 pi 的 latestCacheHitRate 零 prompt 清零语义，4 个回归测试函数锁定（详见该文件）
 - `2026-09-11-markdown-table-cjk-rendering.md`：CJK 表格三连 bug——① `reReplaceAll` 把 regexp2 的 rune 索引当字节偏移切片，匹配点前有 CJK 即损坏 UTF-8（`放松`→`放??`）且 `tableRowBlankLine` 替换错位致表格末尾多出幻影空行；② 分隔线移植丢了 `┤` 前的 `─` 致比顶/底边框短一列错位；修 rune→byte 偏移转换 + 分隔线补 `─`，4 个回归测试函数锁定（详见该文件）
 - `2026-09-10-skill-desc-length-and-auth-storage-flaky.md`：skills description 长度校验误用字节计数（CJK 误报，改 rune 计数）+ auth-storage 取消语义测试 flaky（JS 微任务确定序 vs Go 抢占窗口，断言放宽至 1..2）
 - `2026-09-10-tui-streaming-empty-partial-content.md`：交互模式非流式（两个叠加 bug）——① openai-completions adapter 移植偏差：pi 的 `blocks` 与 `output.content` 同一数组引用（partial 增量生长），pig 的 blocks 是独立局部切片、`output.Content` 到结束才赋值，流式期间每个事件 `Partial.Content` 恒空 → TUI 全程渲染空消息（改为每次 push 前快照 blocks 进 output.Content，保持 Content 存值类型约定，连带事件 Partial/Message 浅拷贝快照化切断跨 goroutine race，顺带修正 `!hasFinishReason` 时 toolUse 恒判不出的潜伏错误）；② `StatusIndicator` 按值拷贝 `*tui.NewLoader()`，动画 ticker goroutine 在构造器内已启动并捕获被丢弃的原件，树内副本冻结第一帧（改指针嵌入归一实例）
