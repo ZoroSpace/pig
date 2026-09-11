@@ -1394,6 +1394,9 @@ func (b *TuiBase) requestImmediateRenderLocked() {
 	}
 	b.immediateRenderScheduled = true
 	go func() {
+		// pig panic containment: a render panic is logged and contained;
+		// the next RequestRender retries. See docs/feat/PANIC-RESILIENCE.md.
+		defer utils.RecoverPanic("tui.immediateRender")
 		b.mu.Lock()
 		b.immediateRenderScheduled = false
 		if b.stopped || !b.renderRequested {
@@ -1429,6 +1432,9 @@ func (b *TuiBase) scheduleRender() {
 		delay = 0
 	}
 	b.renderTimer = time.AfterFunc(delay, func() {
+		// pig panic containment: same contract as the immediate-render
+		// goroutine above.
+		defer utils.RecoverPanic("tui.renderTimer")
 		b.mu.Lock()
 		b.renderTimer = nil
 		if b.stopped || !b.renderRequested {
@@ -1467,6 +1473,11 @@ func (b *TuiBase) doRenderOrPanic() {
 // concurrent call on another goroutine (e.g. the editor autocomplete
 // continuation calling RequestRender while dispatch is in progress), which
 // would run the callback unlocked.
+// The mutex release is panic-safe (pig panic containment): a panicking fn
+// must not brick the renderer mutex — the panic keeps unwinding (the
+// spawn-site RecoverPanic guard logs and contains it), but lock state is
+// restored here. pi's single-threaded event loop has no equivalent failure
+// mode. See docs/feat/PANIC-RESILIENCE.md.
 // RunExclusive runs fn while holding the renderer lock (pig addition: the
 // serializer for cross-goroutine component-tree mutations — pi performs
 // them on the single event loop; pig serializes against the render/input
@@ -1480,9 +1491,11 @@ func (b *TuiBase) lock(fn func()) {
 	}
 	b.mu.Lock()
 	b.lockOwner.acquire()
+	defer func() {
+		b.lockOwner.release()
+		b.mu.Unlock()
+	}()
 	fn()
-	b.lockOwner.release()
-	b.mu.Unlock()
 }
 
 // =============================================================================

@@ -25,6 +25,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	"github.com/ZoroSpace/pig/codingagent/utils"
 	"github.com/ZoroSpace/pig/tui"
+	pigutils "github.com/ZoroSpace/pig/utils"
 )
 
 // sessionScope is the session listing scope (pi: SessionScope).
@@ -1239,6 +1240,8 @@ func (s *SessionSelectorComponent) loadScope(scope sessionScope, reason loadScop
 	// pi: await loader — the sync loader runs on a goroutine (pig
 	// concurrency note).
 	go func() {
+		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+		defer pigutils.RecoverPanic("components.sessionSelector.load")
 		var sessions []core.SessionInfo
 		var loadErr error
 		func() {

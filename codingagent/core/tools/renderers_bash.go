@@ -20,6 +20,7 @@ import (
 
 	harnessutils "github.com/ZoroSpace/pig/agent/harness/utils"
 	"github.com/ZoroSpace/pig/tui"
+	pigutils "github.com/ZoroSpace/pig/utils"
 )
 
 // bashPreviewLines is the collapsed shell-output preview height (pi:
@@ -127,6 +128,9 @@ func formatShellCall(theme UITheme, args map[string]any, prompt string) string {
 func startElapsedTicker(invalidate func()) *time.Ticker {
 	ticker := time.NewTicker(1 * time.Second)
 	go func() {
+		// pig panic containment: the render-state ticker must survive a
+		// panic (see docs/feat/PANIC-RESILIENCE.md).
+		defer pigutils.RecoverPanic("tools.renderBash.elapsed")
 		for range ticker.C {
 			invalidate()
 		}

@@ -29,6 +29,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/ZoroSpace/pig/utils"
 	"golang.org/x/term"
 )
 
@@ -410,7 +411,13 @@ func (t *ProcessTerminal) readLoop() {
 			}
 			pending = append(pending[:0], pending[i:]...)
 			if out.Len() > 0 {
-				stdin.ProcessString(out.String())
+				// pig panic containment: a panic in input dispatch (key
+				// handlers, editor, focus changes) is logged and contained;
+				// the read loop keeps serving stdin. pi runs handlers on the
+				// event loop where a throw kills the process.
+				// See docs/feat/PANIC-RESILIENCE.md.
+				data := out.String()
+				utils.Guard("tui.stdin", func() { stdin.ProcessString(data) })
 			}
 		}
 		if err != nil {

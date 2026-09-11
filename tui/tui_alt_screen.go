@@ -32,6 +32,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ZoroSpace/pig/utils"
 )
 
 const (
@@ -1742,6 +1744,10 @@ func (t *TuiAltScreen) updateSelectionAutoScroll(event altSgrMouseEvent) {
 	ticker := t.selectionAutoScrollTicker
 	stop := t.selectionAutoScrollStop
 	go func() {
+		// pig panic containment: the selection auto-scroll interval must
+		// survive a panic (pi runs it on the shared event loop).
+		// See docs/feat/PANIC-RESILIENCE.md.
+		defer utils.RecoverPanic("tui.altScreen.autoScroll")
 		for {
 			select {
 			case <-stop:

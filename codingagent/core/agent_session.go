@@ -446,7 +446,12 @@ type AgentSession struct {
 
 	unsubscribeAgent func()
 	eventListeners   []*listenerEntry
-	isAgentRunActive bool
+	// listenerPanicObserver is a pig panic-containment addition (pi: a
+	// listener throw crashes the process): invoked — itself guarded — when
+	// a listener panics during emit(), after the panic has been logged, so
+	// the host UI can surface it. See docs/feat/PANIC-RESILIENCE.md.
+	listenerPanicObserver func(event *AgentSessionEvent, logPath string)
+	isAgentRunActive      bool
 	// idleWait is pi's _idleWaitPromise/_resolveIdleWait pair: closed when
 	// the session settles idle.
 	idleWait chan struct{}
@@ -859,12 +864,20 @@ func (s *AgentSession) installAgentNextTurnRefresh() {
 // ============================================================================
 
 // emit sends an event to all listeners (pi: _emit).
+// pig panic containment: a panic in one listener is logged and contained so
+// the event pump and the remaining listeners survive (pi's single event loop
+// would crash the whole process — the observed latex-render panic class).
+// See docs/feat/PANIC-RESILIENCE.md.
 func (s *AgentSession) emit(event *AgentSessionEvent) {
 	s.mu.Lock()
 	listeners := slices.Clone(s.eventListeners)
+	observer := s.listenerPanicObserver
 	s.mu.Unlock()
 	for _, listener := range listeners {
-		listener.fn(event)
+		logPath, panicked := pigutils.Guard("core.agentSession.listener", func() { listener.fn(event) })
+		if panicked && observer != nil {
+			pigutils.Guard("core.agentSession.listenerPanicObserver", func() { observer(event, logPath) })
+		}
 	}
 }
 
@@ -1209,6 +1222,15 @@ func (s *AgentSession) Subscribe(listener AgentSessionEventListener) func() {
 			}
 		}
 	}
+}
+
+// SetListenerPanicObserver registers a callback invoked (guarded) when a
+// session listener panics during emit() (pig addition; pi crashes instead).
+// Interactive mode uses it to surface the recovered panic in the chat UI.
+func (s *AgentSession) SetListenerPanicObserver(observer func(event *AgentSessionEvent, logPath string)) {
+	s.mu.Lock()
+	s.listenerPanicObserver = observer
+	s.mu.Unlock()
 }
 
 // disconnectFromAgent disconnects from agent events during disposal (pi:

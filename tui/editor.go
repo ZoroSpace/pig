@@ -40,6 +40,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/ZoroSpace/pig/utils"
 	"github.com/rivo/uniseg"
 )
 
@@ -2894,6 +2895,10 @@ func (e *Editor) startAutocompleteRequestLocked(startToken int, options autocomp
 	done := make(chan struct{})
 	e.autocompleteRequestTask = done
 	go func() {
+		// pig panic containment: the fd/glob search continuation must not
+		// kill the process. close(done) still runs first (waiters unblock).
+		// See docs/feat/PANIC-RESILIENCE.md.
+		defer utils.RecoverPanic("tui.editor.autocomplete")
 		defer close(done)
 		// pi: await previousTask — serialize behind the previous request.
 		if previous != nil {

@@ -44,6 +44,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/modes"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive"
 	"github.com/ZoroSpace/pig/codingagent/utils"
+	pigutils "github.com/ZoroSpace/pig/utils"
 )
 
 // extensionLoadFailureHint mirrors EXTENSION_LOAD_FAILURE_HINT.
@@ -1190,5 +1191,22 @@ func main() {
 	_ = os.Setenv("AI_AGENT", "pi")
 	// pi suppresses process.emitWarning here; Go has no direct equivalent.
 
-	os.Exit(Main(os.Args[1:]))
+	// pig panic containment, process-level last resort: hot-path panics
+	// (render, input dispatch, session listeners, worker goroutines) are
+	// contained deeper and never reach here; this catches a panic on the
+	// main goroutine, restores the terminal, and points at the panic log
+	// instead of letting the runtime scroll a raw stack over the TUI.
+	// See docs/feat/PANIC-RESILIENCE.md.
+	exitCode := 0
+	logPath, panicked := pigutils.Guard("main", func() { exitCode = Main(os.Args[1:]) })
+	if panicked {
+		core.RestoreStdout()
+		if logPath != "" {
+			fmt.Fprintf(os.Stderr, "pig: internal error (recovered, exiting) — panic log: %s\n", logPath)
+		} else {
+			fmt.Fprintln(os.Stderr, "pig: internal error (recovered, exiting)")
+		}
+		exitCode = 1
+	}
+	os.Exit(exitCode)
 }

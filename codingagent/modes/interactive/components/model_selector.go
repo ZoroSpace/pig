@@ -23,6 +23,7 @@ import (
 	coretools "github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	"github.com/ZoroSpace/pig/tui"
+	pigutils "github.com/ZoroSpace/pig/utils"
 )
 
 // ModelItem is one selectable model entry (pi: ModelItem).
@@ -251,6 +252,8 @@ func (s *ModelSelectorComponent) loadModelsFromSnapshot() {
 
 func (s *ModelSelectorComponent) refreshModels() {
 	go func() {
+		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+		defer pigutils.RecoverPanic("components.modelSelector.refresh")
 		defer close(s.refreshDone)
 		timeoutCtx, cancel := context.WithTimeout(s.refreshCtx, 15*time.Second)
 		defer cancel()

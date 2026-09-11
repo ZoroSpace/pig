@@ -83,6 +83,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	"github.com/ZoroSpace/pig/codingagent/utils"
 	"github.com/ZoroSpace/pig/tui"
+	pigutils "github.com/ZoroSpace/pig/utils"
 	"github.com/samber/lo"
 )
 
@@ -778,6 +779,8 @@ func (m *InteractiveMode) Run(ctx context.Context) error {
 	// block; errors are swallowed).
 	if os.Getenv("PI_OFFLINE") == "" {
 		go func() {
+			// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+			defer pigutils.RecoverPanic("interactive.catalogRefresh")
 			refreshCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			_, _ = RefreshModelCatalogs(refreshCtx, m.session().GetModelRuntime())
@@ -801,6 +804,8 @@ func (m *InteractiveMode) Run(ctx context.Context) error {
 	// pi's package update check lands with the package manager (P7) and the
 	// tmux keyboard setup check with T6 (declared).
 	go func() {
+		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+		defer pigutils.RecoverPanic("interactive.tmuxCheck")
 		if warning := m.checkTmuxKeyboardSetup(context.Background()); warning != "" {
 			m.ShowWarning(warning)
 		}
@@ -945,7 +950,11 @@ func (m *InteractiveMode) startSubmitWorker() {
 		defer close(m.submitDone)
 		ctx := context.Background()
 		for text := range m.submitCh {
-			m.processSubmitText(ctx, text)
+			// pig panic containment: a panic in submit processing (command
+			// expansion, session mutation) is logged and contained; the
+			// worker keeps serving the queue.
+			// See docs/feat/PANIC-RESILIENCE.md.
+			pigutils.Guard("interactive.submitWorker", func() { m.processSubmitText(ctx, text) })
 		}
 	}()
 }
@@ -1126,6 +1135,15 @@ func (m *InteractiveMode) handleNameCommand(text string) {
 // subscribeToAgent subscribes the UI to session events (pi:
 // subscribeToAgent).
 func (m *InteractiveMode) subscribeToAgent() {
+	// pig panic containment: the session's emit() contains listener panics
+	// and reports them here so the user sees what happened and where the
+	// panic log landed (pi crashes the process instead).
+	// See docs/feat/PANIC-RESILIENCE.md.
+	m.session().SetListenerPanicObserver(func(_ *core.AgentSessionEvent, logPath string) {
+		m.mutateUI(func() {
+			m.ShowError("Internal error (recovered) — panic log: " + logPath)
+		})
+	})
 	m.unsubscribe = m.session().Subscribe(func(event *core.AgentSessionEvent) {
 		m.handleEvent(context.Background(), event)
 	})
@@ -2145,11 +2163,13 @@ func (m *InteractiveMode) registerSignalHandlers() {
 	signal.Notify(sigTerm, syscall.SIGTERM)
 	m.signalCleanupHandlers = append(m.signalCleanupHandlers, func() { signal.Stop(sigTerm) })
 	go func() {
+		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+		defer pigutils.RecoverPanic("interactive.signal")
 		for range sigTerm {
 			// SIGHUP/SIGTERM no longer hard-exit: graceful shutdown emits
 			// session_shutdown first (extension shutdown events land with
 			// Phase 7; terminal restore runs here).
-			go func() { _ = m.shutdown(true) }()
+			m.spawnShutdown(true)
 		}
 	}()
 
@@ -2158,11 +2178,23 @@ func (m *InteractiveMode) registerSignalHandlers() {
 		signal.Notify(sigHup, syscall.SIGHUP)
 		m.signalCleanupHandlers = append(m.signalCleanupHandlers, func() { signal.Stop(sigHup) })
 		go func() {
+			defer pigutils.RecoverPanic("interactive.signal")
 			for range sigHup {
-				go func() { _ = m.shutdown(true) }()
+				m.spawnShutdown(true)
 			}
 		}()
 	}
+}
+
+// spawnShutdown runs m.shutdown on its own goroutine with panic containment
+// (pig addition: the serializer for graceful shutdown from signal paths;
+// pi performs it inline on the event loop).
+// See docs/feat/PANIC-RESILIENCE.md.
+func (m *InteractiveMode) spawnShutdown(fatal bool) {
+	go func() {
+		defer pigutils.RecoverPanic("interactive.shutdown")
+		_ = m.shutdown(fatal)
+	}()
 }
 
 func (m *InteractiveMode) unregisterSignalHandlers() {
@@ -3082,6 +3114,7 @@ func (m *InteractiveMode) reportInstallTelemetry(version string) {
 		return
 	}
 	go func() {
+		defer pigutils.RecoverPanic("interactive.installReport")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, "GET",
@@ -4684,6 +4717,8 @@ func (m *InteractiveMode) showExtensionSelector(ctx context.Context, title strin
 
 	if ctx != nil {
 		go func() {
+			// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+			defer pigutils.RecoverPanic("interactive.inputGate")
 			select {
 			case <-ctx.Done():
 				finish("")
@@ -5405,6 +5440,8 @@ func (m *InteractiveMode) showUserMessageSelector() {
 				// pi's onSelect is async — pig runs the fork on its own
 				// goroutine (session replacement is a blocking operation).
 				go func() {
+					// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+					defer pigutils.RecoverPanic("interactive.fork")
 					result, err := m.runtimeHost.Fork(context.Background(), entryID, nil)
 					if err != nil {
 						_ = m.handleFatalRuntimeError("Failed to fork", err)
@@ -5576,6 +5613,8 @@ func (m *InteractiveMode) showModelSelector(initialSearchInput string) {
 			// pi: await setModel — pig runs the mutation on its own goroutine
 			// (session mutation is potentially blocking).
 			go func() {
+				// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+				defer pigutils.RecoverPanic("interactive.setModel")
 				if err := trySetModel(); err != nil {
 					done()
 					m.ShowError(errorMessageOf(err))
@@ -5732,6 +5771,8 @@ func (m *InteractiveMode) showModelsSelector() {
 		// pi: void refreshModelCatalogs(...).then(...) — pig runs the refresh
 		// on its own goroutine; component mutations go through mutateUI.
 		go func() {
+			// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+			defer pigutils.RecoverPanic("interactive.modelRefresh")
 			refreshCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			result, err := RefreshModelCatalogs(refreshCtx, session.GetModelRuntime())
@@ -5975,6 +6016,8 @@ func (m *InteractiveMode) showSessionSelector() {
 			func(sessionPath string) {
 				done()
 				go func() {
+					// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+					defer pigutils.RecoverPanic("interactive.resumeSession")
 					if _, err := m.handleResumeSession(context.Background(), sessionPath, nil); err != nil {
 						_ = err
 					}
@@ -5985,7 +6028,8 @@ func (m *InteractiveMode) showSessionSelector() {
 				m.ui.RequestRender(false)
 			},
 			func() {
-				go func() { _ = m.shutdown(false) }()
+				defer pigutils.RecoverPanic("interactive.shutdown")
+				_ = m.shutdown(false)
 			},
 			func() { m.ui.RequestRender(false) },
 			&components.SessionSelectorOptions{
@@ -6420,6 +6464,8 @@ func (m *InteractiveMode) showOAuthSelector(mode string) {
 				}
 
 				go func() {
+					// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+					defer pigutils.RecoverPanic("interactive.logout")
 					logoutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					err := m.session().GetModelRuntime().Logout(logoutCtx, providerOption.ID)
@@ -6510,6 +6556,8 @@ func (m *InteractiveMode) completeProviderAuthentication(ctx context.Context, pr
 	}
 
 	go func() {
+		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+		defer pigutils.RecoverPanic("interactive.providerRefresh")
 		refreshCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		result := m.session().GetModelRuntime().Refresh(refreshCtx, &ai.ModelsRefreshOptions{Providers: []string{providerID}})
@@ -6889,7 +6937,7 @@ func (m *InteractiveMode) bindCurrentSessionExtensions() error {
 		ShutdownHandler: func() {
 			m.shutdownRequested = true
 			if m.session().IsIdle() {
-				go func() { _ = m.shutdown(false) }()
+				m.spawnShutdown(false)
 			}
 		},
 		OnError: func(err core.ExtensionError) {
@@ -6940,6 +6988,8 @@ func (m *InteractiveMode) setupExtensionShortcuts(extensionRunner *core.Extensio
 			GetContextUsage: func() *core.ContextUsage { return session.GetContextUsage() },
 			Compact: func(options *core.CompactOptions) {
 				go func() {
+					// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+					defer pigutils.RecoverPanic("interactive.compact")
 					var customInstructions string
 					if options != nil {
 						customInstructions = options.CustomInstructions
@@ -7331,6 +7381,8 @@ func (m *InteractiveMode) handleCtrlZ() {
 	cont := make(chan os.Signal, 1)
 	signal.Notify(cont, syscall.SIGCONT)
 	go func() {
+		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+		defer pigutils.RecoverPanic("interactive.sigcont")
 		<-cont
 		signal.Stop(cont)
 		m.ui.Start()

@@ -11,6 +11,8 @@ package tui
 import (
 	"sync"
 	"time"
+
+	"github.com/ZoroSpace/pig/utils"
 )
 
 // LoaderIndicatorOptions mirrors pi's LoaderIndicatorOptions.
@@ -128,6 +130,9 @@ func (l *Loader) restartAnimation() {
 	l.mu.Unlock()
 
 	go func() {
+		// pig panic containment: the animation ticker must survive a panic.
+		// See docs/feat/PANIC-RESILIENCE.md.
+		defer utils.RecoverPanic("tui.loader")
 		ticker := time.NewTicker(time.Duration(intervalMs) * time.Millisecond)
 		defer ticker.Stop()
 		for {

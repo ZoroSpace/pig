@@ -17,6 +17,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/tui"
+	pigutils "github.com/ZoroSpace/pig/utils"
 )
 
 // EditPreview is the preview union (pi: EditPreview = EditDiffResult |
@@ -299,6 +300,9 @@ func editRenderCall(args any, theme UITheme, context ToolRenderContext) tui.Comp
 		requestKey := argsKey
 		input := *previewInput
 		go func() {
+			// pig panic containment: the async diff preview must not kill
+			// the process on unexpected input (see docs/feat/PANIC-RESILIENCE.md).
+			defer pigutils.RecoverPanic("tools.renderEdit.preview")
 			result, errResult := ComputeEditsDiff(stdcontext.Background(), input.path, input.edits, context.Cwd)
 			var preview EditPreview
 			if errResult.Error != "" {

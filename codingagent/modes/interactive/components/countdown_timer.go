@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/tui"
+	"github.com/ZoroSpace/pig/utils"
 )
 
 // CountdownTimer ticks once per second until expiry (pi: class
@@ -38,6 +39,8 @@ func NewCountdownTimer(timeoutMs int, ui tui.TUI, onTick func(seconds int), onEx
 	onTick(c.remainingSeconds)
 
 	go func() {
+		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+		defer utils.RecoverPanic("components.countdownTimer")
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 		for {
