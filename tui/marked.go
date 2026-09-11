@@ -22,6 +22,7 @@ package tui
 import (
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/dlclark/regexp2"
 )
@@ -126,20 +127,44 @@ func mGroup(m *regexp2.Match, n int) string {
 
 // reReplaceAll is JS String.replace(re, replacement) with /g semantics;
 // replacement supports $N group references (the only forms marked uses).
+//
+// regexp2's Match.Index/Length are RUNE offsets while Go string slicing is
+// BYTE-based — every match boundary must be converted, otherwise any match
+// located after a multi-byte rune corrupts the surrounding UTF-8 (found via
+// CJK table cells, 2026-09-11; pi is immune since JS indices are inherently
+// UTF-16 code units). Slicing uses rune offsets derived from the string
+// itself so invalid bytes count as one rune each, matching regexp2's
+// internal []rune conversion.
 func reReplaceAll(re *regexp2.Regexp, s string, repl string) string {
+	byteAt := make([]int, 0, utf8.RuneCountInString(s)+1)
+	for i := range s {
+		byteAt = append(byteAt, i)
+	}
+	byteAt = append(byteAt, len(s))
+	byteIndexOf := func(runeIdx int) int {
+		if runeIdx <= 0 {
+			return 0
+		}
+		if runeIdx >= len(byteAt) {
+			return len(s)
+		}
+		return byteAt[runeIdx]
+	}
 	var b strings.Builder
-	pos := 0
+	pos := 0 // byte offset into s
 	m, err := re.FindStringMatchStartingAt(s, 0)
 	for err == nil && m != nil {
-		b.WriteString(s[pos:m.Index])
+		start := byteIndexOf(m.Index)
+		end := byteIndexOf(m.Index + m.Length)
+		b.WriteString(s[pos:start])
 		b.WriteString(expandRepl(repl, m))
-		pos = m.Index + m.Length
-		if m.Length == 0 {
+		pos = end
+		if start == end {
 			if pos >= len(s) {
 				break
 			}
 			// JS zero-length match: consume one char to avoid an infinite loop.
-			_, size := decodeRuneAt(s, pos)
+			_, size := utf8.DecodeRuneInString(s[pos:])
 			b.WriteString(s[pos : pos+size])
 			pos += size
 		}
@@ -164,6 +189,9 @@ func expandRepl(repl string, m *regexp2.Match) string {
 	return b.String()
 }
 
+// decodeRuneAt returns the rune starting at or after byte offset pos.
+// (Retained for potential callers; reReplaceAll now uses
+// utf8.DecodeRuneInString directly since it tracks byte offsets.)
 func decodeRuneAt(s string, pos int) (rune, int) {
 	for i, r := range s {
 		if i >= pos {

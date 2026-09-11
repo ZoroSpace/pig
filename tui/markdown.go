@@ -1188,7 +1188,10 @@ func (m *Markdown) renderTable(token *MarkedToken, availableWidth int, nextToken
 	for i, w := range columnWidths {
 		separatorCells[i] = strings.Repeat("─", w)
 	}
-	separatorLine := "├─" + strings.Join(separatorCells, "─┼─") + "┤"
+	// pi: `├─${separatorCells.join("─┼─")}─┤` — note the ─ before ┤; dropping
+	// it makes the separator one column narrower than the top/bottom borders
+	// (misaligned right edge with CJK column content, 2026-09-11).
+	separatorLine := "├─" + strings.Join(separatorCells, "─┼─") + "─┤"
 	lines = append(lines, separatorLine)
 
 	// Render rows with wrapping
