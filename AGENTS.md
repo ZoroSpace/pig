@@ -68,6 +68,7 @@
 **登记规则（2026-09-10 起，2026-09-11 补强）**：后续 fix **不再写入上文「已交付」段**（该段只记批次交付，避免被零散 bug 修复稀释）；每起 fix 完成后，在本小节的「现有文件」列表补一条**一行简要摘要**（现象 + 根因 + 处置），详情一律落对应 `docs/fix/*.md`。**每起 fix 必须同时落地回归测试函数**（进对应包的 `_test.go`，由全仓 `go test ./... -race` 自动执行，禁止“只写 fix 文档、无测试锁定”）；回归测试须先用 stash 修复的方式验证其确实能抓到原 bug（修复前 FAIL、修复后 PASS）；fix 文档中写明测试函数名、所在文件与验证方式。
 
 现有文件：
+- `2026-09-11-tool-execution-live-output-empty.md`：交互模式所有工具 live 输出整段不显示（卡片只剩命令行+Took，测试错误看不见，resume 后反而正常）——事件里 Result/PartialResult 是 `agent.AgentToolResult` 而 `resultToComponentResult` 只认 `ToolResultMessage`，content 静默丢失（pi 是 spread，故 pi 显示）；修转换器补分支 + partial 路径统一走它（顺带修回 partial Details 丢失）+ 3 个回归测试（详见该文件）
 - `2026-09-11-find-test-fd-8-6-no-require-git.md`：TestFindTool 4 用例失败——fd 8.7.0 才有 `--no-require-git`，Debian 12 官方仓库 fd-find 就是 8.6.0（pig 与 pi 逐字对齐传 flag，非移植偏差，pi 同环境同挂）；测试补 `fd --help` 能力探测（sync.Once 缓存）缺 flag 则 SKIP，用户升级 fd 10.5.0 后真跑全绿 26 包；运行时保持对齐 pi 不做探测（老 fd 报错与 pi 一致），偏离需另行确认（详见该文件）
 - `2026-09-11-toolcall-title-invalid-arg.md`：write/edit/read/ls 调用行标题流式期间闪现/滞留 `[invalid arg]`（pi 显示 `...`，path 到达即变文件名）——pi 的 `str()` 三分语义（string→值；键缺失/null→""→emptyFallback；存在但非字符串→invalid）被 `rawPathFromArgs` 压扁成两分，把流式常态「键还没到」误判成 invalid；修三分映射 + strPtr 测试锁定（详见该文件；根因定位由用户并行 pi 会话协助）
 - `2026-09-11-latex-escaped-byte-rune-index-panic.md`：渲染「中文段落含行内公式 $面积$」即 panic——`latexFindClosingDelimiter`（strings.Index）返回字节偏移被 `latexIsEscaped` 当 []rune 下标，CJK 使字节偏移超过 rune 数越界（与 09-10 提示修复同族反向：那次 byte→rune 转换，这次扫描留在 byte 世界，反斜杠 ASCII 按字节扫描 parity 等价）；修字节向后扫描 + 4 个回归测试函数锁定（详见该文件）

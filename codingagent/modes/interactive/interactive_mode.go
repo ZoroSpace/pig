@@ -1379,9 +1379,9 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 
 	case agent.AgentEventToolExecutionUpdate:
 		if component := m.pendingTools[event.ToolCallID]; component != nil {
-			component.UpdateResult(components.ToolExecutionResult{
-				Content: partialResultContent(event.PartialResult),
-			}, true)
+			// pi spreads event.partialResult into updateResult (isError:
+			// false) — content AND details must surface (interactive-mode.ts:3351).
+			component.UpdateResult(resultToComponentResult(event.PartialResult, false), true)
 			m.ui.RequestRender(false)
 		}
 
@@ -2899,26 +2899,22 @@ func pluralSuffix(n int) string {
 
 func loPtrInt(v int64) *int { i := int(v); return &i }
 
-// partialResultContent extracts content from a partial tool result for the
-// streaming renderer (pi spreads partialResult into updateResult).
-func partialResultContent(partial any) []types.Content {
-	if partial == nil {
-		return nil
-	}
-	if partialMsg, ok := partial.(*types.ToolResultMessage); ok {
-		return partialMsg.Content
-	}
-	if partialMsg, ok := partial.(types.ToolResultMessage); ok {
-		return partialMsg.Content
-	}
-	return nil
-}
-
-// resultToComponentResult converts a session tool result to the renderer
-// result shape.
+// resultToComponentResult converts a tool result to the renderer result
+// shape. pi spreads the payload straight into updateResult for both live
+// seams (interactive-mode.ts:3351/3360): tool_execution_update/end carry an
+// agent.AgentToolResult (content + details), while the session-restore path
+// (transcript entries) carries a ToolResultMessage — all forms must surface.
 func resultToComponentResult(result any, isError bool) components.ToolExecutionResult {
 	out := components.ToolExecutionResult{IsError: isError}
 	switch r := result.(type) {
+	case agent.AgentToolResult:
+		out.Content = r.Content
+		out.Details = r.Details
+	case *agent.AgentToolResult:
+		if r != nil {
+			out.Content = r.Content
+			out.Details = r.Details
+		}
 	case *types.ToolResultMessage:
 		out.Content = r.Content
 		out.Details = r.Details
