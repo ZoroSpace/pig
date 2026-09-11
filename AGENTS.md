@@ -4,6 +4,7 @@
 
 ## 仓库机制（先读）
 
+- **go test 执行规范（2026-09-11 立，起因：同一命令全量 `-race` 被重复跑两三遍）**：全量回归 `go test ./... -race -count=1` **只跑一次**——输出存变量后多处消费：`out=$(go test ./... -race -count=1 2>&1); rc=$?`，`rc` 即最终裁决（任何包失败非零），失败详情 `echo "$out" | grep -E '^(FAIL|---)'`、通过包数 `echo "$out" | grep -c '^ok'` 均从同一份输出取；重要回归可 `echo "$out" > /tmp/pig-test-out.log` 落盘备复盘。**严禁**为提取失败详情/数 ok 行数等目的把同一命令重跑第二遍（`-race` 全量双倍时间纯属白烧）
 - **tmux**：agent 自身（及用户的长期会话）跑在同一 tmux server 里。冒烟/测试只允许 `tmux new-session -d -s <专属名字>`，结束 `tmux kill-session -t <专属名字>`；**严禁 `tmux kill-server`**。批量杀进程时 `pkill -f` 的模式会匹配自身命令行，用 `^/absolute/path` 锚定。
 
 ## 当前进度（2026-09-10 更新）
