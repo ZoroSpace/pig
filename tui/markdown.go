@@ -48,10 +48,18 @@ var renderLatexFn func(text string, display bool) (string, bool)
 
 var latexPendingDollarRe = regexp.MustCompile(`\\[A-Za-z]+|[_^=+*/<>()[\]|±≤≥≠≈∈→⇒∞∫∑√-]`)
 
+// Byte-based backward scan. `latexFindClosingDelimiter` passes a BYTE offset
+// (from strings.Index), so the index must not be used against a []rune — with
+// CJK content the byte offset exceeds the rune count and runes[position]
+// panics (docs/fix/2026-09-11-latex-escaped-byte-rune-index-panic.md).
+// Backslash is ASCII 0x5C and never a UTF-8 continuation byte, so scanning
+// bytes backward is parity-equivalent to pi's UTF-16 scan (markdown.ts
+// isEscaped, where out-of-range indexing just yields undefined). Same
+// UTF-16↔rune↔byte index family as the 2026-09-10 start-hint fix, but the
+// opposite direction: those hints convert byte→rune, this one must stay byte.
 func latexIsEscaped(source string, index int) bool {
 	backslashes := 0
-	runes := []rune(source)
-	for position := index - 1; position >= 0 && runes[position] == '\\'; position-- {
+	for position := index - 1; position >= 0 && position < len(source) && source[position] == '\\'; position-- {
 		backslashes++
 	}
 	return backslashes%2 == 1

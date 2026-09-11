@@ -91,3 +91,45 @@ func TestMarkdownRendersBlockMathAfterCJKParagraph(t *testing.T) {
 	lines := mapStripTrim(markdown.Render(80))
 	assertDeepLines(t, lines, []string{"中文说明如下", "", "y = x² + 2", "", "结束"}, "block after CJK")
 }
+
+// Regression: latexIsEscaped used the byte offset returned by
+// latexFindClosingDelimiter (strings.Index) as a []rune index. With CJK
+// content the byte offset of the closing delimiter exceeds the rune count and
+// the old code panicked with "index out of range" while rendering an ordinary
+// assistant message (docs/fix/2026-09-11-latex-escaped-byte-rune-index-panic.md).
+// The fix scans bytes backward; these cases lock the escape-parity semantics
+// (pi markdown.ts isEscaped) around CJK content.
+func TestInlineLatexEscapeScanWithCJKDoesNotPanic(t *testing.T) {
+	// Closing delimiter byte offset (7) > rune count (4) — panicked before the fix.
+	tok := latexTokenizeInlineLatex("$面积$")
+	if tok == nil || tok.Type != "latex" || tok.Text != "面积" || tok.Pending {
+		t.Fatalf("plain CJK inline math: got %+v, want latex token with text 面积", tok)
+	}
+}
+
+func TestInlineLatexEscapedDollarAfterCJK(t *testing.T) {
+	// `\$` inside the math must not close the token; the real closing `$` comes
+	// after more CJK — exercises both the escaped and the not-escaped branches
+	// of the backward scan with multibyte content.
+	tok := latexTokenizeInlineLatex("$面积\\$还要$")
+	if tok == nil || tok.Type != "latex" || tok.Text != "面积\\$还要" {
+		t.Fatalf("escaped dollar after CJK: got %+v", tok)
+	}
+}
+
+func TestInlineLatexDoubleBackslashAfterCJKNotEscaped(t *testing.T) {
+	// Even number of backslashes before `$` → the delimiter is NOT escaped
+	// (parity semantics, pi markdown.ts isEscaped).
+	tok := latexTokenizeInlineLatex("$a\\\\$b$")
+	if tok == nil || tok.Type != "latex" || tok.Text != "a\\\\" || tok.Raw != "$a\\\\$" {
+		t.Fatalf("double backslash before delimiter: got %+v", tok)
+	}
+}
+
+func TestMarkdownRendersCJKMathSentenceEndToEnd(t *testing.T) {
+	// The real-world panic path: assistant message markdown with CJK text
+	// around inline math, rendered through the full marked lexer.
+	markdown := NewMarkdown("这是中文段落，包含行内公式 $面积$ 与后续文字。", 0, 0, defaultMarkdownTheme, nil, nil)
+	lines := mapStripTrim(markdown.Render(80))
+	assertDeepLines(t, lines, []string{"这是中文段落，包含行内公式 面积 与后续文字。"}, "CJK sentence with inline math")
+}
