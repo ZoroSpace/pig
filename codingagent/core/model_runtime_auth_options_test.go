@@ -187,9 +187,14 @@ func TestModelRuntimeProjectsProviderOwnedMethodsNamesAndStatus(t *testing.T) {
 	options := authOptions(t, runtime, "")
 
 	found := map[string]string{}
+	oauthFound := map[string]string{}
 	for _, option := range options {
 		if option.authtype != "api_key" {
-			t.Fatalf("unexpected oauth builtin: %s", option.provider.ID())
+			// A2: anthropic and kimi-coding carry builtin OAuth methods
+			// (pi: anthropicOAuth / kimiCodingOAuth); the method surface is
+			// the OAuthAuth, not the ApiKeyAuth.
+			oauthFound[option.provider.ID()] = option.oauth.Name()
+			continue
 		}
 		found[option.provider.ID()] = option.method.Name()
 	}
@@ -204,14 +209,28 @@ func TestModelRuntimeProjectsProviderOwnedMethodsNamesAndStatus(t *testing.T) {
 	if found["deepseek"] != "DeepSeek API key" {
 		t.Fatalf("deepseek method name = %q", found["deepseek"])
 	}
+	// The A2 builtin OAuth methods project their flow names.
+	if got := oauthFound["anthropic"]; got != "Anthropic (Claude Pro/Max)" {
+		t.Errorf("anthropic oauth method = %q, want Anthropic (Claude Pro/Max)", got)
+	}
+	if got := oauthFound["kimi-coding"]; got != "Kimi Code (subscription)" {
+		t.Errorf("kimi-coding oauth method = %q, want Kimi Code (subscription)", got)
+	}
 	// Type filters.
 	for _, option := range authOptions(t, runtime, "api_key") {
 		if option.authtype != "api_key" {
 			t.Fatal("api_key filter leaked other types")
 		}
 	}
-	if len(authOptions(t, runtime, "oauth")) != 0 {
-		t.Fatal("pig has no builtin oauth providers, want empty")
+	oauthOptions := authOptions(t, runtime, "oauth")
+	if len(oauthOptions) != 2 {
+		t.Fatalf("oauth options = %d, want the two A2 builtin oauth providers", len(oauthOptions))
+	}
+	for _, option := range oauthOptions {
+		id := option.provider.ID()
+		if id != "anthropic" && id != "kimi-coding" {
+			t.Fatalf("unexpected oauth builtin: %s", id)
+		}
 	}
 }
 

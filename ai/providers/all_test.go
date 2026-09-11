@@ -39,11 +39,14 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 	}
 	// pi's builtinProviders order, restricted to the ported protocols.
 	// "volcengine-plan" is pig-only (extension made builtin), slotted
-	// alphabetically.
+	// alphabetically. The A2 anthropic-messages batch adds fireworks,
+	// kimi-coding, minimax, minimax-cn, and vercel-ai-gateway.
 	want := []string{
-		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek", "groq",
-		"huggingface", "moonshotai", "moonshotai-cn", "nvidia", "openai",
-		"openrouter", "together", "volcengine-plan", "zai", "zai-coding-cn",
+		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
+		"fireworks", "groq", "huggingface", "kimi-coding", "minimax",
+		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
+		"openrouter", "together", "vercel-ai-gateway", "volcengine-plan",
+		"zai", "zai-coding-cn",
 	}
 	if !reflect.DeepEqual(ids, want) {
 		t.Fatalf("BuiltinProviders() = %v, want %v", ids, want)
@@ -53,9 +56,11 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 func TestBuiltinModelsRegistersAll(t *testing.T) {
 	models := BuiltinModels(nil)
 	for _, id := range []string{
-		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek", "groq",
-		"huggingface", "moonshotai", "moonshotai-cn", "nvidia", "openai",
-		"openrouter", "together", "volcengine-plan", "zai", "zai-coding-cn",
+		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
+		"fireworks", "groq", "huggingface", "kimi-coding", "minimax",
+		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
+		"openrouter", "together", "vercel-ai-gateway", "volcengine-plan",
+		"zai", "zai-coding-cn",
 	} {
 		provider := models.GetProvider(id)
 		if provider == nil {
@@ -65,8 +70,8 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 16 {
-		t.Fatalf("GetProviders() length = %d, want 16", got)
+	if got := len(models.GetProviders()); got != 21 {
+		t.Fatalf("GetProviders() length = %d, want 21", got)
 	}
 }
 

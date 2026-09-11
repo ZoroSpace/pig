@@ -65,17 +65,16 @@ func GetBuiltinModels(provider BuiltinProvider) []ai.Model {
 }
 
 // BuiltinProviders returns all built-in providers, freshly constructed (pi:
-// builtinProviders). Only the providers whose wire protocols are ported are
-// constructed today, in pi's alphabetical position order; the remaining
-// factories arrive with their adapters (README Phase 2): amazonBedrockProvider,
-// azureOpenAIResponsesProvider, cloudflareAIGatewayProvider,
-// cloudflareWorkersAIProvider, fireworksProvider, githubCopilotProvider,
-// googleProvider, googleVertexProvider, kimiCodingProvider, minimaxProvider,
-// minimaxCnProvider, mistralProvider, openaiCodexProvider, opencodeProvider,
+// builtinProviders), in pi's alphabetical position order. The remaining
+// factories arrive with their adapters (README Phase 2):
+// amazonBedrockProvider, azureOpenAIResponsesProvider,
+// cloudflareAIGatewayProvider, cloudflareWorkersAIProvider,
+// githubCopilotProvider, googleProvider, googleVertexProvider,
+// mistralProvider, openaiCodexProvider, opencodeProvider,
 // opencodeGoProvider, qwenTokenPlanProvider, qwenTokenPlanCnProvider,
-// qwenTokenPlanIndividualProvider, radiusProvider, vercelAIGatewayProvider,
-// xaiProvider, xiaomiProvider, xiaomiTokenPlanAmsProvider,
-// xiaomiTokenPlanCnProvider, xiaomiTokenPlanSgpProvider.
+// qwenTokenPlanIndividualProvider, radiusProvider, xaiProvider,
+// xiaomiProvider, xiaomiTokenPlanAmsProvider, xiaomiTokenPlanCnProvider,
+// xiaomiTokenPlanSgpProvider.
 func BuiltinProviders() []ai.Provider {
 	return []ai.Provider{
 		AntLingProvider(),
@@ -83,14 +82,19 @@ func BuiltinProviders() []ai.Provider {
 		BasetenProvider(),
 		CerebrasProvider(),
 		DeepSeekProvider(),
+		FireworksProvider(),
 		GroqProvider(),
 		HuggingFaceProvider(),
+		KimiCodingProvider(),
+		MinimaxProvider(),
+		MinimaxCNProvider(),
 		MoonshotAIProvider(),
 		MoonshotAICNProvider(),
 		NVIDIAProvider(),
 		OpenAIProvider(),
 		OpenRouterProvider(),
 		TogetherProvider(),
+		VercelAIGatewayProvider(),
 		VolcenginePlanProvider(),
 		ZaiProvider(),
 		ZaiCodingCNProvider(),

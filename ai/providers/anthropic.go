@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/ZoroSpace/pig/ai/api"
 	"github.com/ZoroSpace/pig/ai/auth"
 )
 
@@ -17,13 +18,14 @@ func AnthropicProvider() ai.Provider {
 		BaseURL: "https://api.anthropic.com",
 		Auth: auth.ProviderAuth{
 			APIKey: anthropicAPIKeyAuth(),
-			// oauth: lazyOAuth({ name: "Anthropic (Claude Pro/Max)",
-			// isSubscription: true, load: loadAnthropicOAuth }) — arrives
-			// with the OAuth flows (auth/oauth/load.ts, README Phase 2).
+			// OAuth: Claude Pro/Max flow (pi: lazyOAuth({ name: "Anthropic
+			// (Claude Pro/Max)", isSubscription: true, load:
+			// loadAnthropicOAuth }); Go has no dynamic import, so the flow
+			// links directly).
+			OAuth: auth.AnthropicOAuth{},
 		},
 		Models: GetBuiltinModels(ai.ProviderAnthropic),
-		// api: anthropicMessagesApi() — arrives with the anthropic-messages
-		// adapter (README Phase 2).
+		API:    api.AnthropicMessages{},
 	})
 }
 

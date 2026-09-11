@@ -2,8 +2,11 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/ZoroSpace/pig/ai/types"
@@ -97,7 +100,7 @@ func schemaAllowsNull(schema any) bool {
 	return false
 }
 
-func makeJSONSchemaNodeStrict(schema any) error {
+func makeJSONSchemaNodeStrict(schema any, orders map[uintptr][]string) error {
 	m, ok := schema.(map[string]any)
 	if !ok {
 		return &UnsupportedStrictJSONSchemaError{Message: "boolean schemas are unsupported"}
@@ -116,7 +119,7 @@ func makeJSONSchemaNodeStrict(schema any) error {
 			if isStructuredSchema(variant) {
 				return &UnsupportedStrictJSONSchemaError{Message: "object and array unions are unsupported"}
 			}
-			if err := makeJSONSchemaNodeStrict(variant); err != nil {
+			if err := makeJSONSchemaNodeStrict(variant, orders); err != nil {
 				return err
 			}
 		}
@@ -125,7 +128,7 @@ func makeJSONSchemaNodeStrict(schema any) error {
 		if _, isTuple := items.([]any); isTuple {
 			return &UnsupportedStrictJSONSchemaError{Message: "tuple schemas are unsupported"}
 		}
-		if err := makeJSONSchemaNodeStrict(items); err != nil {
+		if err := makeJSONSchemaNodeStrict(items, orders); err != nil {
 			return err
 		}
 	}
@@ -173,23 +176,102 @@ func makeJSONSchemaNodeStrict(schema any) error {
 			return &UnsupportedStrictJSONSchemaError{Message: "required contains an unknown property"}
 		}
 	}
-	allPropertyNames := make([]string, 0, len(properties))
-	for key, property := range properties {
-		if err := makeJSONSchemaNodeStrict(property); err != nil {
+	// Property order follows the schema document (pi: Object.keys insertion
+	// order). Map iteration would randomize the generated required array
+	// per request, breaking provider prompt-cache prefix stability.
+	propertyNames := orders[reflect.ValueOf(properties).Pointer()]
+	if propertyNames == nil {
+		propertyNames = make([]string, 0, len(properties))
+		for key := range properties {
+			propertyNames = append(propertyNames, key)
+		}
+		sort.Strings(propertyNames)
+	}
+	for _, key := range propertyNames {
+		property, present := properties[key]
+		if !present {
+			continue
+		}
+		if err := makeJSONSchemaNodeStrict(property, orders); err != nil {
 			return err
 		}
 		if !requiredSet[key] && !schemaAllowsNull(property) {
 			properties[key] = map[string]any{"anyOf": []any{property, map[string]any{"type": "null"}}}
 		}
-		allPropertyNames = append(allPropertyNames, key)
 	}
-	m["required"] = allPropertyNames
+	m["required"] = propertyNames
 	m["additionalProperties"] = false
 	return nil
 }
 
+// collectJSONKeyOrders records the document order of every object's keys so
+// the strict transform can reproduce pi's Object.keys iteration.
+func collectJSONKeyOrders(node any, dec *json.Decoder, orders map[uintptr][]string) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	return collectJSONKeyOrdersToken(tok, node, dec, orders)
+}
+
+func collectJSONKeyOrdersToken(tok json.Token, node any, dec *json.Decoder, orders map[uintptr][]string) error {
+	delim, isDelim := tok.(json.Delim)
+	if !isDelim {
+		return nil
+	}
+	switch delim {
+	case '{':
+		m, ok := node.(map[string]any)
+		if !ok {
+			return fmt.Errorf("schema shape mismatch")
+		}
+		var keyOrder []string
+		for {
+			keyTok, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			if keyTok == json.Delim('}') {
+				break
+			}
+			key, ok := keyTok.(string)
+			if !ok {
+				return fmt.Errorf("schema shape mismatch")
+			}
+			keyOrder = append(keyOrder, key)
+			if err := collectJSONKeyOrders(m[key], dec, orders); err != nil {
+				return err
+			}
+		}
+		orders[reflect.ValueOf(m).Pointer()] = keyOrder
+	case '[':
+		arr, ok := node.([]any)
+		if !ok {
+			return fmt.Errorf("schema shape mismatch")
+		}
+		for i := 0; ; i++ {
+			tok, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			if tok == json.Delim(']') {
+				break
+			}
+			var element any = nil
+			if i < len(arr) {
+				element = arr[i]
+			}
+			if err := collectJSONKeyOrdersToken(tok, element, dec, orders); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // MakeStrictJSONSchema converts a tool schema to the strict subset expected by
-// provider constrained sampling (pi: makeStrictJsonSchema).
+// provider constrained sampling (pi: makeStrictJsonSchema). Property order
+// follows the schema document (pi: Object.keys).
 func MakeStrictJSONSchema(schema json.RawMessage) (map[string]any, error) {
 	var cloned any
 	if err := json.Unmarshal(schema, &cloned); err != nil {
@@ -198,7 +280,11 @@ func MakeStrictJSONSchema(schema json.RawMessage) (map[string]any, error) {
 	if !isJsonSchemaObject(cloned) {
 		return nil, &UnsupportedStrictJSONSchemaError{Message: "root schema must have type object"}
 	}
-	if err := makeJSONSchemaNodeStrict(cloned); err != nil {
+	orders := map[uintptr][]string{}
+	if err := collectJSONKeyOrders(cloned, json.NewDecoder(bytes.NewReader(schema)), orders); err != nil {
+		return nil, err
+	}
+	if err := makeJSONSchemaNodeStrict(cloned, orders); err != nil {
 		return nil, err
 	}
 	m := cloned.(map[string]any)

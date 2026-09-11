@@ -115,10 +115,25 @@ func TestGetLoginProviderOptionsProjectsProviderAuthWithoutFiltering(t *testing.
 
 	oauthType := auth.AuthTypeOAuth
 	oauthOptions := mode.getLoginProviderOptions(&oauthType)
-	if len(oauthOptions) != 1 {
-		t.Fatalf("oauth options = %d entries, want 1", len(oauthOptions))
+	// A2: the builtin set now carries anthropic + kimi-coding OAuth methods
+	// alongside the fakes, so locate the fake anthropic entry and assert the
+	// builtin kimi-coding method by name.
+	var anthropicOAuth, kimiOAuth *components.AuthSelectorProvider
+	for i := range oauthOptions {
+		switch oauthOptions[i].ID {
+		case "anthropic":
+			anthropicOAuth = &oauthOptions[i]
+		case "kimi-coding":
+			kimiOAuth = &oauthOptions[i]
+		}
 	}
-	if oauthOptions[0].ID != "anthropic" || oauthOptions[0].Name != "Anthropic" || oauthOptions[0].AuthType != auth.AuthTypeOAuth {
-		t.Fatalf("oauth option[0] = %+v, want anthropic/oauth", oauthOptions[0])
+	if anthropicOAuth == nil || anthropicOAuth.Name != "Anthropic" || anthropicOAuth.AuthType != auth.AuthTypeOAuth {
+		t.Fatalf("oauth anthropic = %+v, want anthropic/oauth", anthropicOAuth)
+	}
+	if kimiOAuth == nil {
+		t.Fatal("oauth options missing builtin kimi-coding")
+	}
+	if name := components.AuthSelectorMethodName(kimiOAuth.Method); name != "Kimi Code (subscription)" {
+		t.Fatalf("kimi-coding oauth method = %q, want Kimi Code (subscription)", name)
 	}
 }
