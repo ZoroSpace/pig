@@ -54,11 +54,10 @@
 ## 三、风险与坑（本批实证）
 
 1. **tmux 是共享设施**：agent 与用户会话在同一 server——只用专属命名 session，**严禁 kill-server**；`pkill -f` 模式会匹配自身命令行，用 `^/absolute/path` 锚定（以上已写进 AGENTS.md 仓库机制节）。
-2. **auto-commit**：仓库每 5 分钟自动提交（`auto-save:` 提交），不用手动 commit；`git status` clean 不代表没有改动。
-3. 新增组件/外壳代码时**先想锁序**：t.mu → b.mu 是合法方向，反向必死锁；任何在 input-dispatch 回调里同步调用的路径都不得持 ProcessTerminal.mu/StdinBuffer.mu。
-4. Content 值/指针：adapter 产出的 Message.Content 是值类型；所有 `.(types.X)` 断言都要双形态处理（已有 `asAssistantMessage`/`asTextOrThinking` 先例）。
-5. theme 测试资产 TestMain（PI_PACKAGE_DIR→theme/testdata）照旧；footer 类 watcher 测试记得 mtime 粒度 sleep。
-6. `forwardInputSequenceToLocked` 名字已名不副实（现无锁调用），T5b-2 顺手改名。
+2. 新增组件/外壳代码时**先想锁序**：t.mu → b.mu 是合法方向，反向必死锁；任何在 input-dispatch 回调里同步调用的路径都不得持 ProcessTerminal.mu/StdinBuffer.mu。
+3. Content 值/指针：adapter 产出的 Message.Content 是值类型；所有 `.(types.X)` 断言都要双形态处理（已有 `asAssistantMessage`/`asTextOrThinking` 先例）。
+4. theme 测试资产 TestMain（PI_PACKAGE_DIR→theme/testdata）照旧；footer 类 watcher 测试记得 mtime 粒度 sleep。
+5. `forwardInputSequenceToLocked` 名字已名不副实（现无锁调用），T5b-2 顺手改名。
 
 ## 四、明确不要读的
 

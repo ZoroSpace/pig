@@ -4,7 +4,6 @@
 
 ## 仓库机制（先读）
 
-- **auto-commit**：仓库有自动提交守护，每 5 分钟把当前改动以 `auto-save: <时间>` 提交入库。改动写完即被提交，**无需也不要手动 commit**；`git status` 显示 clean ≠ 没有改动，只说明守护已收走。查某文件的变更历史用 `git log --follow <path>`。
 - **tmux**：agent 自身（及用户的长期会话）跑在同一 tmux server 里。冒烟/测试只允许 `tmux new-session -d -s <专属名字>`，结束 `tmux kill-session -t <专属名字>`；**严禁 `tmux kill-server`**。批量杀进程时 `pkill -f` 的模式会匹配自身命令行，用 `^/absolute/path` 锚定。
 
 ## 当前进度（2026-09-10 更新）
