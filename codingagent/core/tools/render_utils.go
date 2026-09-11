@@ -173,28 +173,31 @@ func RenderToolPath(rawPath *string, theme UITheme, cwd string, emptyFallback st
 	return LinkPath(theme.Fg("accent", ShortenPath(value)), value, cwd)
 }
 
-// rawPathFromArgs is str(args?.file_path ?? args?.path) over raw args; nil =
-// null. Shared by the edit/read/write/ls renderers (pig helper; pi inlines
-// the expression per renderer).
+// rawPathFromArgs is str(args?.file_path ?? args?.path) over raw args (pig
+// helper; pi inlines the expression per renderer). pi's str() maps
+// undefined/null — a missing key or an absent args object, both common while
+// streaming partial args — to "" (rendered as the emptyFallback, e.g. "..."),
+// and only a present-but-non-string value to null ("[invalid arg]"). The
+// pointer form keeps that distinction: "" = absent, nil = invalid. Mapping
+// a missing key to nil instead made the call row flash/stick on
+// "[invalid arg]" during streaming (pi shows "..."; see
+// docs/fix/2026-09-11-toolcall-title-invalid-arg.md).
 func rawPathFromArgs(args any) *string {
+	empty := ""
 	m, ok := args.(map[string]any)
 	if !ok {
-		return nil
+		return &empty
 	}
 	value, has := m["path"]
 	if filePathValue, is := m["file_path"]; is && filePathValue != nil {
 		// pi: args?.file_path ?? args?.path (?? skips null/undefined)
 		value, has = filePathValue, true
 	}
-	if !has {
-		return nil
+	if !has || value == nil {
+		return &empty
 	}
 	if s, isString := value.(string); isString {
 		return &s
-	}
-	if value == nil {
-		empty := ""
-		return &empty
 	}
 	return nil
 }
