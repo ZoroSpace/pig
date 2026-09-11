@@ -1,5 +1,7 @@
 # binaries
 /pig
+/generatemodels
+/generateimagemodels
 /pig.exe
 /cmd/pig/pig
 /cmd/pig/pig.exe
