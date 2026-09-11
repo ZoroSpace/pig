@@ -31,6 +31,16 @@
 | interactive 全部后台 goroutine（catalog 刷新/tmux 检查/submit worker/信号/fork/setModel/模型刷新/resume/logout/provider 刷新/compact/shutdown×4/SIGCONT/input gate/install report） | `interactive.*` | 一次性动作 goroutine 全部 defer 收容；shutdown 一行式收拢为 `spawnShutdown(fatal)` 辅助方法 |
 | 组件/渲染器：countdown timer、model selector 刷新、session selector 装载、bash elapsed ticker、edit 异步 diff preview | `components.*` / `tools.*` | 渲染用户文件内容的后台 goroutine |
 
+### 第 2.5 层：abort-on-panic（用户插入小批，2026-09-11 深夜）
+
+listener panic 除了收容 + 弹 Error 行，现在还会**中止当前 run**（方案 A，会话不 halt）：`subscribeToAgent` 的 panic observer 里 `go session.Abort(ctx 5s 超时)`，与手动 Esc 同语义——模型不再对着坏渲染器继续流式输出，会话本身存活、下一条消息照常。设计要点：
+
+- **必须 `go` 起来调**：observer 在 agent 事件分发的同步链上（agent 等 awaited listener settle 才 idle），同步 Abort → WaitForIdle 会死锁；`abortInFlight`（atomic.Bool CAS）把 panic 爆发合并成一次 abort，abort 结算后复位，后续 run 的 panic 可再触发。
+- **abort 先于 ShowError 派发**，mutateUI 队列再慢也不拖延中止。
+- 未做：会话级 halt 标志（方案 B）、渲染熔断（方案 C）、panic 摘要注入下轮 context——均为独立候选批。
+
+回归测试：`TestSubscribeToAgentAbortsRunOnListenerPanic` / `TestSubscribeToAgentSessionStaysUsableAfterPanicAbort`（`codingagent/modes/interactive/interactive_mode_panic_abort_test.go`，真实流式 run + panicking listener；stash 验证：移除 go Abort → 两测超时 FAIL；同步化 Abort → 同样死锁超时 FAIL）。
+
 ### 第 3 层：进程兜底（`cmd/pig/main.go`）
 
 `main()` 用 `Guard("main")` 包住整个 `Main()`：主 goroutine panic（Init/shutdown/print 路径）→ `core.RestoreStdout()`（终端回 sane 模式，不留烂屏）→ stderr 提示 panic log 路径 → exit 1。print 模式无法"继续"（输出契约已破），但日志已落盘。

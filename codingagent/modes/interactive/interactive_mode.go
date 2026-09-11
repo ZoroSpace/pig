@@ -67,6 +67,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -1139,7 +1140,29 @@ func (m *InteractiveMode) subscribeToAgent() {
 	// and reports them here so the user sees what happened and where the
 	// panic log landed (pi crashes the process instead).
 	// See docs/feat/PANIC-RESILIENCE.md.
-	m.session().SetListenerPanicObserver(func(_ *core.AgentSessionEvent, logPath string) {
+	//
+	// Pig abort-on-panic: a panicking listener usually means the model's
+	// current output is what triggers the bug (e.g. rendering a CJK formula
+	// mid-stream), so the run is aborted — the programmatic equivalent of
+	// the user pressing Esc — instead of streaming on into a broken
+	// renderer. The session itself stays alive for the next message.
+	// Abort MUST run on its own goroutine: this observer is invoked on the
+	// agent's synchronous event-dispatch chain, and the agent does not go
+	// idle until that chain returns — a synchronous Abort → WaitForIdle here
+	// would deadlock. abortInFlight coalesces panic bursts into one abort;
+	// it resets once the abort settles so a panic in a later run triggers a
+	// fresh abort.
+	session := m.session()
+	var abortInFlight atomic.Bool
+	session.SetListenerPanicObserver(func(_ *core.AgentSessionEvent, logPath string) {
+		if abortInFlight.CompareAndSwap(false, true) {
+			go func() {
+				defer abortInFlight.Store(false)
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = session.Abort(ctx)
+			}()
+		}
 		m.mutateUI(func() {
 			m.ShowError("Internal error (recovered) — panic log: " + logPath)
 		})
