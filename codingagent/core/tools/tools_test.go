@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -30,6 +31,46 @@ import (
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
 )
+
+var (
+	fdCapabilityOnce       sync.Once
+	fdHasNoRequireGit      bool
+	fdHasNoRequireGitKnown bool
+)
+
+// fdSupportsNoRequireGit reports whether the fd on PATH knows
+// --no-require-git (added in fd 8.7.0; Debian 12's fd-find package ships
+// 8.6.0 and does not have it). The find tests exercising the non-git-repo
+// branch pass that flag (pi find.ts does the same), so they must skip when
+// the local fd predates it instead of failing as a false regression.
+// fd missing from PATH is NOT a skip: the find tool then uses its download
+// fallback and the tests exercise that path as usual.
+func fdSupportsNoRequireGit() (supported bool, known bool) {
+	fdCapabilityOnce.Do(func() {
+		path, err := exec.LookPath("fd")
+		if err != nil {
+			fdHasNoRequireGitKnown = false
+			return
+		}
+		out, err := exec.Command(path, "--help").Output()
+		if err != nil {
+			fdHasNoRequireGitKnown = false
+			return
+		}
+		fdHasNoRequireGitKnown = true
+		fdHasNoRequireGit = strings.Contains(string(out), "--no-require-git")
+	})
+	return fdHasNoRequireGit, fdHasNoRequireGitKnown
+}
+
+// skipIfFdLacksNoRequireGit skips find tests that rely on --no-require-git
+// when the local fd predates fd 8.7.0.
+func skipIfFdLacksNoRequireGit(t *testing.T) {
+	t.Helper()
+	if supported, known := fdSupportsNoRequireGit(); known && !supported {
+		t.Skip("fd on PATH lacks --no-require-git (added in fd 8.7.0; Debian 12 ships fd-find 8.6.0)")
+	}
+}
 
 func textOf(result agent.AgentToolResult) string {
 	var parts []string
@@ -993,6 +1034,7 @@ func TestFindTool(t *testing.T) {
 	findTool := CreateFindTool(cwdForTest(), nil)
 
 	t.Run("should include hidden files that are not gitignored", func(t *testing.T) {
+		skipIfFdLacksNoRequireGit(t)
 		hiddenDir := filepath.Join(testDir, ".secret")
 		if err := os.Mkdir(hiddenDir, 0o755); err != nil {
 			t.Fatal(err)
@@ -1018,6 +1060,7 @@ func TestFindTool(t *testing.T) {
 	})
 
 	t.Run("should respect .gitignore", func(t *testing.T) {
+		skipIfFdLacksNoRequireGit(t)
 		gitDir := newTestDir(t)
 		writeTestFile(t, filepath.Join(gitDir, ".gitignore"), "ignored.txt\n")
 		writeTestFile(t, filepath.Join(gitDir, "ignored.txt"), "ignored")
@@ -1034,6 +1077,7 @@ func TestFindTool(t *testing.T) {
 	})
 
 	t.Run("should surface fd glob parse errors", func(t *testing.T) {
+		skipIfFdLacksNoRequireGit(t)
 		err := mustFail(t, findTool, "test-call-15", map[string]any{"pattern": "[", "path": testDir})
 		re := regexp.MustCompile(`error parsing glob|fd exited with code|fd error`)
 		if !re.MatchString(err.Error()) {
@@ -1042,6 +1086,7 @@ func TestFindTool(t *testing.T) {
 	})
 
 	t.Run("should treat flag-like patterns as search text", func(t *testing.T) {
+		skipIfFdLacksNoRequireGit(t)
 		result := execTool(t, findTool, "test-call-find-flag-pattern", map[string]any{"pattern": "--help", "path": testDir})
 		if !strings.Contains(textOf(result), "No files found matching pattern") {
 			t.Fatalf("output = %q", textOf(result))
