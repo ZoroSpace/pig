@@ -25,6 +25,7 @@ type (
 const (
 	ApiOpenAICompletions = types.ApiOpenAICompletions
 	ApiAnthropicMessages = types.ApiAnthropicMessages
+	ApiOpenAIResponses   = types.ApiOpenAIResponses
 	ImagesApiOpenRouter  = types.ImagesApiOpenRouter
 )
 
@@ -285,6 +286,7 @@ type (
 	CacheControlFormat            = types.CacheControlFormat
 	DeferredToolsMode             = types.DeferredToolsMode
 	OpenAICompletionsCompat       = types.OpenAICompletionsCompat
+	OpenAIResponsesCompat         = types.OpenAIResponsesCompat
 	AnthropicMessagesCompat       = types.AnthropicMessagesCompat
 	AnthropicAllowedFallbackModel = types.AnthropicAllowedFallbackModel
 	ModelCompat                   = types.ModelCompat

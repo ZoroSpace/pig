@@ -22,6 +22,7 @@ type Api string
 const (
 	ApiOpenAICompletions Api = "openai-completions"
 	ApiAnthropicMessages Api = "anthropic-messages"
+	ApiOpenAIResponses   Api = "openai-responses"
 )
 
 // ImagesApi identifies an image-generation wire protocol.
@@ -1178,9 +1179,47 @@ type OpenAICompletionsCompat struct {
 	VllmPriority *float64 `json:"vllmPriority,omitempty"`
 }
 
-// OpenAIResponsesCompat is missing here by design (pi: compatibility settings
-// for OpenAI Responses, Azure OpenAI Responses, and OpenAI Codex Responses
-// APIs); it arrives with those adapters.
+// OpenAIResponsesCompat carries compatibility settings for OpenAI Responses
+// APIs (pi: OpenAIResponsesCompat). Pointer fields distinguish "unset"
+// (documented default applies) from an explicit value.
+type OpenAIResponsesCompat struct {
+	// SupportsDeveloperRole: whether the provider supports the "developer"
+	// role (vs "system"). Default: true.
+	SupportsDeveloperRole *bool `json:"supportsDeveloperRole,omitempty"`
+	// SessionAffinityFormat: "openai" sends session_id and
+	// x-client-request-id; "openai-nosession" sends x-client-request-id;
+	// "openrouter" sends x-session-id. Does not affect the prompt_cache_key
+	// body param, which is governed by cache retention. Default:
+	// auto-detected from provider/baseUrl.
+	SessionAffinityFormat *SessionAffinityFormat `json:"sessionAffinityFormat,omitempty"`
+	// SupportsLongCacheRetention: whether the provider supports long prompt
+	// cache retention. This uses prompt_cache_options.ttl "30m" on GPT-5.6+
+	// and prompt_cache_retention "24h" on earlier models. Default: true.
+	SupportsLongCacheRetention *bool `json:"supportsLongCacheRetention,omitempty"`
+	// SupportsStrictMode: whether the provider supports strict JSON-schema
+	// function tools. Defaults are API-specific; generated OpenAI models
+	// enable it explicitly.
+	SupportsStrictMode *bool `json:"supportsStrictMode,omitempty"`
+	// SupportsOpenAIGrammarTools: whether to emit OpenAI custom tools with
+	// Lark/regex grammar formats. When false, grammar-constrained tools fall
+	// back to normal function tools. Default: false; the generated model
+	// catalog enables it for capable models.
+	SupportsOpenAIGrammarTools *bool `json:"supportsOpenAIGrammarTools,omitempty"`
+	// SupportsAdditionalTools: whether the model supports message-anchored
+	// additional_tools input items. Default: false.
+	SupportsAdditionalTools *bool `json:"supportsAdditionalTools,omitempty"`
+	// SupportsToolSearch: whether the model supports client-executed tool
+	// search for deferred tools. Default: false.
+	SupportsToolSearch *bool `json:"supportsToolSearch,omitempty"`
+	// SupportsExplicitPromptCacheMode: whether the model accepts
+	// prompt_cache_options (OpenAI GPT-5.6+ prompt caching). Older OpenAI
+	// models reject the parameter. Default: false.
+	SupportsExplicitPromptCacheMode *bool `json:"supportsExplicitPromptCacheMode,omitempty"`
+	// SupportsMaxOutputTokens: whether the provider accepts the
+	// max_output_tokens parameter. Some Codex-protocol gateways reject it.
+	// Default: true.
+	SupportsMaxOutputTokens *bool `json:"supportsMaxOutputTokens,omitempty"`
+}
 
 // AnthropicMessagesCompat carries compatibility settings for
 // Anthropic-Messages-compatible APIs. Pointer fields distinguish "unset"
@@ -1238,6 +1277,7 @@ type ModelCompat interface {
 }
 
 func (c *OpenAICompletionsCompat) modelCompat() {}
+func (c *OpenAIResponsesCompat) modelCompat()   {}
 func (c *AnthropicMessagesCompat) modelCompat() {}
 
 // OpenRouterRouting carries OpenRouter provider routing preferences (sent as
@@ -1349,6 +1389,8 @@ func (m *Model) UnmarshalJSON(data []byte) error {
 	switch m.API {
 	case ApiAnthropicMessages:
 		compat = new(AnthropicMessagesCompat)
+	case ApiOpenAIResponses:
+		compat = new(OpenAIResponsesCompat)
 	default:
 		// openai-completions and untyped custom APIs use the openai shape.
 		compat = new(OpenAICompletionsCompat)
