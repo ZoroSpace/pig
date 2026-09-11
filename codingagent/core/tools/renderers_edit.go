@@ -161,8 +161,16 @@ func formatEditResult(theme UITheme, args any, preview *EditPreview, result Tool
 	if isError {
 		var errorTexts []string
 		for _, c := range result.Content {
-			if t, ok := c.(types.TextContent); ok {
+			switch t := c.(type) {
+			case types.TextContent:
 				errorTexts = append(errorTexts, t.Text)
+			case *types.TextContent:
+				// Builtin tools emit pointer blocks (asTextContent); values
+				// come from the decoders
+				// (docs/fix/2026-09-11-tool-execution-live-output-empty.md).
+				if t != nil {
+					errorTexts = append(errorTexts, t.Text)
+				}
 			}
 		}
 		errorText := strings.Join(errorTexts, "\n")

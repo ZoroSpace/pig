@@ -492,8 +492,16 @@ func (c *ToolExecutionComponent) updateDisplay() {
 	if c.result != nil {
 		var imageBlocks []types.ImageContent
 		for _, block := range c.result.Content {
-			if img, ok := block.(types.ImageContent); ok {
+			switch img := block.(type) {
+			case types.ImageContent:
 				imageBlocks = append(imageBlocks, img)
+			case *types.ImageContent:
+				// Builtin tools emit pointer blocks (read.go); values come
+				// from the decoders
+				// (docs/fix/2026-09-11-tool-execution-live-output-empty.md).
+				if img != nil {
+					imageBlocks = append(imageBlocks, *img)
+				}
 			}
 		}
 		caps := tui.GetCapabilities()

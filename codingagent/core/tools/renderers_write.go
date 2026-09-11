@@ -243,8 +243,16 @@ func formatWriteResult(theme UITheme, result ToolRenderResult, isError bool) str
 	}
 	var outputs []string
 	for _, c := range result.Content {
-		if t, ok := c.(types.TextContent); ok {
+		switch t := c.(type) {
+		case types.TextContent:
 			outputs = append(outputs, t.Text)
+		case *types.TextContent:
+			// Builtin tools emit pointer blocks (asTextContent); values come
+			// from the decoders
+			// (docs/fix/2026-09-11-tool-execution-live-output-empty.md).
+			if t != nil {
+				outputs = append(outputs, t.Text)
+			}
 		}
 	}
 	output := strings.Join(outputs, "\n")

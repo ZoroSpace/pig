@@ -84,14 +84,6 @@ func NormalizeDisplayText(text string) string {
 	return strings.ReplaceAll(text, "\r", "")
 }
 
-// textBlockOf extracts the text of a text content block (pi: c.text).
-func textBlockOf(c types.Content) string {
-	if t, ok := c.(types.TextContent); ok {
-		return t.Text
-	}
-	return ""
-}
-
 // capabilityImagesEnabled mirrors pi's truthiness check on
 // getCapabilities().images (boolean | "kitty" | "iterm2").
 func capabilityImagesEnabled(caps tui.TerminalCapabilities) bool {
@@ -111,8 +103,19 @@ func GetTextOutput(result *ToolRenderResult, showImages bool) string {
 		switch block := c.(type) {
 		case types.TextContent:
 			textBlocks = append(textBlocks, block)
+		case *types.TextContent:
+			// Builtin tools emit pointer blocks (asTextContent); values come
+			// from the JSONL/LLM decoders — both must match
+			// (docs/fix/2026-09-11-tool-execution-live-output-empty.md).
+			if block != nil {
+				textBlocks = append(textBlocks, *block)
+			}
 		case types.ImageContent:
 			imageBlocks = append(imageBlocks, block)
+		case *types.ImageContent:
+			if block != nil {
+				imageBlocks = append(imageBlocks, *block)
+			}
 		}
 	}
 
