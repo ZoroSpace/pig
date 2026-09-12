@@ -27,6 +27,11 @@ const (
 	// "azure-openai-responses"); same event protocol as openai-responses
 	// with Azure deployment/api-version URL conventions.
 	ApiAzureOpenAIResponses Api = "azure-openai-responses"
+	// ApiOpenAICodexResponses is the ChatGPT Codex Responses surface (pi:
+	// "openai-codex-responses"); the openai-responses event protocol over
+	// chatgpt.com/backend-api with SSE + WebSocket transports and ChatGPT
+	// OAuth tokens.
+	ApiOpenAICodexResponses Api = "openai-codex-responses"
 )
 
 // ImagesApi identifies an image-generation wire protocol.
@@ -38,11 +43,12 @@ const ImagesApiOpenRouter ImagesApi = "openrouter-images"
 // The type is open on purpose: custom gateways and local endpoints use
 // arbitrary ids. The constants below cover pi's KnownProvider set reachable
 // today; ids belonging to unported wire protocols (google, amazon-bedrock,
-// azure-openai-responses, openai-codex) arrive with those protocols.
+// azure-openai-responses) arrive with those protocols.
 type ProviderID string
 
 const (
 	ProviderOpenAI              ProviderID = "openai"
+	ProviderOpenAICodex         ProviderID = "openai-codex"
 	ProviderAnthropic           ProviderID = "anthropic"
 	ProviderOpenRouter          ProviderID = "openrouter"
 	ProviderDeepSeek            ProviderID = "deepseek"
@@ -1393,7 +1399,7 @@ func (m *Model) UnmarshalJSON(data []byte) error {
 	switch m.API {
 	case ApiAnthropicMessages:
 		compat = new(AnthropicMessagesCompat)
-	case ApiOpenAIResponses, ApiAzureOpenAIResponses:
+	case ApiOpenAIResponses, ApiAzureOpenAIResponses, ApiOpenAICodexResponses:
 		compat = new(OpenAIResponsesCompat)
 	default:
 		// openai-completions and untyped custom APIs use the openai shape.

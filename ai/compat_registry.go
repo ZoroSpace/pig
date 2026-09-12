@@ -103,8 +103,16 @@ func RegisterBuiltInApiProvider(api Api, streams ProviderStreams) {
 var builtinApiRegistrar func()
 
 // SetBuiltinApiRegistrar records the builtin registration hook. Called by
-// adapter packages (ai/api) at init time.
+// adapter packages (ai/api) at init time. Multiple adapters each register
+// their own hook: calls chain (all hooks run on ResetApiProviders) because
+// pi's compat.ts owns a single registerBuiltInApiProviders loop over every
+// builtin implementation, which a single overwrite-based hook cannot express.
 func SetBuiltinApiRegistrar(fn func()) {
+	if builtinApiRegistrar != nil {
+		prev := builtinApiRegistrar
+		added := fn
+		fn = func() { prev(); added() }
+	}
 	builtinApiRegistrar = fn
 }
 

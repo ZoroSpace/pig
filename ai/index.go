@@ -27,6 +27,7 @@ const (
 	ApiAnthropicMessages    = types.ApiAnthropicMessages
 	ApiOpenAIResponses      = types.ApiOpenAIResponses
 	ApiAzureOpenAIResponses = types.ApiAzureOpenAIResponses
+	ApiOpenAICodexResponses = types.ApiOpenAICodexResponses
 	ImagesApiOpenRouter     = types.ImagesApiOpenRouter
 )
 

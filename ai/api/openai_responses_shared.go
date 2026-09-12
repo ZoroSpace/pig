@@ -137,10 +137,15 @@ type ConvertResponsesMessagesOptions struct {
 
 // ConvertResponsesToolsOptions are the tool-conversion options (pi:
 // ConvertResponsesToolsOptions). pi's strict member is boolean|null; the
-// adapter never passes it, so nil resolves to false (pi's undefined path;
-// the null path is unreachable from the adapter).
+// openai-responses adapters never pass it (nil resolves to false, pi's
+// undefined path); the Codex adapter passes null via StrictNull.
 type ConvertResponsesToolsOptions struct {
-	Strict                     *bool
+	Strict *bool
+	// StrictNull expresses pi's strict: null: the default strict value is
+	// null, serialized as JSON null on tools without constrained sampling
+	// (constrained sampling still overrides with a boolean). Mutually
+	// exclusive with Strict.
+	StrictNull                 bool
 	SupportsStrictMode         *bool
 	SupportsOpenAIGrammarTools *bool
 	DeferLoading               bool
@@ -480,9 +485,16 @@ func marshalToolCallArguments(arguments map[string]any) string {
 // ConvertResponsesTools converts tool definitions into Responses API tool
 // objects: custom grammar tools or function tools (pi: convertResponsesTools).
 func ConvertResponsesTools(tools []types.Tool, options *ConvertResponsesToolsOptions) []any {
+	// pi: defaultStrict = options?.strict === undefined ? false :
+	// options.strict — null propagates as the JSON null strict value.
 	defaultStrict := false
-	if options != nil && options.Strict != nil {
-		defaultStrict = *options.Strict
+	defaultStrictIsNull := false
+	if options != nil {
+		if options.StrictNull {
+			defaultStrictIsNull = true
+		} else if options.Strict != nil {
+			defaultStrict = *options.Strict
+		}
 	}
 	supportsStrictMode := true
 	if options != nil && options.SupportsStrictMode != nil {
@@ -522,8 +534,10 @@ func ConvertResponsesTools(tools []types.Tool, options *ConvertResponsesToolsOpt
 			panic(err)
 		}
 		strict := defaultStrict
+		strictIsNull := defaultStrictIsNull
 		if constrainedStrict != nil {
 			strict = *constrainedStrict
+			strictIsNull = false
 		}
 		parameters, err := GetJSONSchemaToolParameters(&tool, strict)
 		if err != nil {
@@ -539,7 +553,11 @@ func ConvertResponsesTools(tools []types.Tool, options *ConvertResponsesToolsOpt
 			functionTool["defer_loading"] = true
 		}
 		if supportsStrictMode {
-			functionTool["strict"] = strict
+			if strictIsNull {
+				functionTool["strict"] = nil
+			} else {
+				functionTool["strict"] = strict
+			}
 		}
 		out = append(out, functionTool)
 	}
@@ -656,6 +674,9 @@ type responsesResponseObject struct {
 	ServiceTier       *string                     `json:"service_tier"`
 	Usage             *responsesUsage             `json:"usage"`
 	Output            []*responsesOutputItem      `json:"output"`
+	// EndTurn is the Codex backend's end_turn flag on terminal response
+	// events (pi: response.end_turn, read by mapCodexEvents only).
+	EndTurn *bool `json:"end_turn,omitempty"`
 }
 
 type responsesResponseError struct {
@@ -694,6 +715,9 @@ type responsesStreamEvent struct {
 	Input          string                   `json:"input"`
 	Code           string                   `json:"code"`
 	Message        string                   `json:"message"`
+	// NestedError carries a top-level `error` object on Codex error events
+	// (pi: event.error, read by extractCodexEventError only).
+	NestedError *responsesResponseError `json:"error,omitempty"`
 }
 
 // responsesOutputSlot pairs one in-progress block with its output index (pi:
