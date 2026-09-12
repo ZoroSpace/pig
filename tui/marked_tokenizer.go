@@ -633,7 +633,12 @@ func (t *markedTokenizer) emStrong(src string, maskedSrc string, lastChar string
 		if mGroup(s, 3) != "" || mGroup(s, 4) != "" {
 			after += endersLen
 			continue
-		} else if (mGroup(s, 5) != "" || mGroup(s, 6) != "") && delimRuneLen%3 != 0 && (delimRuneLen+endersLen)%3 != 0 {
+			// marked: else if ((s[5] || s[6]) && i % 3 && !((i + u) % 3)) — the
+			// closer candidate is rejected only when (i+u) is a multiple of 3
+			// (CommonMark multiple-of-3 rule). The != here was ported inverted
+			// (2026-09-12 fix): punct-flanked closers (`）*。`) were wrongly
+			// rejected and the run fell back to literal text.
+		} else if (mGroup(s, 5) != "" || mGroup(s, 6) != "") && delimRuneLen%3 != 0 && (delimRuneLen+endersLen)%3 == 0 {
 			counter += endersLen
 			continue
 		}
