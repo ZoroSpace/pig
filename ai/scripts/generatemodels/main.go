@@ -201,8 +201,9 @@ func generateModels(ctx context.Context) error {
 	}
 	allModels = filtered
 
-	// pi's codexModels (openai-codex-responses) and Mistral Medium 3.5
-	// (mistral-conversations) are skipped (unported APIs).
+	// pi's codexModels (openai-codex-responses) follow the minimax filter;
+	// Mistral Medium 3.5 (mistral-conversations) stays skipped (unported API).
+	allModels = append(allModels, codexModels()...)
 
 	allModels = addOpenRouterAliases(allModels)
 

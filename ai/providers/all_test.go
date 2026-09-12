@@ -41,13 +41,13 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 	// "volcengine-plan" is pig-only (extension made builtin), slotted
 	// alphabetically. The A2 anthropic-messages batch adds fireworks,
 	// kimi-coding, minimax, minimax-cn, and vercel-ai-gateway; the B2
-	// openai-responses batch adds xai.
+	// openai-responses batch adds xai; the C2 codex batch adds openai-codex.
 	want := []string{
 		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
 		"fireworks", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
-		"openrouter", "together", "vercel-ai-gateway", "volcengine-plan",
-		"xai", "zai", "zai-coding-cn",
+		"openai-codex", "openrouter", "together", "vercel-ai-gateway",
+		"volcengine-plan", "xai", "zai", "zai-coding-cn",
 	}
 	if !reflect.DeepEqual(ids, want) {
 		t.Fatalf("BuiltinProviders() = %v, want %v", ids, want)
@@ -60,19 +60,26 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
 		"fireworks", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
-		"openrouter", "together", "vercel-ai-gateway", "volcengine-plan",
-		"xai", "zai", "zai-coding-cn",
+		"openai-codex", "openrouter", "together", "vercel-ai-gateway",
+		"volcengine-plan", "xai", "zai", "zai-coding-cn",
 	} {
 		provider := models.GetProvider(id)
 		if provider == nil {
 			t.Fatalf("GetProvider(%q) = nil", id)
 		}
+		// openai-codex is OAuth-only (pi: auth oauth, no api key).
+		if id == "openai-codex" {
+			if provider.Auth().OAuth == nil {
+				t.Fatalf("provider %q has no OAuth auth", id)
+			}
+			continue
+		}
 		if provider.Auth().APIKey == nil {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 22 {
-		t.Fatalf("GetProviders() length = %d, want 22", got)
+	if got := len(models.GetProviders()); got != 23 {
+		t.Fatalf("GetProviders() length = %d, want 23", got)
 	}
 }
 
@@ -103,13 +110,13 @@ func TestCatalogAccessors(t *testing.T) {
 	// The generated catalog covers the ported providers; providers whose wire
 	// APIs are unported (google-generative-ai, mistral-conversations, ...) are
 	// absent. The B2 openai-responses batch adds openai, xai, and
-	// azure-openai-responses to the catalog.
+	// azure-openai-responses; the C2 codex batch adds openai-codex.
 	for _, id := range []BuiltinProvider{"anthropic", "deepseek", "openrouter"} {
 		if !slices.Contains(providers, id) {
 			t.Fatalf("GetBuiltinProviders() = %v, missing %q", providers, id)
 		}
 	}
-	for _, id := range []BuiltinProvider{"openai", "xai", "azure-openai-responses"} {
+	for _, id := range []BuiltinProvider{"openai", "xai", "azure-openai-responses", "openai-codex"} {
 		if !slices.Contains(providers, id) {
 			t.Fatalf("GetBuiltinProviders() = %v, missing B2 %q", providers, id)
 		}

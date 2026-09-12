@@ -33,6 +33,7 @@ const (
 
 const (
 	ProviderOpenAI              = types.ProviderOpenAI
+	ProviderOpenAICodex         = types.ProviderOpenAICodex
 	ProviderAnthropic           = types.ProviderAnthropic
 	ProviderOpenRouter          = types.ProviderOpenRouter
 	ProviderDeepSeek            = types.ProviderDeepSeek

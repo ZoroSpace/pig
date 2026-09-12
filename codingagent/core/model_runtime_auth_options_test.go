@@ -216,6 +216,10 @@ func TestModelRuntimeProjectsProviderOwnedMethodsNamesAndStatus(t *testing.T) {
 	if got := oauthFound["kimi-coding"]; got != "Kimi Code (subscription)" {
 		t.Errorf("kimi-coding oauth method = %q, want Kimi Code (subscription)", got)
 	}
+	// The C2 codex OAuth flow (pi: openaiCodexOAuth).
+	if got := oauthFound["openai-codex"]; got != "OpenAI (ChatGPT Plus/Pro)" {
+		t.Errorf("openai-codex oauth method = %q, want OpenAI (ChatGPT Plus/Pro)", got)
+	}
 	// Type filters.
 	for _, option := range authOptions(t, runtime, "api_key") {
 		if option.authtype != "api_key" {
@@ -223,12 +227,12 @@ func TestModelRuntimeProjectsProviderOwnedMethodsNamesAndStatus(t *testing.T) {
 		}
 	}
 	oauthOptions := authOptions(t, runtime, "oauth")
-	if len(oauthOptions) != 3 {
-		t.Fatalf("oauth options = %d, want the three builtin oauth providers (A2 anthropic/kimi + B2 xai)", len(oauthOptions))
+	if len(oauthOptions) != 4 {
+		t.Fatalf("oauth options = %d, want the four builtin oauth providers (A2 anthropic/kimi + B2 xai + C2 codex)", len(oauthOptions))
 	}
 	for _, option := range oauthOptions {
 		id := option.provider.ID()
-		if id != "anthropic" && id != "kimi-coding" && id != "xai" {
+		if id != "anthropic" && id != "kimi-coding" && id != "xai" && id != "openai-codex" {
 			t.Fatalf("unexpected oauth builtin: %s", id)
 		}
 	}

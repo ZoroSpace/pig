@@ -101,10 +101,24 @@ type anthropicCallbackResult struct {
 // CallbackServerInfo).
 type anthropicCallbackServer struct {
 	server      *http.Server
+	listener    net.Listener
 	redirectURI string
 	cancelWait  func()
 	waitCh      chan anthropicCallbackResult
 	settleOnce  sync.Once
+}
+
+// close releases the port even when Serve has not registered the listener
+// yet (http.Server.Close only sees listeners after Serve starts; closing
+// the raw listener first avoids a leaked bind that breaks the next login
+// in the same process).
+func (s *anthropicCallbackServer) close() {
+	if s.listener != nil {
+		_ = s.listener.Close()
+	}
+	if s.server != nil {
+		_ = s.server.Close()
+	}
 }
 
 func startAnthropicCallbackServer(ctx context.Context, expectedState string) (*anthropicCallbackServer, error) {
@@ -159,13 +173,14 @@ func startAnthropicCallbackServer(ctx context.Context, expectedState string) (*a
 			waitCh <- anthropicCallbackResult{}
 		})
 	}
+	server.listener = listener
 	go func() {
 		_ = httpServer.Serve(listener)
 	}()
 	go func() {
 		// Shut the listener down when the login flow ends.
 		<-ctx.Done()
-		_ = httpServer.Close()
+		server.close()
 	}()
 	return server, nil
 }
@@ -261,7 +276,7 @@ func loginAnthropic(ctx context.Context, interaction AuthInteraction) (*OAuthCre
 	if err != nil {
 		return nil, err
 	}
-	defer server.server.Close()
+	defer server.close()
 
 	authParams := url.Values{}
 	authParams.Set("code", "true")

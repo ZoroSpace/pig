@@ -29,6 +29,7 @@
 | fireworks（completions 半区） | openai-completions | — | ✅（协议已被 deepseek 真验） | ❌ detectCompat 分族 | ❌ | `FIREWORKS_API_KEY` |
 | openai | openai-responses | 39 | 🔶 shim | ❌ `prompt_cache_options`（仅 5.6 家族接受）/ 官方端点 affinity 头 / grammar tools 穿透 | ❌（纯 apiKey） | `OPENAI_API_KEY` |
 | xai | openai-responses | 3 | 🔶 shim | ❌ grok effort 映射 / include encrypted_content 重放 | ❌ 设备流 | `XAI_API_KEY` 或 SuperGrok/X Premium OAuth |
+| openai-codex（C2） | openai-codex-responses | 8 | 🧪 mock（C1 adapter 30 函数 + C2 本地 Go mock CLI 全链路：zstd 请求体/Bearer JWT/chatgpt-account-id/prompt_cache_key/WS→SSE fallback） | ❌ 真 ChatGPT backend 行为（WS 传输真机、account 隔离头、end_turn 语义、限流 Retry-After 形态） | ❌ OAuth（设备流+浏览器路 mock 全锁） | ChatGPT Plus/Pro 订阅（`/login` → openai-codex） |
 | azure-openai-responses（adapter+39 模型） | azure 变体 | 39 | 🧪 mock | ❌ **整个 URL/deployment/api-version/api-key 头约定**（`normalizeAzureBaseURL`、`/responses?api-version=v1`） | ❌（纯 apiKey） | `AZURE_OPENAI_BASE_URL`/`AZURE_OPENAI_RESOURCE_NAME` + key |
 
 注：openai-completions 系其余 provider（groq/cerebras/together/baseten/nvidia/moonshot/zai/antling/huggingface/openrouter 等，Phase 2 交付）同样只有协议级真验（deepseek）+ detectCompat 单测，provider 真机未打——不在本矩阵范围（它们早于 A/B 批），销账时顺带登记即可。
@@ -40,6 +41,7 @@
 | anthropic（Claude Pro/Max） | PKCE + `localhost:53692` 回调服务器；请求携带 `claude-code-20250219` + `oauth-2025-04-20` beta，`Authorization: Bearer` | anthropic-oauth / auth-token 测试 | 真登录：授权页跳转、回调时序、token 端点字段、刷新窗口（5min/15s）、凭证落盘→请求携带全链路 |
 | kimi-coding | 设备流（auth.kimi.com，JSON） | oauth-kimi 测试 | 同上（设备码获取/轮询/令牌交换/刷新不轮换语义） |
 | xai（SuperGrok/X Premium） | 设备流（auth.x.ai，RFC 8628；`verification_uri` 强制 https、refresh 不轮换沿用旧 token） | oauth_xai.go 结构 + mock | 同上 |
+| openai-codex（ChatGPT Plus/Pro，C2） | 双路登录（browser：PKCE + `localhost:1455/auth/callback` 回调服务器 + manual code 兜底 + state 校验；device：usercode 端点 → 轮询 → authorization_code 再走 PKCE exchange，interval 支持数字/字符串）；refresh；toAuth=access 即 apiKey | openai-codex-oauth 测试 12 函数（fake-timer 时钟 seam 驱动轮询节奏/取消/超时/slow_down 无关的 pending/403·404 pending/失败 body 原文） | 真登录：auth.openai.com 授权页、404 禁用文案真值、轮询真节奏、accountId 提取真 JWT、凭证落盘→请求携带全链路 |
 
 **OAuth 真机 probe（手工，任一家）**：`pig` 交互模式 → `/login` → 选目标 provider → 完成流程 → 检查 `~/.pig/agent/auth.json` 新增凭证 → 发一轮真实对话 → 重启 pig 验证刷新路径。
 
@@ -51,6 +53,7 @@
 | `DEEPSEEK_API_KEY` | responses 四项 | `go test -tags smoke ./ai/api/ -run 'TestResponsesDeepSeekSmoke' -v` | ✅ 已跑（B2） |
 | `OPENAI_API_KEY` | cache-affinity e2e | `go test ./ai/api/ -run 'TestOpenAIResponsesCacheAffinityE2E' -v` | ⏳ 待 key |
 | `OPENAI_API_KEY` | reasoning-replay e2e（含 orphaned reasoning、同 provider 异模型交接） | `go test ./ai/api/ -run 'TestOpenAIResponsesReasoningReplayE2E' -v` | ⏳ 待 key |
+| ChatGPT Plus/Pro（openai-codex） | codex cache-affinity e2e（存储 OAuth 凭证 → gpt-5.5 SSE） | `go test ./ai/api/ -run 'TestOpenAICodexCacheAffinityE2E' -v` | ⏳ 待订阅 |
 | `ANTHROPIC_API_KEY` | 逐模型 probe 族 | `go test ./ai/api/ -run 'TestAnthropicEagerToolInputE2EProbe|TestAnthropicLongCacheRetentionE2EProbe|TestAnthropicThinkingBindingE2E|TestAnthropicOpus48Smoke' -v` | ⏳ 待 key |
 | `KIMI_API_KEY` | kimi 模型 probe（eager e2e 的 kimi 分支） | 同上（getE2EAPIKey 按 provider 取 key） | ⏳ 待 key |
 | 上述任一 | reasoning 语义 | anthropic thinking 家族单测全部 mock；真机 thinking 观察并入对应 probe | ⏳ |

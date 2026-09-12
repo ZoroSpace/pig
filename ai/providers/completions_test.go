@@ -158,7 +158,8 @@ func TestBuiltinProvidersAssembled(t *testing.T) {
 		if p.ID() != string(ai.ProviderOpenAI) && len(models) == 0 {
 			t.Fatalf("provider %s has no models", p.ID())
 		}
-		if p.Auth().APIKey == nil {
+		// openai-codex is OAuth-only (pi: auth oauth, no api key).
+		if p.ID() != string(ai.ProviderOpenAICodex) && p.Auth().APIKey == nil {
 			t.Fatalf("provider %s missing api key auth", p.ID())
 		}
 	}

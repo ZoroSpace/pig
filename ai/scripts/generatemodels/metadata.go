@@ -973,7 +973,11 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 	if model.Provider == ai.ProviderGroq && model.ID == "qwen/qwen3.6-27b" {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingMinimal: nil, ai.ModelThinkingLow: nil, ai.ModelThinkingMedium: nil, ai.ModelThinkingHigh: lo.ToPtr("default")})
 	}
-	// pi 930-932: openai-codex (skipped).
+	// pi: provider "openai-codex" maps minimal to the provider-native "low"
+	// effort for every xhigh-capable codex model.
+	if model.Provider == ai.ProviderOpenAICodex && supportsOpenAiXhigh(model.ID) {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingMinimal: lo.ToPtr("low")})
+	}
 	if (model.Provider == ai.ProviderMoonshotAI || model.Provider == ai.ProviderMoonshotAICN) &&
 		(model.ID == "kimi-k2.7-code" || model.ID == "kimi-k2.7-code-highspeed") {
 		// Kimi K2.7 Code is always-thinking. Official docs say

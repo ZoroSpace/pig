@@ -55,6 +55,15 @@ type DeviceCodePollOptions[T any] struct {
 	Ctx context.Context
 }
 
+// deviceCodeNow and deviceCodeSleep are the clock seams behind the poll
+// loop (pi: Date.now() and setTimeout under vi.useFakeTimers). Tests stub
+// both to drive the loop deterministically; the codex token-expiry math
+// shares deviceCodeNow so one fake clock controls the whole flow.
+var (
+	deviceCodeNow   = time.Now
+	deviceCodeSleep = deviceCodeAbortableSleep
+)
+
 // deviceCodeAbortableSleep is pi's abortableSleep: ctx cancellation rejects
 // the wait with the cancel message.
 func deviceCodeAbortableSleep(ctx context.Context, ms int64) error {
@@ -77,7 +86,7 @@ func PollOAuthDeviceCodeFlow[T any](options DeviceCodePollOptions[T]) (T, error)
 	var zero T
 	deadline := time.Time{}
 	if options.ExpiresInSeconds > 0 {
-		deadline = time.Now().Add(time.Duration(options.ExpiresInSeconds) * time.Second)
+		deadline = deviceCodeNow().Add(time.Duration(options.ExpiresInSeconds) * time.Second)
 	}
 	intervalMs := deviceCodeMinimumIntervalMs
 	if candidate := options.IntervalSeconds * 1000; candidate > intervalMs {
@@ -88,7 +97,7 @@ func PollOAuthDeviceCodeFlow[T any](options DeviceCodePollOptions[T]) (T, error)
 	if options.WaitBeforeFirstPoll {
 		remaining := time.Duration(0)
 		if !deadline.IsZero() {
-			remaining = time.Until(deadline)
+			remaining = deadline.Sub(deviceCodeNow())
 			if remaining <= 0 {
 				return zero, fmt.Errorf("%s", deviceCodeTimeoutMessage)
 			}
@@ -97,13 +106,13 @@ func PollOAuthDeviceCodeFlow[T any](options DeviceCodePollOptions[T]) (T, error)
 		if !deadline.IsZero() && wait > remaining {
 			wait = remaining
 		}
-		if err := deviceCodeAbortableSleep(options.Ctx, wait.Milliseconds()); err != nil {
+		if err := deviceCodeSleep(options.Ctx, wait.Milliseconds()); err != nil {
 			return zero, err
 		}
 	}
 
 	for {
-		if !deadline.IsZero() && !time.Now().Before(deadline) {
+		if !deadline.IsZero() && !deviceCodeNow().Before(deadline) {
 			break
 		}
 		if err := options.Ctx.Err(); err != nil {
@@ -137,7 +146,7 @@ func PollOAuthDeviceCodeFlow[T any](options DeviceCodePollOptions[T]) (T, error)
 		}
 
 		if !deadline.IsZero() {
-			remaining := time.Until(deadline)
+			remaining := deadline.Sub(deviceCodeNow())
 			if remaining <= 0 {
 				break
 			}
@@ -145,10 +154,10 @@ func PollOAuthDeviceCodeFlow[T any](options DeviceCodePollOptions[T]) (T, error)
 			if wait > remaining {
 				wait = remaining
 			}
-			if err := deviceCodeAbortableSleep(options.Ctx, wait.Milliseconds()); err != nil {
+			if err := deviceCodeSleep(options.Ctx, wait.Milliseconds()); err != nil {
 				return zero, err
 			}
-		} else if err := deviceCodeAbortableSleep(options.Ctx, intervalMs); err != nil {
+		} else if err := deviceCodeSleep(options.Ctx, intervalMs); err != nil {
 			return zero, err
 		}
 	}
