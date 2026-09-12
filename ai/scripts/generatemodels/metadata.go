@@ -969,7 +969,21 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 			mergeThinkingLevelMap(model, deepseekV4ThinkingLevelMap)
 		}
 	}
-	// pi 918-926: google/gemini/gemma (skipped, google-generative-ai unported).
+	if isGoogleThinkingApi(model) && isGemini3ProModel(model.ID) {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{
+			ai.ModelThinkingOff: nil, ai.ModelThinkingMinimal: nil, ai.ModelThinkingLow: lo.ToPtr("LOW"),
+			ai.ModelThinkingMedium: nil, ai.ModelThinkingHigh: lo.ToPtr("HIGH"),
+		})
+	}
+	if isGoogleThinkingApi(model) && isGemini3FlashModel(model.ID) {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil})
+	}
+	if isGoogleThinkingApi(model) && isGemma4Model(model.ID) {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{
+			ai.ModelThinkingOff: nil, ai.ModelThinkingMinimal: lo.ToPtr("MINIMAL"), ai.ModelThinkingLow: nil,
+			ai.ModelThinkingMedium: nil, ai.ModelThinkingHigh: lo.ToPtr("HIGH"),
+		})
+	}
 	if model.Provider == ai.ProviderGroq && model.ID == "qwen/qwen3.6-27b" {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingMinimal: nil, ai.ModelThinkingLow: nil, ai.ModelThinkingMedium: nil, ai.ModelThinkingHigh: lo.ToPtr("default")})
 	}

@@ -44,7 +44,7 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 	// openai-responses batch adds xai; the C2 codex batch adds openai-codex.
 	want := []string{
 		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
-		"fireworks", "groq", "huggingface", "kimi-coding", "minimax",
+		"fireworks", "google", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
 		"openai-codex", "openrouter", "together", "vercel-ai-gateway",
 		"volcengine-plan", "xai", "zai", "zai-coding-cn",
@@ -58,7 +58,7 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 	models := BuiltinModels(nil)
 	for _, id := range []string{
 		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
-		"fireworks", "groq", "huggingface", "kimi-coding", "minimax",
+		"fireworks", "google", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
 		"openai-codex", "openrouter", "together", "vercel-ai-gateway",
 		"volcengine-plan", "xai", "zai", "zai-coding-cn",
@@ -78,8 +78,8 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 23 {
-		t.Fatalf("GetProviders() length = %d, want 23", got)
+	if got := len(models.GetProviders()); got != 24 {
+		t.Fatalf("GetProviders() length = %d, want 24", got)
 	}
 }
 
@@ -108,20 +108,20 @@ func TestProviderMetadata(t *testing.T) {
 func TestCatalogAccessors(t *testing.T) {
 	providers := GetBuiltinProviders()
 	// The generated catalog covers the ported providers; providers whose wire
-	// APIs are unported (google-generative-ai, mistral-conversations, ...) are
-	// absent. The B2 openai-responses batch adds openai, xai, and
-	// azure-openai-responses; the C2 codex batch adds openai-codex.
+	// APIs are unported (mistral-conversations, ...) are absent. The B2
+	// openai-responses batch adds openai, xai, and azure-openai-responses; the
+	// C2 codex batch adds openai-codex; the C3 google batch adds google.
 	for _, id := range []BuiltinProvider{"anthropic", "deepseek", "openrouter"} {
 		if !slices.Contains(providers, id) {
 			t.Fatalf("GetBuiltinProviders() = %v, missing %q", providers, id)
 		}
 	}
-	for _, id := range []BuiltinProvider{"openai", "xai", "azure-openai-responses", "openai-codex"} {
+	for _, id := range []BuiltinProvider{"openai", "xai", "azure-openai-responses", "openai-codex", "google"} {
 		if !slices.Contains(providers, id) {
 			t.Fatalf("GetBuiltinProviders() = %v, missing B2 %q", providers, id)
 		}
 	}
-	for _, id := range []BuiltinProvider{"google", "mistral"} {
+	for _, id := range []BuiltinProvider{"mistral"} {
 		if slices.Contains(providers, id) {
 			t.Fatalf("GetBuiltinProviders() includes unported %q: %v", id, providers)
 		}
@@ -129,8 +129,12 @@ func TestCatalogAccessors(t *testing.T) {
 	if got := GetBuiltinModels("deepseek"); len(got) != 2 {
 		t.Fatalf("GetBuiltinModels(deepseek) = %v, want the 2 hardcoded V4 models", got)
 	}
-	if got := GetBuiltinModels("google"); got != nil {
-		t.Fatalf("GetBuiltinModels(google) = %v, want nil", got)
+	if got := GetBuiltinModels("google"); len(got) == 0 {
+		// C3: the google provider is ported; its catalog comes from models.dev.
+		t.Fatalf("GetBuiltinModels(google) = empty, want the models.dev catalog")
+	}
+	if got, ok := GetBuiltinModel("google", "gemini-2.5-flash"); !ok || got.API != ai.ApiGoogleGenerativeAI {
+		t.Fatalf("GetBuiltinModel(google, gemini-2.5-flash) = %+v, %v", got, ok)
 	}
 	if got := GetBuiltinModelDataGeneratedAt(); got == 0 {
 		t.Fatal("GetBuiltinModelDataGeneratedAt() = 0, want the real generation timestamp")

@@ -21,6 +21,7 @@
 | Provider | 协议 | 模型数 | 协议语义 | Provider 特有语义 | Auth 真机 | 解锁条件 |
 |---|---|---|---|---|---|---|
 | anthropic | anthropic-messages | 14 | 🔶 shim | ❌ cache_control 1h 计费 / redacted_thinking / adaptive thinking（opus-4.6+）/ 5 beta 头协商 / server-side-fallback / tool_reference | ❌ | `ANTHROPIC_API_KEY` 或 Claude Pro/Max OAuth |
+| google | google-generative-ai | 22 | 🧪 mock（C3 共享层+adapter 45 函数 + 本地 mock CLI 全链路：URL/tModel/x-goog-api-key/mldev 字段提升/SSE） | ❌ 真 Gemini 端点行为（thinkingBudget 分代、thoughtSignature 回放、functionResponse 图片嵌套真机） | ❌（纯 apiKey） | `GEMINI_API_KEY` |
 | kimi-coding | anthropic-messages | 4 | 🔶 shim | ❌（kimi 特有 header/行为） | ❌ 设备流 | `KIMI_API_KEY` 或 Kimi 订阅 OAuth |
 | minimax | anthropic-messages | 3 | 🔶 shim | ❌ | ❌（纯 apiKey） | `MINIMAX_API_KEY` |
 | minimax-cn | anthropic-messages | 3 | 🔶 shim | ❌ | ❌（纯 apiKey） | `MINIMAX_CN_API_KEY` |
@@ -54,6 +55,7 @@
 | `OPENAI_API_KEY` | cache-affinity e2e | `go test ./ai/api/ -run 'TestOpenAIResponsesCacheAffinityE2E' -v` | ⏳ 待 key |
 | `OPENAI_API_KEY` | reasoning-replay e2e（含 orphaned reasoning、同 provider 异模型交接） | `go test ./ai/api/ -run 'TestOpenAIResponsesReasoningReplayE2E' -v` | ⏳ 待 key |
 | ChatGPT Plus/Pro（openai-codex） | codex cache-affinity e2e（存储 OAuth 凭证 → gpt-5.5 SSE） | `go test ./ai/api/ -run 'TestOpenAICodexCacheAffinityE2E' -v` | ⏳ 待订阅 |
+| `GEMINI_API_KEY` | thinking-disable e2e 三例（2.5-flash / 3-flash / 3.1-pro，thinking 全关 + pong 计数） | `go test ./ai/api/ -run 'TestGoogleThinkingDisable' -v` | ⏳ 待 key |
 | `ANTHROPIC_API_KEY` | 逐模型 probe 族 | `go test ./ai/api/ -run 'TestAnthropicEagerToolInputE2EProbe|TestAnthropicLongCacheRetentionE2EProbe|TestAnthropicThinkingBindingE2E|TestAnthropicOpus48Smoke' -v` | ⏳ 待 key |
 | `KIMI_API_KEY` | kimi 模型 probe（eager e2e 的 kimi 分支） | 同上（getE2EAPIKey 按 provider 取 key） | ⏳ 待 key |
 | 上述任一 | reasoning 语义 | anthropic thinking 家族单测全部 mock；真机 thinking 观察并入对应 probe | ⏳ |

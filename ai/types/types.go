@@ -32,6 +32,10 @@ const (
 	// chatgpt.com/backend-api with SSE + WebSocket transports and ChatGPT
 	// OAuth tokens.
 	ApiOpenAICodexResponses Api = "openai-codex-responses"
+	// ApiGoogleGenerativeAI is Google's Gemini API surface (pi:
+	// "google-generative-ai"); generateContent over
+	// generativelanguage.googleapis.com with SSE.
+	ApiGoogleGenerativeAI Api = "google-generative-ai"
 )
 
 // ImagesApi identifies an image-generation wire protocol.
@@ -48,6 +52,7 @@ type ProviderID string
 
 const (
 	ProviderOpenAI              ProviderID = "openai"
+	ProviderGoogle              ProviderID = "google"
 	ProviderOpenAICodex         ProviderID = "openai-codex"
 	ProviderAnthropic           ProviderID = "anthropic"
 	ProviderOpenRouter          ProviderID = "openrouter"

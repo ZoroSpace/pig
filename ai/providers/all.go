@@ -69,7 +69,7 @@ func GetBuiltinModels(provider BuiltinProvider) []ai.Model {
 // factories arrive with their adapters (README Phase 2):
 // amazonBedrockProvider, azureOpenAIResponsesProvider,
 // cloudflareAIGatewayProvider, cloudflareWorkersAIProvider,
-// githubCopilotProvider, googleProvider, googleVertexProvider,
+// githubCopilotProvider, googleVertexProvider,
 // mistralProvider, opencodeProvider,
 // opencodeGoProvider, qwenTokenPlanProvider, qwenTokenPlanCnProvider,
 // qwenTokenPlanIndividualProvider, radiusProvider,
@@ -83,6 +83,7 @@ func BuiltinProviders() []ai.Provider {
 		CerebrasProvider(),
 		DeepSeekProvider(),
 		FireworksProvider(),
+		GoogleProvider(),
 		GroqProvider(),
 		HuggingFaceProvider(),
 		KimiCodingProvider(),
