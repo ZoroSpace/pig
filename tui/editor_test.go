@@ -652,61 +652,46 @@ func TestEditorUnicodeTextEditing(t *testing.T) {
 
 	t.Run("stops at fullwidth Chinese punctuation (issue #4972)", func(t *testing.T) {
 		// pi (ICU dictionary): 你好 / ， / 世界 → cols 5(end)→3→2→0→2→3→5.
-		// pig (UAX #29, byte offsets): each char is its own segment, so the
-		// walk visits every grapheme boundary. The regression intent is
-		// preserved: the fullwidth comma is its own boundary and word
-		// movement never jumps over it into a word.
+		// Byte domain with the gse dictionary grouping (cjk_segmenter.go):
+		// 你好=0-5, ，=6-8, 世界=9-14 → 15→9→6→0→6→9→15. (Was adapted to the
+		// UAX #29 per-char walk before the dictionary landed.)
+		requireCJKDict(t)
 		editor := newTestEditor(80, 24, nil)
 
 		editor.SetText("你好，世界")
 		// Cursor at end (byte 15)
 
-		// Move left over 界
+		// Move left over 世界
 		editor.HandleInput("\x1b[1;5D") // Ctrl+Left
-		wantCursor(t, editor, 0, 12)
-
-		// Move left over 世
-		editor.HandleInput("\x1b[1;5D")
-		wantCursor(t, editor, 0, 9) // after ，(pi ICU: col 3)
+		wantCursor(t, editor, 0, 9)     // after ，(pi ICU: col 3)
 
 		// Move left over ，
 		editor.HandleInput("\x1b[1;5D")
-		wantCursor(t, editor, 0, 6)
+		wantCursor(t, editor, 0, 6) // pi ICU: col 2
 
-		// Move left over 好
+		// Move left over 你好
 		editor.HandleInput("\x1b[1;5D")
-		wantCursor(t, editor, 0, 3)
+		wantCursor(t, editor, 0, 0) // start (pi ICU: col 0)
 
-		// Move left over 你
-		editor.HandleInput("\x1b[1;5D")
-		wantCursor(t, editor, 0, 0) // start
-
-		// Move right over 你
+		// Move right over 你好
 		editor.HandleInput("\x1b[1;5C") // Ctrl+Right
-		wantCursor(t, editor, 0, 3)
-
-		// Move right over 好
-		editor.HandleInput("\x1b[1;5C")
-		wantCursor(t, editor, 0, 6) // after 你好 (pi ICU: col 2)
+		wantCursor(t, editor, 0, 6)     // after 你好 (pi ICU: col 2)
 
 		// Move right over ，
 		editor.HandleInput("\x1b[1;5C")
 		wantCursor(t, editor, 0, 9) // after ，(pi ICU: col 3)
 
-		// Move right over 世
+		// Move right over 世界
 		editor.HandleInput("\x1b[1;5C")
-		wantCursor(t, editor, 0, 12)
-
-		// Move right over 界
-		editor.HandleInput("\x1b[1;5C")
-		wantCursor(t, editor, 0, 15) // end
+		wantCursor(t, editor, 0, 15) // end (pi ICU: col 5)
 	})
 
 	t.Run("handles mixed CJK and ASCII word movement", func(t *testing.T) {
 		// pi (ICU dictionary): hello / 你好 / ， / world / 世界 → backward
 		// cols 15→13→8→7→5→0, forward cols 5→7→8→13→15.
-		// pig (UAX #29, byte offsets): per-character CJK segmentation; the
-		// ，boundary is hit in both implementations.
+		// Byte domain with the gse dictionary grouping (cjk_segmenter.go):
+		// backward 25→19→14→11→5→0, forward 5→11→14→19→25.
+		requireCJKDict(t)
 		editor := newTestEditor(80, 24, nil)
 
 		editor.SetText("hello你好，world世界")
@@ -714,26 +699,17 @@ func TestEditorUnicodeTextEditing(t *testing.T) {
 
 		// Move left over 世界 (pi ICU: col 13 = byte 19)
 		editor.HandleInput("\x1b[1;5D") // Ctrl+Left
-		wantCursor(t, editor, 0, 22)
+		wantCursor(t, editor, 0, 19)
 
-		editor.HandleInput("\x1b[1;5D") // Ctrl+Left
-		wantCursor(t, editor, 0, 19)    // after 'world' (pi ICU: byte 19)
-
-		// Move left over ，(pi ICU: col 8 = byte 14)
+		// Move left over world (pi ICU: col 8 = byte 14)
 		editor.HandleInput("\x1b[1;5D")
 		wantCursor(t, editor, 0, 14)
 
-		// Move left over 好 (pi ICU: col 7 = byte 11)
+		// Move left over ，(pi ICU: col 7 = byte 11)
 		editor.HandleInput("\x1b[1;5D")
 		wantCursor(t, editor, 0, 11)
 
-		// Move left over 你 (pi ICU: col 5 = byte 8)
-		editor.HandleInput("\x1b[1;5D")
-		wantCursor(t, editor, 0, 8)
-
-		// Move left over hello first char boundary (pi ICU: dictionary 你好 = one
-		// word, so this press lands at col 5/byte 8; UAX #29 needs one extra
-		// press per CJK char)
+		// Move left over 你好 (pi ICU: col 5 = byte 5)
 		editor.HandleInput("\x1b[1;5D")
 		wantCursor(t, editor, 0, 5)
 
@@ -743,23 +719,21 @@ func TestEditorUnicodeTextEditing(t *testing.T) {
 
 		// Forward from start
 		editor.HandleInput("\x1b[1;5C") // Ctrl+Right
-		wantCursor(t, editor, 0, 5)     // after 'hello' (pi ICU: byte 8)
+		wantCursor(t, editor, 0, 5)     // after 'hello' (pi ICU: col 5)
 
+		// Move right over 你好 (pi ICU: col 7 = byte 11)
 		editor.HandleInput("\x1b[1;5C") // Ctrl+Right
-		wantCursor(t, editor, 0, 8)     // after 你 (pi ICU: byte 11)
+		wantCursor(t, editor, 0, 11)
 
+		// Move right over ，(pi ICU: col 8 = byte 14)
 		editor.HandleInput("\x1b[1;5C") // Ctrl+Right
-		wantCursor(t, editor, 0, 11)    // after 好 (pi ICU: byte 14)
+		wantCursor(t, editor, 0, 14)
 
+		// Move right over world (pi ICU: col 13 = byte 19)
 		editor.HandleInput("\x1b[1;5C") // Ctrl+Right
-		wantCursor(t, editor, 0, 14)    // after ，(pi ICU: byte 14)
+		wantCursor(t, editor, 0, 19)
 
-		editor.HandleInput("\x1b[1;5C") // Ctrl+Right
-		wantCursor(t, editor, 0, 19)    // after 'world' (pi ICU: byte 19)
-
-		editor.HandleInput("\x1b[1;5C") // Ctrl+Right
-		wantCursor(t, editor, 0, 22)
-
+		// Move right over 世界 (pi ICU: col 15 = byte 25)
 		editor.HandleInput("\x1b[1;5C") // Ctrl+Right
 		wantCursor(t, editor, 0, 25)    // end
 	})

@@ -3,11 +3,11 @@
 // Declared deviations:
 //   - Indices are UTF-8 byte offsets (pi uses UTF-16 code units). All ASCII
 //     expectations are unchanged; CJK positions are converted to bytes.
-//   - The CJK cases relied on ICU's dictionary-based word segmentation
-//     ([你好][世界]); UAX #29 (rivo/uniseg) has no CJK dictionary and cuts
-//     per character, so those expectations are adapted to the UAX #29 values
-//     (AGENTS.md Phase 6 known gap — WordSegmenter seam for future
-//     dictionary-backed enhancement).
+//   - The CJK cases rely on ICU's dictionary-based word segmentation
+//     ([你好][世界]); pig reproduces it via the gse dictionary
+//     (cjk_segmenter.go) and keeps pi's original expectations. (Between the
+//     initial port and the dictionary landing, they were temporarily adapted
+//     to UAX #29 per-character values.)
 
 package tui
 
@@ -53,21 +53,22 @@ func TestFindWordBackward(t *testing.T) {
 	})
 
 	t.Run("CJK mixed", func(t *testing.T) {
+		requireCJKDict(t)
 		text := "你好世界 test"
 		// pi (ICU dictionary): findWordBackward(text, text.length) = 5 (UTF-16);
-		// byte domain: 5 units = 13 bytes.
+		// byte domain: 4 Han chars (12 bytes) + space = 13.
 		if got := FindWordBackward(text, len(text), nil); got != 13 {
 			t.Errorf("FindWordBackward(%q, len) = %d, want 13", text, got)
 		}
-		// pi (ICU dictionary): each CJK char separate word-like segment, but
-		// dictionary groups 你好/世界 → 2. UAX #29 cuts per character:
-		// skip space + 界 → byte 9 (UTF-16 index 3).
-		if got := FindWordBackward(text, 13, nil); got != 9 {
-			t.Errorf("FindWordBackward(%q, 13) = %d, want 9 (UAX #29 per-char)", text, got)
+		// pi: findWordBackward(text, 5) = 2 — ICU dictionary groups [你好][世界]:
+		// skip space (1) + 世界 (6 bytes) → 13 - 7 = 6. (Was 9 under the UAX
+		// #29 per-char adaptation; restored via gse, see cjk_segmenter.go.)
+		if got := FindWordBackward(text, 13, nil); got != 6 {
+			t.Errorf("FindWordBackward(%q, 13) = %d, want 6", text, got)
 		}
-		// pi (ICU dictionary): from 2 (UTF-16) → 0; UAX #29: skip 好 → byte 3.
-		if got := FindWordBackward(text, 6, nil); got != 3 {
-			t.Errorf("FindWordBackward(%q, 6) = %d, want 3 (UAX #29 per-char)", text, got)
+		// pi: findWordBackward(text, 2) = 0 — skip 你好 (6 bytes) → 0.
+		if got := FindWordBackward(text, 6, nil); got != 0 {
+			t.Errorf("FindWordBackward(%q, 6) = %d, want 0", text, got)
 		}
 	})
 

@@ -1050,8 +1050,13 @@ func (e *Editor) HandleMouse(event *TuiMouseEvent) *TuiMouseEventResult {
 
 // HandleInput implements InputHandler.
 func (e *Editor) HandleInput(data string) {
+	// Fire the CJK dictionary load on the first Han keystroke so word
+	// navigation is dictionary-backed by the time word movement is used
+	// (async, never blocks; see cjk_segmenter.go).
+	if containsHanRune(data) {
+		prewarmCJKSegmenter()
+	}
 	e.lock(func() { e.handleInputLocked(data) })
-
 }
 
 func (e *Editor) handleInputLocked(data string) {

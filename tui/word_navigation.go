@@ -1,11 +1,10 @@
 // tui/word_navigation.go — ported from pi: packages/tui/src/word-navigation.ts
 //
 // Declared deviations:
-//   - Intl.Segmenter word granularity → UAX #29 via rivo/uniseg (no ICU CJK
-//     dictionary segmentation; CJK text is cut per character, which is coarser
-//     than ICU's dictionary-based splitting — see AGENTS.md Phase 6). The
-//     WordNavigationOptions.Segment seam allows a dictionary-backed
-//     implementation later.
+//   - Intl.Segmenter word granularity → UAX #29 via rivo/uniseg as the base.
+//     Han runs are re-grouped by a dictionary-backed CJK segmenter
+//     (cjk_segmenter.go, pig-only) to match ICU's CJ-dictionary behavior for
+//     Chinese; Japanese kana stays per-character (no kana dictionary).
 //   - isWordLike approximates ICU's word-like classification (any letter or
 //     number rune; Han/Hiragana/Katakana/Hangul are letters and thus covered).
 //     Standalone ExtendNumLet runs (e.g. "_") classify as non-word-like here.
@@ -31,9 +30,16 @@ type SegmentData struct {
 	IsWordLike bool
 }
 
-// wordSegmentData segments s into words per UAX #29, mirroring
-// getWordSegmenter().segment(s) plus the isWordLike flag.
+// wordSegmentData segments s into words: UAX #29 base (uaxWordSegmentData)
+// with all-Han runs re-grouped by the dictionary-backed CJK segmenter
+// (cjk_segmenter.go — pi gets this from ICU's built-in CJ dictionary).
 func wordSegmentData(s string) []SegmentData {
+	return mergeHanRunsWith(&theCJKSegmenter, uaxWordSegmentData(s))
+}
+
+// uaxWordSegmentData segments s into words per UAX #29 (rivo/uniseg),
+// mirroring the base of getWordSegmenter().segment(s) plus the isWordLike flag.
+func uaxWordSegmentData(s string) []SegmentData {
 	var out []SegmentData
 	index := 0
 	state := -1

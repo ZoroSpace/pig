@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/dlclark/regexp2 v1.11.5
+	github.com/go-ego/gse v1.0.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/klauspost/compress v1.20.0
 	github.com/rivo/uniseg v0.4.7
@@ -17,5 +18,6 @@ require (
 
 require (
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
+	github.com/vcaesar/cedar v0.30.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 )

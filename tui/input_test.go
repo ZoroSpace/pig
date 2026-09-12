@@ -1,11 +1,10 @@
 // tui/input_test.go — ported from pi: packages/tui/test/input.test.ts
 //
 // Declared deviations:
-//   - CJK word-deletion expectations are adapted to UAX #29 segmentation
-//     (pi relies on ICU's CJK dictionary — see word_navigation_test.go
-//     header); the regression intent (fullwidth punctuation is an
-//     independent boundary) is preserved. Under UAX #29 each Han character
-//     is its own word segment, so the deletion counts differ from pi.
+//   - CJK word-deletion expectations are byte conversions of pi's UTF-16
+//     values; the CJK dictionary grouping (pi: ICU, pig: gse — see
+//     cjk_segmenter.go) reproduces pi's exact deletion counts, and fullwidth
+//     punctuation stays an independent boundary.
 
 package tui
 
@@ -173,24 +172,20 @@ func TestInputKillRing(t *testing.T) {
 
 	t.Run("Ctrl+W handles Unicode word boundaries", func(t *testing.T) {
 		// pi (ICU dictionary): "你好世界。你好，世界" segments as
-		// 你好|世界|。|你好|，|世界 — 6 deletions. UAX #29 (no CJK dictionary)
-		// cuts per character: 你|好|世|界|。|你|好|，|世|界 — each Ctrl+W
-		// deletes one character (10 presses). Regression intent (fullwidth
-		// punctuation is an independent boundary) is preserved.
+		// 你好|世界|。|你好|，|世界 — 6 deletions, reproduced via the gse
+		// dictionary (cjk_segmenter.go). Fullwidth punctuation stays an
+		// independent boundary.
+		requireCJKDict(t)
 		input := NewInput()
 
 		input.SetValue("你好世界。你好，世界")
 		input.HandleInput("\x05") // Ctrl+E
 		want := []string{
-			"你好世界。你好，世",
 			"你好世界。你好，",
 			"你好世界。你好",
-			"你好世界。你",
 			"你好世界。",
 			"你好世界",
-			"你好世",
 			"你好",
-			"你",
 			"",
 		}
 		for _, w := range want {
@@ -492,22 +487,19 @@ func TestInputKillRing(t *testing.T) {
 	})
 
 	t.Run("Alt+D handles Unicode word boundaries", func(t *testing.T) {
-		// pi (ICU dictionary): 你好|世界|。|你好|，|世界 — 6 deletions. UAX #29
-		// cuts per character — each Alt+D deletes one character (10 presses).
+		// pi (ICU dictionary): 你好|世界|。|你好|，|世界 — 6 deletions,
+		// reproduced via the gse dictionary (cjk_segmenter.go).
+		requireCJKDict(t)
 		input := NewInput()
 
 		input.SetValue("你好世界。你好，世界")
 		input.HandleInput("\x01") // Ctrl+A
 		want := []string{
-			"好世界。你好，世界",
 			"世界。你好，世界",
-			"界。你好，世界",
 			"。你好，世界",
 			"你好，世界",
-			"好，世界",
 			"，世界",
 			"世界",
-			"界",
 			"",
 		}
 		for _, w := range want {
