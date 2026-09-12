@@ -3,8 +3,8 @@
 // pi mocks the @google/genai SDK at module level; pig overrides the
 // googleGenerateContentStream seam with canned chunks (and asserts the client
 // config the SDK constructor would have received). The Google Vertex cases
-// (SAFETY error path, MAX_TOKENS/STOP with tool calls over vertex) arrive
-// with the vertex adapter (C4).
+// (SAFETY error path, MAX_TOKENS/STOP with tool calls over vertex) run
+// against the googleVertexGenerateContentStream seam (C4).
 package api
 
 import (
@@ -116,7 +116,28 @@ func TestGoogleRawStopReasonPreservesMalformedFunctionCall(t *testing.T) {
 }
 
 // TestGoogleRawStopReasonPreservesVertexSafety covers the vertex half (pi:
-// streamGoogleVertex with SAFETY); deferred to the vertex adapter batch (C4).
+// streamGoogleVertex with SAFETY); C4.
+func TestGoogleRawStopReasonPreservesVertexSafety(t *testing.T) {
+	state := &vertexSeamState{chunks: []*googleGenerateContentResponse{
+		googleStopReasonChunk("SAFETY", false),
+	}}
+	stubVertexSeam(t, state)
+
+	model := vertexCatalogModel(t, "gemini-3-flash-preview")
+	options := &GoogleVertexOptions{Project: "test-project", Location: "us-central1"}
+	stream := streamGoogleVertex(context.Background(), model, googleStopReasonContext(), options)
+	_, result := collectResponsesEvents(t, stream)
+
+	if result.StopReason != types.StopReasonError {
+		t.Errorf("stopReason = %q, want error", result.StopReason)
+	}
+	if result.RawStopReason != "SAFETY" {
+		t.Errorf("rawStopReason = %q, want SAFETY", result.RawStopReason)
+	}
+	if result.ErrorMessage != "Provider stopped with: SAFETY" {
+		t.Errorf("errorMessage = %q", result.ErrorMessage)
+	}
+}
 
 func TestGoogleRawStopReasonMaxTokensWithToolCallIsLength(t *testing.T) {
 	state := &googleSeamState{chunks: []*googleGenerateContentResponse{
@@ -164,6 +185,66 @@ func TestGoogleRawStopReasonStopWithToolCallIsToolUse(t *testing.T) {
 	}
 	if result.RawStopReason != "STOP" {
 		t.Errorf("rawStopReason = %q, want STOP", result.RawStopReason)
+	}
+}
+
+// TestGoogleRawStopReasonVertexMaxTokensWithToolCallIsLength covers the
+// vertex half of pi's it.each(adapters) MAX_TOKENS case (C4).
+func TestGoogleRawStopReasonVertexMaxTokensWithToolCallIsLength(t *testing.T) {
+	state := &vertexSeamState{chunks: []*googleGenerateContentResponse{
+		googleStopReasonChunk("MAX_TOKENS", true),
+	}}
+	stubVertexSeam(t, state)
+
+	model := vertexCatalogModel(t, "gemini-3-flash-preview")
+	options := &GoogleVertexOptions{Project: "test-project", Location: "us-central1"}
+	stream := streamGoogleVertex(context.Background(), model, googleStopReasonContext(), options)
+	_, result := collectResponsesEvents(t, stream)
+
+	if result.StopReason != types.StopReasonLength {
+		t.Errorf("stopReason = %q, want length", result.StopReason)
+	}
+	if result.RawStopReason != "MAX_TOKENS" {
+		t.Errorf("rawStopReason = %q, want MAX_TOKENS", result.RawStopReason)
+	}
+	hasToolCall := false
+	for _, block := range result.Content {
+		if _, ok := block.(types.ToolCall); ok {
+			hasToolCall = true
+		}
+	}
+	if !hasToolCall {
+		t.Error("expected a tool call block")
+	}
+}
+
+// TestGoogleRawStopReasonVertexStopWithToolCallIsToolUse covers the vertex
+// half of pi's it.each(adapters) STOP case (C4).
+func TestGoogleRawStopReasonVertexStopWithToolCallIsToolUse(t *testing.T) {
+	state := &vertexSeamState{chunks: []*googleGenerateContentResponse{
+		googleStopReasonChunk("STOP", true),
+	}}
+	stubVertexSeam(t, state)
+
+	model := vertexCatalogModel(t, "gemini-3-flash-preview")
+	options := &GoogleVertexOptions{Project: "test-project", Location: "us-central1"}
+	stream := streamGoogleVertex(context.Background(), model, googleStopReasonContext(), options)
+	_, result := collectResponsesEvents(t, stream)
+
+	if result.StopReason != types.StopReasonToolUse {
+		t.Errorf("stopReason = %q, want toolUse", result.StopReason)
+	}
+	if result.RawStopReason != "STOP" {
+		t.Errorf("rawStopReason = %q, want STOP", result.RawStopReason)
+	}
+	hasToolCall := false
+	for _, block := range result.Content {
+		if _, ok := block.(types.ToolCall); ok {
+			hasToolCall = true
+		}
+	}
+	if !hasToolCall {
+		t.Error("expected a tool call block")
 	}
 }
 

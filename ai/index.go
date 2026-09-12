@@ -29,12 +29,14 @@ const (
 	ApiAzureOpenAIResponses = types.ApiAzureOpenAIResponses
 	ApiOpenAICodexResponses = types.ApiOpenAICodexResponses
 	ApiGoogleGenerativeAI   = types.ApiGoogleGenerativeAI
+	ApiGoogleVertex         = types.ApiGoogleVertex
 	ImagesApiOpenRouter     = types.ImagesApiOpenRouter
 )
 
 const (
 	ProviderOpenAI              = types.ProviderOpenAI
 	ProviderGoogle              = types.ProviderGoogle
+	ProviderGoogleVertex        = types.ProviderGoogleVertex
 	ProviderOpenAICodex         = types.ProviderOpenAICodex
 	ProviderAnthropic           = types.ProviderAnthropic
 	ProviderOpenRouter          = types.ProviderOpenRouter

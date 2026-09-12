@@ -44,7 +44,7 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 	// openai-responses batch adds xai; the C2 codex batch adds openai-codex.
 	want := []string{
 		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
-		"fireworks", "google", "groq", "huggingface", "kimi-coding", "minimax",
+		"fireworks", "google", "google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
 		"openai-codex", "openrouter", "together", "vercel-ai-gateway",
 		"volcengine-plan", "xai", "zai", "zai-coding-cn",
@@ -58,7 +58,7 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 	models := BuiltinModels(nil)
 	for _, id := range []string{
 		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
-		"fireworks", "google", "groq", "huggingface", "kimi-coding", "minimax",
+		"fireworks", "google", "google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
 		"openai-codex", "openrouter", "together", "vercel-ai-gateway",
 		"volcengine-plan", "xai", "zai", "zai-coding-cn",
@@ -78,8 +78,8 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 24 {
-		t.Fatalf("GetProviders() length = %d, want 24", got)
+	if got := len(models.GetProviders()); got != 25 {
+		t.Fatalf("GetProviders() length = %d, want 25", got)
 	}
 }
 
@@ -116,7 +116,7 @@ func TestCatalogAccessors(t *testing.T) {
 			t.Fatalf("GetBuiltinProviders() = %v, missing %q", providers, id)
 		}
 	}
-	for _, id := range []BuiltinProvider{"openai", "xai", "azure-openai-responses", "openai-codex", "google"} {
+	for _, id := range []BuiltinProvider{"openai", "xai", "azure-openai-responses", "openai-codex", "google", "google-vertex"} {
 		if !slices.Contains(providers, id) {
 			t.Fatalf("GetBuiltinProviders() = %v, missing B2 %q", providers, id)
 		}
@@ -135,6 +135,13 @@ func TestCatalogAccessors(t *testing.T) {
 	}
 	if got, ok := GetBuiltinModel("google", "gemini-2.5-flash"); !ok || got.API != ai.ApiGoogleGenerativeAI {
 		t.Fatalf("GetBuiltinModel(google, gemini-2.5-flash) = %+v, %v", got, ok)
+	}
+	if got := GetBuiltinModels("google-vertex"); len(got) == 0 {
+		// C4: the google-vertex provider is ported; its catalog comes from models.dev.
+		t.Fatalf("GetBuiltinModels(google-vertex) = empty, want the models.dev catalog")
+	}
+	if got, ok := GetBuiltinModel("google-vertex", "gemini-2.5-flash"); !ok || got.API != ai.ApiGoogleVertex {
+		t.Fatalf("GetBuiltinModel(google-vertex, gemini-2.5-flash) = %+v, %v", got, ok)
 	}
 	if got := GetBuiltinModelDataGeneratedAt(); got == 0 {
 		t.Fatal("GetBuiltinModelDataGeneratedAt() = 0, want the real generation timestamp")

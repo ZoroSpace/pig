@@ -882,10 +882,10 @@ func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 
 	var models []*ai.Model
 
-	// pi also processes amazon-bedrock, google-vertex, mistral
-	// (mistral-conversations), cloudflare-workers-ai, cloudflare-ai-gateway,
-	// github-copilot, opencode/opencode-go, qwen-token-plan, and xiaomi
-	// blocks here; all are skipped (their wire APIs are unported in pig).
+	// pi also processes amazon-bedrock, mistral (mistral-conversations),
+	// cloudflare-workers-ai, cloudflare-ai-gateway, github-copilot,
+	// opencode/opencode-go, qwen-token-plan, and xiaomi blocks here; all are
+	// skipped (their wire APIs are unported in pig).
 
 	nvidiaNimModelIDs := map[string]string{}
 	if data["nvidia"] != nil && data["nvidia"].Models != nil {
@@ -901,6 +901,7 @@ func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 
 	models = append(models, processAnthropicModels(data)...)
 	models = append(models, processGoogleModels(data)...)
+	models = append(models, processGoogleVertexModels(data)...)
 	models = append(models, processOpenAIModels(data)...)
 	models = append(models, processXaiModels(data)...)
 	models = append(models, processGroqModels(data)...)

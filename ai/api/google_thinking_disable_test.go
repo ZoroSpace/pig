@@ -1,9 +1,8 @@
 // pi: test/google-thinking-disable.test.ts.
 //
 // Live-API probe; every describe block skips without its key (pi:
-// describe.skipIf). The vertex block arrives with the vertex adapter (C4).
-// pi's { retry: 2, timeout: 30000 } per-test options have no Go equivalent —
-// the probes run once.
+// describe.skipIf). pi's { retry: 2, timeout: 30000 } per-test options have
+// no Go equivalent — the probes run once.
 package api
 
 import (
@@ -164,4 +163,43 @@ func TestGoogleThinkingDisableOpenRouterQwen(t *testing.T) {
 		t.Skip("qwen/qwen3.5-plus-02-15 not in catalog")
 	}
 	googleExpectThinkingDisabled(t, model, 100, 35, nil)
+}
+
+// vertexE2EOptions resolves pi's vertexOptions: GOOGLE_CLOUD_API_KEY wins,
+// then GOOGLE_CLOUD_PROJECT/GCLOUD_PROJECT + GOOGLE_CLOUD_LOCATION; nil means
+// no Vertex credentials (pi: describe.skipIf).
+func vertexE2EOptions(t *testing.T) func(*types.SimpleStreamOptions) {
+	t.Helper()
+	if key := os.Getenv("GOOGLE_CLOUD_API_KEY"); key != "" {
+		return func(options *types.SimpleStreamOptions) { options.APIKey = key }
+	}
+	project := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if project == "" {
+		project = os.Getenv("GCLOUD_PROJECT")
+	}
+	location := os.Getenv("GOOGLE_CLOUD_LOCATION")
+	if project == "" || location == "" {
+		return nil
+	}
+	return func(options *types.SimpleStreamOptions) {
+		options.Env = types.ProviderEnv{"GOOGLE_CLOUD_PROJECT": project, "GOOGLE_CLOUD_LOCATION": location}
+	}
+}
+
+func TestGoogleVertexThinkingDisableGemini25(t *testing.T) {
+	extra := vertexE2EOptions(t)
+	if extra == nil {
+		t.Skip("no Vertex credentials (GOOGLE_CLOUD_API_KEY or GOOGLE_CLOUD_PROJECT+GOOGLE_CLOUD_LOCATION)")
+	}
+	model := googleCatalogModel(ai.ProviderGoogleVertex, "gemini-2.5-flash")
+	googleExpectThinkingDisabled(t, model, 160, 35, extra)
+}
+
+func TestGoogleVertexThinkingDisableGemini3x(t *testing.T) {
+	extra := vertexE2EOptions(t)
+	if extra == nil {
+		t.Skip("no Vertex credentials (GOOGLE_CLOUD_API_KEY or GOOGLE_CLOUD_PROJECT+GOOGLE_CLOUD_LOCATION)")
+	}
+	model := googleCatalogModel(ai.ProviderGoogleVertex, "gemini-3-flash-preview")
+	googleExpectThinkingDisabled(t, model, 160, 35, extra)
 }

@@ -183,7 +183,8 @@ func (c *googleGenAIClient) generateContentStream(ctx context.Context, params *g
 }
 
 // buildRequest composes the URL and the mldev body (pi: ApiClient.constructUrl
-// + generateContentParametersToMldev).
+// + generateContentParametersToMldev; the body serialization is shared with
+// the vertex transport — the two mappings coincide for the surface pi uses).
 func (c *googleGenAIClient) buildRequest(params *googleGenerateContentParams) (string, []byte, error) {
 	baseURL := c.baseURL
 	if baseURL == "" {
@@ -197,36 +198,7 @@ func (c *googleGenAIClient) buildRequest(params *googleGenerateContentParams) (s
 	urlElements = append(urlElements, tGoogleModel(params.Model)+":streamGenerateContent")
 	url := strings.Join(urlElements, "/") + "?alt=sse"
 
-	body := map[string]any{}
-	if len(params.Contents) > 0 {
-		body["contents"] = params.Contents
-	}
-	config := params.Config
-	if config != nil {
-		generationConfig := map[string]any{}
-		if config.Temperature != nil {
-			generationConfig["temperature"] = *config.Temperature
-		}
-		if config.MaxOutputTokens != nil {
-			generationConfig["maxOutputTokens"] = *config.MaxOutputTokens
-		}
-		if config.ThinkingConfig != nil {
-			generationConfig["thinkingConfig"] = config.ThinkingConfig
-		}
-		if len(generationConfig) > 0 {
-			body["generationConfig"] = generationConfig
-		}
-		if config.SystemInstruction != nil {
-			body["systemInstruction"] = config.SystemInstruction
-		}
-		if config.Tools != nil {
-			body["tools"] = config.Tools
-		}
-		if config.ToolConfig != nil {
-			body["toolConfig"] = config.ToolConfig
-		}
-	}
-	encoded, err := json.Marshal(body)
+	encoded, err := marshalGoogleGenerateContentBody(params)
 	if err != nil {
 		return "", nil, err
 	}

@@ -36,6 +36,11 @@ const (
 	// "google-generative-ai"); generateContent over
 	// generativelanguage.googleapis.com with SSE.
 	ApiGoogleGenerativeAI Api = "google-generative-ai"
+	// ApiGoogleVertex is Google's Vertex AI Gemini surface (pi:
+	// "google-vertex"); the same generateContent protocol over
+	// aiplatform.googleapis.com with ADC credentials or Vertex express API
+	// keys.
+	ApiGoogleVertex Api = "google-vertex"
 )
 
 // ImagesApi identifies an image-generation wire protocol.
@@ -53,6 +58,7 @@ type ProviderID string
 const (
 	ProviderOpenAI              ProviderID = "openai"
 	ProviderGoogle              ProviderID = "google"
+	ProviderGoogleVertex        ProviderID = "google-vertex"
 	ProviderOpenAICodex         ProviderID = "openai-codex"
 	ProviderAnthropic           ProviderID = "anthropic"
 	ProviderOpenRouter          ProviderID = "openrouter"

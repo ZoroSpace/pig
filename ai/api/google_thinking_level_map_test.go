@@ -1,7 +1,7 @@
 // pi: test/google-thinking-level-map.test.ts.
 //
-// The two captureVertexPayload cases and their vertexModel fixtures arrive
-// with the vertex adapter (C4).
+// The captureVertexPayload cases and their vertexModel fixtures landed with
+// the vertex adapter (C4).
 package api
 
 import (
@@ -160,5 +160,68 @@ func TestGoogleThinkingLevelUsesMappedLevelsForBudgets(t *testing.T) {
 	}
 }
 
-// TestGoogleThinkingLevelMapsVertexExtendedLevels and the vertex budget case
-// arrive with the vertex adapter (C4).
+// vertexTLMModel is pi's vertexModel fixture (api "google-vertex",
+// provider "test-vertex").
+func vertexTLMModel(id string, thinkingLevelMap types.ThinkingLevelMap) *types.Model {
+	return &types.Model{
+		ID:               id,
+		Name:             id,
+		API:              ai.ApiGoogleVertex,
+		Provider:         "test-vertex",
+		BaseURL:          "https://example.invalid/v1",
+		Reasoning:        true,
+		ThinkingLevelMap: thinkingLevelMap,
+		Input:            []types.ModelInput{types.ModelInputText},
+		Cost:             types.ModelCost{},
+		ContextWindow:    128000,
+		MaxTokens:        4096,
+	}
+}
+
+// captureVertexPayload runs the vertex streamSimple with an onPayload hook
+// that captures the request and then errors the stream (pi:
+// captureVertexPayload).
+func captureVertexPayload(t *testing.T, model *types.Model, reasoning types.ThinkingLevel, thinkingBudgets *types.ThinkingBudgets) *googleGenerateContentParams {
+	t.Helper()
+	var payload *googleGenerateContentParams
+	options := &types.SimpleStreamOptions{}
+	options.APIKey = "test"
+	options.Reasoning = reasoning
+	options.ThinkingBudgets = thinkingBudgets
+	options.OnPayload = func(request any, _ *types.Model) any {
+		payload = request.(*googleGenerateContentParams)
+		panic("payload captured")
+	}
+
+	stream := GoogleVertex{}.StreamSimple(context.Background(), model, googleTLMContext(), options)
+	_, result := collectResponsesEvents(t, stream)
+	if !strings.Contains(result.ErrorMessage, "payload captured") {
+		t.Fatalf("errorMessage = %q, want it to contain the capture marker", result.ErrorMessage)
+	}
+	if payload == nil {
+		t.Fatal("Vertex payload was not captured")
+	}
+	return payload
+}
+
+func TestGoogleThinkingLevelMapsVertexExtendedLevels(t *testing.T) {
+	payload := captureVertexPayload(t, vertexTLMModel("gemini-3.7-flash", types.ThinkingLevelMap{
+		types.ModelThinkingXHigh: lo.ToPtr("high"),
+	}), "xhigh", nil)
+
+	tc := payload.Config.ThinkingConfig
+	if tc == nil || !tc.IncludeThoughts || tc.ThinkingLevel != GoogleThinkingLevelHigh {
+		t.Errorf("thinkingConfig = %+v, want includeThoughts + HIGH", tc)
+	}
+}
+
+func TestGoogleThinkingLevelUsesMappedVertexLevelsForBudgets(t *testing.T) {
+	payload := captureVertexPayload(t, vertexTLMModel("gemini-2.5-flash", types.ThinkingLevelMap{
+		types.ModelThinkingMax: lo.ToPtr("high"),
+	}), "max", &types.ThinkingBudgets{High: lo.ToPtr(int64(1234))})
+
+	if payload.Config.ThinkingConfig == nil || payload.Config.ThinkingConfig.ThinkingBudget == nil ||
+		*payload.Config.ThinkingConfig.ThinkingBudget != 1234 {
+		t.Errorf("thinkingConfig = %+v, want thinkingBudget 1234", payload.Config.ThinkingConfig)
+	}
+}
