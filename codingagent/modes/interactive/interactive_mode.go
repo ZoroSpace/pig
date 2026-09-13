@@ -698,8 +698,9 @@ func (m *InteractiveMode) Init() error {
 		)
 		m.builtInHeader = builtInHeader
 
-		// Setup UI layout (pi: headerContainer gets spacer/header/spacer)
-		m.headerContainer.AddChild(tui.NewSpacer(1))
+		// pig-only: no leading spacer so the logo sits directly below the
+		// shell prompt line (pi: headerContainer gets spacer/header/spacer;
+		// user request).
 		m.headerContainer.AddChild(builtInHeader)
 		m.headerContainer.AddChild(tui.NewSpacer(1))
 	} else {
@@ -7435,8 +7436,8 @@ func (m *InteractiveMode) handleOpenExternalEditor(ctx context.Context) {
 // hints. Deviation from pi (pi: single-line bold(accent("pi")) +
 // dim(" v"+version)): the user asked for a prominent logo. Art lines are
 // colored individually so SGR state never leaks across lines in the diff
-// renderer; color follows the onboarding hint line (dim, user request),
-// and the version tag trails the bottom line.
+// renderer; color is the theme text color (white on dark themes, black on
+// light themes, user request), and the version tag trails the bottom line.
 func buildPigLogo(t *theme.Theme, version string) string {
 	// figlet output, uniform 19 columns (trailing spaces included).
 	art := []string{
@@ -7448,12 +7449,12 @@ func buildPigLogo(t *theme.Theme, version string) string {
 	}
 	var sb strings.Builder
 	for _, line := range art {
-		sb.WriteString(t.Bold(t.Fg("dim", line)))
+		sb.WriteString(t.Bold(t.Fg("text", line)))
 		sb.WriteByte('\n')
 	}
 	return sb.String() +
-		t.Bold(t.Fg("accent", "             |___/")) +
-		t.Fg("dim", " v"+version)
+		t.Bold(t.Fg("text", "             |___/")) +
+		t.Fg("text", " v"+version)
 }
 
 // =========================================================================
