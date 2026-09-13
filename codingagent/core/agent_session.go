@@ -1254,7 +1254,7 @@ func (s *AgentSession) Dispose() {
 		s.Agent.Abort()
 	}()
 
-	s.extensionRunner.Invalidate("This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().")
+	s.extensionRunner.Invalidate("This extension ctx is stale after session replacement or reload. Do not use a captured pig or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().")
 	s.disconnectFromAgent()
 	s.mu.Lock()
 	s.eventListeners = nil
@@ -3736,7 +3736,7 @@ func (s *AgentSession) Reload(ctx context.Context, options *ReloadOptions) error
 	if _, err := EmitSessionShutdownEvent(ctx, oldRunner, &SessionShutdownEvent{Type: "session_shutdown", Reason: "reload"}); err != nil {
 		return err
 	}
-	oldRunner.Invalidate("This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().")
+	oldRunner.Invalidate("This extension ctx is stale after session replacement or reload. Do not use a captured pig or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().")
 	s.SettingsManager.Reload()
 	s.syncQueueModesFromSettings()
 	ai.ResetApiProviders()

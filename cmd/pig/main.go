@@ -48,7 +48,7 @@ import (
 )
 
 // extensionLoadFailureHint mirrors EXTENSION_LOAD_FAILURE_HINT.
-const extensionLoadFailureHint = "Hint: Start without extensions using \"pi -ne\"."
+const extensionLoadFailureHint = "Hint: Start without extensions using \"pig -ne\"." // pig: was "pi -ne"
 
 // readPipedStdin reads all content from piped stdin; ok=false when stdin is
 // a TTY (interactive terminal) or the pipe is empty (pi: readPipedStdin —

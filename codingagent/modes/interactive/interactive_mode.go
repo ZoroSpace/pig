@@ -646,8 +646,7 @@ func (m *InteractiveMode) Init() error {
 	// Add header with keybindings from config (unless silenced)
 	if m.options.Verbose || !m.settingsManager().GetQuietStartup() {
 		currentTheme := theme.Current()
-		logo := currentTheme.Bold(currentTheme.Fg("accent", codingagent.AppName)) +
-			currentTheme.Fg("dim", " v"+m.version)
+		logo := buildPigLogo(currentTheme, m.version)
 
 		// Build startup instructions using keybinding hint helpers
 		hint := func(keybinding string, description string) string {
@@ -687,7 +686,7 @@ func (m *InteractiveMode) Init() error {
 		compactOnboarding := currentTheme.Fg("dim",
 			"Press "+coretools.KeyText(core.AppKeybindingToolsExpand)+" to show full startup help and loaded resources.")
 		onboarding := currentTheme.Fg("dim",
-			"Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.")
+			"Pig can explain its own features and look up its docs. Ask it how to use or extend Pig.")
 		builtInHeader := newExpandableText(
 			func() string {
 				return logo + "\n" + compactInstructions + "\n" + compactOnboarding + "\n\n" + onboarding
@@ -2083,7 +2082,7 @@ func (m *InteractiveMode) renderProjectTrustWarningIfNeeded() {
 		m.chatContainer.AddChild(tui.NewSpacer(1))
 	}
 	m.chatContainer.AddChild(tui.NewText(theme.Current().Fg("warning",
-		fmt.Sprintf("This project is not trusted. Project %s resources and packages are ignored. Use /trust to save a trust decision, then restart pi.", codingagent.ConfigDirName),
+		fmt.Sprintf("This project is not trusted. Project %s resources and packages are ignored. Use /trust to save a trust decision, then restart pig.", codingagent.ConfigDirName),
 	), 1, 0))
 }
 
@@ -3184,7 +3183,7 @@ func (m *InteractiveMode) checkTmuxKeyboardSetup(ctx context.Context) string {
 		return ""
 	}
 	if extendedKeysFormat == "xterm" {
-		return "tmux extended-keys-format is xterm. Pi works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux."
+		return "tmux extended-keys-format is xterm. Pig works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux."
 	}
 
 	return ""
@@ -7426,6 +7425,35 @@ func (m *InteractiveMode) handleOpenExternalEditor(ctx context.Context) {
 	if result.Status == "complete" {
 		m.editor.SetText(result.Content)
 	}
+}
+
+// =========================================================================
+// Startup logo (pig-only: pi prints the plain "pi v0.85.1" header line)
+// =========================================================================
+
+// buildPigLogo renders the ASCII art startup logo shown above the keybinding
+// hints. Deviation from pi (pi: single-line bold(accent("pi")) +
+// dim(" v"+version)): the user asked for a prominent logo. Art lines are
+// colored individually so SGR state never leaks across lines in the diff
+// renderer; color follows the onboarding hint line (dim, user request),
+// and the version tag trails the bottom line.
+func buildPigLogo(t *theme.Theme, version string) string {
+	// figlet output, uniform 19 columns (trailing spaces included).
+	art := []string{
+		" ____    _         ",
+		"|  _ \\  (_)   __ _ ",
+		"| |_) | | |  / _` |",
+		"|  __/  | | | (_| |",
+		"|_|     |_|  \\__, |",
+	}
+	var sb strings.Builder
+	for _, line := range art {
+		sb.WriteString(t.Bold(t.Fg("dim", line)))
+		sb.WriteByte('\n')
+	}
+	return sb.String() +
+		t.Bold(t.Fg("accent", "             |___/")) +
+		t.Fg("dim", " v"+version)
 }
 
 // =========================================================================

@@ -99,7 +99,7 @@ func (c *FirstTimeSetupComponent) update() {
 	} else {
 		c.AddChild(tui.NewText(currentTheme.Fg("text", "Opt-in to anonymous usage data sharing?"), 1, 0))
 		c.AddChild(tui.NewText(currentTheme.Fg("muted",
-			"Opting in stores a tracking identifier in settings.json and enables anonymous\nusage analytics. This helps us to better debug, reproduce, and resolve issues\nand bugs within Pi. You can observe what is shared using /privacy and make\nchanges anytime in settings.json.",
+			"Opting in stores a tracking identifier in settings.json and enables anonymous\nusage analytics. This helps us to better debug, reproduce, and resolve issues\nand bugs within Pig. You can observe what is shared using /privacy and make\nchanges anytime in settings.json.",
 		), 1, 0))
 		c.AddChild(tui.NewSpacer(1))
 		labels := make([]string, len(firstTimeSetupAnalyticsOptions))

@@ -371,7 +371,7 @@ Commands:
   %s install <source> [-l]     Install extension source and add to settings
   %s remove <source> [-l]      Remove extension source from settings
   %s uninstall <source> [-l]   Alias for remove
-  %s update [source|self|pi]   Update pi, extensions, or model catalogs
+  %s update [source|self|pi]   Update pig, extensions, or model catalogs // pig: was "Update pi"
   %s list                      List installed extensions from settings
   %s config [-l]               Open TUI to enable/disable package resources (Tab switches scope)
   %s auth <command>            Print credentials or check provider readiness
