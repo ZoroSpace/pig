@@ -165,23 +165,131 @@ func TestMainScreenBlockRebuildAboveViewportRepaintsVisibleRange(t *testing.T) {
 	}
 }
 
+// Tool-call collapse shape: a live output panel TALLER than the viewport
+// (top edge above viewportTop) folds up to a compact card. The buffer shrinks
+// while firstChanged sits above the viewport top — this must repaint the
+// visible window in place, NOT wipe screen+scrollback and replay the whole
+// transcript (which is what pi does and pig round-1 kept, storming on every
+// tall tool completion).
+func TestMainScreenToolCollapseRepaintsWindowNotFullRender(t *testing.T) {
+	terminal, tui, component := newViewportTestTui(t)
+
+	// Transcript, then a live tool panel streams taller than the viewport:
+	// 20 rows + 20 panel rows = 40; viewport top ends at 32, panel top (20)
+	// is far above it. Growth frames stay incremental (round-1 clamp path).
+	lines := buildNumberedLines(20)
+	for i := 0; i < 20; i++ {
+		lines = append(lines, fmt.Sprintf("panel-%02d", i))
+		component.SetLines(lines)
+		tui.RenderNow(false)
+	}
+	redraws := tui.FullRedraws()
+	scrollTop := terminal.GetScrollBuffer()[:12]
+
+	// Tool completes: the 20-row panel collapses to a 3-row card.
+	collapsed := buildNumberedLines(20)
+	collapsed = append(collapsed, "card-0", "card-1", "card-2")
+	component.SetLines(collapsed)
+	terminal.ClearWrites()
+	tui.RenderNow(false)
+
+	writes := terminal.GetWrites()
+	if strings.Contains(writes, "\x1b[2J") || strings.Contains(writes, "\x1b[3J") || strings.Contains(writes, "\x1b[H") {
+		t.Fatalf("collapse triggered full render (screen/scrollback wipe): %q", writes[:minInt(200, len(writes))])
+	}
+	if got := tui.FullRedraws(); got != redraws+1 {
+		t.Fatalf("collapse should repaint the window once (count %d, want %d)", got, redraws+1)
+	}
+	// Scrollback history above the viewport must survive a window repaint.
+	after := terminal.GetScrollBuffer()
+	if len(after) < len(scrollTop) {
+		t.Fatalf("scrollback truncated: %d rows < %d", len(after), len(scrollTop))
+	}
+	for i, want := range scrollTop {
+		if after[i] != want {
+			t.Fatalf("scrollback row %d changed: %q, want %q", i, after[i], want)
+		}
+	}
+	// The viewport shows the bottom 8 rows of the collapsed buffer.
+	wantViewport := []string{"row-15", "row-16", "row-17", "row-18", "row-19", "card-0", "card-1", "card-2"}
+	if got := terminal.GetViewport(); !reflect.DeepEqual(got, wantViewport) {
+		t.Fatalf("viewport = %q, want %q", got, wantViewport)
+	}
+
+	// Second collapse: only the tail rows below the viewport bottom vanish
+	// (firstChanged lands inside the viewport), so the pre-existing incremental
+	// deleted-lines path handles it — no window repaint, no wipe, blank rows
+	// at the bottom until new content appends.
+	collapsed2 := buildNumberedLines(20)
+	collapsed2 = append(collapsed2, "card-0")
+	component.SetLines(collapsed2)
+	terminal.ClearWrites()
+	tui.RenderNow(false)
+	if got := tui.FullRedraws(); got != redraws+1 {
+		t.Fatalf("tail-only shrink must stay incremental (count %d, want %d)", got, redraws+1)
+	}
+	if writes := terminal.GetWrites(); strings.Contains(writes, "\x1b[2J") || strings.Contains(writes, "\x1b[3J") {
+		t.Fatalf("second collapse triggered full render: %q", writes)
+	}
+	if got := terminal.GetViewport(); !reflect.DeepEqual(got, []string{"row-15", "row-16", "row-17", "row-18", "row-19", "card-0", "", ""}) {
+		t.Fatalf("second collapse viewport = %q", got)
+	}
+
+	// Bookkeeping stays consistent: a follow-up append paints incrementally.
+	grown := buildNumberedLines(20)
+	grown = append(grown, "card-0", "tail-0")
+	component.SetLines(grown)
+	terminal.ClearWrites()
+	tui.RenderNow(false)
+	if writes := terminal.GetWrites(); strings.Contains(writes, "\x1b[2J") {
+		t.Fatalf("follow-up append triggered full render: %q", writes)
+	}
+	if vp := terminal.GetViewport(); vp[6] != "tail-0" {
+		t.Fatalf("viewport row 6 = %q, want tail-0", vp[6])
+	}
+}
+
 // Content shrinking while changes start above the viewport: the viewport must
-// slide up, which relative-only painting cannot express — the pre-existing
-// full-render behavior is intentionally kept (the fix is growth-only, so this
-// pins against over-fixing).
-func TestMainScreenShrinkSpanningViewportStillFullRenders(t *testing.T) {
-	_, tui, component := newViewportTestTui(t)
+// slide up to keep the buffer bottom (editor/input) visible, which relative-
+// only painting cannot express — pig repaints just the visible window instead
+// of pi's fullRender(true) (no scrollback wipe, no top-of-buffer replay).
+func TestMainScreenShrinkSpanningViewportRepaintsWindow(t *testing.T) {
+	terminal, tui, component := newViewportTestTui(t)
 
 	component.SetLines(buildNumberedLines(20))
 	tui.RenderNow(false)
 	redraws := tui.FullRedraws()
+	scrollBefore := terminal.GetScrollBuffer()
 
 	lines := buildNumberedLines(17)
 	lines[10] = "changed"
 	component.SetLines(lines)
+	terminal.ClearWrites()
 	tui.RenderNow(false)
 
+	writes := terminal.GetWrites()
+	if strings.Contains(writes, "\x1b[2J") || strings.Contains(writes, "\x1b[3J") || strings.Contains(writes, "\x1b[H") {
+		t.Fatalf("shrink spanning viewport wiped screen/scrollback: %q", writes)
+	}
 	if got := tui.FullRedraws(); got != redraws+1 {
-		t.Fatalf("shrink spanning viewport should full-render (count %d, want %d)", got, redraws+1)
+		t.Fatalf("shrink spanning viewport should repaint the window (count %d, want %d)", got, redraws+1)
+	}
+	scrollAfter := terminal.GetScrollBuffer()
+	if len(scrollAfter) < len(scrollBefore) {
+		t.Fatalf("scrollback truncated: %d rows < %d", len(scrollAfter), len(scrollBefore))
+	}
+	for i, want := range scrollBefore {
+		if i >= len(scrollAfter) {
+			break
+		}
+		// Rows above the new viewport top keep their old content; rows inside
+		// the repainted window are expected to change.
+		if i < 9 && scrollAfter[i] != want {
+			t.Fatalf("scrollback row %d changed: %q, want %q", i, scrollAfter[i], want)
+		}
+	}
+	want := []string{"row-09", "changed", "row-11", "row-12", "row-13", "row-14", "row-15", "row-16"}
+	if got := terminal.GetViewport(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("viewport = %q, want %q", got, want)
 	}
 }

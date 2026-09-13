@@ -58,9 +58,19 @@ if firstChanged < prevViewportTop {
 - `tui/tui_main_screen.go` 此 guard 的行为与 pi 源码**有意分叉**（pi 上游未修）：pig 三分支化，pi 单分支 `fullRender(true)`。pi 侧若后续合并 #9255 修复（或其变体），基线同步批应对齐本文件——pi 采纳的写法与本实现的语义差异需在同步时比对（预期 pi 会采纳同方向的 clamp/skip 方案）。
 - 跳过分支中 kitty 图像的按 id 删除为 pig 侧补充细节（#9255 提案未涉及 kitty 簿记）；普通文本路径零输出。
 
+## 第二轮：收缩跨视口分支仍在风暴（工具折叠触发，同日补修）
+
+第一轮收口后真机验收时，长工具输出（heredoc commit message，40 行 live 面板）完成折叠后再次风暴。定位：第一轮刻意保留的分支 3（内容收缩且变更始于视口上方 → `fullRender(true)`）恰恰是**工具完成的必经路径**——live 输出面板高于视口时，其顶边（firstChanged）恒在视口上方，折叠即触发全量重绘。第一轮的两个纯文本长流测试（纯增长）探不到它；`clearOnShrink` 已排除（settings/env 默认均不开）。
+
+**修法：`repaintVisibleWindow`（窗口重绘）替代分支 3 的 `fullRender(true)`**——只重绘可见视口各行（`\x1b[2K` + 内容），窗口滑到收缩后 buffer 底部（编辑器可见），相对移动定位（不归顶）、不清屏不清 scrollback（无 `2J/3J`）、不重印上方历史。关键洞察：整窗重绘可以任意重定位视口（包括上滑），无需真正“反向滚动”。kitty 图像行为：视口内含图像行则回退 `fullRender(true)`（Image 组件 Phase 8 前罕见）；视口上方 scrollback 中的图像 id 保留在簿记中以免孤儿化。尾部纯删除（firstChanged 落在视口内）仍走既有增量删除路径，无需滑窗。
+
+测试更新：`TestMainScreenToolCollapseRepaintsWindowNotFullRender`（40 行面板折叠为 3 行卡片，断言无 `2J/3J/H`、scrollback 逐行保留、视口 = 新 buffer 底部 8 行、后续追加仍增量）+ `TestMainScreenShrinkSpanningViewportRepaintsWindow`（替代原“收缩保留全量”防过修测试，新语义：收缩改走窗口重绘）。两者在修复前复现 FAIL（`2J+H+3J` 后从 row-00 整段重印，与用户所见一致），修复后 PASS。
+
+修复后流路径上仅余的正当全量重绘：首次渲染、宽高变化、clearOnShrink（默认关）、kitty 图像视口溢出回退。
+
 ## 用户验证与行为取舍
 
-- **验证**：`cd ~/Projects/pig && git pull && go build -o /tmp/pig ./cmd/pig && /tmp/pig`。此前易触发场景——tmux 小 pane 里跑长会话 + 流式输出——不再跳顶回卷。**真机验收已过**（2026-09-13，修复后二进制重启的 dogfooding 会话内：两段长流式输出——约 1x/3x commit message 长度，live 块高过视口、每帧变更行始于视口上方的风暴形态——全程无跳顶回卷，用户确认一切正常）。
+- **验证**：`cd ~/Projects/pig && git pull && go build -o /tmp/pig ./cmd/pig && /tmp/pig`。此前易触发场景——tmux 小 pane 里跑长会话 + 流式输出——不再跳顶回卷。**真机验收记录**：2026-09-13 第一轮修复后，两段纯增长长流式输出（1x/3x commit message 长度）无跳顶，但同日随后一次含 40 行工具输出的折叠再次风暴（暴露分支 3，见第二轮段），二轮修复待用户重建二进制后复验。
 - **刻意取舍**：钳位分支下，视口上方 scrollback 中的已变更行保持旧渲染（滚上去看时那一小段可能是旧内容）。该区域物理不可见，正常使用几乎不可感知；且严格优于 pi 现状（`3J` 把整个 scrollback 清空重放，历史浏览位置尽失）。
 - **pi 本体用户**：pi 上游 #9255 仍 open，pi 里此问题依旧存在；临时规避 `pi --tui-mode fullscreen`（alternate screen 无 scrollback 回放，#5023 下有用户实测确认）。
 - **溯源致谢**：修复方案直接基于 #9255 报告者的根因实测（99.9% 全量重绘路径统计）与三分支提案；pig 侧十几分钟内落地并锁定回归，依赖 T1-T4 移植时打下的 VirtualTerminal/`FullRedraws()` 测试基建。

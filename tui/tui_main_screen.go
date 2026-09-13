@@ -456,6 +456,70 @@ func (m *TuiMainScreen) doRender() error {
 		_, _ = f.WriteString(msg)
 	}
 
+	// Repaint only the visible viewport rows, sliding the window to the bottom
+	// of the (possibly shrunken) buffer. Unlike fullRender(true) it neither
+	// homes the cursor, clears screen+scrollback (ESC[2J H 3J), nor repaints
+	// the rows above the viewport — so a large collapse (e.g. a finished tool
+	// call's live output folding up, pi #5023/#9255) neither jumps the display
+	// to the top of the transcript nor wipes scrollback history. pig-only,
+	// second round of the #9255 adaptation (round 1 left the shrink-spanning
+	// branch on fullRender, which stormed on every tall tool completion).
+	repaintVisibleWindow := func() {
+		m.fullRedrawCount++
+		newViewportTop := maxInt(0, len(newLines)-height)
+		for i := newViewportTop; i < len(newLines); i++ {
+			if IsImageLine(newLines[i]) {
+				logRedraw("window repaint fallback: image row in viewport")
+				fullRender(true)
+				return
+			}
+		}
+		output := newBoundedTerminalWriter(m.terminal.Write)
+		output.append("\x1b[?2026h")
+		output.append(m.deleteChangedKittyImages(prevViewportTop, minInt(prevViewportTop+height-1, len(m.previousLines)-1)))
+		// Move to the physical top row of the current viewport.
+		screenRowDelta := prevViewportTop - hardwareCursorRow // >0: cursor above window top
+		if screenRowDelta > 0 {
+			output.append(fmt.Sprintf("\x1b[%dB", screenRowDelta))
+		} else if screenRowDelta < 0 {
+			output.append(fmt.Sprintf("\x1b[%dA", -screenRowDelta))
+		}
+		output.append("\r")
+		paintedRows := len(newLines) - newViewportTop
+		for i := newViewportTop; i < len(newLines); i++ {
+			if i > newViewportTop {
+				output.append("\r\n")
+			}
+			output.append("\x1b[2K")
+			output.append(newLines[i])
+		}
+		// Rows below the new content still show stale content — clear them.
+		for r := paintedRows; r < height; r++ {
+			output.append("\r\n\x1b[2K")
+		}
+		if height > paintedRows {
+			output.append(fmt.Sprintf("\x1b[%dA", height-paintedRows))
+		}
+		output.append("\x1b[?2026l")
+		output.flush()
+		m.cursorRow = maxInt(0, len(newLines)-1)
+		m.hardwareCursorRow = m.cursorRow
+		m.maxLinesRendered = maxInt(m.maxLinesRendered, len(newLines))
+		m.previousViewportTop = newViewportTop
+		m.positionHardwareCursorLocked(cursorPos, len(newLines))
+		// Images above the viewport stay on display in scrollback: keep their
+		// ids so later kitty cleanup can still reach them.
+		oldTopIds := m.collectKittyImageIds(m.previousLines[:minInt(prevViewportTop, len(m.previousLines))])
+		m.previousLines = newLines
+		ids := m.collectKittyImageIds(newLines)
+		for id := range oldTopIds {
+			ids[id] = true
+		}
+		m.previousKittyImageIds = ids
+		m.previousWidth = width
+		m.previousHeight = height
+	}
+
 	// First render - just output everything without clearing (assumes clean screen)
 	if len(m.previousLines) == 0 && !widthChanged && !heightChanged {
 		logRedraw("first render")
@@ -631,11 +695,13 @@ func (m *TuiMainScreen) doRender() error {
 			firstChanged = prevViewportTop
 		} else {
 			// Content shrank while changes start above the viewport: the
-			// viewport itself must slide up, which relative-only painting
-			// cannot express — a full repaint is required (rare: large
-			// blocks collapsing, e.g. finished tool results).
-			logRedraw(fmt.Sprintf("firstChanged < viewportTop with shrink (%d < %d)", firstChanged, prevViewportTop))
-			fullRender(true)
+			// viewport must slide up to keep the buffer bottom (editor/input)
+			// visible, which relative-only painting cannot express. Repaint
+			// just the visible window — fullRender(true) here is what still
+			// stormed (tall tool-call live output collapsing fires this on
+			// every completion, pi #5023/#9255).
+			logRedraw(fmt.Sprintf("shrink spanning viewportTop — window repaint (%d < %d)", firstChanged, prevViewportTop))
+			repaintVisibleWindow()
 			return nil
 		}
 	}
