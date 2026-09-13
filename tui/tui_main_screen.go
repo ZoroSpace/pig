@@ -587,12 +587,57 @@ func (m *TuiMainScreen) doRender() error {
 		return nil
 	}
 
-	// Differential rendering can only touch what was actually visible.
-	// If the first changed line is above the previous viewport, we need a full redraw.
+	// Differential rendering can only touch what was actually visible. If the
+	// first changed line is above the previous viewport, the changed rows sit
+	// in scrollback — repainting them is neither possible nor necessary.
+	//
+	// pig fix for the "terminal jumps to top then replays to bottom" bug (pi
+	// issue #9255, still open upstream; pi's TuiMainScreen does fullRender(true)
+	// here unconditionally, which on long transcripts with a live block taller
+	// than the viewport wipes screen + scrollback and repaints the ENTIRE
+	// buffer 3-5x per second). pig-only deviation from pi, recorded in
+	// docs/fix/2026-09-13-main-screen-viewport-redraw-jump.md.
 	if firstChanged < prevViewportTop {
-		logRedraw(fmt.Sprintf("firstChanged < viewportTop (%d < %d)", firstChanged, prevViewportTop))
-		fullRender(true)
-		return nil
+		if lastChanged < prevViewportTop {
+			// Every changed row is above the viewport — nothing on screen
+			// differs; delete any fully-scrollback kitty image blocks (not
+			// cursor-bound) and update bookkeeping without painting.
+			logRedraw(fmt.Sprintf("all changes above viewportTop (%d..%d < %d)", firstChanged, lastChanged, prevViewportTop))
+			if deleted := m.deleteChangedKittyImages(firstChanged, lastChanged); deleted != "" {
+				output := newBoundedTerminalWriter(m.terminal.Write)
+				output.append("\x1b[?2026h")
+				output.append(deleted)
+				output.append("\x1b[?2026l")
+				output.flush()
+			}
+			m.previousLines = newLines
+			m.previousKittyImageIds = m.collectKittyImageIds(newLines)
+			m.previousWidth = width
+			m.previousHeight = height
+			m.cursorRow = maxInt(0, len(newLines)-1)
+			m.maxLinesRendered = maxInt(m.maxLinesRendered, len(newLines))
+			m.positionHardwareCursorLocked(cursorPos, len(newLines))
+			m.previousViewportTop = prevViewportTop
+			return nil
+		}
+		if len(newLines) >= len(m.previousLines) {
+			// Stable or growing content with changes spanning into the
+			// viewport: repaint the visible range only, starting at the
+			// viewport top. Rows above stay stale in scrollback (a full
+			// render would erase the scrollback entirely, which is worse).
+			// appendStart is unreachable here: pure appends have
+			// firstChanged == len(previousLines) > prevViewportTop.
+			logRedraw(fmt.Sprintf("clamping firstChanged to viewportTop (%d < %d)", firstChanged, prevViewportTop))
+			firstChanged = prevViewportTop
+		} else {
+			// Content shrank while changes start above the viewport: the
+			// viewport itself must slide up, which relative-only painting
+			// cannot express — a full repaint is required (rare: large
+			// blocks collapsing, e.g. finished tool results).
+			logRedraw(fmt.Sprintf("firstChanged < viewportTop with shrink (%d < %d)", firstChanged, prevViewportTop))
+			fullRender(true)
+			return nil
+		}
 	}
 
 	// Render from first changed line to end
