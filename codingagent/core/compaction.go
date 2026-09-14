@@ -24,9 +24,10 @@
 //   - The completeSimple fallback of completeSummarization goes through the
 //     api-provider registry (ai.GetApiProvider) directly. pi's
 //     compat.ts standalone stream family (getBuiltinProviderForModel with
-//     the cloudflare-legacy branch, withEnvApiKey) is not ported yet: pig's
-//     builtin adapters self-register in the same registry, and env-key fill
-//     arrives with the env-api-keys port. AgentSession always supplies the
+//     the cloudflare-legacy branch) is not ported yet: pig's
+//     builtin adapters self-register in the same registry. The withEnvApiKey
+//     env-key fill landed in ai.StreamSimple on 2026-09-13
+//     (docs/fix/2026-09-13-env-api-keys-fill.md). AgentSession always supplies the
 //     agent's streamFn, so the fallback is only reachable for direct
 //     library callers.
 package core

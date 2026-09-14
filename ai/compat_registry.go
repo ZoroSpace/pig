@@ -17,6 +17,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/ZoroSpace/pig/ai/types"
@@ -125,12 +126,38 @@ func ResetApiProviders() {
 	}
 }
 
+// withEnvApiKey fills options.APIKey from the provider's well-known env vars
+// when the caller did not set one (pi: compat.ts withEnvApiKey → getEnvApiKey,
+// ported in ai/env_api_keys.go). Whitespace-only keys count as unset (pi:
+// hasExplicitApiKey). The ambient-credentials marker leaves options untouched
+// so ambient-auth adapters (google-vertex ADC, amazon-bedrock) run their own
+// resolution. pi spreads {...options, apiKey}; the Go copy keeps caller state
+// unmutated. pig only dispatches streamSimple today; the twin for a top-level
+// Stream() dispatcher arrives with that dispatcher (pi: compat.ts stream()).
+func withEnvApiKey(model *Model, options *SimpleStreamOptions) *SimpleStreamOptions {
+	if options == nil {
+		return nil
+	}
+	if strings.TrimSpace(options.APIKey) != "" {
+		return options
+	}
+	apiKey := GetEnvApiKey(model.Provider, options.Env)
+	if apiKey == "" || apiKey == AmbientAuthMarker {
+		return options
+	}
+	filled := *options
+	filled.APIKey = apiKey
+	return &filled
+}
+
 // StreamSimple streams one simple request through the registered api provider
 // for the model (pi: compat.ts streamSimple; used as the default agent stream
 // function). Segment deviations (declared in the core/compaction batch):
-// pi's getBuiltinProviderForModel short-circuit (cloudflare-legacy auth shape
-// and withEnvApiKey env fallback) arrives with the env-api-keys batch — pig's
-// builtin adapters are already self-registered into the same registry.
+// pi's getBuiltinProviderForModel short-circuit (cloudflare-legacy auth shape)
+// is still absent — pig's builtin adapters self-register into the same
+// registry, so dispatch goes straight to the registered implementation. The
+// withEnvApiKey env-key fill is ported (2026-09-13, triggered by the first
+// live GEMINI_API_KEY probe; docs/fix/2026-09-13-env-api-keys-fill.md).
 func StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *SimpleStreamOptions) *AssistantMessageEventStream {
 	provider, ok := GetApiProvider(model.API)
 	if !ok {
@@ -148,5 +175,5 @@ func StreamSimple(ctx context.Context, model *Model, llmContext *Context, option
 		stream.EndWith(message)
 		return stream
 	}
-	return provider.StreamSimple(ctx, model, llmContext, options)
+	return provider.StreamSimple(ctx, model, llmContext, withEnvApiKey(model, options))
 }

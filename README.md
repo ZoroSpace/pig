@@ -14,7 +14,7 @@ pig 是 [pi coding agent](https://github.com/earendil-works/pi) 的 Go 全量重
 pig 与 pi 做到**行为规格级对齐**：pi 的 TypeScript 代码就是 pig 的规格书。provider 流式事件序列、CLI 参数与退出码、会话 JSONL 逐字节格式、TUI 的每一次按键手感，都逐项对照移植。pi 的经验、文档、肌肉记忆和**现有会话记录**都可以直接带过来。
 
 > [!WARNING]
-> pig 处于活跃开发中的 dogfooding 阶段，CLI 与内部结构可能变化。目前只有 DeepSeek 与火山方舟 Coding Plan 经过真实 API 全链路验证，其余 provider 尚未打过真实服务，请勿默认视为可用，详见下文[验证分层](#provider实现--验证要分开看)。
+> pig 处于活跃开发中的 dogfooding 阶段，CLI 与内部结构可能变化。目前 DeepSeek、火山方舟 Coding Plan 与 Google（部分）经过真实 API 验证，其余 provider 尚未打过真实服务，请勿默认视为可用，详见下文[验证分层](#provider实现--验证要分开看)。
 
 ## 起源
 
@@ -24,7 +24,7 @@ pig 与 pi 做到**行为规格级对齐**：pi 的 TypeScript 代码就是 pig 
 
 这里的"对齐"是文件、函数、struct 级的一一对应：上游每改一处，pig 侧都能精确定位到对应的文件与函数。这种粒度既是当初看懂 pi 的方式，也是能持续跟进上游迭代的保障。个别包与实验特性因 pi 仍在快速迭代而暂缓（见[能力边界](#与-pi-的能力边界)），等上游稳定后会写进本项目。
 
-最后一点声明：手上没有各家 API 与账号，真实服务的实测只覆盖了 DeepSeek 与火山方舟 Coding Plan 两家（详见[验证分层](#provider实现--验证要分开看)）。**欢迎拿到其他家 key 的朋友帮忙实测**——发现偏差请提 issue 或 PR，修复会按仓库惯例带回归测试合入。
+最后一点声明：手上没有各家 API 与账号，真实服务的实测只覆盖了 DeepSeek、火山方舟 Coding Plan 两家，以及 Google 的部分链路（详见[验证分层](#provider实现--验证要分开看)）。**欢迎拿到其他家 key 的朋友帮忙实测**——发现偏差请提 issue 或 PR，修复会按仓库惯例带回归测试合入。
 
 ## 概览
 
@@ -36,7 +36,7 @@ pig 与 pi 做到**行为规格级对齐**：pi 的 TypeScript 代码就是 pig 
 | 默认配置 | `~/.pig/agent`，项目级配置目录为 `.pig/` |
 | 会话格式 | 与 pi JSONL 双向兼容（v3/v4 两代格式实测互读） |
 | Provider | 25 家内置、约 960 个模型、7 种 API 协议适配器 |
-| 真实服务验证 | DeepSeek、火山方舟 Coding Plan（其余见[验证分层](#provider实现--验证要分开看)） |
+| 真实服务验证 | DeepSeek、火山方舟 Coding Plan、Google（部分；其余见[验证分层](#provider实现--验证要分开看)） |
 | 测试 | 1300+ 测试函数 · 28 个包 · `-race` 全绿 |
 | License | MIT |
 
@@ -214,7 +214,7 @@ git diff | ./pig -p "审查这个 diff，指出可能的正确性问题"
 
 | 状态 | 范围 | 说明 |
 | --- | --- | --- |
-| ✅ 真实端点已验证 | DeepSeek、火山方舟 Coding Plan | 真实 API 流式对话；火山方舟含 thinking 场景 |
+| ✅ 真实端点已验证 | DeepSeek、火山方舟 Coding Plan、Google（部分） | 真实 API 流式对话；火山方舟含 thinking 场景；Google 为 gemini-3.x flash 基础链路 + thinking 关闭探针（部分模型受账号档位/地区限制，详见验证矩阵） |
 | 🔶 兼容端点已验证 | Anthropic Messages、OpenAI Responses 系 | 经 DeepSeek 的 `/anthropic` 与 Responses 兼容端点验证了协议层；Anthropic / OpenAI 官方端点本身尚未实测 |
 | 🧪 mock / 单测已验证 | 其余 provider、OAuth、provider 特有语义 | 无真实服务或真实登录链路验证 |
 

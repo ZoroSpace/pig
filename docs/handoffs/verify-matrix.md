@@ -21,7 +21,7 @@
 | Provider | 协议 | 模型数 | 协议语义 | Provider 特有语义 | Auth 真机 | 解锁条件 |
 |---|---|---|---|---|---|---|
 | anthropic | anthropic-messages | 14 | 🔶 shim | ❌ cache_control 1h 计费 / redacted_thinking / adaptive thinking（opus-4.6+）/ 5 beta 头协商 / server-side-fallback / tool_reference | ❌ | `ANTHROPIC_API_KEY` 或 Claude Pro/Max OAuth |
-| google | google-generative-ai | 22 | 🧪 mock（C3 共享层+adapter 45 函数 + 本地 mock CLI 全链路：URL/tModel/x-goog-api-key/mldev 字段提升/SSE） | ❌ 真 Gemini 端点行为（thinkingBudget 分代、thoughtSignature 回放、functionResponse 图片嵌套真机） | ❌（纯 apiKey） | `GEMINI_API_KEY` |
+| google | google-generative-ai | 22 | 🔶→✅ 部分（2026-09-14：`TestGoogleThinkingDisableGemini3x` 真机 PASS（3-flash-preview thinking 全关 + pong 计数）；CLI 全链路 3.8/3.5-flash pong、`--thinking minimal` 通、`--mode json` 事件流正常、thoughtSignature 真端点观察（pi 差分逐字一致）） | ❌ 3.1-pro 探针（免费档配额 limit:0，等付费；2.5 系探针不再追——新账号 404 deprecated）、thinkingBudget 分代真机、functionResponse 图片嵌套真机；上游知会：3.8-flash 拒 MINIMAL（pi 同样 400，catalog 元数据未表达，不追） | 🔶 AI Studio 免费 key（2026-09-14）已销协议半账；付费档可解锁剩余 | `GEMINI_API_KEY`（已到）/ 付费档 |
 | google-vertex（C4） | google-vertex | 14 | 🧪 mock（C4 adapter：SDK 构造配置 10 例 + URL 组合 8 形态（node 探针对 @google/genai 1.52.0 实证）+ tModel/SAFETY/MAX_TOKENS/STOP/thinking 映射；本地 mock CLI 全链路：`/v1/publishers/google/models/{id}:streamGenerateContent`、x-goog-api-key、vertex 字段提升） | ❌ 真 Vertex 端点行为（regional/global/multi-region URL 实路由、ADC 真凭证链 authorized_user/service_account/metadata server、express 限流形态） | ❌（apiKey 或 ADC；ADC 授权链为 pig 原生实现） | `GOOGLE_CLOUD_API_KEY`，或 ADC（`gcloud auth application-default login`）+ `GOOGLE_CLOUD_PROJECT`+`GOOGLE_CLOUD_LOCATION` |
 | kimi-coding | anthropic-messages | 4 | 🔶 shim | ❌（kimi 特有 header/行为） | ❌ 设备流 | `KIMI_API_KEY` 或 Kimi 订阅 OAuth |
 | minimax | anthropic-messages | 3 | 🔶 shim | ❌ | ❌（纯 apiKey） | `MINIMAX_API_KEY` |
@@ -56,7 +56,7 @@
 | `OPENAI_API_KEY` | cache-affinity e2e | `go test ./ai/api/ -run 'TestOpenAIResponsesCacheAffinityE2E' -v` | ⏳ 待 key |
 | `OPENAI_API_KEY` | reasoning-replay e2e（含 orphaned reasoning、同 provider 异模型交接） | `go test ./ai/api/ -run 'TestOpenAIResponsesReasoningReplayE2E' -v` | ⏳ 待 key |
 | ChatGPT Plus/Pro（openai-codex） | codex cache-affinity e2e（存储 OAuth 凭证 → gpt-5.5 SSE） | `go test ./ai/api/ -run 'TestOpenAICodexCacheAffinityE2E' -v` | ⏳ 待订阅 |
-| `GEMINI_API_KEY` | thinking-disable e2e 三例（2.5-flash / 3-flash / 3.1-pro，thinking 全关 + pong 计数） | `go test ./ai/api/ -run 'TestGoogleThinkingDisable' -v` | ⏳ 待 key |
+| `GEMINI_API_KEY` | thinking-disable e2e（3-flash / 3.1-pro，thinking 全关 + pong 计数；**2.5-flash / 2.5-flash-lite 不再追**——2026-09-14 用户决策：新账号 404 deprecated，模型生命周期问题不属 pig 验证范围） | `go test ./ai/api/ -run 'TestGoogleThinkingDisable' -v` | 🔶 部分（2026-09-14：3-flash-preview ✅；3.1-pro 429 免费档 limit:0 等付费档；顺带修出 env-api-keys 缺口，见 docs/fix/2026-09-13-env-api-keys-fill.md；环境注记：3.x flash 族存在按请求来源 IP 的地区限制（与账号无关）） |
 | `GOOGLE_CLOUD_API_KEY` 或 ADC+project/location | thinking-disable vertex e2e 两例（2.5-flash / 3-flash-preview）+ `pig -p --model google-vertex/gemini-2.5-flash` 真端点一轮 | `GOOGLE_CLOUD_API_KEY=... go test ./ai/api/ -run 'TestGoogleVertexThinkingDisable' -v` | ⏳ 待 key/ADC |
 | `ANTHROPIC_API_KEY` | 逐模型 probe 族 | `go test ./ai/api/ -run 'TestAnthropicEagerToolInputE2EProbe|TestAnthropicLongCacheRetentionE2EProbe|TestAnthropicThinkingBindingE2E|TestAnthropicOpus48Smoke' -v` | ⏳ 待 key |
 | `KIMI_API_KEY` | kimi 模型 probe（eager e2e 的 kimi 分支） | 同上（getE2EAPIKey 按 provider 取 key） | ⏳ 待 key |
@@ -70,6 +70,8 @@
 2. 通过 → 本文件对应格改 ✅ 并注明日期。
 3. 发现偏差 → `docs/fix/YYYY-MM-DD-<主题>.md` 登记 + 回归测试锁定（stash 验证 FAIL→PASS），本文件该格改 ✅ 并链 fix 文档。
 4. pi 与 pig 实测行为不一致且确认 pig 错 → 修 pig；确认 pi 错/文档错 → 记录知会，不追。
+5. **README 同步义务（2026-09-14 立）**：销账/降级/不再追若影响 README「Provider：实现 ≠ 验证」分层表的归属，同批更新 README（含顶部 WARNING 与概览表的真实验证行）。
+6. 仓库惯例：凡批次或 fix 改动了用户可见面（provider 验证状态、CLI 行为、配置格式等），同批同步 README 对应段；AGENTS.md 台账与 README 二者都要落地。
 
 ## 5. 风险备注
 
