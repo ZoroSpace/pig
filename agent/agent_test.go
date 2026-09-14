@@ -332,6 +332,40 @@ func TestAgentWaitForIdleWaitsForSubscribers(t *testing.T) {
 	_ = release
 }
 
+// Regression (docs/fix/2026-09-14-tui-turn-memory-leak.md): finishRun must
+// cancel the run context. pi's AbortController is garbage-collected when the
+// run ends, but a Go cancelCtx stays registered in its parent's children map
+// until canceled — one leaked registration per turn, pinning the run's whole
+// context subtree. Once finishRun clears activeRun nobody observes the
+// context anymore (Signal() returns nil), so Done must be closed.
+func TestAgentCancelsRunContextAfterRunFinishes(t *testing.T) {
+	runContexts := make(chan context.Context, 1)
+	agent, err := NewAgent(AgentOptions{
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			runContexts <- ctx
+			return mockStreamFn(doneEvent(agentTestAssistantMessage("ok")))(ctx, model, llmContext, options)
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	if err := agent.PromptText(context.Background(), "hello"); err != nil {
+		t.Fatalf("prompt: %v", err)
+	}
+	agent.WaitForIdle()
+	var runCtx context.Context
+	select {
+	case runCtx = <-runContexts:
+	case <-time.After(2 * time.Second):
+		t.Fatal("streamFn never invoked")
+	}
+	select {
+	case <-runCtx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("run context not canceled after the run finished (finishRun leaks the ctx registration)")
+	}
+}
+
 func TestAgentPassesActiveRunContextToSubscribers(t *testing.T) {
 	receivedSignal := make(chan context.Context, 1)
 	agent, err := NewAgent(AgentOptions{

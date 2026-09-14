@@ -24,9 +24,7 @@ import (
 )
 
 func TestMemLeakProbeFrames(t *testing.T) {
-	if testing.Short() {
-		t.Skip("probe; skip in short mode")
-	}
+	memProbeGate(t)
 	initProbeTheme(t)
 	full := probeMessageText()
 	const turns = 120
@@ -47,13 +45,14 @@ func TestMemLeakProbeFrames(t *testing.T) {
 	before := memSnapshotHeap(t)
 
 	for i := 0; i < turns; i++ {
-		chat.AddChild(components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil))
-		chat.AddChild(tui.NewSpacer(1))
-
 		assistant := components.NewAssistantMessageComponent(nil, &components.AssistantMessageOptions{
 			MarkdownTheme: &mdThemeProbe,
 		})
-		chat.AddChild(assistant)
+		mutateChat(screen, func() {
+			chat.AddChild(components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil))
+			chat.AddChild(tui.NewSpacer(1))
+			chat.AddChild(assistant)
+		})
 
 		// Faithful to openai_completions_stream.go: ONE message struct whose
 		// Text grows via fresh string allocation per frame (s += delta).
@@ -66,12 +65,12 @@ func TestMemLeakProbeFrames(t *testing.T) {
 		for c := 0; c < frames; c++ {
 			acc = acc + full[len(full)*c/frames:len(full)*(c+1)/frames] // fresh backing array each frame
 			partial.Content[0] = types.NewTextContent(acc)
-			assistant.UpdateContent(partial, true)
+			mutateChat(screen, func() { assistant.UpdateContent(partial, true) })
 			screen.RenderNow(false)
 			time.Sleep(time.Millisecond)
 		}
 		partial.Content[0] = types.NewTextContent(full)
-		assistant.UpdateContent(partial, false)
+		mutateChat(screen, func() { assistant.UpdateContent(partial, false) })
 		screen.RenderNow(false)
 		time.Sleep(time.Millisecond)
 	}
@@ -98,9 +97,7 @@ func TestMemLeakProbeFrames(t *testing.T) {
 // TestMemLeakProbeFramesNoRender is the control: same loop, renders only once
 // per turn (not per frame) — isolates the per-frame-render factor.
 func TestMemLeakProbeFramesNoRender(t *testing.T) {
-	if testing.Short() {
-		t.Skip("probe; skip in short mode")
-	}
+	memProbeGate(t)
 	initProbeTheme(t)
 	full := probeMessageText()
 	const turns = 120
@@ -120,12 +117,14 @@ func TestMemLeakProbeFramesNoRender(t *testing.T) {
 	before := memSnapshotHeap(t)
 
 	for i := 0; i < turns; i++ {
-		chat.AddChild(components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil))
-		chat.AddChild(tui.NewSpacer(1))
 		assistant := components.NewAssistantMessageComponent(nil, &components.AssistantMessageOptions{
 			MarkdownTheme: &mdThemeProbe,
 		})
-		chat.AddChild(assistant)
+		mutateChat(screen, func() {
+			chat.AddChild(components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil))
+			chat.AddChild(tui.NewSpacer(1))
+			chat.AddChild(assistant)
+		})
 		partial := &types.AssistantMessage{
 			Role:    types.RoleAssistant,
 			Content: []types.Content{types.NewTextContent("")},
@@ -135,10 +134,10 @@ func TestMemLeakProbeFramesNoRender(t *testing.T) {
 		for c := 0; c < frames; c++ {
 			acc = acc + full[len(full)*c/frames:len(full)*(c+1)/frames]
 			partial.Content[0] = types.NewTextContent(acc)
-			assistant.UpdateContent(partial, true)
+			mutateChat(screen, func() { assistant.UpdateContent(partial, true) })
 		}
 		partial.Content[0] = types.NewTextContent(full)
-		assistant.UpdateContent(partial, false)
+		mutateChat(screen, func() { assistant.UpdateContent(partial, false) })
 		screen.RenderNow(false)
 		time.Sleep(time.Millisecond)
 	}

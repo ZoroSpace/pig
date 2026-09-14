@@ -16,9 +16,7 @@ import (
 )
 
 func TestMemLeakProbeStreaming(t *testing.T) {
-	if testing.Short() {
-		t.Skip("probe; skip in short mode")
-	}
+	memProbeGate(t)
 	initProbeTheme(t)
 
 	text := probeMessageText()

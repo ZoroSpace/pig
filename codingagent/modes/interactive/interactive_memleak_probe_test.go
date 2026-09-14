@@ -11,6 +11,7 @@
 package interactive
 
 import (
+	"os"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -72,10 +73,25 @@ func initProbeTheme(t *testing.T) {
 	mdThemeProbe = theme.GetMarkdownTheme()
 }
 
-func TestMemLeakProbeComponents(t *testing.T) {
+// memProbeGate skips the diagnostic probes unless explicitly requested.
+// They are measurement harnesses (docs/fix/2026-09-14-tui-turn-memory-leak.md),
+// not regression locks — real renders × hundreds of turns × forced GC make
+// them the slowest tests in the suite (~127s under -race, vs ~7s for the
+// rest of the package), so the default suite skips them:
+//
+//	PIG_MEMLEAK_PROBE=1 go test ./codingagent/modes/interactive/ -run 'TestMemLeakProbe' -race -v
+func memProbeGate(t *testing.T) {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("probe; skip in short mode")
 	}
+	if os.Getenv("PIG_MEMLEAK_PROBE") == "" {
+		t.Skip("probe; set PIG_MEMLEAK_PROBE=1 to run")
+	}
+}
+
+func TestMemLeakProbeComponents(t *testing.T) {
+	memProbeGate(t)
 	initProbeTheme(t)
 	text := probeMessageText()
 	const turns = 200

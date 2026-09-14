@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ZoroSpace/pig/ai/auth"
 )
@@ -360,5 +361,56 @@ func TestNewProviderMergesDynamicModels(t *testing.T) {
 		if model.ID == "static" && model.Provider != "p" {
 			t.Fatalf("replaced entry wrong: %+v", model)
 		}
+	}
+}
+
+// stubRefreshingProvider extends stubProvider with a dynamicProvider
+// RefreshModels implementation (pi: a provider with refreshModels).
+type stubRefreshingProvider struct {
+	stubProvider
+	refresh func(ctx context.Context, refreshCtx *RefreshModelsContext) error
+}
+
+func (p *stubRefreshingProvider) RefreshModels(ctx context.Context, refreshCtx *RefreshModelsContext) error {
+	return p.refresh(ctx, refreshCtx)
+}
+
+// Regression (docs/fix/2026-09-14-tui-turn-memory-leak.md): Refresh must
+// cancel the per-provider refresh context once the refresh settles. pi's
+// AbortController is garbage-collected when the promise resolves, but a Go
+// cancelCtx stays registered in its parent's children map until canceled —
+// one leaked registration per provider per refresh. The operation has
+// settled by the time Refresh returns (or the context was already canceled
+// by a supersede), so Done must be closed.
+func TestModelsRefreshCancelsPerProviderRefreshContext(t *testing.T) {
+	refreshContexts := make(chan context.Context, 1)
+	provider := &stubRefreshingProvider{
+		stubProvider: stubProvider{
+			id:      "refreshing",
+			streams: stubStreams{},
+			models:  []Model{{ID: "m", API: ApiOpenAICompletions, Provider: "refreshing"}},
+		},
+		refresh: func(ctx context.Context, refreshCtx *RefreshModelsContext) error {
+			refreshContexts <- ctx
+			return nil
+		},
+	}
+	m := NewModels(nil)
+	m.SetProvider(provider)
+
+	result := m.Refresh(context.Background(), &ModelsRefreshOptions{Providers: []string{"refreshing"}})
+	if len(result.Errors) != 0 {
+		t.Fatalf("refresh errors: %v", result.Errors)
+	}
+	var refreshCtx context.Context
+	select {
+	case refreshCtx = <-refreshContexts:
+	case <-time.After(2 * time.Second):
+		t.Fatal("RefreshModels never invoked")
+	}
+	select {
+	case <-refreshCtx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("refresh context not canceled after Refresh returned (Refresh leaks the ctx registration)")
 	}
 }

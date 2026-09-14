@@ -24,10 +24,16 @@ func renderNFrames(t *testing.T, screen *tui.TuiMainScreen, n int) {
 	}
 }
 
+// mutateChat runs container/component mutations under the TUI lock. The
+// probes drive components from the test goroutine while the screen's render
+// goroutine renders; without the lock AddChild/UpdateContent race Render
+// (the real app serializes these via mutateUI → RunExclusive).
+func mutateChat(screen *tui.TuiMainScreen, fn func()) {
+	screen.RunExclusive(fn)
+}
+
 func TestMemLeakProbeTuiFrames(t *testing.T) {
-	if testing.Short() {
-		t.Skip("probe; skip in short mode")
-	}
+	memProbeGate(t)
 	initProbeTheme(t)
 	text := probeMessageText()
 
@@ -46,8 +52,10 @@ func TestMemLeakProbeTuiFrames(t *testing.T) {
 		assistant := components.NewAssistantMessageComponent(testAssistantMessageForProbe(text), &components.AssistantMessageOptions{
 			MarkdownTheme: &mdThemeProbe,
 		})
-		chatA.AddChild(user)
-		chatA.AddChild(assistant)
+		mutateChat(screenA, func() {
+			chatA.AddChild(user)
+			chatA.AddChild(assistant)
+		})
 		renderNFrames(t, screenA, 1)
 	}
 	afterA := memSnapshotHeap(t)
@@ -62,12 +70,14 @@ func TestMemLeakProbeTuiFrames(t *testing.T) {
 	screenB.Start()
 	defer screenB.Stop(nil)
 	// pre-build a transcript equal to ~50 turns
-	for i := 0; i < 50; i++ {
-		chatB.AddChild(components.NewUserMessageComponent("probe", &mdThemeProbe, 1, nil))
-		chatB.AddChild(components.NewAssistantMessageComponent(testAssistantMessageForProbe(text), &components.AssistantMessageOptions{
-			MarkdownTheme: &mdThemeProbe,
-		}))
-	}
+	mutateChat(screenB, func() {
+		for i := 0; i < 50; i++ {
+			chatB.AddChild(components.NewUserMessageComponent("probe", &mdThemeProbe, 1, nil))
+			chatB.AddChild(components.NewAssistantMessageComponent(testAssistantMessageForProbe(text), &components.AssistantMessageOptions{
+				MarkdownTheme: &mdThemeProbe,
+			}))
+		}
+	})
 	renderNFrames(t, screenB, 2)
 	beforeB := memSnapshotHeap(t)
 	const frames = 200

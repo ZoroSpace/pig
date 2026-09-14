@@ -748,13 +748,23 @@ func (a *Agent) handleRunFailure(err error, aborted bool) {
 
 func (a *Agent) finishRun() {
 	a.mu.Lock()
-	defer a.mu.Unlock()
+	run := a.activeRun
 	a.state.IsStreaming = false
 	a.state.StreamingMessage = nil
 	a.state.PendingToolCalls = map[string]bool{}
-	if a.activeRun != nil {
-		close(a.activeRun.done)
-		a.activeRun = nil
+	a.activeRun = nil
+	a.mu.Unlock()
+	if run != nil {
+		close(run.done)
+		// pi has no counterpart: the run's AbortController goes out of scope
+		// and is garbage-collected after the run, while a Go cancelCtx stays
+		// registered in its parent's children map until canceled — one leaked
+		// registration per turn, pinning the whole run-context subtree. The
+		// run is over and nobody observes this context anymore (Signal()
+		// returns nil once activeRun is cleared), so canceling is safe and
+		// releases the subtree. Canceling after close(done): a waiter woken
+		// by done can only start a NEW run, whose context is a sibling.
+		run.cancel()
 	}
 }
 

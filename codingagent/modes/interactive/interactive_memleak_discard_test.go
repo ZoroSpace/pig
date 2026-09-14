@@ -45,9 +45,7 @@ func waitForRenders(t *testing.T, screen *tui.TuiMainScreen, n int) {
 }
 
 func TestMemLeakProbeDiscard(t *testing.T) {
-	if testing.Short() {
-		t.Skip("probe; skip in short mode")
-	}
+	memProbeGate(t)
 	initProbeTheme(t)
 	text := probeMessageText()
 
@@ -65,8 +63,10 @@ func TestMemLeakProbeDiscard(t *testing.T) {
 		assistant := components.NewAssistantMessageComponent(testAssistantMessageForProbe(text), &components.AssistantMessageOptions{
 			MarkdownTheme: &mdThemeProbe,
 		})
-		chat.AddChild(user)
-		chat.AddChild(assistant)
+		mutateChat(screen, func() {
+			chat.AddChild(user)
+			chat.AddChild(assistant)
+		})
 		waitForRenders(t, screen, 1)
 	}
 	after := memSnapshotHeap(t)

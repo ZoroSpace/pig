@@ -579,12 +579,20 @@ func (m *modelsImpl) Refresh(ctx context.Context, options *ModelsRefreshOptions)
 			}
 			m.refreshMu.Lock()
 			if m.refreshControllers[providerID] == controller {
-				// Still this generation's controller: remove it. Do not
-				// cancel — the operation already finished (pi:
-				// identity-checked delete without abort).
+				// Still this generation's controller: remove it (pi:
+				// identity-checked delete without abort — the operation has
+				// settled, so nothing in flight is aborted).
 				delete(m.refreshControllers, providerID)
 			}
 			m.refreshMu.Unlock()
+			// pi has no counterpart: the refresh's AbortController goes out of
+			// scope and is garbage-collected, while a Go cancelCtx stays
+			// registered in its parent's children map until canceled — one
+			// leaked registration per refresh (each startup refresh fans out
+			// to every dynamic provider). waitOperation has returned, so the
+			// operation has settled, or the context was already canceled by a
+			// supersede or the parent (cancel is idempotent and a no-op there).
+			controller.cancel()
 		}(target)
 	}
 	wg.Wait()
