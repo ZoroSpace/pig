@@ -459,6 +459,12 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 	// — user-forced terminal capabilities take effect from construction on.
 	tui.SetCapabilityOverrides(settingsManager.GetTerminalCapabilityOverrides())
 
+	// pig-only: CJK word-segmentation backend (settings.json `cjkSegmenter`
+	// key; bigram when unset). Must land before the first Han keystroke
+	// resolves the segmenter; a no-op when it matches the already-resolved
+	// mode.
+	tui.SetCJKSegmenterMode(settingsManager.GetCJKSegmenter())
+
 	m.renderer = createInteractiveTui(createInteractiveTuiOptions{
 		tuiMode:                tuiMode,
 		showHardwareCursor:     settingsManager.GetShowHardwareCursor(),
@@ -5197,6 +5203,7 @@ func (m *InteractiveMode) showSettingsSelector() {
 				FullscreenScrollbar:     m.settingsManager().GetFullscreenScrollbar(),
 				FullscreenCopyOnSelect:  m.settingsManager().GetFullscreenCopyOnSelect(),
 				Warnings:                m.settingsManager().GetWarnings(),
+				CJKSegmenter:            m.settingsManager().GetCJKSegmenter(),
 			},
 			&components.SettingsCallbacks{
 				OnAutoCompactChange: func(enabled bool) {
@@ -5392,6 +5399,13 @@ func (m *InteractiveMode) showSettingsSelector() {
 				},
 				OnWarningsChange: func(warnings core.WarningSettings) {
 					m.settingsManager().SetWarnings(warnings)
+				},
+				OnCJKSegmenterChange: func(mode string) {
+					m.settingsManager().SetCJKSegmenter(mode)
+					// Push it into the segmenter too: a no-op once it has
+					// resolved this session (the persisted setting applies
+					// from the next start), effective immediately otherwise.
+					tui.SetCJKSegmenterMode(mode)
 				},
 				OnCancel: func() {
 					done()

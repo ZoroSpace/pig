@@ -76,7 +76,8 @@ gse 词典解析 ~15MB 文本耗时 **~0.9s**（zh_s 单独 ~0.5s），同步首
 
 ### 方案：模式门面 + 三后端
 
-- **`PIG_CJK_SEGMENTER=bigram|sst|gse`**（tui 是叶子包，env 与 `tui.go` 既有做法一致；首次使用时 `sync.Once` 解析；空/`bigram`/未知值一律回落 bigram——配置永远只能降级不能炸）。
+- **`PIG_CJK_SEGMENTER=bigram|sst|gse`**（tui 是叶子包，env 与 `tui.go` 既有做法一致；首次使用时 `sync.Once` 解析；空/`bigram`/未知值一律回落 bigram——配置永远只能降级不能炸）。**〔已废除，2026-09-14 用户决策：env 旋钮整体删除，配置面收敛到 settings.json `cjkSegmenter` 键（见文末 CJK-SETTINGS 节）；下文 env 语义仅作历史记录保留〕**
+- **/settings 面板（CJK-SETTINGS 批，2026-09-14 追加）**：`cjkSegmenter` 设置键（pig-only，写入全局 settings.json）暴露到交互模式 /settings 的「CJK word segmentation」条目（editor-padding 簇之后，值 bigram/sst/gse 循环）。**优先级：有效设置 > `PIG_CJK_SEGMENTER`（tui 同款宽松解析）> bigram**；非法存量值视为未设、穿透到 env 层；`SetCJKSegmenter` 拒绝不合法值（永不报错契约同 tui resolver）。交互模式启动时经 `tui.SetCJKSegmenterMode` 推送（getter 解析值），**语义：改动即时持久化；进程内已 resolve（本会话敲过汉字）则下次启动生效，尚未 resolve 则立即生效**——不热切换实例，tui 侧仅 +1 个 override 变量（`ensureInit` 先读 override 再读 env），并发结构零改动。
 - **bigram（默认，零依赖）**：纯 Han run 按 2 字定长分组（奇尾 1 字，按字符数不按字节，扩展平面 4 字节 rune 正确配对）。零状态、零加载、切分 ~86ns/100 字、零分配。
 - **sst（零依赖词典）**：同一份 vendor 词典解析为**排序词表**（blob + uint32 offsets + float64 freqs，~12MB live / ~50MB 瞬时）；切词 = 二分查找 DAG + Viterbi，**逐点镜像 gse `getDag`/`calc`**（前缀可延伸才续走、精确词作边、单字兜底边、log(freq)−log(total) 打分、平局取长词）；scratch 缓冲复用，切分零分配（结果 token 是 run 的子串）。~29µs/100 字，词导航调用频率下不可测量。
 - **gse（保留）**：原路径原行为，作为 ICU 对齐参照与 HMM-for-OOV 载体。
@@ -106,3 +107,14 @@ gse 词典解析 ~15MB 文本耗时 **~0.9s**（zh_s 单独 ~0.5s），同步首
 ### 验收
 
 - tui 包 `-race` 全绿；全仓 28 包 `-race`：27 绿 + `codingagent/core/tools` `TestPathsCanonicalize` **存量失败**（macOS `/tmp → /private/tmp` realpath 前缀，`git stash` 验证与本批无关，另立 fix 单）。
+
+## CJK-SETTINGS：/settings 暴露切词后端（2026-09-14 追加，同日废除 env 旋钮）
+
+用户插入小批：模式选择收敛为**单一配置面**——settings.json 的 `cjkSegmenter` 键（pig-only）。原 `PIG_CJK_SEGMENTER` 环境变量同日整体删除（用户决策；此前短暂的「设置 > env > bigram」三层优先级不复存在）。改动面：
+
+- `tui/cjk_segmenter.go`：+`cjkSegmenterOverride`（`atomic.Pointer[string]`）+ 导出 `SetCJKSegmenterMode(value)`；`ensureInit` 解析顺序为 **override（交互层推送的设置值）→ bigram 默认**，env 读取代码删除。**不做运行时热切换**（不换实例、不加后端缓存）：设置改动即时持久化，进程内已 resolve 则下次启动生效，未 resolve 则立即生效。`resolveCJKSegmenterMode` 保留（对 override 值做宽松解析：大小写/空白容忍、未知值回落 bigram）。
+- `core/settings_manager.go`：`cjkSegmenter` 键（Settings 清单注释 + `cjkSegmenterModes` 白名单 + `GetCJKSegmenter`（有效设置生效；**非法存量值直接落 bigram**，同 tui 永不报错契约；无 env 回落层）+ `SetCJKSegmenter`（非法值静默拒绝；markModified + save））。
+- `components/settings_selector.go`：`SettingsConfig.CJKSegmenter` + `SettingsCallbacks.OnCJKSegmenterChange` + item「CJK word segmentation」（pig-only 注释声明，插在 output-padding 之后、autocomplete-max-visible 之前，进 editor 簇；描述文案含 "Applies from the next start."）+ onChange 分发。**值列展示带说明的标签**（`cjkSegmenterLabels` 表，同 `defaultProjectTrustLabels` 的标签↔值映射模式）：`bigram (fixed 2-char groups, uses no RAM)` / `sst (Chinese dictionary, uses ~12 MB RAM)` / `gse (Chinese dictionary, uses ~206 MB RAM)`——括号内为效果 + 该后端将占用的稳态内存（dictbench 实测数），回调收到的仍是裸模式名。
+- `modes/interactive/interactive_mode.go`：启动推送（`tui.SetCapabilityOverrides` 之后，首次 Han 键入前落地）+ /settings config 与回调接线（回调同时 Set + 推送，推送在已 resolve 时为无害 no-op）。
+
+回归测试（3 函数）：`tui.TestSetCJKSegmenterMode`（override 首次使用前生效 / 未知值回落 bigram / 未推送默认 bigram / resolve 后改动本会话不生效，进程全局 save/restore）、`core.TestSettingsManagerCJKSegmenter`（默认 bigram / 存量设置生效 / 非法存量值落 bigram / 持久化与拒绝四子测）、`components.TestSettingsSelectorCyclesCJKSegmenter`（装饰标签渲染断言 + 循环 bigram→sst→gse 且回调收裸模式名）。

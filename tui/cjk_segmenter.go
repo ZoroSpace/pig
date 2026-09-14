@@ -8,7 +8,9 @@
 // character at a time. This file regroups maximal runs of ≥2 consecutive
 // all-Han segments through a pluggable CJK backend.
 //
-// Backends (selected once per process at first use via PIG_CJK_SEGMENTER):
+// Backends (selected once per process at first use; the interactive layer
+// pushes the settings.json `cjkSegmenter` choice in via SetCJKSegmenterMode,
+// and the default when nothing was pushed is bigram):
 //
 //   - bigram (default): groups Han runs into fixed 2-character chunks
 //     (odd tail → 1 char). Zero dependencies, zero state, zero startup
@@ -53,8 +55,8 @@
 // Declared deviations from pi/ICU:
 //   - The default bigram grouping is coarser than ICU's dictionary
 //     granularity (今天天气: ICU/gse 今天/天气-ish, bigram 今天|天天|气真).
-//     This is a deliberate pig default (user decision 2026-09-14); set
-//     PIG_CJK_SEGMENTER=gse for ICU-parity groupings.
+//     This is a deliberate pig default (user decision 2026-09-14); select
+//     gse in /settings for ICU-parity groupings.
 //   - Japanese kana stays on UAX #29 boundaries (the zh dictionaries do not
 //     cover it); ICU also dictionary-segments Japanese.
 //   - Dictionary grouping follows word frequencies, which occasionally
@@ -65,7 +67,6 @@ package tui
 
 import (
 	_ "embed"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -104,17 +105,31 @@ const (
 	cjkModeGSE
 )
 
-// cjkSegmenterEnv names the environment variable that selects the backend
-// (tui is a leaf package and cannot reach the settings manager, so — like
-// tui.go's own knobs — this is env-only):
-//
-//	PIG_CJK_SEGMENTER=bigram|sst|gse
-//
-// Unset, empty, and unrecognized values fall back to the bigram default
-// (configuration can never break word navigation; it can only degrade it).
-const cjkSegmenterEnv = "PIG_CJK_SEGMENTER"
+// The backend is configured through the settings.json `cjkSegmenter` key
+// (pig-only; see core.GetCJKSegmenter); the interactive layer bridges it in
+// via SetCJKSegmenterMode because tui is a leaf package and cannot reach the
+// settings manager. Unset, empty, and unrecognized values fall back to the
+// bigram default (configuration can never break word navigation; it can
+// only degrade it). Mid-session changes apply from the next start (or
+// immediately when the segmenter has not resolved yet).
 
-// String returns the PIG_CJK_SEGMENTER value spelling of the mode.
+// cjkSegmenterOverride holds the settings-driven mode value pushed via
+// SetCJKSegmenterMode. ensureInit consults it before the bigram default.
+// Pig-only; no pi counterpart.
+var cjkSegmenterOverride atomic.Pointer[string]
+
+// SetCJKSegmenterMode records the settings-driven backend selection (pig
+// extension; pi has no counterpart — Intl.Segmenter ships inside the JS
+// runtime). Unrecognized values resolve to the bigram default (the
+// configuration can only degrade word navigation, never break it). If the
+// segmenter already resolved (a Han word operation ran this session), the
+// change takes effect on the next pig start; before that, the very next
+// word operation picks it up.
+func SetCJKSegmenterMode(value string) {
+	cjkSegmenterOverride.Store(&value)
+}
+
+// String returns the settings spelling of the mode.
 func (m cjkSegmenterMode) String() string {
 	switch m {
 	case cjkModeBigram:
@@ -127,9 +142,9 @@ func (m cjkSegmenterMode) String() string {
 	return "unknown"
 }
 
-// resolveCJKSegmenterMode maps a raw PIG_CJK_SEGMENTER value to a mode.
-// Matching is case-insensitive and whitespace-tolerant; anything
-// unrecognized resolves to the bigram default.
+// resolveCJKSegmenterMode maps a raw backend value (the settings-driven
+// override; matching is case-insensitive and whitespace-tolerant) to a
+// mode; anything unrecognized resolves to the bigram default.
 func resolveCJKSegmenterMode(value string) cjkSegmenterMode {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "sst":
@@ -176,7 +191,11 @@ func prewarmCJKSegmenter() {
 // closed when the attempt ends either way.
 func (c *cjkSegmenter) ensureInit() {
 	c.once.Do(func() {
-		c.mode = resolveCJKSegmenterMode(os.Getenv(cjkSegmenterEnv))
+		mode := cjkModeBigram
+		if override := cjkSegmenterOverride.Load(); override != nil {
+			mode = resolveCJKSegmenterMode(*override)
+		}
+		c.mode = mode
 		c.ready = make(chan struct{})
 		switch c.mode {
 		case cjkModeBigram:

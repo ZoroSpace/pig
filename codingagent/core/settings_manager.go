@@ -109,6 +109,7 @@ import (
 //	fullscreenExitOutput?: FullscreenExitOutput          — default "transcript"
 //	fullscreenScrollbar?: ScrollViewScrollbar            — default "auto"
 //	fullscreenCopyOnSelect?: boolean                     — default true; no effect in regular TUI mode (v0.85.1)
+//	cjkSegmenter?: "bigram" | "sst" | "gse"              — pig-only; default via PIG_CJK_SEGMENTER env, else "bigram"
 type Settings map[string]any
 
 // SettingsScope selects which settings layer a storage operation targets.
@@ -2615,6 +2616,52 @@ func (m *SettingsManager) SetTreeFilterMode(mode string) {
 	defer m.mutex.Unlock()
 	m.globalSettings["treeFilterMode"] = mode
 	m.markModified("treeFilterMode", "")
+	m.save()
+}
+
+// cjkSegmenterModes lists the valid CJK word-segmentation backends
+// (pig-only setting; no pi counterpart — Intl.Segmenter ships inside the
+// JS runtime; see tui/cjk_segmenter.go for the backend semantics).
+var cjkSegmenterModes = []string{"bigram", "sst", "gse"}
+
+// GetCJKSegmenter returns the CJK word-segmentation backend (pig-only;
+// no pi counterpart — Intl.Segmenter ships inside the JS runtime). An
+// invalid stored value resolves to "bigram", matching the tui resolver's
+// never-error contract (configuration can only degrade word navigation,
+// never break it).
+func (m *SettingsManager) GetCJKSegmenter() string {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if mode, ok := settingsString(m.settings, "cjkSegmenter"); ok {
+		for _, valid := range cjkSegmenterModes {
+			if mode == valid {
+				return mode
+			}
+		}
+	}
+	return "bigram"
+}
+
+// SetCJKSegmenter records the CJK word-segmentation backend (pig-only).
+// Invalid values are ignored, mirroring the tui resolver's never-error
+// contract (configuration can only degrade word navigation, never break
+// it). Mid-session changes persist here; the in-process backend applies
+// them from the next start (or immediately when it has not resolved yet).
+func (m *SettingsManager) SetCJKSegmenter(mode string) {
+	valid := false
+	for _, candidate := range cjkSegmenterModes {
+		if mode == candidate {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return
+	}
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.globalSettings["cjkSegmenter"] = mode
+	m.markModified("cjkSegmenter", "")
 	m.save()
 }
 

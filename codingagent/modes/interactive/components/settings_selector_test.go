@@ -71,6 +71,43 @@ func TestSettingsSelectorCyclesThroughFullscreenSettings(t *testing.T) {
 	}
 }
 
+// pig-only item: cycles the CJK word-segmentation backend (bigram → sst →
+// gse) and dispatches OnCJKSegmenterChange.
+func TestSettingsSelectorCyclesCJKSegmenter(t *testing.T) {
+	initTestTheme(t)
+
+	coreKeybindings := core.CreateKeybindingsManager("")
+	tui.SetKeybindings(coreKeybindings.KeybindingsManager)
+	defer tui.SetKeybindings(core.CreateKeybindingsManager("").KeybindingsManager)
+
+	var changes []string
+	config := &SettingsConfig{
+		Warnings:     core.WarningSettings{},
+		CJKSegmenter: "bigram",
+	}
+	callbacks := &SettingsCallbacks{
+		OnCJKSegmenterChange: func(mode string) {
+			changes = append(changes, mode)
+		},
+	}
+
+	list := NewSettingsSelectorComponent(config, callbacks).GetSettingsList()
+	for _, character := range "CJK word segmentation" {
+		list.HandleInput(string(character))
+	}
+	// The value column shows the decorated label (effect + memory), while
+	// the callback receives the bare backend mode.
+	output := stripVT(t, strings.Join(list.Render(120), "\n"))
+	if !strings.Contains(output, "bigram (fixed 2-char groups, uses no RAM)") {
+		t.Fatalf("expected decorated bigram label:\n%s", output)
+	}
+	list.HandleInput("\r")
+	list.HandleInput("\r")
+	if want := []string{"sst", "gse"}; !reflect.DeepEqual(changes, want) {
+		t.Fatalf("cjk segmenter changes = %v, want %v", changes, want)
+	}
+}
+
 // pi: "keeps the configured fixed theme marked while browsing" (v0.85.1).
 func TestSettingsSelectorKeepsFixedThemeMarkedWhileBrowsing(t *testing.T) {
 	initTestTheme(t)

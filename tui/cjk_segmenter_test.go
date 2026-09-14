@@ -300,3 +300,67 @@ func TestContainsHanRune(t *testing.T) {
 		}
 	}
 }
+
+// TestSetCJKSegmenterMode covers the settings-driven override (pig-only;
+// the /settings panel pushes it via SetCJKSegmenterMode): it selects the
+// backend before the segmenter resolves, unrecognized values degrade to
+// bigram, the unpushed default is bigram, and a change made after
+// resolution does not re-cut the current session (the persisted setting
+// applies from the next start). Subtests mutate process globals — no
+// t.Parallel.
+func TestSetCJKSegmenterMode(t *testing.T) {
+	savedOverride := cjkSegmenterOverride.Load()
+	savedSegmenter := theCJKSegmenter
+	t.Cleanup(func() {
+		cjkSegmenterOverride.Store(savedOverride)
+		theCJKSegmenter = savedSegmenter
+	})
+
+	waitForDict := func(t *testing.T) {
+		t.Helper()
+		deadline := time.Now().Add(120 * time.Second)
+		for theCJKSegmenter.sstDict.Load() == nil {
+			if theCJKSegmenter.loadFailed.Load() {
+				t.Fatal("cjk dictionary failed to load")
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("cjk dictionary load timed out")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	t.Run("override applies before first use", func(t *testing.T) {
+		theCJKSegmenter = &cjkSegmenter{}
+		SetCJKSegmenterMode("sst")
+		prewarmCJKSegmenter()
+		waitForDict(t)
+		if got := renderSegments(t, "你好世界", wordSegmentData("你好世界")); got != "[你好][世界]" {
+			t.Fatalf("override not applied: %s", got)
+		}
+	})
+
+	t.Run("unrecognized override resolves to bigram", func(t *testing.T) {
+		theCJKSegmenter = &cjkSegmenter{}
+		SetCJKSegmenterMode("nonsense")
+		prewarmCJKSegmenter()
+		// bigram serves the very first call (nothing to load).
+		if got := renderSegments(t, "修复了切词的bug", wordSegmentData("修复了切词的bug")); got != "[修复][了切][词的][bug]" {
+			t.Fatalf("unexpected bigram grouping: %s", got)
+		}
+	})
+
+	t.Run("change after resolution applies from the next start", func(t *testing.T) {
+		theCJKSegmenter = &cjkSegmenter{}
+		// Nothing pushed: the bigram default resolves.
+		before := renderSegments(t, "修复了切词的bug", wordSegmentData("修复了切词的bug"))
+		if before != "[修复][了切][词的][bug]" {
+			t.Fatalf("expected bigram grouping before the change: %s", before)
+		}
+		SetCJKSegmenterMode("gse")
+		after := renderSegments(t, "修复了切词的bug", wordSegmentData("修复了切词的bug"))
+		if after != before {
+			t.Fatalf("mid-session change re-cut segments: before %s, after %s", before, after)
+		}
+	})
+}

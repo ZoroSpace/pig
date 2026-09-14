@@ -890,3 +890,54 @@ func boolPtr(value bool) *bool {
 // Keep the codingagent import referenced (ConfigDirName pins the project
 // settings path shape asserted through behavior above).
 var _ = codingagent.ConfigDirName
+
+// pig-only setting: CJK word-segmentation backend (no pi counterpart).
+// A valid `cjkSegmenter` setting applies; invalid stored values resolve to
+// "bigram" (the tui resolver's never-error contract).
+func TestSettingsManagerCJKSegmenter(t *testing.T) {
+	t.Run("defaults to bigram", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+		if got := manager.GetCJKSegmenter(); got != "bigram" {
+			t.Fatalf("cjkSegmenter = %q, want bigram", got)
+		}
+	})
+
+	t.Run("stored setting applies", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"cjkSegmenter":"sst"}`)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+		if got := manager.GetCJKSegmenter(); got != "sst" {
+			t.Fatalf("cjkSegmenter = %q, want sst", got)
+		}
+	})
+
+	t.Run("invalid stored value resolves to bigram", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"cjkSegmenter":"icu"}`)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+		if got := manager.GetCJKSegmenter(); got != "bigram" {
+			t.Fatalf("cjkSegmenter = %q, want bigram", got)
+		}
+	})
+
+	t.Run("Set persists and rejects invalid values", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+
+		manager.SetCJKSegmenter("icu")
+		if saved, err := os.ReadFile(filepath.Join(agentDir, "settings.json")); err == nil && strings.Contains(string(saved), "cjkSegmenter") {
+			t.Fatalf("invalid value must not be persisted: %s", saved)
+		}
+
+		manager.SetCJKSegmenter("gse")
+		manager.Flush()
+		saved := readSettingsJSON(t, filepath.Join(agentDir, "settings.json"))
+		if got := settingsJSONString(t, saved, "cjkSegmenter"); got != "gse" {
+			t.Fatalf("persisted cjkSegmenter = %q, want gse", got)
+		}
+		if got := manager.GetCJKSegmenter(); got != "gse" {
+			t.Fatalf("cjkSegmenter = %q, want gse", got)
+		}
+	})
+}

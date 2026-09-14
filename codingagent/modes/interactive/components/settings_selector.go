@@ -54,6 +54,31 @@ var defaultProjectTrustByLabel = func() map[string]core.DefaultProjectTrust {
 	return m
 }()
 
+// cjkSegmenterLabels pairs each CJK backend with its picker label (pig-only;
+// same label-mapping pattern as defaultProjectTrustLabels): the parenthetical
+// states the effect and the memory the backend will occupy (dictbench
+// steady-state numbers, docs/feat/CJK-WORD-SEGMENTATION.md). The slice
+// preserves cycle order.
+var cjkSegmenterLabels = []struct {
+	Value string
+	Label string
+}{
+	{"bigram", "bigram (fixed 2-char groups, uses no RAM)"},
+	{"sst", "sst (Chinese dictionary, uses ~12 MB RAM)"},
+	{"gse", "gse (Chinese dictionary, uses ~206 MB RAM)"},
+}
+
+// cjkSegmenterLabel returns the picker label for a backend mode (unknown
+// modes render as the bigram default, matching the resolver).
+func cjkSegmenterLabel(mode string) string {
+	for _, pair := range cjkSegmenterLabels {
+		if pair.Value == mode {
+			return pair.Label
+		}
+	}
+	return cjkSegmenterLabels[0].Label
+}
+
 // SettingsConfig is the settings snapshot the selector renders (pi:
 // SettingsConfig).
 type SettingsConfig struct {
@@ -96,6 +121,7 @@ type SettingsConfig struct {
 	FullscreenScrollbar     core.ScrollViewScrollbar
 	FullscreenCopyOnSelect  bool
 	Warnings                core.WarningSettings
+	CJKSegmenter            string // pig-only: "bigram" | "sst" | "gse"
 }
 
 // SettingsCallbacks carries the change handlers (pi: SettingsCallbacks).
@@ -135,6 +161,7 @@ type SettingsCallbacks struct {
 	OnFullscreenScrollbarChange    func(mode core.ScrollViewScrollbar)
 	OnFullscreenCopyOnSelectChange func(enabled bool)
 	OnWarningsChange               func(warnings core.WarningSettings)
+	OnCJKSegmenterChange           func(mode string) // pig-only
 	OnCancel                       func()
 }
 
@@ -1004,6 +1031,22 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 		Values:       []string{"0", "1"},
 	}
 
+	// CJK word segmentation (pig-only; pi has no counterpart — Intl.Segmenter
+	// ships inside the JS runtime). Inserted after output-padding, inside the
+	// editor cluster: it controls editor word navigation over CJK text.
+	cjkInsertIndex := findItemIndex(items, "output-padding")
+	items = append(items, nil)
+	copy(items[cjkInsertIndex+1:], items[cjkInsertIndex:])
+	items[cjkInsertIndex+1] = &tui.SettingItem{
+		Id:           "cjk-segmenter",
+		Label:        "CJK word segmentation",
+		Description:  "Editor word-navigation backend for CJK text. Applies from the next start.",
+		CurrentValue: cjkSegmenterLabel(config.CJKSegmenter),
+	}
+	for _, pair := range cjkSegmenterLabels {
+		items[cjkInsertIndex+1].Values = append(items[cjkInsertIndex+1].Values, pair.Label)
+	}
+
 	// Autocomplete max visible toggle (insert after output-padding)
 	outputPaddingIndex := findItemIndex(items, "output-padding")
 	items = append(items, nil)
@@ -1192,6 +1235,17 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 			case "fullscreen-copy-on-select":
 				if callbacks.OnFullscreenCopyOnSelectChange != nil {
 					callbacks.OnFullscreenCopyOnSelectChange(newValue == "true")
+				}
+			case "cjk-segmenter":
+				if callbacks.OnCJKSegmenterChange != nil {
+					// The picker cycles display labels; map back to the
+					// backend mode (same pattern as default-project-trust).
+					for _, pair := range cjkSegmenterLabels {
+						if pair.Label == newValue {
+							callbacks.OnCJKSegmenterChange(pair.Value)
+							break
+						}
+					}
 				}
 			case "theme":
 				if callbacks.OnThemeChange != nil {
