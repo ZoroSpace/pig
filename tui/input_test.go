@@ -175,7 +175,7 @@ func TestInputKillRing(t *testing.T) {
 		// 你好|世界|。|你好|，|世界 — 6 deletions, reproduced via the gse
 		// dictionary (cjk_segmenter.go). Fullwidth punctuation stays an
 		// independent boundary.
-		requireCJKDict(t)
+		useCJKSegmenter(t, cjkModeGSE)
 		input := NewInput()
 
 		input.SetValue("你好世界。你好，世界")
@@ -489,7 +489,7 @@ func TestInputKillRing(t *testing.T) {
 	t.Run("Alt+D handles Unicode word boundaries", func(t *testing.T) {
 		// pi (ICU dictionary): 你好|世界|。|你好|，|世界 — 6 deletions,
 		// reproduced via the gse dictionary (cjk_segmenter.go).
-		requireCJKDict(t)
+		useCJKSegmenter(t, cjkModeGSE)
 		input := NewInput()
 
 		input.SetValue("你好世界。你好，世界")

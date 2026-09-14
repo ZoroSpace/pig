@@ -62,3 +62,47 @@ gse 词典解析 ~15MB 文本耗时 **~0.9s**（zh_s 单独 ~0.5s），同步首
 
 - `go build && go vet && gofmt -l` 干净；全仓 28 包 `go test ./... -race -count=1 -timeout 600s` **rc=0**（1346 测试函数）。
 - 过程事故（非代码 bug）：量基线二进制时 `git stash && go build && git stash pop` 因 build 失败断链未 pop，改动滞留 stash 被误判丢失；`git stash pop` 恢复，无损失。教训：stash 链式命令不要把破坏性步骤放 `&&` 中段。
+
+---
+
+## 2026-09-14 追加：切词后端可切换（bigram 默认 / sst / gse）
+
+- **状态**：✅ 已交付（用户插入批续；**默认后端改为 bigram 是用户决策**——放弃「默认与 pi 粒度一致」，换取零内存/零启动开销，文件头声明为 pig 偏差）
+- **涉及文件**：`tui/cjk_segmenter.go`（重构为模式门面）、`tui/cjk_segmenter_sst.go`（新增）、`tui/word_navigation.go`、四个测试文件（pin 方式重构）、本文档、AGENTS.md
+
+### 动机：gse 的真实内存账单
+
+对运行中的 pig 实测 + dictbench 探针（/tmp/dictbench 方法学：gctrace live heap + /usr/bin/time 峰值 RSS）：gse 加载 zh 词典后 **live heap ~206MB**（此前本文档写的「稳态 +15MB」实测不成立，诊断记录见下），构成：cedar trie ~39MB + `Tokens []Token` 逐词切片/字符串/float64 ~150MB + 8.3MB 原文被 pos substring 钉住 + HMM ~1MB；加载瞬时堆 ~308MB。TUI 敲第一个汉字 RSS 即 ~450-500MB（基础 ~30MB + live + 未归还残页）。**文档勘误**：本文档上方「稳态 RSS +15MB」实为探针方法缺陷（字典被 GC 后读数），保留原文以存真，以本节为准。
+
+### 方案：模式门面 + 三后端
+
+- **`PIG_CJK_SEGMENTER=bigram|sst|gse`**（tui 是叶子包，env 与 `tui.go` 既有做法一致；首次使用时 `sync.Once` 解析；空/`bigram`/未知值一律回落 bigram——配置永远只能降级不能炸）。
+- **bigram（默认，零依赖）**：纯 Han run 按 2 字定长分组（奇尾 1 字，按字符数不按字节，扩展平面 4 字节 rune 正确配对）。零状态、零加载、切分 ~86ns/100 字、零分配。
+- **sst（零依赖词典）**：同一份 vendor 词典解析为**排序词表**（blob + uint32 offsets + float64 freqs，~12MB live / ~50MB 瞬时）；切词 = 二分查找 DAG + Viterbi，**逐点镜像 gse `getDag`/`calc`**（前缀可延伸才续走、精确词作边、单字兜底边、log(freq)−log(total) 打分、平局取长词）；scratch 缓冲复用，切分零分配（结果 token 是 run 的子串）。~29µs/100 字，词导航调用频率下不可测量。
+- **gse（保留）**：原路径原行为，作为 ICU 对齐参照与 HMM-for-OOV 载体。
+
+### gse 对齐的两个关键语义（踩出来的）
+
+1. **单字词频强制 2**：gse `Size()` 对单字词无条件 `freq = 2`（"reduce the word frequency"）。不镜像这条，真实单字频率会让 Viterbi 在 `今天天气真好` 上切出 `[真][好]`（gse：`[真好]`）——词典分组全面漂移。
+2. **首现去重 + freq<MinTokenFreq(2.0) 丢弃**：稳定排序后取首个出现（zh_s 先于 zh_t），与 gse `AddToken` 的 trie 去重等价。SST 总词频和与 gse `totalFreq`=53,226,742 同源。
+
+声明偏差（sst vs gse）：无 HMM（OOV run 保持逐字）；freq 求和按排序序（gse 按文件序，仅亚 ULP 舍入差）。
+
+### 测试重构
+
+- `useCJKSegmenter(t, mode)`：全局段词器换成 pin 模式的新实例 + 等加载完成 + `t.Cleanup` 恢复（这批测试不得 `t.Parallel`）。
+- 原 pi 对齐导航测试（word_navigation/editor/input 六处 `requireCJKDict`）改名为 `useCJKSegmenter(t, cjkModeGSE)`——它们锁的 pi/ICU 数值对应 gse 模式，期望值零改动全绿。
+- 新增：三后端各自的分组 pin 表（bigram 的 `今天天气真好` = `[今天][天气][真好]`，6 字 3 对，碰巧与词典分组一致）、`TestResolveCJKSegmenterMode`（env 解析含未知值回落）、`TestFindWordBackwardForwardCJK`/tiling 性质按三模式参数化（`你好世界` 三模式同构 `[你好][世界]`，pi 数值跨模式成立）。
+- 过程 bug（已修）：SST offsets 表按索引赋值但初始 len=1，第二词即越界 panic → `loadFailed`（现象是「加载失败」而非崩溃，panic-resilience 按设计兜住了；回归由 SST pin 测试锁定）。
+
+### 三后端对照（dictbench 实测，587,211 词）
+
+| 后端 | live | 加载瞬时堆 | 切分延迟(100字) | 依赖 |
+| --- | --- | --- | --- | --- |
+| bigram（默认） | **0** | 0 | 86ns | 无 |
+| sst | **~12MB** | ~50MB | ~29µs | 无 |
+| gse | ~206MB | ~308MB | ~5.4µs | go-ego/gse + cedar |
+
+### 验收
+
+- tui 包 `-race` 全绿；全仓 28 包 `-race`：27 绿 + `codingagent/core/tools` `TestPathsCanonicalize` **存量失败**（macOS `/tmp → /private/tmp` realpath 前缀，`git stash` 验证与本批无关，另立 fix 单）。

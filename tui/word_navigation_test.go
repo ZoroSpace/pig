@@ -53,7 +53,7 @@ func TestFindWordBackward(t *testing.T) {
 	})
 
 	t.Run("CJK mixed", func(t *testing.T) {
-		requireCJKDict(t)
+		useCJKSegmenter(t, cjkModeGSE)
 		text := "你好世界 test"
 		// pi (ICU dictionary): findWordBackward(text, text.length) = 5 (UTF-16);
 		// byte domain: 4 Han chars (12 bytes) + space = 13.

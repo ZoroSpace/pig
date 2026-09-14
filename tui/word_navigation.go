@@ -31,10 +31,11 @@ type SegmentData struct {
 }
 
 // wordSegmentData segments s into words: UAX #29 base (uaxWordSegmentData)
-// with all-Han runs re-grouped by the dictionary-backed CJK segmenter
-// (cjk_segmenter.go — pi gets this from ICU's built-in CJ dictionary).
+// with all-Han runs re-grouped by the pluggable CJK segmenter
+// (cjk_segmenter.go — pi gets this from ICU's built-in CJ dictionary;
+// pig's backend is selectable via PIG_CJK_SEGMENTER, default bigram).
 func wordSegmentData(s string) []SegmentData {
-	return mergeHanRunsWith(&theCJKSegmenter, uaxWordSegmentData(s))
+	return mergeHanRunsWith(theCJKSegmenter, uaxWordSegmentData(s))
 }
 
 // uaxWordSegmentData segments s into words per UAX #29 (rivo/uniseg),

@@ -655,7 +655,7 @@ func TestEditorUnicodeTextEditing(t *testing.T) {
 		// Byte domain with the gse dictionary grouping (cjk_segmenter.go):
 		// 你好=0-5, ，=6-8, 世界=9-14 → 15→9→6→0→6→9→15. (Was adapted to the
 		// UAX #29 per-char walk before the dictionary landed.)
-		requireCJKDict(t)
+		useCJKSegmenter(t, cjkModeGSE)
 		editor := newTestEditor(80, 24, nil)
 
 		editor.SetText("你好，世界")
@@ -691,7 +691,7 @@ func TestEditorUnicodeTextEditing(t *testing.T) {
 		// cols 15→13→8→7→5→0, forward cols 5→7→8→13→15.
 		// Byte domain with the gse dictionary grouping (cjk_segmenter.go):
 		// backward 25→19→14→11→5→0, forward 5→11→14→19→25.
-		requireCJKDict(t)
+		useCJKSegmenter(t, cjkModeGSE)
 		editor := newTestEditor(80, 24, nil)
 
 		editor.SetText("hello你好，world世界")
