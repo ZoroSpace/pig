@@ -25,8 +25,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	// blank import: registers pprof handlers on DefaultServeMux (diagnostic)
 	"fmt"
 	"io"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"sort"
@@ -795,10 +798,28 @@ func createRuntimeFactory(
 
 // Main is the coding agent CLI entry point (pi: main). It returns the
 // process exit code.
+// startPprofEndpointIfRequested starts a net/http/pprof endpoint when
+// PIG_PPROF is set (e.g. PIG_PPROF=127.0.0.1:18924). Diagnostic aid for
+// live-process heap/goroutine inspection; no-op unless the env is set.
+func startPprofEndpointIfRequested() {
+	addr := os.Getenv("PIG_PPROF")
+	if addr == "" {
+		return
+	}
+	go func() {
+		// never crash the TUI over a diagnostic endpoint
+		defer func() { _ = recover() }()
+		if err := http.ListenAndServe(addr, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "pig: pprof endpoint failed: %v\n", err)
+		}
+	}()
+}
+
 func Main(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	startPprofEndpointIfRequested()
 	core.ResetTimings(core.TimingMain)
 	// pi spreads builtInExtensions + options.extensionFactories here; the
 	// built-in extensions and inline factories arrive with the extensions
