@@ -2,7 +2,8 @@
 // token stats, and context usage. Computes token/context stats from the
 // session; git branch and extension statuses come from the provider. When
 // the pig-only showResourceStats setting is on, the stats line also shows
-// process resource stats (MEM, separated by "|").
+// process resource stats ("| MEM 52MB·HEAP 14MB·⚠️G 387…": memory and heap
+// always, G/FD/CPU alerts only on anomaly — see resource_stats.go).
 //
 // Declared deviation: pi reads session.sessionManager/session.state
 // directly on the concrete AgentSession; pig routes the accesses through
@@ -19,7 +20,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
@@ -125,21 +125,21 @@ func newFooterSessionView(session *core.AgentSession) footerSessionView {
 
 // FooterComponent is the footer line pair: pwd (branch, session name) and
 // token/context stats with the right-aligned model name. When resource
-// stats are enabled (pig-only), the stats line gains a "| MEM …" segment.
+// stats are enabled (pig-only), the stats line gains a "| MEM…" segment.
 type FooterComponent struct {
 	mu sync.Mutex
 
 	autoCompactEnabled bool
-	showResourceStats  bool // pig-only: gates the MEM segment (showResourceStats setting)
+	showResourceStats  bool // pig-only: gates the resource segment (showResourceStats setting)
 	session            *core.AgentSession
 	view               footerSessionView
 	footerData         ReadonlyFooterDataProvider
 
-	// Resource sampling (pig-only): RSS is read off-frame on a slow ticker
-	// and cached here; 0 = unsampled (segment hidden). The sampler runs
-	// only while the segment is enabled — never to poll an invisible one.
-	rssBytes      atomic.Int64
-	stopRSSPoller func()
+	// Resource sampling (pig-only): values are read off-frame on a slow
+	// ticker and cached in res; the sampler runs only while the segment is
+	// enabled — never to poll an invisible one. See resource_stats.go.
+	res                resourceStats
+	stopResourcePoller func()
 }
 
 // NewFooterComponent builds the footer (pi: constructor).
@@ -174,7 +174,7 @@ func (f *FooterComponent) SetAutoCompactEnabled(enabled bool) {
 }
 
 // SetShowResourceStats toggles the footer resource segment (pig-only; pi
-// has no counterpart — the showResourceStats setting). The RSS sampler
+// has no counterpart — the showResourceStats setting). The resource poller
 // starts lazily on first enable and stops while hidden: sampling exists
 // only to feed a visible segment.
 func (f *FooterComponent) SetShowResourceStats(enabled bool) {
@@ -182,35 +182,34 @@ func (f *FooterComponent) SetShowResourceStats(enabled bool) {
 	defer f.mu.Unlock()
 	f.showResourceStats = enabled
 	if enabled {
-		if f.stopRSSPoller == nil {
+		if f.stopResourcePoller == nil {
 			// Sample once up front so the segment appears on the next
-			// render instead of one interval later.
-			if b, ok := readRSSBytes(); ok {
-				f.rssBytes.Store(b)
-			}
-			f.stopRSSPoller = startRSSPoller(footerRSSInterval, &f.rssBytes)
+			// render instead of one interval later (the CPU rate needs two
+			// ticks and starts at "no data").
+			f.res.sampleStatic()
+			f.stopResourcePoller = startResourcePoller(footerRSSInterval, &f.res)
 		}
 		return
 	}
-	if f.stopRSSPoller != nil {
-		f.stopRSSPoller()
-		f.stopRSSPoller = nil
+	if f.stopResourcePoller != nil {
+		f.stopResourcePoller()
+		f.stopResourcePoller = nil
 	}
-	f.rssBytes.Store(0)
+	f.res.zero()
 }
 
 // Invalidate is a no-op: git branch caching is handled by the provider
 // (pi: invalidate — kept for call-site compatibility).
 func (f *FooterComponent) Invalidate() {}
 
-// Dispose stops the resource sampler if it is running; git watcher cleanup
+// Dispose stops the resource poller if it is running; git watcher cleanup
 // is handled by the provider (pi: dispose).
 func (f *FooterComponent) Dispose() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.stopRSSPoller != nil {
-		f.stopRSSPoller()
-		f.stopRSSPoller = nil
+	if f.stopResourcePoller != nil {
+		f.stopResourcePoller()
+		f.stopResourcePoller = nil
 	}
 }
 
@@ -375,11 +374,32 @@ func (f *FooterComponent) Render(width int) []string {
 	}
 
 	// Resource segment (pig-only; pi has no counterpart): process stats
-	// separated from the usage stats by "|". Hidden until the sampler
-	// produced a value (0 = not sampled / no procfs platform).
+	// separated from the usage stats by "|", items joined by "·". MEM =
+	// RSS, HEAP = live-heap allocations; the alert items (!G/!FD/!CPU,
+	// warning color) surface only on anomaly — see resource_stats.go for
+	// the thresholds. The alert prefix is deliberately ASCII: emoji (⚠️ =
+	// U+26A0+FE0F) cell width is decided by the terminal/font, not by pig,
+	// and mismatched advances overlap the following text. Hidden until the
+	// sampler produced a value (0 = not sampled / no procfs platform).
 	if showResourceStats {
-		if rssBytes := f.rssBytes.Load(); rssBytes > 0 {
-			statsParts = append(statsParts, "|", "MEM "+FormatMemBytes(rssBytes))
+		var resParts []string
+		if rssBytes := f.res.rssBytes.Load(); rssBytes > 0 {
+			resParts = append(resParts, "MEM "+FormatMemBytes(rssBytes))
+			if heapBytes := f.res.heapBytes.Load(); heapBytes > 0 {
+				resParts = append(resParts, "HEAP "+FormatMemBytes(heapBytes))
+			}
+		}
+		if f.res.alertG.Load() {
+			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!G %d", f.res.goroutines.Load())))
+		}
+		if f.res.alertFD.Load() {
+			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!FD %d", f.res.fdCount.Load())))
+		}
+		if f.res.alertCPU.Load() {
+			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!CPU %d%%", f.res.cpuPercent.Load())))
+		}
+		if len(resParts) > 0 {
+			statsParts = append(statsParts, "|", strings.Join(resParts, "·"))
 		}
 	}
 

@@ -1094,7 +1094,7 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 	items[terminalProgressIndex+1] = &tui.SettingItem{
 		Id:           "resource-stats",
 		Label:        "Resource stats",
-		Description:  "Show process resource usage (memory) in the footer",
+		Description:  "Show process resource stats in the footer: memory and heap; goroutine, FD and CPU alerts appear only on anomaly",
 		CurrentValue: boolSettingValue(config.ShowResourceStats),
 		Values:       []string{"true", "false"},
 	}
