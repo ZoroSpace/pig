@@ -38,13 +38,14 @@ func TestFooterMemShownWhenEnabledAndSampled(t *testing.T) {
 	footer.res.rssBytes.Store(testRSS)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
-	if !strings.Contains(statsLine, "3.0%/1.0M (auto) | MEM 52MB") {
-		t.Fatalf("stats line %q missing %q", statsLine, "3.0%/1.0M (auto) | MEM 52MB")
+	if !strings.Contains(statsLine, "3.0%/1.0M (auto) | MEM52MB") {
+		t.Fatalf("stats line %q missing %q", statsLine, "3.0%/1.0M (auto) | MEM52MB")
 	}
 }
 
 // TestFooterHeapShownWithMem: heap renders as a "·"-joined sibling item
-// (user-set format: "MEM 52MB·HEAP 14MB", no slash, no CJK label).
+// (user-set format: "MEM52MB·HEAP14MB" — no slash, no CJK label, no space
+// between metric name and value).
 func TestFooterHeapShownWithMem(t *testing.T) {
 	initTestTheme(t)
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
@@ -53,8 +54,8 @@ func TestFooterHeapShownWithMem(t *testing.T) {
 	footer.res.heapBytes.Store(testHeap)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
-	if !strings.Contains(statsLine, "MEM 52MB·HEAP 14MB") {
-		t.Fatalf("stats line %q missing %q", statsLine, "MEM 52MB·HEAP 14MB")
+	if !strings.Contains(statsLine, "MEM52MB·HEAP14MB") {
+		t.Fatalf("stats line %q missing %q", statsLine, "MEM52MB·HEAP14MB")
 	}
 	if strings.Contains(statsLine, "MB/") {
 		t.Fatalf("stats line %q must not join MEM/HEAP with a slash", statsLine)
@@ -89,7 +90,7 @@ func TestFooterAlertsShownWhenFlagsSet(t *testing.T) {
 	footer.res.alertCPU.Store(true)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
-	want := "MEM 52MB·HEAP 14MB·!G 387·!FD 210·!CPU 97%"
+	want := "MEM52MB·HEAP14MB·!G387·!FD210·!CPU97%"
 	if !strings.Contains(statsLine, want) {
 		t.Fatalf("stats line %q missing %q", statsLine, want)
 	}

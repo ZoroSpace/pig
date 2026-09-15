@@ -2,7 +2,7 @@
 // token stats, and context usage. Computes token/context stats from the
 // session; git branch and extension statuses come from the provider. When
 // the pig-only showResourceStats setting is on, the stats line also shows
-// process resource stats ("| MEM 52MB·HEAP 14MB·⚠️G 387…": memory and heap
+// process resource stats ("| MEM52MB·HEAP14MB·!G387…": memory and heap
 // always, G/FD/CPU alerts only on anomaly — see resource_stats.go).
 //
 // Declared deviation: pi reads session.sessionManager/session.state
@@ -384,19 +384,19 @@ func (f *FooterComponent) Render(width int) []string {
 	if showResourceStats {
 		var resParts []string
 		if rssBytes := f.res.rssBytes.Load(); rssBytes > 0 {
-			resParts = append(resParts, "MEM "+FormatMemBytes(rssBytes))
+			resParts = append(resParts, "MEM"+FormatMemBytes(rssBytes))
 			if heapBytes := f.res.heapBytes.Load(); heapBytes > 0 {
-				resParts = append(resParts, "HEAP "+FormatMemBytes(heapBytes))
+				resParts = append(resParts, "HEAP"+FormatMemBytes(heapBytes))
 			}
 		}
 		if f.res.alertG.Load() {
-			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!G %d", f.res.goroutines.Load())))
+			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!G%d", f.res.goroutines.Load())))
 		}
 		if f.res.alertFD.Load() {
-			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!FD %d", f.res.fdCount.Load())))
+			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!FD%d", f.res.fdCount.Load())))
 		}
 		if f.res.alertCPU.Load() {
-			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!CPU %d%%", f.res.cpuPercent.Load())))
+			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!CPU%d%%", f.res.cpuPercent.Load())))
 		}
 		if len(resParts) > 0 {
 			statsParts = append(statsParts, "|", strings.Join(resParts, "·"))
