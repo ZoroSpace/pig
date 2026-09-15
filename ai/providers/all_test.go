@@ -44,9 +44,10 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 	// openai-responses batch adds xai; the C2 codex batch adds openai-codex;
 	// the P2-T1 batch adds cloudflare-ai-gateway, cloudflare-workers-ai,
 	// github-copilot, opencode, opencode-go, qwen-token-plan(-cn/-individual),
-	// and xiaomi(-token-plan-cn/ams/sgp).
+	// and xiaomi(-token-plan-cn/ams/sgp); the P2-T2 bedrock batch adds
+	// amazon-bedrock.
 	want := []string{
-		"ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
+		"amazon-bedrock", "ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
 		"cloudflare-workers-ai", "deepseek", "fireworks", "github-copilot", "google",
 		"google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
@@ -63,7 +64,7 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 func TestBuiltinModelsRegistersAll(t *testing.T) {
 	models := BuiltinModels(nil)
 	for _, id := range []string{
-		"ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
+		"amazon-bedrock", "ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
 		"cloudflare-workers-ai", "deepseek", "fireworks", "github-copilot", "google",
 		"google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
@@ -87,8 +88,8 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 37 {
-		t.Fatalf("GetProviders() length = %d, want 37", got)
+	if got := len(models.GetProviders()); got != 38 {
+		t.Fatalf("GetProviders() length = %d, want 38", got)
 	}
 }
 

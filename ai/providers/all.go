@@ -71,6 +71,7 @@ func GetBuiltinModels(provider BuiltinProvider) []ai.Model {
 // radiusProvider.
 func BuiltinProviders() []ai.Provider {
 	return []ai.Provider{
+		AmazonBedrockProvider(),
 		AntLingProvider(),
 		AnthropicProvider(),
 		BasetenProvider(),

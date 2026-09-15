@@ -22,7 +22,11 @@ type Api string
 const (
 	ApiOpenAICompletions Api = "openai-completions"
 	ApiAnthropicMessages Api = "anthropic-messages"
-	ApiOpenAIResponses   Api = "openai-responses"
+	// ApiBedrockConverseStream is Amazon Bedrock's Converse Stream surface (pi:
+	// "bedrock-converse-stream"); the Converse API event protocol over the
+	// Bedrock Runtime endpoint with SigV4 / bearer-token auth.
+	ApiBedrockConverseStream Api = "bedrock-converse-stream"
+	ApiOpenAIResponses       Api = "openai-responses"
 	// ApiAzureOpenAIResponses is Azure's Responses surface (pi:
 	// "azure-openai-responses"); same event protocol as openai-responses
 	// with Azure deployment/api-version URL conventions.
@@ -51,11 +55,12 @@ const ImagesApiOpenRouter ImagesApi = "openrouter-images"
 // ProviderID identifies a provider (openai, openrouter, a local vLLM, ...).
 // The type is open on purpose: custom gateways and local endpoints use
 // arbitrary ids. The constants below cover pi's KnownProvider set reachable
-// today; ids belonging to unported wire protocols (google, amazon-bedrock,
-// azure-openai-responses) arrive with those protocols.
+// today; ids belonging to unported wire protocols (mistral) arrive with those
+// protocols.
 type ProviderID string
 
 const (
+	ProviderAmazonBedrock       ProviderID = "amazon-bedrock"
 	ProviderOpenAI              ProviderID = "openai"
 	ProviderGoogle              ProviderID = "google"
 	ProviderGoogleVertex        ProviderID = "google-vertex"
@@ -1286,14 +1291,19 @@ type AnthropicMessagesCompat struct {
 	SupportsToolReferences *bool `json:"supportsToolReferences,omitempty"`
 }
 
-// BedrockCompat is missing here by design (pi: supportsStrictMode for Amazon
-// Bedrock); it arrives with the bedrock adapter.
+// BedrockCompat carries compatibility settings for Amazon Bedrock models (pi:
+// BedrockCompat).
+type BedrockCompat struct {
+	// SupportsStrictMode: whether the model supports Bedrock strict tool
+	// schemas. Default: false.
+	SupportsStrictMode *bool `json:"supportsStrictMode,omitempty"`
+}
 
 // ModelCompat is the per-API compatibility settings carried by Model.Compat
 // (pi: the conditional Model.compat type). Concrete types:
-// OpenAICompletionsCompat for "openai-completions" (and untyped custom APIs)
-// and AnthropicMessagesCompat for "anthropic-messages"; decoding dispatches on
-// Model.API.
+// OpenAICompletionsCompat for "openai-completions" (and untyped custom APIs),
+// AnthropicMessagesCompat for "anthropic-messages", BedrockCompat for
+// "bedrock-converse-stream"; decoding dispatches on Model.API.
 type ModelCompat interface {
 	modelCompat()
 }
@@ -1301,6 +1311,7 @@ type ModelCompat interface {
 func (c *OpenAICompletionsCompat) modelCompat() {}
 func (c *OpenAIResponsesCompat) modelCompat()   {}
 func (c *AnthropicMessagesCompat) modelCompat() {}
+func (c *BedrockCompat) modelCompat()           {}
 
 // OpenRouterRouting carries OpenRouter provider routing preferences (sent as
 // the "provider" request field). Sort, PreferredMinThroughput, and
@@ -1411,6 +1422,8 @@ func (m *Model) UnmarshalJSON(data []byte) error {
 	switch m.API {
 	case ApiAnthropicMessages:
 		compat = new(AnthropicMessagesCompat)
+	case ApiBedrockConverseStream:
+		compat = new(BedrockCompat)
 	case ApiOpenAIResponses, ApiAzureOpenAIResponses, ApiOpenAICodexResponses:
 		compat = new(OpenAIResponsesCompat)
 	default:

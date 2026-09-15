@@ -1,8 +1,8 @@
 // pi: generate-models.ts — models.dev catalog processing. Ported for every
 // provider whose wire API pig has implemented (openai-completions /
-// anthropic-messages / openai-responses / google-generative-ai). Providers
-// that pi serves through unported APIs (bedrock-converse-stream,
-// mistral-conversations) are skipped with the pi processing noted in
+// anthropic-messages / openai-responses / google-generative-ai /
+// bedrock-converse-stream). Providers that pi serves through unported APIs
+// (mistral-conversations) are skipped with the pi processing noted in
 // comments.
 package main
 
@@ -884,8 +884,8 @@ func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 
 	var models []*ai.Model
 
-	// pi also processes amazon-bedrock and mistral (mistral-conversations)
-	// blocks here; both are skipped (their wire APIs are unported in pig).
+	// pi also processes the mistral (mistral-conversations) block here; it is
+	// skipped (its wire API is unported in pig).
 
 	nvidiaNimModelIDs := map[string]string{}
 	if data["nvidia"] != nil && data["nvidia"].Models != nil {
@@ -900,6 +900,7 @@ func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 	}
 
 	models = append(models, processAnthropicModels(data)...)
+	models = append(models, processBedrockModels(data)...)
 	models = append(models, processGoogleModels(data)...)
 	models = append(models, processGoogleVertexModels(data)...)
 	models = append(models, processOpenAIModels(data)...)

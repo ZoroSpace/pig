@@ -33,6 +33,7 @@
 | xai | openai-responses | 3 | 🔶 shim | ❌ grok effort 映射 / include encrypted_content 重放 | ❌ 设备流 | `XAI_API_KEY` 或 SuperGrok/X Premium OAuth |
 | openai-codex（C2） | openai-codex-responses | 8 | 🧪 mock（C1 adapter 30 函数 + C2 本地 Go mock CLI 全链路：zstd 请求体/Bearer JWT/chatgpt-account-id/prompt_cache_key/WS→SSE fallback） | ❌ 真 ChatGPT backend 行为（WS 传输真机、account 隔离头、end_turn 语义、限流 Retry-After 形态） | ❌ OAuth（设备流+浏览器路 mock 全锁） | ChatGPT Plus/Pro 订阅（`/login` → openai-codex） |
 | azure-openai-responses（adapter+39 模型） | azure 变体 | 39 | 🧪 mock | ❌ **整个 URL/deployment/api-version/api-key 头约定**（`normalizeAzureBaseURL`、`/responses?api-version=v1`） | ❌（纯 apiKey） | `AZURE_OPENAI_BASE_URL`/`AZURE_OPENAI_RESOURCE_NAME` + key |
+| amazon-bedrock（P2-T2，adapter+155 模型） | bedrock-converse-stream | 155 | 🧪 mock（P2-T2：adapter 事件流/转换/thinking/redacted 30+ 函数；**真实 SDK 传输本地 e2e**：response-headers 测试打本地 httptest 端点，SigV4 签名 + dummy 凭证 + eventstream 分帧 + onResponse 全通） | ❌ 真 AWS 行为：SDK 默认凭证链（profile 静态 key/role/SSO/IMDS/ECS）、bearer token 真实 `bedrock:CallWithBearerToken`、cache point 计费、GovCloud 端点、AWS_BEDROCK_FORCE_CACHE 应用推理档案 | ❌（bearer token 或 AWS 凭证链；链内 profile-beats-env 语义 pig 侧自实现，见 P2-T2 handoff 偏差） | AWS 凭证任一形态（bearer token / `AWS_PROFILE` / env keys / IAM role） |
 
 注：openai-completions 系其余 provider（groq/cerebras/together/baseten/nvidia/moonshot/zai/antling/huggingface/openrouter 等，Phase 2 交付）同样只有协议级真验（deepseek）+ detectCompat 单测，provider 真机未打——不在本矩阵范围（它们早于 A/B 批），销账时顺带登记即可。
 

@@ -219,9 +219,9 @@ git diff | ./pig -p "审查这个 diff，指出可能的正确性问题"
 | 🧪 mock / 单测已验证 | 其余 provider、OAuth、provider 特有语义 | 无真实服务或真实登录链路验证 |
 
 <details>
-<summary>当前注册的 25 个内置 Provider</summary>
+<summary>当前注册的 38 个内置 Provider</summary>
 
-`ant-ling`、`anthropic`、`baseten`、`cerebras`、`deepseek`、`fireworks`、`google`、`google-vertex`、`groq`、`huggingface`、`kimi-coding`、`minimax`、`minimax-cn`、`moonshotai`、`moonshotai-cn`、`nvidia`、`openai`、`openai-codex`、`openrouter`、`together`、`vercel-ai-gateway`、`volcengine-plan`、`xai`、`zai`、`zai-coding-cn`
+`amazon-bedrock`、`ant-ling`、`anthropic`、`baseten`、`cerebras`、`cloudflare-ai-gateway`、`cloudflare-workers-ai`、`deepseek`、`fireworks`、`github-copilot`、`google`、`google-vertex`、`groq`、`huggingface`、`kimi-coding`、`minimax`、`minimax-cn`、`moonshotai`、`moonshotai-cn`、`nvidia`、`openai`、`openai-codex`、`opencode`、`opencode-go`、`openrouter`、`qwen-token-plan`、`qwen-token-plan-cn`、`qwen-token-plan-individual`、`together`、`vercel-ai-gateway`、`volcengine-plan`、`xiaomi`、`xiaomi-token-plan-ams`、`xiaomi-token-plan-cn`、`xiaomi-token-plan-sgp`、`xai`、`zai`、`zai-coding-cn`
 
 </details>
 
@@ -240,6 +240,7 @@ git diff | ./pig -p "审查这个 diff，指出可能的正确性问题"
 | Google Gemini | `GEMINI_API_KEY` | ⏳ 未实测 |
 | xAI | `XAI_API_KEY` | ⏳ 未实测 |
 | OpenRouter | `OPENROUTER_API_KEY` | ⏳ 未实测 |
+| Amazon Bedrock | `AWS_BEARER_TOKEN_BEDROCK` 或 AWS 凭证链（`AWS_PROFILE` / env keys / IAM role） | ⏳ 未实测 |
 
 环境变量只是配置入口，各家能否放心用，以上表验证状态为准；完整变量列表见 `./pig --help`。认证状态检查：
 

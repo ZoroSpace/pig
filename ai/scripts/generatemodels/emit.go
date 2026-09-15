@@ -248,6 +248,12 @@ func writeCompat(b *strings.Builder, compat ai.ModelCompat, indent string) {
 		writeCompatFields(b, reflect.ValueOf(c).Elem(), indent+"\t")
 		b.WriteString(indent)
 		b.WriteString("},\n")
+	case *ai.BedrockCompat:
+		b.WriteString(indent)
+		b.WriteString("Compat: &BedrockCompat{\n")
+		writeCompatFields(b, reflect.ValueOf(c).Elem(), indent+"\t")
+		b.WriteString(indent)
+		b.WriteString("},\n")
 	default:
 		panic(fmt.Sprintf("generatemodels: unsupported compat type %T", compat))
 	}

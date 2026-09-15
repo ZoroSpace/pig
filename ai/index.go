@@ -23,17 +23,19 @@ type (
 )
 
 const (
-	ApiOpenAICompletions    = types.ApiOpenAICompletions
-	ApiAnthropicMessages    = types.ApiAnthropicMessages
-	ApiOpenAIResponses      = types.ApiOpenAIResponses
-	ApiAzureOpenAIResponses = types.ApiAzureOpenAIResponses
-	ApiOpenAICodexResponses = types.ApiOpenAICodexResponses
-	ApiGoogleGenerativeAI   = types.ApiGoogleGenerativeAI
-	ApiGoogleVertex         = types.ApiGoogleVertex
-	ImagesApiOpenRouter     = types.ImagesApiOpenRouter
+	ApiOpenAICompletions     = types.ApiOpenAICompletions
+	ApiAnthropicMessages     = types.ApiAnthropicMessages
+	ApiBedrockConverseStream = types.ApiBedrockConverseStream
+	ApiOpenAIResponses       = types.ApiOpenAIResponses
+	ApiAzureOpenAIResponses  = types.ApiAzureOpenAIResponses
+	ApiOpenAICodexResponses  = types.ApiOpenAICodexResponses
+	ApiGoogleGenerativeAI    = types.ApiGoogleGenerativeAI
+	ApiGoogleVertex          = types.ApiGoogleVertex
+	ImagesApiOpenRouter      = types.ImagesApiOpenRouter
 )
 
 const (
+	ProviderAmazonBedrock       = types.ProviderAmazonBedrock
 	ProviderOpenAI              = types.ProviderOpenAI
 	ProviderGoogle              = types.ProviderGoogle
 	ProviderGoogleVertex        = types.ProviderGoogleVertex
@@ -296,6 +298,7 @@ type (
 	OpenAICompletionsCompat       = types.OpenAICompletionsCompat
 	OpenAIResponsesCompat         = types.OpenAIResponsesCompat
 	AnthropicMessagesCompat       = types.AnthropicMessagesCompat
+	BedrockCompat                 = types.BedrockCompat
 	AnthropicAllowedFallbackModel = types.AnthropicAllowedFallbackModel
 	ModelCompat                   = types.ModelCompat
 	OpenRouterRouting             = types.OpenRouterRouting
