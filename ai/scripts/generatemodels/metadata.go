@@ -621,7 +621,7 @@ func mergeAnthropicOverrideNonNil(dst, src *ai.AnthropicMessagesCompat) {
 // getAnthropicMessagesCompat returns anthropic-messages compat overrides keyed
 // by provider/model (pi: getAnthropicMessagesCompat). The eager-streaming set
 // only lists github-copilot models and the allowEmptySignature branch only
-// matches xiaomi providers, both unported; kept verbatim for the port.
+// matches xiaomi providers.
 func getAnthropicMessagesCompat(provider, modelID string) *ai.AnthropicMessagesCompat {
 	compat := &ai.AnthropicMessagesCompat{}
 	hadField := false
@@ -907,7 +907,11 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 			ai.ModelThinkingMax:     lo.ToPtr("max"),
 		})
 	}
-	// pi: github-copilot gpt-5* -> minimal "low" (skipped, provider unported).
+	// pi: github-copilot gpt-5* models map minimal to the provider-native
+	// "low" effort.
+	if model.Provider == ai.ProviderGithubCopilot && strings.HasPrefix(model.ID, "gpt-5") {
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingMinimal: lo.ToPtr("low")})
+	}
 	if model.API == ai.ApiOpenAIResponses && model.Provider == ai.ProviderOpenAI &&
 		openAIResponsesNoneReasoningModels[model.ID] {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: lo.ToPtr("none")})
@@ -1018,12 +1022,27 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 			ai.ModelThinkingMax:     lo.ToPtr("max"),
 		})
 	}
-	// pi 955-965: opencode-go glm-5.2 / kimi-k2.6, opencode grok-build-0.1
-	// (skipped, opencode providers unported).
+	if model.Provider == ai.ProviderOpenCodeGo && model.ID == "glm-5.2" {
+		mergeThinkingLevelMap(model, openCodeGoGlm52ThinkingLevelMap)
+	}
+	if model.Provider == ai.ProviderOpenCodeGo && model.ID == "kimi-k2.6" {
+		// OpenCode Go exposes Kimi K2.6 thinking as on/off, not distinct
+		// effort tiers.
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingMinimal: nil, ai.ModelThinkingLow: nil, ai.ModelThinkingMedium: nil})
+	}
+	if model.Provider == ai.ProviderOpenCode && model.ID == "grok-build-0.1" {
+		// OpenCode Zen Grok Build reasons by default but rejects explicit
+		// reasoningEffort.
+		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil, ai.ModelThinkingMinimal: nil, ai.ModelThinkingLow: nil, ai.ModelThinkingMedium: nil})
+	}
 	if model.Provider == ai.ProviderAntLing && model.Reasoning {
 		// Ring reasons by default. Only high/xhigh have documented explicit
 		// effort controls.
 		mergeThinkingLevelMap(model, antLingRingThinkingLevelMap)
 	}
-	// pi 970-975: github-copilot overrides (skipped).
+	if model.Provider == ai.ProviderGithubCopilot {
+		if override, ok := githubCopilotThinkingLevelOverrides[model.ID]; ok {
+			mergeThinkingLevelMap(model, override)
+		}
+	}
 }

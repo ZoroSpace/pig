@@ -250,15 +250,34 @@ func inputOf(m *ModelsDevModel) []ai.ModelInput {
 // github-copilot, which pig has not ported yet).
 func modelsDevCostOf(c *ModelsDevCost) ai.ModelCost {
 	var input, output, cacheRead, cacheWrite *float64
+	var tiers []ai.ModelCostTier
 	if c != nil {
 		input, output, cacheRead, cacheWrite = c.Input, c.Output, c.CacheRead, c.CacheWrite
+		// pi: getModelsDevCost keeps context-sized tiers only.
+		for _, tier := range c.Tiers {
+			if tier.Tier == nil || tier.Tier.Type != "context" || tier.Tier.Size == nil {
+				continue
+			}
+			tiers = append(tiers, ai.ModelCostTier{
+				ModelCostRates: ai.ModelCostRates{
+					Input:      floatVal(tier.Input),
+					Output:     floatVal(tier.Output),
+					CacheRead:  floatVal(tier.CacheRead),
+					CacheWrite: floatVal(tier.CacheWrite),
+				},
+				InputTokensAbove: *tier.Tier.Size,
+			})
+		}
 	}
-	return ai.ModelCost{ModelCostRates: ai.ModelCostRates{
-		Input:      floatVal(input),
-		Output:     floatVal(output),
-		CacheRead:  floatVal(cacheRead),
-		CacheWrite: floatVal(cacheWrite),
-	}}
+	return ai.ModelCost{
+		ModelCostRates: ai.ModelCostRates{
+			Input:      floatVal(input),
+			Output:     floatVal(output),
+			CacheRead:  floatVal(cacheRead),
+			CacheWrite: floatVal(cacheWrite),
+		},
+		Tiers: tiers,
+	}
 }
 
 // roundCost is pi's Number(value.toFixed(6)).

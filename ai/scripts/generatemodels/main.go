@@ -52,10 +52,13 @@ func main() {
 // combineModels combines the fetched catalogs (models.dev has priority).
 func combineModels(modelsDevModels, openRouterModels, aiGatewayModels []*ai.Model) []*ai.Model {
 	// pi filters xai retired ids and the opencode gpt-5.3-codex-spark alias
-	// here; the opencode providers are unported so only the xai half applies.
+	// here.
 	allModels := make([]*ai.Model, 0, len(modelsDevModels)+len(openRouterModels)+len(aiGatewayModels))
 	for _, model := range modelsDevModels {
 		if model.Provider == ai.ProviderXAI && xaiBuiltinExcludedModelIds[model.ID] {
+			continue
+		}
+		if (model.Provider == ai.ProviderOpenCode || model.Provider == ai.ProviderOpenCodeGo) && model.ID == "gpt-5.3-codex-spark" {
 			continue
 		}
 		allModels = append(allModels, model)
@@ -100,21 +103,30 @@ func generateModels(ctx context.Context) error {
 	}
 
 	// Combine models (models.dev has priority); pi filters xai retired ids
-	// and the opencode gpt-5.3-codex-spark alias here (the latter is a no-op,
-	// opencode providers unported).
+	// and the opencode gpt-5.3-codex-spark alias here.
 	allModels := combineModels(modelsDevModels, openRouterModels, aiGatewayModels)
 
 	// Temporary overrides until upstream model metadata is corrected (pi).
-	// The github-copilot extended-context and opencode sonnet/gpt-5.4
-	// branches are skipped (providers unported); the OpenRouter / Vercel
-	// gateway overrides apply.
 	for _, candidate := range allModels {
+		if candidate.Provider == ai.ProviderGithubCopilot && githubCopilotExtendedContextModels[candidate.ID] {
+			candidate.ContextWindow = 1000000
+		}
 		if (candidate.Provider == ai.ProviderAnthropic || candidate.Provider == ai.ProviderOpenCode || candidate.Provider == ai.ProviderOpenCodeGo) &&
 			(candidate.ID == "claude-opus-4-6" ||
 				candidate.ID == "claude-sonnet-4-6" ||
 				candidate.ID == "claude-opus-4.6" ||
 				candidate.ID == "claude-sonnet-4.6") {
 			candidate.ContextWindow = 1000000
+		}
+		// OpenCode variants list Claude Sonnet 4/4.5 with 1M context, actual
+		// limit is 200K.
+		if (candidate.Provider == ai.ProviderOpenCode || candidate.Provider == ai.ProviderOpenCodeGo) &&
+			(candidate.ID == "claude-sonnet-4-5" || candidate.ID == "claude-sonnet-4") {
+			candidate.ContextWindow = 200000
+		}
+		if (candidate.Provider == ai.ProviderOpenCode || candidate.Provider == ai.ProviderOpenCodeGo) && candidate.ID == "gpt-5.4" {
+			candidate.ContextWindow = 272000
+			candidate.MaxTokens = 128000
 		}
 		// Keep direct OpenAI requests in the short-context pricing tier by
 		// default. Users can opt into the larger context through model

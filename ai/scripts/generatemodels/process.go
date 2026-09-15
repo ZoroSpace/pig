@@ -1,19 +1,21 @@
-// pi: generate-models.ts — models.dev catalog processing. Only providers
-// whose wire API pig has implemented are ported (openai-completions /
-// anthropic-messages). Providers that pi serves through unported APIs
-// (openai-responses, google-generative-ai, google-vertex,
-// bedrock-converse-stream, mistral-conversations, openai-codex-responses) and
-// providers explicitly out of pig's Phase 1 scope (github-copilot,
-// cloudflare-workers-ai/-gateway, opencode/opencode-go, qwen-token-plan,
-// xiaomi) are skipped with the pi processing noted in comments.
+// pi: generate-models.ts — models.dev catalog processing. Ported for every
+// provider whose wire API pig has implemented (openai-completions /
+// anthropic-messages / openai-responses / google-generative-ai). Providers
+// that pi serves through unported APIs (bedrock-converse-stream,
+// mistral-conversations) are skipped with the pi processing noted in
+// comments.
 package main
 
 import (
 	"context"
 	"fmt"
+	"maps"
+	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/ZoroSpace/pig/ai/api"
 	"github.com/samber/lo"
 )
 
@@ -882,10 +884,8 @@ func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 
 	var models []*ai.Model
 
-	// pi also processes amazon-bedrock, mistral (mistral-conversations),
-	// cloudflare-workers-ai, cloudflare-ai-gateway, github-copilot,
-	// opencode/opencode-go, qwen-token-plan, and xiaomi blocks here; all are
-	// skipped (their wire APIs are unported in pig).
+	// pi also processes amazon-bedrock and mistral (mistral-conversations)
+	// blocks here; both are skipped (their wire APIs are unported in pig).
 
 	nvidiaNimModelIDs := map[string]string{}
 	if data["nvidia"] != nil && data["nvidia"].Models != nil {
@@ -915,7 +915,647 @@ func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 	models = append(models, processKimiCodingModels(data)...)
 	models = append(models, processMoonshotModels(data)...)
 	models = append(models, processHuggingFaceModels(data)...)
+	models = append(models, processCloudflareModels(data)...)
+	models = append(models, processOpenCodeModels(data)...)
+	models = append(models, processGitHubCopilotModels(data)...)
+	models = append(models, processXiaomiModels(data)...)
+	models = append(models, processQwenTokenPlanModels(data)...)
 
 	fmt.Printf("Loaded %d tool-capable models from models.dev\n", len(models))
 	return models, nil
+}
+
+// ---------------------------------------------------------------------------
+// P2-T1 providers (pi: loadModelsDevData cloudflare / opencode /
+// github-copilot / xiaomi / qwen-token-plan blocks; the cloudflare endpoint
+// constants come from ai/api/cloudflare.go, pi imports src/api/cloudflare.ts).
+
+// copilotStaticHeaders ride every github-copilot model (pi:
+// COPILOT_STATIC_HEADERS).
+var copilotStaticHeaders = map[string]string{
+	"User-Agent":             "GitHubCopilotChat/0.35.0",
+	"Editor-Version":         "vscode/1.107.0",
+	"Editor-Plugin-Version":  "copilot-chat/0.35.0",
+	"Copilot-Integration-Id": "vscode-chat",
+}
+
+// openCodeGoGlm52ThinkingLevelMap (pi: OPENCODE_GO_GLM52_THINKING_LEVEL_MAP).
+var openCodeGoGlm52ThinkingLevelMap = ai.ThinkingLevelMap{
+	ai.ModelThinkingOff:     nil,
+	ai.ModelThinkingMinimal: nil,
+	ai.ModelThinkingLow:     nil,
+	ai.ModelThinkingMedium:  nil,
+	ai.ModelThinkingHigh:    lo.ToPtr("high"),
+	ai.ModelThinkingMax:     lo.ToPtr("max"),
+}
+
+// qwenTokenPlanFallbackThinkingLevelMap (pi:
+// QWEN_TOKEN_PLAN_FALLBACK_THINKING_LEVEL_MAP).
+var qwenTokenPlanFallbackThinkingLevelMap = ai.ThinkingLevelMap{
+	ai.ModelThinkingMinimal: nil,
+	ai.ModelThinkingLow:     nil,
+	ai.ModelThinkingMedium:  nil,
+	ai.ModelThinkingHigh:    lo.ToPtr("high"),
+	ai.ModelThinkingXHigh:   nil,
+	ai.ModelThinkingMax:     lo.ToPtr("max"),
+}
+
+// qwenTokenPlanReasoningEffortFallbackModelIDs (pi:
+// QWEN_TOKEN_PLAN_REASONING_EFFORT_FALLBACK_MODEL_IDS).
+var qwenTokenPlanReasoningEffortFallbackModelIDs = stringSet("glm-5", "glm-5.1")
+
+// qwenTokenPlanExcludedModelIDs lists retired preview ids — models.dev may
+// still list them after GA ships (pi: QWEN_TOKEN_PLAN_EXCLUDED_MODEL_IDS).
+var qwenTokenPlanExcludedModelIDs = stringSet("qwen3.8-max-preview")
+
+// qwenTokenPlanIndividualModelIDs is the QwenCloud Token Plan Individual
+// text-model allowlist, verified 2026-09-03. Retired models remain excluded
+// above even if the public catalog lags.
+// https://docs.qwencloud.com/token-plan/personal/token-plan-personal-overview
+// (pi: QWEN_TOKEN_PLAN_INDIVIDUAL_MODEL_IDS)
+var qwenTokenPlanIndividualModelIDs = stringSet(
+	"deepseek-v4-flash-0731",
+	"deepseek-v4-pro",
+	"deepseek-v4-pro-0813",
+	"glm-5.2",
+	"qwen3.6-flash",
+	"qwen3.7-max",
+	"qwen3.7-plus",
+	"qwen3.8-flash",
+	"qwen3.8-max",
+)
+
+// openCodeOpenAICompletionsLongCacheRetentionUnsupportedModels (pi:
+// OPENCODE_OPENAI_COMPLETIONS_LONG_CACHE_RETENTION_UNSUPPORTED_MODELS).
+var openCodeOpenAICompletionsLongCacheRetentionUnsupportedModels = stringSet(
+	"opencode:deepseek-v4-flash",
+	"opencode:deepseek-v4-pro",
+	"opencode:kimi-k2.5",
+	"opencode:kimi-k2.6",
+	"opencode:minimax-m2.7",
+	"opencode-go:kimi-k2.6",
+)
+
+// githubCopilotExtendedContextModels lists the "Models with extended
+// capabilities" Copilot models supporting the extended 1 million token
+// context window (pi: GITHUB_COPILOT_EXTENDED_CONTEXT_MODELS).
+var githubCopilotExtendedContextModels = stringSet(
+	"claude-fable-5",
+	"claude-opus-4.6",
+	"claude-opus-4.7",
+	"claude-opus-4.8",
+	"claude-opus-5",
+	"claude-sonnet-4.6",
+	"claude-sonnet-5",
+	"gpt-5.3-codex",
+	"gpt-5.4",
+	"gpt-5.5",
+)
+
+// githubCopilotThinkingLevelOverrides narrows models.dev metadata over the
+// authenticated GitHub Copilot /models endpoint (checked 2026-06-15; pi:
+// GITHUB_COPILOT_THINKING_LEVEL_OVERRIDES).
+var githubCopilotThinkingLevelOverrides = map[string]ai.ThinkingLevelMap{
+	"claude-opus-4.7":   {ai.ModelThinkingMinimal: lo.ToPtr("low")},
+	"claude-opus-4.8":   {ai.ModelThinkingMinimal: lo.ToPtr("low")},
+	"claude-opus-5":     {ai.ModelThinkingMinimal: lo.ToPtr("low")},
+	"claude-sonnet-4.6": {ai.ModelThinkingMinimal: lo.ToPtr("low"), ai.ModelThinkingMax: lo.ToPtr("max")},
+}
+
+// processCloudflareModels handles Workers AI and AI Gateway (pi:
+// loadModelsDevData cloudflare-workers-ai / cloudflare-ai-gateway blocks).
+func processCloudflareModels(data ModelsDevCatalog) []*ai.Model {
+	var models []*ai.Model
+
+	// Process Cloudflare Workers AI models
+	if workersAI := data["cloudflare-workers-ai"]; workersAI != nil && workersAI.Models != nil {
+		for modelID, m := range workersAI.Models {
+			if !boolVal(m.ToolCall) {
+				continue
+			}
+			models = append(models, &ai.Model{
+				ID:            modelID,
+				Name:          modelsDevName(m, modelID),
+				API:           ai.ApiOpenAICompletions,
+				Provider:      ai.ProviderCloudflareWorkersAI,
+				BaseURL:       api.CloudflareWorkersAIBaseURL,
+				Reasoning:     boolVal(m.Reasoning),
+				Input:         inputOf(m),
+				Cost:          modelsDevCostOf(m.Cost),
+				Compat:        &ai.OpenAICompletionsCompat{SendSessionAffinityHeaders: lo.ToPtr(true)},
+				ContextWindow: int64Or(limitContext(m), 4096),
+				MaxTokens:     int64Or(limitOutput(m), 4096),
+			})
+			recordModelsDevReasoningOptions("cloudflare-workers-ai", modelID, m)
+		}
+	}
+
+	// Process Cloudflare AI Gateway models
+	cloudflareAIGatewayModelIDs := map[string]bool{}
+	if gateway := data["cloudflare-ai-gateway"]; gateway != nil && gateway.Models != nil {
+		for prefixedID, m := range gateway.Models {
+			if !boolVal(m.ToolCall) {
+				continue
+			}
+			slashIdx := strings.Index(prefixedID, "/")
+			if slashIdx == -1 {
+				continue
+			}
+			upstream := prefixedID[:slashIdx]
+			nativeID := prefixedID[slashIdx+1:]
+
+			var apiKind ai.Api
+			var baseURL, id string
+			switch upstream {
+			case "openai":
+				apiKind = ai.ApiOpenAIResponses
+				baseURL = api.CloudflareAIGatewayOpenAIBaseURL
+				id = nativeID
+			case "anthropic":
+				apiKind = ai.ApiAnthropicMessages
+				baseURL = api.CloudflareAIGatewayAnthropicBaseURL
+				id = nativeID
+			case "workers-ai":
+				apiKind = ai.ApiOpenAICompletions
+				baseURL = api.CloudflareAIGatewayCompatBaseURL
+				id = prefixedID
+			default:
+				continue
+			}
+
+			// Gateway passthroughs forward session affinity headers to
+			// upstreams that use them for cache/routing affinity. pi's object
+			// spread keeps whichever compat shape the later metadata merge
+			// expects: anthropic-messages models take anthropic compat here
+			// (forceAdaptiveThinking etc. merge into the same object).
+			var compat ai.ModelCompat
+			if upstream == "anthropic" {
+				compat = &ai.AnthropicMessagesCompat{SendSessionAffinityHeaders: lo.ToPtr(true)}
+			} else if upstream == "workers-ai" {
+				compat = &ai.OpenAICompletionsCompat{SendSessionAffinityHeaders: lo.ToPtr(true)}
+			}
+
+			cloudflareAIGatewayModelIDs[id] = true
+			models = append(models, &ai.Model{
+				ID:            id,
+				Name:          modelsDevName(m, id),
+				API:           apiKind,
+				Provider:      ai.ProviderCloudflareAIGateway,
+				BaseURL:       baseURL,
+				Reasoning:     boolVal(m.Reasoning),
+				Input:         inputOf(m),
+				Cost:          modelsDevCostOf(m.Cost),
+				Compat:        compat,
+				ContextWindow: int64Or(limitContext(m), 4096),
+				MaxTokens:     int64Or(limitOutput(m), 4096),
+			})
+			recordModelsDevReasoningOptions("cloudflare-ai-gateway", id, m)
+		}
+	}
+
+	// The gateway proxies Workers AI through its OpenAI-compatible /compat
+	// endpoint, but models.dev may omit or intermittently drop those
+	// `workers-ai/*` entries from the AI Gateway catalog. Mirror the Workers
+	// AI catalog under the documented prefix so the gateway keeps its
+	// OpenAI-compatible models stable.
+	if workersAI := data["cloudflare-workers-ai"]; workersAI != nil && workersAI.Models != nil {
+		for modelID, m := range workersAI.Models {
+			if !boolVal(m.ToolCall) {
+				continue
+			}
+			id := "workers-ai/" + modelID
+			if cloudflareAIGatewayModelIDs[id] {
+				continue
+			}
+			cloudflareAIGatewayModelIDs[id] = true
+
+			models = append(models, &ai.Model{
+				ID:            id,
+				Name:          modelsDevName(m, id),
+				API:           ai.ApiOpenAICompletions,
+				Provider:      ai.ProviderCloudflareAIGateway,
+				BaseURL:       api.CloudflareAIGatewayCompatBaseURL,
+				Reasoning:     boolVal(m.Reasoning),
+				Input:         inputOf(m),
+				Cost:          modelsDevCostOf(m.Cost),
+				Compat:        &ai.OpenAICompletionsCompat{SendSessionAffinityHeaders: lo.ToPtr(true)},
+				ContextWindow: int64Or(limitContext(m), 4096),
+				MaxTokens:     int64Or(limitOutput(m), 4096),
+			})
+			recordModelsDevReasoningOptions("cloudflare-ai-gateway", id, m)
+		}
+	}
+
+	return models
+}
+
+// processOpenCodeModels handles opencode and opencode-go (pi:
+// loadModelsDevData opencodeVariants block). models.dev's provider.npm hint
+// routes each model to its wire API.
+func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
+	type openCodeVariant struct {
+		key      string
+		provider ai.ProviderID
+		basePath string
+	}
+	variants := []openCodeVariant{
+		{key: "opencode", provider: ai.ProviderOpenCode, basePath: "https://opencode.ai/zen"},
+		{key: "opencode-go", provider: ai.ProviderOpenCodeGo, basePath: "https://opencode.ai/zen/go"},
+	}
+
+	var models []*ai.Model
+	for _, variant := range variants {
+		entry := data[variant.key]
+		if entry == nil || entry.Models == nil {
+			continue
+		}
+		for modelID, m := range entry.Models {
+			if !boolVal(m.ToolCall) || m.Status == "deprecated" {
+				continue
+			}
+
+			npm := ""
+			if m.Provider != nil {
+				npm = m.Provider.Npm
+			}
+			var apiKind ai.Api
+			var baseURL string
+			var compat ai.ModelCompat
+
+			switch npm {
+			case "@ai-sdk/openai":
+				apiKind = ai.ApiOpenAIResponses
+				baseURL = variant.basePath + "/v1"
+				compat = &ai.OpenAIResponsesCompat{SessionAffinityFormat: lo.ToPtr(ai.SessionAffinityOpenAINoSession)}
+			case "@ai-sdk/anthropic":
+				apiKind = ai.ApiAnthropicMessages
+				// Anthropic SDK appends /v1/messages to baseURL
+				baseURL = variant.basePath
+			case "@ai-sdk/google":
+				apiKind = ai.ApiGoogleGenerativeAI
+				baseURL = variant.basePath + "/v1"
+			case "@ai-sdk/alibaba":
+				apiKind = ai.ApiOpenAICompletions
+				baseURL = variant.basePath + "/v1"
+				compat = &ai.OpenAICompletionsCompat{CacheControlFormat: lo.ToPtr(ai.CacheControlAnthropic)}
+			default:
+				// null, undefined, or @ai-sdk/openai-compatible
+				apiKind = ai.ApiOpenAICompletions
+				baseURL = variant.basePath + "/v1"
+			}
+
+			if variant.provider == ai.ProviderOpenCode && modelID == "grok-build-0.1" {
+				// pi: compat = { ...(compat ?? {}), supportsReasoningEffort: false }.
+				// supportsReasoningEffort is a completions-only key that the
+				// openai-responses adapter never reads (only openai-completions.ts
+				// consumes it), so for a responses-typed compat the extra key is
+				// inert in pi and is dropped here; the completions shapes match.
+				switch existing := compat.(type) {
+				case *ai.OpenAIResponsesCompat:
+					_ = existing
+				case *ai.OpenAICompletionsCompat:
+					existing.SupportsReasoningEffort = lo.ToPtr(false)
+				default:
+					compat = &ai.OpenAICompletionsCompat{SupportsReasoningEffort: lo.ToPtr(false)}
+				}
+			}
+
+			if (variant.provider == ai.ProviderOpenCode || variant.provider == ai.ProviderOpenCodeGo) && modelID == "kimi-k2.6" {
+				// OpenCode Kimi K2.6 accepts Anthropic-style thinking objects
+				// and rejects string thinking values or combined
+				// reasoning_effort. pi spreads thinkingFormat/supportsReasoningEffort
+				// into whatever object exists; for the anthropic-typed nil case
+				// that object is inert (the anthropic adapter reads neither
+				// key), which the fresh completions compat reproduces.
+				switch existing := compat.(type) {
+				case *ai.OpenAICompletionsCompat:
+					existing.ThinkingFormat = lo.ToPtr(ai.ThinkingFormatDeepSeek)
+					existing.SupportsReasoningEffort = lo.ToPtr(false)
+				default:
+					compat = &ai.OpenAICompletionsCompat{
+						ThinkingFormat:          lo.ToPtr(ai.ThinkingFormatDeepSeek),
+						SupportsReasoningEffort: lo.ToPtr(false),
+					}
+				}
+			}
+
+			// Fix known mismatches between models.dev npm data and actual
+			// OpenCode Go endpoint behaviour. models.dev reports these models
+			// as @ai-sdk/anthropic, but the OpenCode Go endpoints either
+			// don't accept Anthropic SDK auth (MiniMax M2.7) or are served
+			// through the OpenAI-compatible /v1/chat/completions path (Qwen
+			// 3.5/3.6). Switch them to openai-completions so requests use
+			// Bearer auth and the standard /v1/chat/completions endpoint.
+			if variant.provider == ai.ProviderOpenCodeGo {
+				if modelID == "minimax-m2.7" {
+					apiKind = ai.ApiOpenAICompletions
+					baseURL = variant.basePath + "/v1"
+				}
+				if modelID == "qwen3.5-plus" || modelID == "qwen3.6-plus" {
+					apiKind = ai.ApiOpenAICompletions
+					baseURL = variant.basePath + "/v1"
+					// Qwen/DashScope uses enable_thinking at the top level.
+					openAICompat := asOpenAICompat(compat)
+					openAICompat.ThinkingFormat = lo.ToPtr(ai.ThinkingFormatQwen)
+					compat = openAICompat
+				}
+			}
+
+			if apiKind == ai.ApiOpenAICompletions {
+				openAICompat := asOpenAICompat(compat)
+				openAICompat.MaxTokensField = lo.ToPtr(ai.MaxTokensPlain)
+				if openCodeOpenAICompletionsLongCacheRetentionUnsupportedModels[string(variant.provider)+":"+modelID] {
+					openAICompat.SupportsLongCacheRetention = lo.ToPtr(false)
+				}
+				compat = openAICompat
+			}
+
+			models = append(models, &ai.Model{
+				ID:            modelID,
+				Name:          modelsDevName(m, modelID),
+				API:           apiKind,
+				Provider:      variant.provider,
+				BaseURL:       baseURL,
+				Reasoning:     boolVal(m.Reasoning),
+				Input:         inputOf(m),
+				Cost:          modelsDevCostOf(m.Cost),
+				Compat:        compat,
+				ContextWindow: int64Or(limitContext(m), 4096),
+				MaxTokens:     int64Or(limitOutput(m), 4096),
+			})
+			recordModelsDevReasoningOptions(string(variant.provider), modelID, m)
+		}
+	}
+	return models
+}
+
+// asOpenAICompat reads an existing OpenAICompletionsCompat out of a compat
+// value or starts a fresh one (pi's `{...(compat ?? {}), field}` spreads).
+func asOpenAICompat(compat ai.ModelCompat) *ai.OpenAICompletionsCompat {
+	if openAICompat, ok := compat.(*ai.OpenAICompletionsCompat); ok && openAICompat != nil {
+		return openAICompat
+	}
+	return &ai.OpenAICompletionsCompat{}
+}
+
+var githubCopilotClaudeRe = regexp.MustCompile(`^claude-(haiku|sonnet|opus|fable)-[45]([.\-]|$)`)
+
+// processGitHubCopilotModels handles the Copilot catalog (pi:
+// loadModelsDevData github-copilot block). Claude 4.x/5.x models route to
+// anthropic-messages; Grok, gpt-5, oswe, and MAI-Code models are only served
+// through the Copilot /responses endpoint.
+func processGitHubCopilotModels(data ModelsDevCatalog) []*ai.Model {
+	entry := data["github-copilot"]
+	if entry == nil || entry.Models == nil {
+		return nil
+	}
+	var models []*ai.Model
+	for modelID, m := range entry.Models {
+		if !boolVal(m.ToolCall) || m.Status == "deprecated" {
+			continue
+		}
+
+		isCopilotClaude := githubCopilotClaudeRe.MatchString(modelID)
+		needsResponsesAPI := strings.HasPrefix(modelID, "grok-") ||
+			strings.HasPrefix(modelID, "gpt-5") ||
+			strings.HasPrefix(modelID, "oswe") ||
+			strings.HasPrefix(modelID, "mai-")
+
+		apiKind := ai.ApiOpenAICompletions
+		if isCopilotClaude {
+			apiKind = ai.ApiAnthropicMessages
+		} else if needsResponsesAPI {
+			apiKind = ai.ApiOpenAIResponses
+		}
+
+		model := &ai.Model{
+			ID:            modelID,
+			Name:          modelsDevName(m, modelID),
+			API:           apiKind,
+			Provider:      ai.ProviderGithubCopilot,
+			BaseURL:       "https://api.individual.githubcopilot.com",
+			Reasoning:     boolVal(m.Reasoning),
+			Input:         inputOf(m),
+			Cost:          modelsDevCostOf(m.Cost),
+			Headers:       maps.Clone(copilotStaticHeaders),
+			ContextWindow: int64Or(limitContext(m), 128000),
+			MaxTokens:     int64Or(limitOutput(m), 8192),
+		}
+		if apiKind == ai.ApiAnthropicMessages {
+			if compat := getAnthropicMessagesCompat("github-copilot", modelID); compat != nil {
+				model.Compat = compat
+			}
+		} else if apiKind == ai.ApiOpenAICompletions {
+			// compat only applies to openai-completions
+			model.Compat = &ai.OpenAICompletionsCompat{
+				SupportsStore:           lo.ToPtr(false),
+				SupportsDeveloperRole:   lo.ToPtr(false),
+				SupportsReasoningEffort: lo.ToPtr(false),
+			}
+		}
+		models = append(models, model)
+		recordModelsDevReasoningOptions("github-copilot", modelID, m)
+	}
+	return models
+}
+
+// processXiaomiModels handles Xiaomi MiMo (pi: loadModelsDevData xiaomiVariants
+// block). Built-in `xiaomi` targets the API billing endpoint (single stable
+// URL, keys from platform.xiaomimimo.com); the three `xiaomi-token-plan-*`
+// providers cover prepaid Token Plan endpoints in cn / ams / sgp.
+func processXiaomiModels(data ModelsDevCatalog) []*ai.Model {
+	xiaomiCompat := &ai.OpenAICompletionsCompat{
+		RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
+		ThinkingFormat: lo.ToPtr(ai.ThinkingFormatDeepSeek),
+	}
+	type xiaomiVariant struct {
+		source   string
+		provider ai.ProviderID
+		baseURL  string
+	}
+	variants := []xiaomiVariant{
+		{source: "xiaomi", provider: ai.ProviderXiaomi, baseURL: "https://api.xiaomimimo.com/v1"},
+		{source: "xiaomi-token-plan-cn", provider: ai.ProviderXiaomiTokenPlanCN, baseURL: "https://token-plan-cn.xiaomimimo.com/v1"},
+		{source: "xiaomi-token-plan-ams", provider: ai.ProviderXiaomiTokenPlanAMS, baseURL: "https://token-plan-ams.xiaomimimo.com/v1"},
+		{source: "xiaomi-token-plan-sgp", provider: ai.ProviderXiaomiTokenPlanSGP, baseURL: "https://token-plan-sgp.xiaomimimo.com/v1"},
+	}
+
+	var models []*ai.Model
+	for _, variant := range variants {
+		entry := data[variant.source]
+		if entry == nil || entry.Models == nil {
+			continue
+		}
+		for modelID, m := range entry.Models {
+			if !boolVal(m.ToolCall) || m.Status == "deprecated" {
+				continue
+			}
+			models = append(models, &ai.Model{
+				ID:            modelID,
+				Name:          modelsDevName(m, modelID),
+				API:           ai.ApiOpenAICompletions,
+				Provider:      variant.provider,
+				BaseURL:       variant.baseURL,
+				Reasoning:     boolVal(m.Reasoning),
+				Input:         inputOf(m),
+				Cost:          modelsDevCostOf(m.Cost),
+				Compat:        copyOpenAICompat(xiaomiCompat),
+				ContextWindow: int64Or(limitContext(m), 4096),
+				MaxTokens:     int64Or(limitOutput(m), 4096),
+			})
+			recordModelsDevReasoningOptions(string(variant.provider), modelID, m)
+		}
+	}
+	return models
+}
+
+// processQwenTokenPlanModels handles Alibaba Cloud Model Studio Token Plan
+// models (pi: loadModelsDevData qwenTokenPlanVariants block). International
+// and China use separate endpoints and API keys (sk-sp- prefix); the
+// Individual provider reuses the international source and endpoint with a
+// narrower catalog. models.dev keys are "alibaba-token-plan[-cn]"; pi exposes
+// them as "qwen-token-plan[-cn]" plus the Individual catalog view.
+func processQwenTokenPlanModels(data ModelsDevCatalog) []*ai.Model {
+	qwenTokenPlanCompat := &ai.OpenAICompletionsCompat{
+		ThinkingFormat:          lo.ToPtr(ai.ThinkingFormatQwen),
+		SupportsDeveloperRole:   lo.ToPtr(false),
+		SupportsStore:           lo.ToPtr(false),
+		SupportsReasoningEffort: lo.ToPtr(true),
+	}
+	type qwenTokenPlanVariant struct {
+		source   string
+		provider ai.ProviderID
+		baseURL  string
+		modelIDs map[string]bool
+	}
+	variants := []qwenTokenPlanVariant{
+		{source: "alibaba-token-plan", provider: ai.ProviderQwenTokenPlan, baseURL: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"},
+		{source: "alibaba-token-plan", provider: ai.ProviderQwenTokenPlanInd, baseURL: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", modelIDs: qwenTokenPlanIndividualModelIDs},
+		{source: "alibaba-token-plan-cn", provider: ai.ProviderQwenTokenPlanCN, baseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"},
+	}
+
+	var models []*ai.Model
+	for _, variant := range variants {
+		entry := data[variant.source]
+		var providerModels map[string]*ModelsDevModel
+		if entry != nil {
+			providerModels = entry.Models
+		}
+		emittedModelIDs := map[string]bool{}
+		trackEmitted := variant.modelIDs != nil
+
+		for modelID, m := range providerModels {
+			if !boolVal(m.ToolCall) || qwenTokenPlanExcludedModelIDs[modelID] {
+				continue
+			}
+			if variant.modelIDs != nil && !variant.modelIDs[modelID] {
+				continue
+			}
+			thinkingLevelMap := getEffortThinkingLevelMap(m.ReasoningOptions)
+			if thinkingLevelMap == nil && qwenTokenPlanReasoningEffortFallbackModelIDs[modelID] {
+				fallback := cloneThinkingLevelMap(qwenTokenPlanFallbackThinkingLevelMap)
+				thinkingLevelMap = &fallback
+			}
+
+			compat := copyOpenAICompat(qwenTokenPlanCompat)
+			if thinkingLevelMap == nil {
+				compat.SupportsReasoningEffort = lo.ToPtr(false)
+			}
+
+			models = append(models, &ai.Model{
+				ID:        modelID,
+				Name:      modelsDevName(m, modelID),
+				API:       ai.ApiOpenAICompletions,
+				Provider:  variant.provider,
+				BaseURL:   variant.baseURL,
+				Reasoning: boolVal(m.Reasoning),
+				Input:     inputOf(m),
+				Cost:      modelsDevCostOf(m.Cost),
+				Compat:    compat,
+				ThinkingLevelMap: func() ai.ThinkingLevelMap {
+					if thinkingLevelMap != nil {
+						return *thinkingLevelMap
+					}
+					return nil
+				}(),
+				ContextWindow: int64Or(limitContext(m), 4096),
+				MaxTokens:     int64Or(limitOutput(m), 4096),
+			})
+			if trackEmitted {
+				emittedModelIDs[modelID] = true
+			}
+		}
+
+		if trackEmitted && genOptions.strict {
+			assertExactModelIDs(string(variant.provider), qwenTokenPlanIndividualModelIDs, emittedModelIDs)
+		}
+	}
+	return models
+}
+
+// assertExactModelIds fails the strict run when an allowlisted catalog view
+// diverges from the generated one (pi: model-data.ts assertExactModelIds).
+func assertExactModelIDs(label string, expected, actual map[string]bool) {
+	expectedIDs := sortedSetMembers(expected)
+	actualIDs := sortedSetMembers(actual)
+	if sameStrings(expectedIDs, actualIDs) {
+		return
+	}
+	panic(fmt.Sprintf("%s model IDs do not match (%s)", label, describeSetDifference(expectedIDs, actualIDs)))
+}
+
+func sortedSetMembers(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for id := range set {
+		if set[id] {
+			out = append(out, id)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// describeSetDifference renders "missing: [...]; extra: [...]" (pi:
+// describeSetDifference).
+func describeSetDifference(expected, actual []string) string {
+	expectedSet := map[string]bool{}
+	for _, id := range expected {
+		expectedSet[id] = true
+	}
+	actualSet := map[string]bool{}
+	for _, id := range actual {
+		actualSet[id] = true
+	}
+	var missing, extra []string
+	for _, id := range expected {
+		if !actualSet[id] {
+			missing = append(missing, id)
+		}
+	}
+	for _, id := range actual {
+		if !expectedSet[id] {
+			extra = append(extra, id)
+		}
+	}
+	return fmt.Sprintf("missing: %v; extra: %v", missing, extra)
+}
+
+// modelsDevName is pi's `m.name || modelId` fallback.
+func modelsDevName(m *ModelsDevModel, fallback string) string {
+	if m.Name != "" {
+		return m.Name
+	}
+	return fallback
 }

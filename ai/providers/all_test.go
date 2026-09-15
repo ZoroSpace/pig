@@ -41,13 +41,19 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 	// "volcengine-plan" is pig-only (extension made builtin), slotted
 	// alphabetically. The A2 anthropic-messages batch adds fireworks,
 	// kimi-coding, minimax, minimax-cn, and vercel-ai-gateway; the B2
-	// openai-responses batch adds xai; the C2 codex batch adds openai-codex.
+	// openai-responses batch adds xai; the C2 codex batch adds openai-codex;
+	// the P2-T1 batch adds cloudflare-ai-gateway, cloudflare-workers-ai,
+	// github-copilot, opencode, opencode-go, qwen-token-plan(-cn/-individual),
+	// and xiaomi(-token-plan-cn/ams/sgp).
 	want := []string{
-		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
-		"fireworks", "google", "google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
+		"ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
+		"cloudflare-workers-ai", "deepseek", "fireworks", "github-copilot", "google",
+		"google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
-		"openai-codex", "openrouter", "together", "vercel-ai-gateway",
-		"volcengine-plan", "xai", "zai", "zai-coding-cn",
+		"openai-codex", "opencode", "opencode-go", "openrouter", "qwen-token-plan",
+		"qwen-token-plan-cn", "qwen-token-plan-individual", "together", "vercel-ai-gateway",
+		"volcengine-plan", "xiaomi", "xiaomi-token-plan-ams", "xiaomi-token-plan-cn",
+		"xiaomi-token-plan-sgp", "xai", "zai", "zai-coding-cn",
 	}
 	if !reflect.DeepEqual(ids, want) {
 		t.Fatalf("BuiltinProviders() = %v, want %v", ids, want)
@@ -57,11 +63,14 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 func TestBuiltinModelsRegistersAll(t *testing.T) {
 	models := BuiltinModels(nil)
 	for _, id := range []string{
-		"ant-ling", "anthropic", "baseten", "cerebras", "deepseek",
-		"fireworks", "google", "google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
+		"ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
+		"cloudflare-workers-ai", "deepseek", "fireworks", "github-copilot", "google",
+		"google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
-		"openai-codex", "openrouter", "together", "vercel-ai-gateway",
-		"volcengine-plan", "xai", "zai", "zai-coding-cn",
+		"openai-codex", "opencode", "opencode-go", "openrouter", "qwen-token-plan",
+		"qwen-token-plan-cn", "qwen-token-plan-individual", "together", "vercel-ai-gateway",
+		"volcengine-plan", "xiaomi", "xiaomi-token-plan-ams", "xiaomi-token-plan-cn",
+		"xiaomi-token-plan-sgp", "xai", "zai", "zai-coding-cn",
 	} {
 		provider := models.GetProvider(id)
 		if provider == nil {
@@ -78,8 +87,8 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 25 {
-		t.Fatalf("GetProviders() length = %d, want 25", got)
+	if got := len(models.GetProviders()); got != 37 {
+		t.Fatalf("GetProviders() length = %d, want 37", got)
 	}
 }
 

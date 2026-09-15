@@ -41,6 +41,7 @@ const (
 	ProviderAnthropic           = types.ProviderAnthropic
 	ProviderOpenRouter          = types.ProviderOpenRouter
 	ProviderDeepSeek            = types.ProviderDeepSeek
+	ProviderGithubCopilot       = types.ProviderGithubCopilot
 	ProviderNVIDIA              = types.ProviderNVIDIA
 	ProviderXAI                 = types.ProviderXAI
 	ProviderGroq                = types.ProviderGroq

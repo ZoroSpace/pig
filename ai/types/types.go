@@ -63,6 +63,7 @@ const (
 	ProviderAnthropic           ProviderID = "anthropic"
 	ProviderOpenRouter          ProviderID = "openrouter"
 	ProviderDeepSeek            ProviderID = "deepseek"
+	ProviderGithubCopilot       ProviderID = "github-copilot"
 	ProviderNVIDIA              ProviderID = "nvidia"
 	ProviderXAI                 ProviderID = "xai"
 	ProviderGroq                ProviderID = "groq"

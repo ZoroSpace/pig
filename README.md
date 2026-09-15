@@ -35,7 +35,7 @@ pig 与 pi 做到**行为规格级对齐**：pi 的 TypeScript 代码就是 pig 
 | 启动开销 | CLI 启动约 25ms、峰值内存约 30MB |
 | 默认配置 | `~/.pig/agent`，项目级配置目录为 `.pig/` |
 | 会话格式 | 与 pi JSONL 双向兼容（v3/v4 两代格式实测互读） |
-| Provider | 25 家内置、约 960 个模型、7 种 API 协议适配器 |
+| Provider | 37 家内置、约 1200 个模型、7 种 API 协议适配器 |
 | 真实服务验证 | DeepSeek、火山方舟 Coding Plan、Google（部分；其余见[验证分层](#provider实现--验证要分开看)） |
 | 测试 | 1300+ 测试函数 · 28 个包 · `-race` 全绿 |
 | License | MIT |
@@ -103,21 +103,21 @@ pig 是纯 Go 实现，编译产物为**单个静态二进制**，拷到任何 L
 - **逐字段一致的模型目录**：内置模型 catalog 由生成脚本产出，与 pi 的模型数据逐字段零差异
 - **配置隔离，互不踩踏**：pig 用 `~/.pig/`，pi 用 `~/.pi/`，两套目录完全独立；想共用存量数据见[从 pi 迁移](#从-pi-迁移数据)
 
-### 🌐 模型接入：25 家 provider，7 种 API 协议
+### 🌐 模型接入：37 家 provider，7 种 API 协议
 
 各家模型服务的接口格式互不相同（OpenAI、Anthropic、Gemini 的 API 长得完全不一样）。pig 为每种接口格式移植了独立的适配器，事件语义（usage、tool call 边界、思考块、缓存命中、中止/错误/重试）逐协议对齐：
 
 | API 协议 | 覆盖 |
 | --- | --- |
-| openai-completions | OpenAI / DeepSeek / OpenRouter / Groq / Cerebras / Together / NVIDIA / Moonshot / Z.ai 等 |
-| openai-responses | OpenAI / xAI |
+| openai-completions | OpenAI / DeepSeek / OpenRouter / Groq / Cerebras / Together / NVIDIA / Moonshot / Z.ai / Qwen Token Plan / Xiaomi MiMo / Cloudflare Workers AI 等 |
+| openai-responses | OpenAI / xAI / GitHub Copilot（GPT-5 与 Grok 系）/ OpenCode Zen |
 | azure-openai-responses | Azure OpenAI |
 | openai-codex-responses | OpenAI Codex（含 WebSocket 传输与 zstd 请求压缩） |
-| anthropic-messages | Anthropic / Kimi Coding / MiniMax / Vercel AI Gateway / Fireworks |
-| google-generative-ai | Google Gemini |
+| anthropic-messages | Anthropic / Kimi Coding / MiniMax / Vercel AI Gateway / Fireworks / GitHub Copilot（Claude 系） |
+| google-generative-ai | Google Gemini / OpenCode Zen |
 | google-vertex | Vertex AI（含 ADC 服务账号认证） |
 
-内置 25 家 provider、约 960 个模型开箱即用；非内置端点通过 `models.json` 自定义 provider 挂进来。Anthropic / Kimi / OpenAI Codex / xAI 已移植 OAuth 登录（浏览器 + device code 双流程，目前为 mock 级验证，真实登录链路待销账）。
+内置 37 家 provider、约 1200 个模型开箱即用；非内置端点通过 `models.json` 自定义 provider 挂进来。Anthropic / Kimi / OpenAI Codex / xAI / GitHub Copilot 已移植 OAuth 登录（浏览器 + device code 双流程，目前为 mock 级验证，真实登录链路待销账）。
 
 ### 🛠 干活的工具：内置七件套
 
@@ -288,7 +288,7 @@ cp -a ~/.pi/agent ~/.pig/agent
 
 | 能力 | pi | pig |
 | --- | --- | --- |
-| 交互 / print / JSON 三模式、7 种 API 协议、25 家 provider、模型 catalog | ✅ | ✅ 对齐 |
+| 交互 / print / JSON 三模式、7 种 API 协议、37 家 provider、模型 catalog | ✅ | ✅ 对齐 |
 | 会话树 / 分支 / 压缩 / 导出 HTML | ✅ | ✅ |
 | TUI（编辑器、补全、主题、鼠标、搜索）与 Markdown / LaTeX / Mermaid | ✅ | ✅ pi-tui 全量移植 |
 | 中文分词与 CJK 渲染修复 | — | ✅ pig 增强 |

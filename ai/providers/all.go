@@ -67,22 +67,19 @@ func GetBuiltinModels(provider BuiltinProvider) []ai.Model {
 // BuiltinProviders returns all built-in providers, freshly constructed (pi:
 // builtinProviders), in pi's alphabetical position order. The remaining
 // factories arrive with their adapters (README Phase 2):
-// amazonBedrockProvider, azureOpenAIResponsesProvider,
-// cloudflareAIGatewayProvider, cloudflareWorkersAIProvider,
-// githubCopilotProvider,
-// mistralProvider, opencodeProvider,
-// opencodeGoProvider, qwenTokenPlanProvider, qwenTokenPlanCnProvider,
-// qwenTokenPlanIndividualProvider, radiusProvider,
-// xiaomiProvider, xiaomiTokenPlanAmsProvider, xiaomiTokenPlanCnProvider,
-// xiaomiTokenPlanSgpProvider.
+// amazonBedrockProvider, azureOpenAIResponsesProvider, mistralProvider,
+// radiusProvider.
 func BuiltinProviders() []ai.Provider {
 	return []ai.Provider{
 		AntLingProvider(),
 		AnthropicProvider(),
 		BasetenProvider(),
 		CerebrasProvider(),
+		CloudflareAIGatewayProvider(),
+		CloudflareWorkersAIProvider(),
 		DeepSeekProvider(),
 		FireworksProvider(),
+		GitHubCopilotProvider(),
 		GoogleProvider(),
 		GoogleVertexProvider(),
 		GroqProvider(),
@@ -95,10 +92,19 @@ func BuiltinProviders() []ai.Provider {
 		NVIDIAProvider(),
 		OpenAIProvider(),
 		OpenAICodexProvider(),
+		OpenCodeProvider(),
+		OpenCodeGoProvider(),
 		OpenRouterProvider(),
+		QwenTokenPlanProvider(),
+		QwenTokenPlanCNProvider(),
+		QwenTokenPlanIndividualProvider(),
 		TogetherProvider(),
 		VercelAIGatewayProvider(),
 		VolcenginePlanProvider(),
+		XiaomiProvider(),
+		XiaomiTokenPlanAMSProvider(),
+		XiaomiTokenPlanCNProvider(),
+		XiaomiTokenPlanSGPProvider(),
 		XaiProvider(),
 		ZaiProvider(),
 		ZaiCodingCNProvider(),

@@ -1,7 +1,7 @@
-// pi: test/github-copilot-anthropic.test.ts. The TS test also asserts the
-// generated github-copilot catalog (thinking level maps, context windows) —
-// that provider's catalog entries land with the B2 regeneration, so only the
-// adapter's request-shaping surface is exercised here.
+// pi: test/github-copilot-anthropic.test.ts. The catalog half (thinking
+// level maps, context windows) is asserted in
+// TestGitHubCopilotCatalogAnthropicMapping below, now that the
+// github-copilot catalog entries have landed.
 package api
 
 import (
@@ -10,6 +10,7 @@ import (
 
 	"github.com/samber/lo"
 
+	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
 )
 
@@ -70,5 +71,61 @@ func TestGitHubCopilotAnthropicAgentInitiator(t *testing.T) {
 	}
 	if got := captured.req.Header.Get("X-Initiator"); got != "agent" {
 		t.Errorf("X-Initiator = %q, want agent", got)
+	}
+}
+
+// TestGitHubCopilotCatalogAnthropicMapping ports the catalog half of
+// github-copilot-anthropic.test.ts (deferred from the A1 batch until the
+// github-copilot catalog entries landed): thinking-level overrides, the 1M
+// extended context, and getSupportedThinkingLevels membership.
+func TestGitHubCopilotCatalogAnthropicMapping(t *testing.T) {
+	catalog := catalogModelsSorted(t)[types.ProviderID("github-copilot")]
+	if len(catalog) == 0 {
+		t.Fatal("github-copilot catalog not populated")
+	}
+	catalogByID := map[string]types.Model{}
+	for _, model := range catalog {
+		catalogByID[model.ID] = model
+	}
+
+	opus47 := catalogByID["claude-opus-4.7"]
+	if opus47.ThinkingLevelMap[types.ModelThinkingMinimal] == nil || *opus47.ThinkingLevelMap[types.ModelThinkingMinimal] != "low" {
+		t.Errorf("opus-4.7 minimal = %v, want low", opus47.ThinkingLevelMap[types.ModelThinkingMinimal])
+	}
+	assertCopilotLevel(t, opus47, "xhigh", true)
+	assertCopilotLevel(t, opus47, "max", true)
+
+	opus5 := catalogByID["claude-opus-5"]
+	if opus5.API != types.ApiAnthropicMessages {
+		t.Errorf("opus-5 api = %s, want anthropic-messages", opus5.API)
+	}
+	if opus5.ContextWindow != 1000000 {
+		t.Errorf("opus-5 contextWindow = %d, want 1000000 (extended context)", opus5.ContextWindow)
+	}
+	if opus5.ThinkingLevelMap[types.ModelThinkingMinimal] == nil || *opus5.ThinkingLevelMap[types.ModelThinkingMinimal] != "low" {
+		t.Errorf("opus-5 minimal = %v, want low", opus5.ThinkingLevelMap[types.ModelThinkingMinimal])
+	}
+	assertCopilotLevel(t, opus5, "xhigh", true)
+	assertCopilotLevel(t, opus5, "max", true)
+
+	sonnet46 := catalogByID["claude-sonnet-4.6"]
+	if sonnet46.ThinkingLevelMap[types.ModelThinkingMinimal] == nil || *sonnet46.ThinkingLevelMap[types.ModelThinkingMinimal] != "low" {
+		t.Errorf("sonnet-4.6 minimal = %v, want low", sonnet46.ThinkingLevelMap[types.ModelThinkingMinimal])
+	}
+	assertCopilotLevel(t, sonnet46, "max", true)
+	assertCopilotLevel(t, sonnet46, "xhigh", false)
+}
+
+// assertCopilotLevel asserts getSupportedThinkingLevels membership.
+func assertCopilotLevel(t *testing.T, model types.Model, level types.ModelThinkingLevel, want bool) {
+	t.Helper()
+	supported := false
+	for _, candidate := range ai.GetSupportedThinkingLevels(&model) {
+		if candidate == level {
+			supported = true
+		}
+	}
+	if supported != want {
+		t.Errorf("%s supports %s = %v, want %v", model.ID, level, supported, want)
 	}
 }

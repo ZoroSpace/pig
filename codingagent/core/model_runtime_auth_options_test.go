@@ -227,12 +227,12 @@ func TestModelRuntimeProjectsProviderOwnedMethodsNamesAndStatus(t *testing.T) {
 		}
 	}
 	oauthOptions := authOptions(t, runtime, "oauth")
-	if len(oauthOptions) != 4 {
-		t.Fatalf("oauth options = %d, want the four builtin oauth providers (A2 anthropic/kimi + B2 xai + C2 codex)", len(oauthOptions))
+	if len(oauthOptions) != 5 {
+		t.Fatalf("oauth options = %d, want the five builtin oauth providers (A2 anthropic/kimi + B2 xai + C2 codex + P2-T1 github-copilot)", len(oauthOptions))
 	}
 	for _, option := range oauthOptions {
 		id := option.provider.ID()
-		if id != "anthropic" && id != "kimi-coding" && id != "xai" && id != "openai-codex" {
+		if id != "anthropic" && id != "kimi-coding" && id != "xai" && id != "openai-codex" && id != "github-copilot" {
 			t.Fatalf("unexpected oauth builtin: %s", id)
 		}
 	}
