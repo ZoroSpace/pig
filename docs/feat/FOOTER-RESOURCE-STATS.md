@@ -16,7 +16,7 @@
 stats line 末尾以 `|` 与 token 统计隔开：
 
 ```
-↑58k ↓2.9k R32k W1.0k CH35.2% $0.050 3.0%/1.0M (auto) | MEM 52MB
+↑58k ↓2.9k R32k W1.0k CH35.2% $0.050 3.0%/1.0M (auto) | MEM52MB
 ```
 
 - 格式 `FormatMemBytes`：`52MB` 而非 `52M`（用户拍板，"M" 易与 token 的 M 混淆）——<1MB 用 KB（向上取整）、1~10MB 一位小数、≥10MB 整数、≥1GB 一位小数。
@@ -38,11 +38,11 @@ stats line 末尾以 `|` 与 token 统计隔开：
 
 `settings.json` 的 pig-only 键 `showResourceStats`（默认 false；`Get/Set` 沿 `QuietStartup` 模式，Settings 清单注释同步）→ `/settings` 面板新增 "Resource stats" 项（splice 模式插在 terminal-progress 之后，pig-only 注释声明）→ 回调 `SetShowResourceStats`（持久化 + footer 即时生效）→ interactive 两处初始接线（构造后 + 7090 处 session 重绑后，紧邻 `SetAutoCompactEnabled` 既有模式）。
 
-## 回归测试（8 函数，`components/footer_mem_test.go`）
+## 回归测试（初版 8 函数；追加批后 16 函数、文件更名 `footer_resource_stats_test.go`、显示格式去空格，见下 RESOURCE-ALERTS 节）
 
-- `TestFooterMemHiddenByDefault`（设置关时即使有采样值也不显示——门控即本批语义核心）/ `TestFooterMemShownWhenEnabledAndSampled`（断言 `3.0%/1.0M (auto) | MEM 52MB` 全串）/ `TestFooterMemHiddenWhenEnabledButUnsampled`
+- `TestFooterMemHiddenByDefault`（设置关时即使有采样值也不显示——门控即本批语义核心）/ `TestFooterMemShownWhenEnabledAndSampled`（断言 `3.0%/1.0M (auto) | MEM52MB` 全串）/ `TestFooterMemHiddenWhenEnabledButUnsampled`
 - `TestSetShowResourceStatsLifecycle`（开→sampler 启动 + 即时采样；关→停止 + 清零；无 procfs 平台 skip）
-- `TestStartRSSPollerSamplesIntoSink` / `TestStartRSSPollerStopIsIdempotent`
+- `TestStartResourcePollerSamplesIntoSink` / `TestStartResourcePollerStopIsIdempotent`（初版名 TestStartRSSPoller*，追加批更名）
 - `TestReadRSSBytesSanity`（1MB~64GB 合理区间）、`TestFormatMemBytes`（格式钉死：`512KB`/`1024KB`/`1.0MB`/`8.4MB`/`52MB`/`1.2GB`）
 
 ## 过程记录
@@ -55,7 +55,7 @@ stats line 末尾以 `|` 与 token 统计隔开：
 用户插入批：资源段从单一 MEM 扩为**两项常驻 + 三项异常浮出**。显示格式经用户两次纠正定稿：项间用 `·` 分隔（不加空格）、HEAP 用英文标签、单位保持 MB：
 
 ```
-↑58k ↓2.9k … 3.0%/1.0M (auto) | MEM 52MB·HEAP 14MB·!G 387·!FD 210·!CPU 97%
+↑58k ↓2.9k … 3.0%/1.0M (auto) | MEM52MB·HEAP14MB·!G387·!FD210·!CPU97%
 ```
 
 - **常态**：`MEM`（RSS）+ `HEAP`（`runtime.HeapAlloc` 活堆）。配对的意义：活堆涨 = transcript 成比例（设计内，见 2026-09-14 内存整案），RSS 涨 = 运行时 arena 保留（无害），比值定性泄漏 vs churn。
