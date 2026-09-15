@@ -110,6 +110,7 @@ import (
 //	fullscreenScrollbar?: ScrollViewScrollbar            — default "auto"
 //	fullscreenCopyOnSelect?: boolean                     — default true; no effect in regular TUI mode (v0.85.1)
 //	cjkSegmenter?: "bigram" | "sst" | "gse"              — pig-only; default via PIG_CJK_SEGMENTER env, else "bigram"
+//	showResourceStats?: boolean                          — pig-only; show process resource stats (memory) in the footer, default false
 type Settings map[string]any
 
 // SettingsScope selects which settings layer a storage operation targets.
@@ -1879,6 +1880,28 @@ func (m *SettingsManager) SetQuietStartup(quiet bool) {
 	defer m.mutex.Unlock()
 	m.globalSettings["quietStartup"] = quiet
 	m.markModified("quietStartup", "")
+	m.save()
+}
+
+// GetShowResourceStats returns whether the footer shows process resource
+// stats (pig-only; no pi counterpart — pi's footer shows token stats only).
+// Default false: the segment stays hidden until explicitly enabled.
+func (m *SettingsManager) GetShowResourceStats() bool {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	show, ok := settingsBool(m.settings, "showResourceStats")
+	if !ok {
+		return false
+	}
+	return show
+}
+
+// SetShowResourceStats records the footer resource-stats toggle (pig-only).
+func (m *SettingsManager) SetShowResourceStats(show bool) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.globalSettings["showResourceStats"] = show
+	m.markModified("showResourceStats", "")
 	m.save()
 }
 

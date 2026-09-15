@@ -508,6 +508,7 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 	m.footerDataProviderView = core.NewFooterDataProvider(session.SessionManager.GetCwd())
 	m.footer = components.NewFooterComponent(session, m.footerDataProviderView)
 	m.footer.SetAutoCompactEnabled(session.AutoCompactionEnabled())
+	m.footer.SetShowResourceStats(settingsManager.GetShowResourceStats())
 	m.footerContainer = &tui.Container{}
 	m.footerContainer.AddChild(m.footer)
 
@@ -5204,6 +5205,7 @@ func (m *InteractiveMode) showSettingsSelector() {
 				FullscreenCopyOnSelect:  m.settingsManager().GetFullscreenCopyOnSelect(),
 				Warnings:                m.settingsManager().GetWarnings(),
 				CJKSegmenter:            m.settingsManager().GetCJKSegmenter(),
+				ShowResourceStats:       m.settingsManager().GetShowResourceStats(),
 			},
 			&components.SettingsCallbacks{
 				OnAutoCompactChange: func(enabled bool) {
@@ -5307,6 +5309,10 @@ func (m *InteractiveMode) showSettingsSelector() {
 				},
 				OnQuietStartupChange: func(enabled bool) {
 					m.settingsManager().SetQuietStartup(enabled)
+				},
+				OnShowResourceStatsChange: func(enabled bool) {
+					m.settingsManager().SetShowResourceStats(enabled)
+					m.footer.SetShowResourceStats(enabled)
 				},
 				OnDefaultProjectTrustChange: func(defaultProjectTrust core.DefaultProjectTrust) {
 					m.settingsManager().SetDefaultProjectTrust(defaultProjectTrust)
@@ -7088,6 +7094,7 @@ func (m *InteractiveMode) applyRuntimeSettings() {
 	}
 	m.footer.SetSession(m.session())
 	m.footer.SetAutoCompactEnabled(m.session().AutoCompactionEnabled())
+	m.footer.SetShowResourceStats(m.settingsManager().GetShowResourceStats())
 	m.footerDataProviderView.SetCwd(m.sessionManager().GetCwd())
 	m.hideThinkingBlock = m.settingsManager().GetHideThinkingBlock()
 	m.outputPad = m.settingsManager().GetOutputPad()

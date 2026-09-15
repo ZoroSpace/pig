@@ -122,6 +122,7 @@ type SettingsConfig struct {
 	FullscreenCopyOnSelect  bool
 	Warnings                core.WarningSettings
 	CJKSegmenter            string // pig-only: "bigram" | "sst" | "gse"
+	ShowResourceStats       bool   // pig-only: footer resource segment (MEM now, more later)
 }
 
 // SettingsCallbacks carries the change handlers (pi: SettingsCallbacks).
@@ -161,7 +162,8 @@ type SettingsCallbacks struct {
 	OnFullscreenScrollbarChange    func(mode core.ScrollViewScrollbar)
 	OnFullscreenCopyOnSelectChange func(enabled bool)
 	OnWarningsChange               func(warnings core.WarningSettings)
-	OnCJKSegmenterChange           func(mode string) // pig-only
+	OnCJKSegmenterChange           func(mode string)  // pig-only
+	OnShowResourceStatsChange      func(enabled bool) // pig-only
 	OnCancel                       func()
 }
 
@@ -1083,6 +1085,20 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 		Values:       []string{"true", "false"},
 	}
 
+	// Resource stats toggle (pig-only; insert after terminal-progress).
+	// Name is deliberately generic: the segment may grow more process
+	// metrics (CPU, goroutines, …) beyond MEM.
+	terminalProgressIndex := findItemIndex(items, "terminal-progress")
+	items = append(items, nil)
+	copy(items[terminalProgressIndex+1:], items[terminalProgressIndex:])
+	items[terminalProgressIndex+1] = &tui.SettingItem{
+		Id:           "resource-stats",
+		Label:        "Resource stats",
+		Description:  "Show process resource usage (memory) in the footer",
+		CurrentValue: boolSettingValue(config.ShowResourceStats),
+		Values:       []string{"true", "false"},
+	}
+
 	// HTTP idle timeout values (labels of the picker choices)
 	for _, item := range items {
 		if item.Id == "http-idle-timeout" {
@@ -1219,6 +1235,10 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 			case "terminal-progress":
 				if callbacks.OnShowTerminalProgressChange != nil {
 					callbacks.OnShowTerminalProgressChange(newValue == "true")
+				}
+			case "resource-stats":
+				if callbacks.OnShowResourceStatsChange != nil {
+					callbacks.OnShowResourceStatsChange(newValue == "true")
 				}
 			case "tui-mode":
 				if callbacks.OnTuiModeChange != nil {

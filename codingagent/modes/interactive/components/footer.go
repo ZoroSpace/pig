@@ -1,6 +1,8 @@
 // footer.go (pi: components/footer.ts) — footer component showing pwd,
 // token stats, and context usage. Computes token/context stats from the
-// session; git branch and extension statuses come from the provider.
+// session; git branch and extension statuses come from the provider. When
+// the pig-only showResourceStats setting is on, the stats line also shows
+// process resource stats (MEM, separated by "|").
 //
 // Declared deviation: pi reads session.sessionManager/session.state
 // directly on the concrete AgentSession; pig routes the accesses through
@@ -17,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
@@ -121,14 +124,22 @@ func newFooterSessionView(session *core.AgentSession) footerSessionView {
 }
 
 // FooterComponent is the footer line pair: pwd (branch, session name) and
-// token/context stats with the right-aligned model name.
+// token/context stats with the right-aligned model name. When resource
+// stats are enabled (pig-only), the stats line gains a "| MEM …" segment.
 type FooterComponent struct {
 	mu sync.Mutex
 
 	autoCompactEnabled bool
+	showResourceStats  bool // pig-only: gates the MEM segment (showResourceStats setting)
 	session            *core.AgentSession
 	view               footerSessionView
 	footerData         ReadonlyFooterDataProvider
+
+	// Resource sampling (pig-only): RSS is read off-frame on a slow ticker
+	// and cached here; 0 = unsampled (segment hidden). The sampler runs
+	// only while the segment is enabled — never to poll an invisible one.
+	rssBytes      atomic.Int64
+	stopRSSPoller func()
 }
 
 // NewFooterComponent builds the footer (pi: constructor).
@@ -162,18 +173,52 @@ func (f *FooterComponent) SetAutoCompactEnabled(enabled bool) {
 	f.autoCompactEnabled = enabled
 }
 
+// SetShowResourceStats toggles the footer resource segment (pig-only; pi
+// has no counterpart — the showResourceStats setting). The RSS sampler
+// starts lazily on first enable and stops while hidden: sampling exists
+// only to feed a visible segment.
+func (f *FooterComponent) SetShowResourceStats(enabled bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.showResourceStats = enabled
+	if enabled {
+		if f.stopRSSPoller == nil {
+			// Sample once up front so the segment appears on the next
+			// render instead of one interval later.
+			if b, ok := readRSSBytes(); ok {
+				f.rssBytes.Store(b)
+			}
+			f.stopRSSPoller = startRSSPoller(footerRSSInterval, &f.rssBytes)
+		}
+		return
+	}
+	if f.stopRSSPoller != nil {
+		f.stopRSSPoller()
+		f.stopRSSPoller = nil
+	}
+	f.rssBytes.Store(0)
+}
+
 // Invalidate is a no-op: git branch caching is handled by the provider
 // (pi: invalidate — kept for call-site compatibility).
 func (f *FooterComponent) Invalidate() {}
 
-// Dispose cleans up; git watcher cleanup is handled by the provider (pi:
-// dispose).
-func (f *FooterComponent) Dispose() {}
+// Dispose stops the resource sampler if it is running; git watcher cleanup
+// is handled by the provider (pi: dispose).
+func (f *FooterComponent) Dispose() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.stopRSSPoller != nil {
+		f.stopRSSPoller()
+		f.stopRSSPoller = nil
+	}
+}
 
 // Render renders the footer lines (pi: render).
 func (f *FooterComponent) Render(width int) []string {
 	f.mu.Lock()
 	autoCompact := f.autoCompactEnabled
+	showResourceStats := f.showResourceStats
 	view := f.view
 	f.mu.Unlock()
 
@@ -327,6 +372,15 @@ func (f *FooterComponent) Render(width int) []string {
 	statsParts = append(statsParts, contextPercentStr)
 	if core.AreExperimentalFeaturesEnabled() {
 		statsParts = append(statsParts, currentTheme.Fg("dim", "•")+" "+currentTheme.Bold(currentTheme.Fg("warning", "xp")))
+	}
+
+	// Resource segment (pig-only; pi has no counterpart): process stats
+	// separated from the usage stats by "|". Hidden until the sampler
+	// produced a value (0 = not sampled / no procfs platform).
+	if showResourceStats {
+		if rssBytes := f.rssBytes.Load(); rssBytes > 0 {
+			statsParts = append(statsParts, "|", "MEM "+FormatMemBytes(rssBytes))
+		}
 	}
 
 	statsLeft := strings.Join(statsParts, " ")
