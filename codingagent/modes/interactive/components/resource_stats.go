@@ -16,7 +16,6 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -196,19 +195,6 @@ func startResourcePoller(interval time.Duration, stats *resourceStats) (stop fun
 		}
 	}()
 	return func() { once.Do(func() { close(done) }) }
-}
-
-// readProcessCPUMicros reads the process's cumulative CPU time
-// (utime+stime) in microseconds via getrusage — portable across Linux and
-// darwin, and finer-grained than /proc/self/stat's USER_HZ ticks.
-func readProcessCPUMicros() (int64, bool) {
-	var ru syscall.Rusage
-	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &ru); err != nil {
-		return 0, false
-	}
-	utime := int64(ru.Utime.Sec)*1e6 + int64(ru.Utime.Usec)
-	stime := int64(ru.Stime.Sec)*1e6 + int64(ru.Stime.Usec)
-	return utime + stime, true
 }
 
 // FormatMemBytes formats a byte count for the footer resource segment

@@ -81,7 +81,9 @@ stats line 末尾以 `|` 与 token 统计隔开：
    - FD：darwin 数 `/dev/fd`（fdesc），Linux 仍走 `/proc/self/fd`；
    - G：`NumGoroutine` 本就跨平台。
 
-平台差异收敛为两个小文件：`resource_stats_linux.go`（statm + /proc/self/fd）、`resource_stats_darwin.go`（ps + /dev/fd），其余全在共享的 `resource_stats.go`。当前显示形态：
+平台差异收敛为两个小文件：`resource_stats_linux.go`（statm + /proc/self/fd）、`resource_stats_darwin.go`（ps + /dev/fd），CPU 的 getrusage 归入 `resource_stats_unix.go`（//go:build unix）；其余全在共享的 `resource_stats.go`。
+
+**Windows：编译桩，非支持平台**。pig 本体本就编不过 windows（tui 依赖 POSIX 信号 syscall.Kill/SIGWINCH，tui/terminal.go），本批仅为资源采样代码提供 `resource_stats_windows.go` 编译桩（三采样器返回不可用 → 段隐藏），未来接 windows 支持时的真实现路径已写在文件头注释：GetProcessMemoryInfo（WorkingSetSize）/ GetProcessTimes / 句柄数（FD 阈值需 windows 专属基线，典型进程持有数百句柄）。三平台 `go build` 验证经独立临时包（components 传递依赖 tui，windows 下整包编不过为既有边界）。当前显示形态：
 
 ```
 ↑58k ↓2.9k … 3.0%/1.0M (auto) | MEM22MB·!G387·!FD210·!CPU97%
