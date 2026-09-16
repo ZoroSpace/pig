@@ -23,10 +23,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/ZoroSpace/pig/codingagent"
@@ -285,29 +283,11 @@ func KillTrackedDetachedChildren() {
 	}
 }
 
-// KillProcessTree kills a process and all its children (pi:
-// killProcessTree).
-func KillProcessTree(pid int) {
-	if runtime.GOOS == "windows" {
-		// pi (v0.85.1): use the trusted System32 executable so cleanup does
-		// not depend on PATH.
-		taskkill := filepath.Join(systemRoot(), "System32", "taskkill.exe")
-		cmd := exec.Command(taskkill, "/F", "/T", "/PID", strconv.Itoa(pid))
-		cmd.SysProcAttr = spawnSysProcAttr()
-		_ = cmd.Start() // Ignore errors if taskkill fails.
-		return
-	}
-	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
-		// Fallback to killing just the child if process group kill fails.
-		_ = syscall.Kill(pid, syscall.SIGKILL)
-	}
-}
+// KillProcessTree is per-platform (compile-time dispatch replaced the
+// runtime GOOS branch in the Windows compile port, WINDOWS-SUPPORT):
+// shell_kill_unix.go / shell_kill_windows.go.
 
-// systemRoot resolves the Windows system root (pi:
-// process.env.SystemRoot ?? "C:\\Windows").
-func systemRoot() string {
-	if root := os.Getenv("SystemRoot"); root != "" {
-		return root
-	}
-	return `C:\Windows`
-}
+// systemRoot was moved to shell_kill_windows.go (Windows-only).
+
+// KillTrackedDetachedChildren kills all tracked detached children (pi:
+// killTrackedDetachedChildren).

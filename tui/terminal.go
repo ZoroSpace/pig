@@ -7,7 +7,9 @@
 //     process.stdout.write / process.stdin.on; Go tests inject pipes instead.
 //   - Node raw mode → golang.org/x/term MakeRaw/Restore (saved termios is the
 //     wasRaw equivalent).
-//   - process.stdout 'resize' event → SIGWINCH via signal.Notify goroutine.
+//   - process.stdout 'resize' event → SIGWINCH via signal.Notify goroutine
+//     (POSIX half lives in terminal_unix.go; Windows polls the console
+//     size instead — terminal_windows.go, WINDOWS-SUPPORT 2026-09-14).
 //   - setEncoding('utf8') → incremental UTF-8 decode in the stdin read loop
 //     (StringDecoder semantics for multibyte sequences split across reads).
 //   - enableWindowsVTInput and the win32-console-mode native helper have no
@@ -18,14 +20,12 @@ package tui
 import (
 	"io"
 	"os"
-	"os/signal"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -210,25 +210,11 @@ func (t *ProcessTerminal) ModifyOtherKeysActive() bool {
 	return t.modifyOtherKeysActive
 }
 
-// refreshTerminalDimensions refreshes terminal dimensions on POSIX platforms
-// by sending SIGWINCH to this process. Best-effort: some environments
-// (restricted seccomp or LSM policies) return EACCES for kill(2); in that
-// case the dimensions refresh is skipped rather than crashing (pi:
-// refreshTerminalDimensions).
-// terminalPlatform and killSelfSignal are test seams for pi's
-// process.platform / process.kill monkey-patching (Go cannot override
-// syscalls).
-var (
-	terminalPlatform = runtime.GOOS
-	killSelfSignal   = func() error { return syscall.Kill(os.Getpid(), syscall.SIGWINCH) }
-)
-
-func refreshTerminalDimensions() {
-	if terminalPlatform == "windows" {
-		return
-	}
-	_ = killSelfSignal()
-}
+// refreshTerminalDimensions and startWinchHandler are per-platform: the
+// POSIX implementations (SIGWINCH seam) live in terminal_unix.go, the
+// Windows poll-based ones in terminal_windows.go. Split for the Windows
+// compile port (WINDOWS-SUPPORT, 2026-09-14); comments and test seams
+// moved with the code.
 
 func (t *ProcessTerminal) Start(onInput func(data string), onResize func()) {
 	t.mu.Lock()
@@ -261,35 +247,8 @@ func (t *ProcessTerminal) Start(onInput func(data string), onResize func()) {
 	t.queryAndEnableKittyProtocol()
 }
 
-// startWinchHandler runs a goroutine forwarding SIGWINCH to onResize.
-func (t *ProcessTerminal) startWinchHandler(onResize func()) {
-	t.mu.Lock()
-	if t.winchStop != nil {
-		t.mu.Unlock()
-		return
-	}
-	stop := make(chan struct{})
-	t.winchStop = stop
-	t.mu.Unlock()
-
-	winch := make(chan os.Signal, 1)
-	signal.Notify(winch, syscall.SIGWINCH)
-	t.winchWG.Add(1)
-	go func() {
-		defer t.winchWG.Done()
-		for {
-			select {
-			case <-stop:
-				signal.Stop(winch)
-				return
-			case <-winch:
-				if onResize != nil {
-					onResize()
-				}
-			}
-		}
-	}()
-}
+// startWinchHandler forwards terminal resizes to onResize; per-platform
+// implementations in terminal_unix.go / terminal_windows.go.
 
 // setupStdinBuffer splits batched input into individual sequences so that
 // components receive single events (making MatchesKey/IsKeyRelease work

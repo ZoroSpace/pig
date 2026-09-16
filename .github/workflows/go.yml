@@ -24,6 +24,16 @@ jobs:
       - name: gofmt
         run: test -z "$(gofmt -l .)"
 
+      # Cross-compile gate (WINDOWS-SUPPORT): the windows/darwin builds must
+      # stay green. Tests stay linux-only (no -race benefit on other OS
+      # runners; windows TUI behavior is a real-machine item, see
+      # docs/handoffs/verify-matrix.md platform section).
+      - name: Cross-compile build
+        run: |
+          GOOS=darwin go build ./...
+          GOOS=windows go build ./...
+          GOOS=windows go vet ./...
+
       # Full race regression, run once (repo convention), with explicit timeout.
       - name: Test
         run: go test ./... -race -count=1 -timeout 600s -coverprofile=coverage.out

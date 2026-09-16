@@ -1,8 +1,9 @@
 //go:build unix
 
-// resource_stats_unix.go — CPU sampling for POSIX platforms (Linux, darwin;
-// pig does not support windows — see resource_stats_windows.go). Shared by
-// the linux/darwin platform files; see resource_stats.go for the poller.
+// resource_stats_unix.go — CPU sampling for POSIX platforms (Linux,
+// darwin; Windows uses GetProcessTimes — see resource_stats_windows.go).
+// Shared by the linux/darwin platform files; see resource_stats.go for the
+// poller.
 package components
 
 import (

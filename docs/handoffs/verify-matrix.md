@@ -79,3 +79,22 @@
 - 线格式抄自 pi（有真实使用历史），主要风险在 **pig 重写的 HTTP 细节**（URL 拼接、header 组装、表单编码、轮询状态机）——mock 锁了结构，真机才能暴露端点的实际容忍度。
 - **最高风险三件**：① anthropic OAuth 回调全链路（纯 pig 新写 HTTP 服务器）；② openai 5.6 家族 `prompt_cache_options` 分代（发错即 400）；③ azure URL 约定（零真机）。
 - 加密 reasoning 重放（`encrypted_content`）是 openai-responses 多轮无状态的关键路径，DeepSeek 端点无法覆盖——拿到 `OPENAI_API_KEY` 后 reasoning-replay e2e 是第一优先。
+
+## 6. 平台矩阵（Windows，WINDOWS-SUPPORT 2026-09-16 后开列）
+
+- **背景**：`GOOS=windows` 编译/编译期 vet 已绿（本地 + CI cross-compile gate），但 **Windows 从未真机运行过 pig**——TUI 渲染、shell 执行、资源采样全是纸面推断。本节开列真机销账项；发现偏差走 `docs/fix/` 流程。
+- **环境**：Windows Terminal（ANSI/VT 支持好）与 conhost（老）分开验；x/term 的 raw mode 走 console API，未经实测。
+
+| 项 | 内容 | 状态 |
+|---|---|---|
+| TUI 渲染 | 交互模式启动、流式回复渲染、ANSI/VT 序列（差分渲染、alt-screen）、SGR 着色 | ❌ 未验 |
+| CJK 宽度 | 中文/emoji 在 Windows 终端的 wcwidth 行为（编辑器光标、表格、markdown） | ❌ 未验 |
+| 鼠标事件 | Windows Terminal 的 SGR 鼠标协议（滚动、选择、点击展开） | ❌ 未验 |
+| resize | 终端尺寸变化 → 250ms 轮询触发 relayout（terminal_windows.go，无 SIGWINCH） | ❌ 未验 |
+| 键盘输入 | Kitty 协议探测超时回落、modifyOtherKeys、bracketed paste、ESC 裸键 | ❌ 未验 |
+| Ctrl+Z | 应显示 "Suspend to background is not supported on Windows"（ctrl_z_windows.go） | ❌ 未验 |
+| bash 工具 | shellPath 解析：Git bash / powershell / cmd 分支（§四.2 盘点遗留：未逐分支核对，发现偏差另立 fix 单） | ❌ 未验 |
+| taskkill 清理 | Ctrl+C 中断命令后子进程树被 taskkill /F /T 收干净（codingagent/utils 与 agent/harness/env 两份实现） | ❌ 未验 |
+| 资源段 | footer 资源段显示（MEM=working set / G 趋势 / CPU%）；FD 项应永不显示（句柄数不同货币，见 resource_stats_windows.go） | ❌ 未验 |
+| print 模式 | `pig -p`、`--mode json`；SIGTERM/SIGHUP 处置（windows 上这些信号不触发，等同 pi/Node 行为） | ❌ 未验 |
+| OAuth | /login 浏览器回调（localhost 服务器在 windows 的行为） | ❌ 未验 |

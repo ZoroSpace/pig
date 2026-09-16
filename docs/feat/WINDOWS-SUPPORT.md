@@ -1,6 +1,6 @@
 # WINDOWS-SUPPORT：Windows 编译补齐（用户插入批，2026-09-14，README 承诺兑现）
 
-**状态**：⏳ 待执行（总约束：**零 cgo、静态单二进制、pi 行为对齐不变**；完成后本行销账 ✅ 并按惯例补 AGENTS.md「已交付」条目）
+**状态**：✅ 已完成（2026-09-16；总约束：**零 cgo、静态单二进制、pi 行为对齐不变**；真机体验项全部开列至 `docs/handoffs/verify-matrix.md` §6 平台矩阵）
 
 ## 一、背景与动机
 
@@ -90,10 +90,41 @@ go build ./... && go test ./... -race -count=1 -timeout 600s   # unix 行为零�
 
 ## 五、验收清单
 
-- [ ] `GOOS=windows go build ./... && GOOS=windows go vet ./...` 通过
-- [ ] `GOOS=darwin go build ./...` 通过（回归）
-- [ ] Linux 全量 `go test ./... -race -count=1 -timeout 600s` 全绿（unix 路径行为零变化的证据）
-- [ ] CI 加 cross-compile build 步并跑绿
-- [ ] resource_stats_windows.go 真实现（或明确留桩的决策记录）
-- [ ] README / verify-matrix 同步
-- [ ] AGENTS.md「已交付」补 WINDOWS-SUPPORT 条目
+- [x] `GOOS=windows go build ./... && GOOS=windows go vet ./...` 通过
+- [x] `GOOS=darwin go build ./...` 通过（回归）
+- [x] Linux 全量 `go test ./... -race -count=1 -timeout 600s` 全绿（unix 路径行为零变化的证据，28 包 rc=0）
+- [x] CI 加 cross-compile build 步（darwin/windows build + windows vet；test 仍 linux-only）
+- [x] resource_stats_windows.go 真实现（决策记录见 §六）
+- [x] README / verify-matrix 同步（README:87 加注；verify-matrix 新增 §6 平台矩阵 12 项）
+- [x] AGENTS.md「已交付」补 WINDOWS-SUPPORT 条目
+
+## 六、实施记录（2026-09-16）
+
+### 断点实况：盘点 3 处，实修 4 处（漏网 2 处共 4 个符号）
+
+编译器扫出的完整清单（文档盘点漏网的标 ✚）：
+
+1. `tui/terminal.go:223/276` — `killSelfSignal`（SIGWINCH 自发）+ winch goroutine → 拆 `terminal_unix.go`（原样搬入，seam 原位）/ `terminal_windows.go`（轮询半边）。
+2. `codingagent/utils/shell.go:300` — 组杀 → 拆 `shell_kill_unix.go` / `shell_kill_windows.go`（taskkill 分支 + systemRoot() 原样挪入，编译期派发替换运行时 GOOS 分支）。
+3. ✚ `agent/harness/env/nodejs.go:450` — `killProcessTree` 组杀 → 拆 `kill_unix.go` / `kill_windows.go`（同上；windows 侧保持 nodejs.ts 原样的裸 `taskkill`，与 shell.go 的 System32 路径差异是 pi 自身两份副本的差异，不动）。
+4. ✚ `codingagent/modes/interactive/interactive_mode.go:7417/7422` — `handleCtrlZ` 的 SIGTSTP/SIGCONT（**SIGCONT 在 windows syscall 无常量**，SIGHUP/SIGTERM 有发明值、Notify 永不触发等同 pi/Node 行为故不动）→ 整函数拆 `ctrl_z_unix.go`（unix 原样）/ `ctrl_z_windows.go`（「不支持」提示），编译期派发替换 `isWindows()` 运行时分支；原位置留指路注释。
+
+### windows resize 方案落地（与计划选项 a 的偏差声明）
+
+计划首选「渲染 tick 里比对、无新 goroutine」——实证 pig 渲染管线是**事件驱动**（scheduleRender 经 time.AfterFunc 按需调度），无固定 tick 可搭；空闲期纯渲染比对会漏 resize（libuv 在 windows 本就是轮询喂 'resize' 事件）。落地为 **250ms 尺寸轮询 goroutine**（`terminal_windows.go`，单次 GetConsoleScreenBufferInfo 代价可忽略）：首次观测尺寸即触发一次 onResize——与 unix 启动语义等价（`Start` 的 `refreshTerminalDimensions` 自发一次 SIGWINCH）；同尺寸不重复触发；`Stop()` 生命周期与 unix 版逐字段对称（winchStop/winchWG）。尺寸读取器抽 `consoleSizeFn` 包级 var 测试 seam（镜像 unix 的 killSelfSignal 先例）。
+
+### resource_stats_windows.go 真实现
+
+- **MEM**：GetProcessMemoryInfo → WorkingSetSize（x/sys/windows v0.29.0 未导出该函数 → psapi.dll 经 NewLazySystemDLL 声明，标准 x/sys 模式；PROCESS_MEMORY_COUNTERS 手工镜像 struct，Cb=unsafe.Sizeof 自适应 GOARCH）。任务管理器「内存」列即 working set，与采样器契约（平台自家监控器显示的数）对齐。
+- **CPU**：GetProcessTimes → kernel+user FILETIMEs（x/sys 原生）→ `filetimesToMicros` 纯函数换算 µs（共享接口 cpuMicros 契约同 resource_stats_unix.go 的 getrusage）。
+- **FD**：**决策=不可用**。GetProcessHandleCount 报句柄数（不同货币，典型进程数百，fdThreshold=200 必天天误报）且该函数亦不在 x/sys；footer 既有渲染逻辑（仅 alertFD 时显示）使 FD 项自动隐藏，零改动。
+
+### 测试与依赖
+
+- 新增 windows-tagged 测试 3 个：`tui/terminal_windows_test.go`（轮询变才触发 ×2：基线+变更恰 2 事件、Stop 后 goroutine 退出；经 consoleSizeFn seam 脚本化尺寸序列）+ `components/resource_stats_windows_test.go`（filetimesToMicros 单位换算 4 例）。linux 上不执行，`GOOS=windows go vet` 类型检查通过（windows 真机/CI 可跑）。
+- `tui/regression_sigwinch_kill_eacces_test.go` 补 `//go:build !windows`（引用 unix-only seam，语义本就是 unix SIGWINCH 行为锁定）。
+- go.mod：`golang.org/x/sys` indirect→direct；`go mod tidy` 顺带把 P2-T2 的 aws-sdk-go-v2 五项 indirect→direct 归位（本就该 direct，版本零变化，无新外部依赖）。
+
+### 验收结果
+
+`GOOS=windows go build ./...` ✅ / `GOOS=windows go vet ./...` ✅（含 -tags smoke）/ `GOOS=darwin go build ./...` ✅ / linux `go build && go vet && gofmt -l` ✅ / 全量 `go test ./... -race -count=1 -timeout 600s` **28 包 rc=0** ✅。真机项（TUI 渲染/CJK 宽度/鼠标/resize/键盘/bash shell 分支/taskkill 清理/资源段/print 模式/OAuth）全部 ❌ 开列于 verify-matrix §6，待 Windows 机器销账。

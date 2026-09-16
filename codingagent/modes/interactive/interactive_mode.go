@@ -7591,33 +7591,10 @@ func randomUUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// handleCtrlZ suspends the process (pi: handleCtrlZ).
-func (m *InteractiveMode) handleCtrlZ() {
-	if isWindows() {
-		m.showStatus("Suspend to background is not supported on Windows")
-		return
-	}
-
-	// Stop the TUI (restore terminal to normal mode), then signal the
-	// process group; SIGCONT restarts the TUI (pig: pi's keep-alive timer
-	// and SIGINT ignore have no Go event-loop equivalent — signal delivery
-	// is independent of timers).
-	m.ui.Stop(nil)
-	if err := syscall.Kill(0, syscall.SIGTSTP); err != nil {
-		m.ui.Start()
-		return
-	}
-	cont := make(chan os.Signal, 1)
-	signal.Notify(cont, syscall.SIGCONT)
-	go func() {
-		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
-		defer pigutils.RecoverPanic("interactive.sigcont")
-		<-cont
-		signal.Stop(cont)
-		m.ui.Start()
-		m.ui.RequestRender(true)
-	}()
-}
+// handleCtrlZ is per-platform (compile-time dispatch; split from
+// interactive_mode.go in the Windows compile port, WINDOWS-SUPPORT):
+// ctrl_z_unix.go (SIGTSTP/SIGCONT) / ctrl_z_windows.go (unsupported
+// message). Windows has no SIGTSTP/SIGCONT constants.
 
 // handleOpenExternalEditor edits the editor text in the external editor (pi:
 // handleOpenExternalEditor).

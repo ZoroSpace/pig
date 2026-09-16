@@ -438,19 +438,9 @@ func getShellEnv(shellEnv map[string]string, extraEnv map[string]string, inherit
 	return env
 }
 
-// killProcessTree force-kills a process and its group (pi:
-// killProcessTree).
-func killProcessTree(pid int) {
-	if runtime.GOOS == "windows" {
-		cmd := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
-		cmd.SysProcAttr = spawnSysProcAttr()
-		_ = cmd.Start() // pi ignores errors.
-		return
-	}
-	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
-		_ = syscall.Kill(pid, syscall.SIGKILL)
-	}
-}
+// killProcessTree is per-platform (compile-time dispatch; split from
+// nodejs.go in the Windows compile port, WINDOWS-SUPPORT): kill_unix.go /
+// kill_windows.go.
 
 // spawnSysProcAttr is defined per-platform in spawn_unix.go / spawn_windows.go
 // (the syscall.SysProcAttr fields differ across platforms).

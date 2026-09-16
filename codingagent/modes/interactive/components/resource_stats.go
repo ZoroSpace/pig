@@ -7,9 +7,10 @@
 // resourceStats (atomic fields; Render only reads) and derives the anomaly
 // alert flags from the same stream. 0 = unsampled.
 //
-// Platform split lives in resource_stats_linux.go (procfs) and
+// Platform split lives in resource_stats_linux.go (procfs),
 // resource_stats_darwin.go (/usr/bin/footprint phys_footprint, ps RSS
-// fallback, /dev/fd); everything here is portable.
+// fallback, /dev/fd) and resource_stats_windows.go (psapi working set,
+// GetProcessTimes); everything here is portable.
 package components
 
 import (

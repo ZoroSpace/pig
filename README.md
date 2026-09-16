@@ -84,7 +84,7 @@ DEEPSEEK_API_KEY=your-api-key \
 
 ### 🔥 Pure Go：一个文件，开箱即跑
 
-pig 是纯 Go 实现，编译产物为**单个静态二进制**，拷到任何 Linux / macOS / Windows 机器上就能跑，交叉编译一行命令。与 pi（npm 安装，Node 运行时 + 依赖树）同机实测：
+pig 是纯 Go 实现，编译产物为**单个静态二进制**，拷到任何 Linux / macOS / Windows 机器上就能跑，交叉编译一行命令（Windows：编译过 CI 矩阵门，终端体验未真机验证，见 verify-matrix 平台节）。与 pi（npm 安装，Node 运行时 + 依赖树）同机实测：
 
 | | pig | pi |
 | --- | --- | --- |

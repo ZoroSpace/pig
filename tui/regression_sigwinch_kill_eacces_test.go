@@ -1,5 +1,9 @@
 // tui/regression_sigwinch_kill_eacces_test.go (pi:
 // packages/tui/test/regression-sigwinch-kill-eacces.test.ts)
+// Unix-only: locks the SIGWINCH seam behavior (see terminal_unix.go); the
+// Windows poll counterpart lives behind consoleSizeFn (WINDOWS-SUPPORT).
+//go:build !windows
+
 package tui
 
 import (
