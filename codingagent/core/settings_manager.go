@@ -110,7 +110,7 @@ import (
 //	fullscreenScrollbar?: ScrollViewScrollbar            — default "auto"
 //	fullscreenCopyOnSelect?: boolean                     — default true; no effect in regular TUI mode (v0.85.1)
 //	cjkSegmenter?: "bigram" | "sst" | "gse"              — pig-only; default via PIG_CJK_SEGMENTER env, else "bigram"
-//	showResourceStats?: boolean                          — pig-only; footer resource stats (MEM/HEAP always, G/FD/CPU alerts on anomaly), default false
+//	showResourceStats?: boolean                          — pig-only; footer resource stats (MEM always, G/FD/CPU alerts on anomaly), default false
 type Settings map[string]any
 
 // SettingsScope selects which settings layer a storage operation targets.

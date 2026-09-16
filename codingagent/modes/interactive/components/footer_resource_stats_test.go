@@ -11,10 +11,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/utils"
 )
 
-const (
-	testRSS  = int64(52 * 1024 * 1024)
-	testHeap = int64(14 * 1024 * 1024)
-)
+const testRSS = int64(52 * 1024 * 1024)
 
 // TestFooterMemHiddenByDefault: the showResourceStats setting gates the
 // render — a sampled value alone must NOT surface the segment.
@@ -43,27 +40,8 @@ func TestFooterMemShownWhenEnabledAndSampled(t *testing.T) {
 	}
 }
 
-// TestFooterHeapShownWithMem: heap renders as a "·"-joined sibling item
-// (user-set format: "MEM52MB·HEAP14MB" — no slash, no CJK label, no space
-// between metric name and value).
-func TestFooterHeapShownWithMem(t *testing.T) {
-	initTestTheme(t)
-	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
-	footer.showResourceStats = true
-	footer.res.rssBytes.Store(testRSS)
-	footer.res.heapBytes.Store(testHeap)
-	t.Cleanup(func() { footer.res.zero() })
-	statsLine := utils.StripAnsi(footer.Render(120)[1])
-	if !strings.Contains(statsLine, "MEM52MB·HEAP14MB") {
-		t.Fatalf("stats line %q missing %q", statsLine, "MEM52MB·HEAP14MB")
-	}
-	if strings.Contains(statsLine, "MB/") {
-		t.Fatalf("stats line %q must not join MEM/HEAP with a slash", statsLine)
-	}
-}
-
 // TestFooterMemHiddenWhenEnabledButUnsampled: enabled but no sample yet
-// (no procfs / poller not fired) → no segment.
+// (poller not fired) → no segment.
 func TestFooterMemHiddenWhenEnabledButUnsampled(t *testing.T) {
 	initTestTheme(t)
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
@@ -81,7 +59,6 @@ func TestFooterAlertsShownWhenFlagsSet(t *testing.T) {
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
 	footer.showResourceStats = true
 	footer.res.rssBytes.Store(testRSS)
-	footer.res.heapBytes.Store(testHeap)
 	footer.res.goroutines.Store(387)
 	footer.res.fdCount.Store(210)
 	footer.res.cpuPercent.Store(97)
@@ -90,7 +67,7 @@ func TestFooterAlertsShownWhenFlagsSet(t *testing.T) {
 	footer.res.alertCPU.Store(true)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
-	want := "MEM52MB·HEAP14MB·!G387·!FD210·!CPU97%"
+	want := "MEM52MB·!G387·!FD210·!CPU97%"
 	if !strings.Contains(statsLine, want) {
 		t.Fatalf("stats line %q missing %q", statsLine, want)
 	}
@@ -189,16 +166,16 @@ func TestReadRSSBytesSanity(t *testing.T) {
 	}
 }
 
-// TestReadProcessCPUTicksSanity: cumulative CPU ticks are positive and
+// TestReadProcessCPUMicrosSanity: cumulative CPU time is positive and
 // consistent across two reads (monotonic).
-func TestReadProcessCPUTicksSanity(t *testing.T) {
-	a, ok := readProcessCPUTicks()
+func TestReadProcessCPUMicrosSanity(t *testing.T) {
+	a, ok := readProcessCPUMicros()
 	if !ok {
-		t.Skip("no procfs on this platform")
+		t.Skip("getrusage unavailable on this platform")
 	}
-	b, ok := readProcessCPUTicks()
+	b, ok := readProcessCPUMicros()
 	if !ok || b < a {
-		t.Fatalf("CPU ticks not monotonic: %d then %d (ok=%v)", a, b, ok)
+		t.Fatalf("CPU time not monotonic: %dµs then %dµs (ok=%v)", a, b, ok)
 	}
 }
 
@@ -253,27 +230,27 @@ func TestResourcePollerGoroutineStreak(t *testing.T) {
 func TestResourcePollerCPUAlertStreak(t *testing.T) {
 	var stats resourceStats
 	p := resourcePoller{stats: &stats}
-	reading := func(ticks int64) resourceReadings {
-		// 150 ticks per 5s window = 1.5s CPU / 5s = 30%.
-		return resourceReadings{rss: testRSS, cpuTicks: ticks, cpuOK: true}
+	reading := func(micros int64) resourceReadings {
+		// Δ1_500_000µs per 5s window = 1.5s CPU / 5s = 30%.
+		return resourceReadings{rss: testRSS, cpuMicros: micros, cpuOK: true}
 	}
 
-	p.apply(reading(1000), 5*time.Second) // first window: no rate yet
+	p.apply(reading(1_000_000), 5*time.Second) // first window: no rate yet
 	if stats.alertCPU.Load() {
 		t.Fatal("CPU alert fired on the first window")
 	}
-	p.apply(reading(1150), 5*time.Second) // 30%
+	p.apply(reading(2_500_000), 5*time.Second) // 30%
 	if stats.cpuPercent.Load() != 30 {
 		t.Fatalf("cpuPercent = %d, want 30", stats.cpuPercent.Load())
 	}
 	if stats.alertCPU.Load() {
 		t.Fatal("CPU alert fired after a single hot window")
 	}
-	p.apply(reading(1300), 5*time.Second) // 30% again
+	p.apply(reading(4_000_000), 5*time.Second) // 30% again
 	if !stats.alertCPU.Load() {
 		t.Fatal("CPU alert did not fire after two consecutive hot windows")
 	}
-	p.apply(reading(1350), 5*time.Second) // 10%: cool
+	p.apply(reading(4_500_000), 5*time.Second) // 10%: cool
 	if stats.alertCPU.Load() {
 		t.Fatal("CPU alert survived a cool window")
 	}

@@ -69,3 +69,22 @@ stats line 末尾以 `|` 与 token 统计隔开：
 - 回归测试 16 函数（`footer_resource_stats_test.go`）：渲染门控 6（MEM 默认隐藏/显示/HEAP 拼接/未采样隐藏/告警显示/告警隐藏）+ 生命周期 1 + poller 冒烟 2 + procfs 读数 3（RSS/CPU ticks 单调/FD）+ apply 纯函数 3（G 趋势与播种语义、CPU 双窗连续、FD 阈值与无读数）+ `FormatMemBytes` 1。
 
 过程 bug（本批）：G 趋势测试首版少算一次播种（N 次递增产生 streak=N-1），10 次递增才触发——按实现语义修正测试而非放松判据；HEAP 测试的斜杠断言被 context 段的 `3.0%/1.0M` 误触发，改为钉 `MB/` 子串。
+
+## MEM-ONLY + macOS：单内存项 + darwin 全指标（2026-09-14 同日第三批，本节为显示终态）
+
+用户插入批，两个决策：
+
+1. **显示再次收敛：去 HEAP**——「用户其实不用知道 RSS 和 HEAP」，常态就一个数 `MEM22MB`。9/14 整案里的 RSS/活堆配对诊断法转入本文档存档，footer 不再承载（未来 /debug 面板可复活）。`ReadMemStats`（STW）同步移出采样路径，poller 更轻。
+2. **macOS 全指标支持**（此前 procfs 缺失 → 整段隐藏）：
+   - MEM：spawn `ps -o rss= -p <pid>`（当前 RSS，与 Linux 同语义；~1-2ms/5s，保住零 cgo 静态构建——mach `task_info` 需要 cgo，不可接受）；
+   - CPU：改用跨平台 `getrusage(RUSAGE_SELF)`（µs 级），**删除 /proc/self/stat 解析与 USER_HZ=100 假设**；
+   - FD：darwin 数 `/dev/fd`（fdesc），Linux 仍走 `/proc/self/fd`；
+   - G：`NumGoroutine` 本就跨平台。
+
+平台差异收敛为两个小文件：`resource_stats_linux.go`（statm + /proc/self/fd）、`resource_stats_darwin.go`（ps + /dev/fd），其余全在共享的 `resource_stats.go`。当前显示形态：
+
+```
+↑58k ↓2.9k … 3.0%/1.0M (auto) | MEM22MB·!G387·!FD210·!CPU97%
+```
+
+回归测试 15 函数（合并去 HEAP 后）：HEAP 渲染用例删除，CPU 纯函数用例改 µs 语义，新增 `TestReadProcessCPUMicrosSanity`（单调性）；darwin 运行时路径无 CI 覆盖（Linux CI），以 `GOOS=darwin go build` 保证编译 + 代码审查级核对。

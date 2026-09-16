@@ -2,8 +2,8 @@
 // token stats, and context usage. Computes token/context stats from the
 // session; git branch and extension statuses come from the provider. When
 // the pig-only showResourceStats setting is on, the stats line also shows
-// process resource stats ("| MEM52MB·HEAP14MB·!G387…": memory and heap
-// always, G/FD/CPU alerts only on anomaly — see resource_stats.go).
+// process resource stats ("| MEM22MB·!G387…": one plain memory number;
+// G/FD/CPU alerts only on anomaly — see resource_stats.go).
 //
 // Declared deviation: pi reads session.sessionManager/session.state
 // directly on the concrete AgentSession; pig routes the accesses through
@@ -374,20 +374,19 @@ func (f *FooterComponent) Render(width int) []string {
 	}
 
 	// Resource segment (pig-only; pi has no counterpart): process stats
-	// separated from the usage stats by "|", items joined by "·". MEM =
-	// RSS, HEAP = live-heap allocations; the alert items (!G/!FD/!CPU,
-	// warning color) surface only on anomaly — see resource_stats.go for
-	// the thresholds. The alert prefix is deliberately ASCII: emoji (⚠️ =
-	// U+26A0+FE0F) cell width is decided by the terminal/font, not by pig,
-	// and mismatched advances overlap the following text. Hidden until the
-	// sampler produced a value (0 = not sampled / no procfs platform).
+	// separated from the usage stats by "|", items joined by "·". One
+	// plain "MEM" number by design — users don't need the RSS/heap
+	// distinction (the pairing rationale lives in the feat doc). The alert
+	// items (!G/!FD/!CPU, warning color) surface only on anomaly — see
+	// resource_stats.go for the thresholds. Keep the alert prefix ASCII:
+	// an earlier draft used ⚠️ (U+26A0+FE0F), whose cell width is decided
+	// by the terminal/font rather than pig — mismatched advances made the
+	// glyph overlap the following text (user-verified). Hidden until the
+	// sampler produced a value (0 = not sampled / unsupported platform).
 	if showResourceStats {
 		var resParts []string
 		if rssBytes := f.res.rssBytes.Load(); rssBytes > 0 {
 			resParts = append(resParts, "MEM"+FormatMemBytes(rssBytes))
-			if heapBytes := f.res.heapBytes.Load(); heapBytes > 0 {
-				resParts = append(resParts, "HEAP"+FormatMemBytes(heapBytes))
-			}
 		}
 		if f.res.alertG.Load() {
 			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!G%d", f.res.goroutines.Load())))

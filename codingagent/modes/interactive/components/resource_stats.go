@@ -2,20 +2,21 @@
 // segment (pig-only; pi has no counterpart).
 //
 // The footer renders on every frame, so values must be sampled off-frame
-// and cached: a syscall (let alone ReadMemStats' brief stop-the-world) per
-// render would tax every keystroke. One background poller samples on a
-// slow ticker into resourceStats (atomic fields; Render only reads) and
-// derives the anomaly alert flags from the same stream. 0 = unsampled.
+// and cached: a syscall (let alone a fork/exec) per render would tax every
+// keystroke. One background poller samples on a slow ticker into
+// resourceStats (atomic fields; Render only reads) and derives the anomaly
+// alert flags from the same stream. 0 = unsampled.
+//
+// Platform split lives in resource_stats_linux.go (procfs) and
+// resource_stats_darwin.go (ps + /dev/fd); everything here is portable.
 package components
 
 import (
 	"fmt"
-	"os"
 	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -24,10 +25,6 @@ const (
 	// footerRSSInterval is how often the resource poller samples. RSS moves
 	// slowly (per-turn growth is ~100KB scale), so 5s is plenty responsive.
 	footerRSSInterval = 5 * time.Second
-
-	// clockTicksPerSecond is Linux's _SC_CLK_TCK (USER_HZ), the unit of
-	// /proc/self/stat's utime/stime fields (gopsutil assumes the same).
-	clockTicksPerSecond = 100
 
 	// Goroutine leak signals. Trend beats thresholds: gLeakStreakTicks
 	// consecutive monotonic increases (~50s) catch a leak long before any
@@ -53,9 +50,8 @@ const (
 // the poller goroutine writes, footer Render reads.
 type resourceStats struct {
 	rssBytes   atomic.Int64 // resident set size; 0 = unsampled/unsupported
-	heapBytes  atomic.Int64 // runtime HeapAlloc (live objects)
 	goroutines atomic.Int64
-	fdCount    atomic.Int64 // open descriptors; 0 = unavailable (no procfs)
+	fdCount    atomic.Int64 // open descriptors; 0 = unavailable
 	cpuPercent atomic.Int64 // last window's process CPU, rounded; 0 = no window yet
 
 	alertG   atomic.Bool
@@ -64,10 +60,9 @@ type resourceStats struct {
 }
 
 // zero clears every published value: the segment hides (used when the
-// poller stops on procfs loss or the segment is switched off).
+// poller stops on sampler loss or the segment is switched off).
 func (s *resourceStats) zero() {
 	s.rssBytes.Store(0)
-	s.heapBytes.Store(0)
 	s.goroutines.Store(0)
 	s.fdCount.Store(0)
 	s.cpuPercent.Store(0)
@@ -85,24 +80,23 @@ func (s *resourceStats) sampleStatic() {
 		return
 	}
 	s.rssBytes.Store(r.rss)
-	s.heapBytes.Store(r.heap)
 	s.goroutines.Store(r.goroutines)
 	s.fdCount.Store(r.fds)
 }
 
 // resourceReadings is one tick's raw readings (apply is pure over these,
-// so the alert logic is unit-testable without time or procfs).
+// so the alert logic is unit-testable without time or platform probes).
 type resourceReadings struct {
 	rss        int64
-	heap       int64
 	goroutines int64
 	fds        int64
-	cpuTicks   int64
+	cpuMicros  int64
 	cpuOK      bool
 }
 
-// readResourceSample reads everything once. ok=false means procfs is
-// unavailable (RSS is the segment's gate; without it the rest is moot).
+// readResourceSample reads everything once. ok=false means the platform
+// sampler is unavailable (RSS is the segment's gate; without it the rest
+// is moot).
 func readResourceSample() (resourceReadings, bool) {
 	var r resourceReadings
 	rss, ok := readRSSBytes()
@@ -110,12 +104,9 @@ func readResourceSample() (resourceReadings, bool) {
 		return r, false
 	}
 	r.rss = rss
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	r.heap = int64(m.HeapAlloc)
 	r.goroutines = int64(runtime.NumGoroutine())
 	r.fds, _ = readFDCount()
-	r.cpuTicks, r.cpuOK = readProcessCPUTicks()
+	r.cpuMicros, r.cpuOK = readProcessCPUMicros()
 	return r, true
 }
 
@@ -123,12 +114,12 @@ func readResourceSample() (resourceReadings, bool) {
 type resourcePoller struct {
 	stats *resourceStats
 
-	prevCPUTicks int64
-	haveCPU      bool
-	prevG        int64
-	haveG        bool
-	gStreak      int
-	cpuStreak    int
+	prevCPUMicros int64
+	haveCPU       bool
+	prevG         int64
+	haveG         bool
+	gStreak       int
+	cpuStreak     int
 }
 
 // apply folds one tick's readings into the published state. elapsed is the
@@ -136,20 +127,19 @@ type resourcePoller struct {
 func (p *resourcePoller) apply(r resourceReadings, elapsed time.Duration) {
 	s := p.stats
 	s.rssBytes.Store(r.rss)
-	s.heapBytes.Store(r.heap)
 	s.goroutines.Store(r.goroutines)
 	s.fdCount.Store(r.fds)
 
 	// CPU rate over this window; the first window has no denominator pair.
 	if r.cpuOK {
 		if p.haveCPU && elapsed > 0 {
-			percent := float64(r.cpuTicks-p.prevCPUTicks) / clockTicksPerSecond / elapsed.Seconds() * 100
+			percent := float64(r.cpuMicros-p.prevCPUMicros) / 1e6 / elapsed.Seconds() * 100
 			if percent < 0 {
-				percent = 0 // tick accounting can straddle two reads
+				percent = 0 // accounting can straddle two reads
 			}
 			s.cpuPercent.Store(int64(percent + 0.5))
 		}
-		p.prevCPUTicks = r.cpuTicks
+		p.prevCPUMicros = r.cpuMicros
 		p.haveCPU = true
 	} else {
 		p.haveCPU = false
@@ -177,7 +167,7 @@ func (p *resourcePoller) apply(r resourceReadings, elapsed time.Duration) {
 }
 
 // startResourcePoller samples on a ticker until the returned stop is
-// called (idempotent). Stops on procfs loss: all values zero, segment
+// called (idempotent). Stops on sampler loss: all values zero, segment
 // hides. The first sample lands after one interval; callers wanting
 // instant values call resourceStats.sampleStatic first.
 func startResourcePoller(interval time.Duration, stats *resourceStats) (stop func()) {
@@ -208,57 +198,16 @@ func startResourcePoller(interval time.Duration, stats *resourceStats) (stop fun
 	return func() { once.Do(func() { close(done) }) }
 }
 
-// readRSSBytes reads the resident set size from /proc/self/statm (field 2,
-// resident pages) scaled by the page size.
-func readRSSBytes() (int64, bool) {
-	data, err := os.ReadFile("/proc/self/statm")
-	if err != nil {
+// readProcessCPUMicros reads the process's cumulative CPU time
+// (utime+stime) in microseconds via getrusage — portable across Linux and
+// darwin, and finer-grained than /proc/self/stat's USER_HZ ticks.
+func readProcessCPUMicros() (int64, bool) {
+	var ru syscall.Rusage
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &ru); err != nil {
 		return 0, false
 	}
-	fields := strings.Fields(string(data))
-	if len(fields) < 2 {
-		return 0, false
-	}
-	pages, err := strconv.ParseInt(fields[1], 10, 64)
-	if err != nil || pages <= 0 {
-		return 0, false
-	}
-	return pages * int64(os.Getpagesize()), true
-}
-
-// readFDCount counts open file descriptors (/proc/self/fd entries; the
-// count includes the listing handle itself — ±1 noise is irrelevant).
-func readFDCount() (int64, bool) {
-	entries, err := os.ReadDir("/proc/self/fd")
-	if err != nil {
-		return 0, false
-	}
-	return int64(len(entries)), true
-}
-
-// readProcessCPUTicks reads the process's cumulative CPU time
-// (utime+stime, stat fields 14/15) in clock ticks from /proc/self/stat.
-// comm (field 2) may contain spaces and parens, so parsing starts after
-// its closing ')'.
-func readProcessCPUTicks() (int64, bool) {
-	data, err := os.ReadFile("/proc/self/stat")
-	if err != nil {
-		return 0, false
-	}
-	s := string(data)
-	i := strings.LastIndex(s, ")")
-	if i < 0 || i+2 > len(s) {
-		return 0, false
-	}
-	fields := strings.Fields(s[i+2:]) // fields[0] = state (field 3)
-	if len(fields) < 13 {
-		return 0, false
-	}
-	utime, errU := strconv.ParseInt(fields[11], 10, 64) // field 14
-	stime, errS := strconv.ParseInt(fields[12], 10, 64) // field 15
-	if errU != nil || errS != nil {
-		return 0, false
-	}
+	utime := int64(ru.Utime.Sec)*1e6 + int64(ru.Utime.Usec)
+	stime := int64(ru.Stime.Sec)*1e6 + int64(ru.Stime.Usec)
 	return utime + stime, true
 }
 
