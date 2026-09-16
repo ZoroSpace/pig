@@ -1,4 +1,4 @@
-# WIN-1：Windows 编译补齐（用户插入批，2026-09-14，README 承诺兑现）
+# WINDOWS-SUPPORT：Windows 编译补齐（用户插入批，2026-09-14，README 承诺兑现）
 
 **状态**：⏳ 待执行（总约束：**零 cgo、静态单二进制、pi 行为对齐不变**；完成后本行销账 ✅ 并按惯例补 AGENTS.md「已交付」条目）
 
@@ -96,4 +96,4 @@ go build ./... && go test ./... -race -count=1 -timeout 600s   # unix 行为零�
 - [ ] CI 加 cross-compile build 步并跑绿
 - [ ] resource_stats_windows.go 真实现（或明确留桩的决策记录）
 - [ ] README / verify-matrix 同步
-- [ ] AGENTS.md「已交付」补 WIN-1 条目
+- [ ] AGENTS.md「已交付」补 WINDOWS-SUPPORT 条目
