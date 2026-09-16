@@ -5,13 +5,17 @@
 //   - pi converts unsupported formats (e.g. BMP from WSLg) to PNG via photon
 //     (WASM). The photon pipeline lands with Phase 8; convertToPng returns
 //     not-ok until then (declared).
-//   - pi's native-addon half (clipboard.hasImage/getImageBinary) has no
-//     equivalent; the non-Linux read path reports nothing (declared).
+//   - pi's native-addon half (clipboard.hasImage/getImageBinary) has no Go
+//     equivalent. On darwin pig substitutes external tools (pig-only,
+//     docs/feat/MAC-CLIPBOARD-IMAGE.md): osascript ships with every macOS and
+//     reads the PNG pasteboard flavor; optional pngpaste (user-installed)
+//     covers TIFF-only clipboards. Windows still reports nothing (declared).
 package utils
 
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -34,6 +38,10 @@ const (
 	clipboardDefaultListTimeoutMs       = 1000
 	clipboardDefaultReadTimeoutMs       = 3000
 	clipboardDefaultPowershellTimeoutMs = 5000
+	// clipboardDefaultOsascriptTimeoutMs is generous on purpose (pig-only):
+	// osascript dumps the PNG flavor as hex (2x the bytes) and multi-MB
+	// screenshots can take seconds; the 3s read default is too tight.
+	clipboardDefaultOsascriptTimeoutMs = 10000
 )
 
 // IsWaylandSession reports a Wayland session (pi: isWaylandSession).
@@ -121,6 +129,10 @@ func clipboardRunCommand(command string, args []string, timeoutMs int64) ([]byte
 	}
 	return out, true
 }
+
+// clipboardRunCommandFn indirections clipboardRunCommand (pig-only test seam:
+// tests stub it so the darwin paths never spawn real clipboard processes).
+var clipboardRunCommandFn = clipboardRunCommand
 
 // readClipboardImageViaWlPaste reads via wl-paste type negotiation (pi:
 // readClipboardImageViaWlPaste).
@@ -246,6 +258,58 @@ func readClipboardImageViaXclip() *ClipboardImage {
 	return nil
 }
 
+// readClipboardImageViaOsascript reads the PNG pasteboard flavor via osascript
+// (pig-only; darwin transport for pi's native-addon getImageBinary, which
+// returns image/png as well). ok=false when the clipboard carries no PNG
+// flavor (osascript exits non-zero) or the output does not decode.
+func readClipboardImageViaOsascript() *ClipboardImage {
+	out, ok := clipboardRunCommandFn("osascript",
+		[]string{"-e", `the clipboard as «class PNGf»`}, clipboardDefaultOsascriptTimeoutMs)
+	if !ok {
+		return nil
+	}
+	bytes, ok := decodeOsascriptPngData(out)
+	if !ok || len(bytes) == 0 {
+		return nil
+	}
+	return &ClipboardImage{Bytes: bytes, MimeType: "image/png"}
+}
+
+// decodeOsascriptPngData decodes osascript's binary-literal output
+// `«data PNGf<hex>»` (pig-only). AppleScript renders the PNGf flavor as one
+// data token; the hex payload is the raw PNG bytes. Trailing newlines are
+// tolerated; anything else (missing prefix/suffix, odd length, bad hex) is a
+// decode failure.
+func decodeOsascriptPngData(output []byte) ([]byte, bool) {
+	const prefix = "«data PNGf"
+	const suffix = "»"
+	s := strings.TrimSpace(string(output))
+	if !strings.HasPrefix(s, prefix) || !strings.HasSuffix(s, suffix) {
+		return nil, false
+	}
+	hexPart := strings.TrimSuffix(strings.TrimPrefix(s, prefix), suffix)
+	if len(hexPart) == 0 || len(hexPart)%2 != 0 {
+		return nil, false
+	}
+	bytes, err := hex.DecodeString(hexPart)
+	if err != nil || len(bytes) == 0 {
+		return nil, false
+	}
+	return bytes, true
+}
+
+// readClipboardImageViaPngpaste reads via the optional pngpaste tool
+// (pig-only fallback for readClipboardImageViaOsascript; it also converts
+// TIFF-only clipboards, which the PNGf flavor path cannot see). Absent or
+// failing tool → nil.
+func readClipboardImageViaPngpaste() *ClipboardImage {
+	data, ok := clipboardRunCommandFn("pngpaste", []string{"-"}, 0)
+	if !ok || len(data) == 0 {
+		return nil
+	}
+	return &ClipboardImage{Bytes: data, MimeType: "image/png"}
+}
+
 // ReadClipboardImageOptions parameterize ReadClipboardImage (pi: the options
 // param; nil = process values).
 type ReadClipboardImageOptions struct {
@@ -295,8 +359,15 @@ func ReadClipboardImage(options *ReadClipboardImageOptions) *ClipboardImage {
 		if image == nil && !wayland {
 			image = readClipboardImageViaXclip()
 		}
+	} else if platform == "darwin" {
+		// pig-only: osascript first (always present), then pngpaste when
+		// installed (TIFF-only clipboards; see file header).
+		image = readClipboardImageViaOsascript()
+		if image == nil {
+			image = readClipboardImageViaPngpaste()
+		}
 	}
-	// Non-Linux: pi's native-addon half only (declared deviation).
+	// Windows: pi's native-addon half only — no Go equivalent (declared).
 
 	if image == nil {
 		return nil

@@ -292,7 +292,7 @@ cp -a ~/.pi/agent ~/.pig/agent
 | 交互 / print / JSON 三模式、7 种 API 协议、37 家 provider、模型 catalog | ✅ | ✅ 对齐 |
 | 会话树 / 分支 / 压缩 / 导出 HTML | ✅ | ✅ |
 | TUI（编辑器、补全、主题、鼠标、搜索）与 Markdown / LaTeX / Mermaid | ✅ | ✅ pi-tui 全量移植 |
-| 中文分词与 CJK 渲染修复 | — | ✅ pig 增强 |
+| 中文分词与 CJK 渲染修复、macOS Ctrl+V 剪贴板贴图 | — | ✅ pig 增强（pi 走 native addon，pig 用 osascript 零依赖实现） |
 | RPC 模式 / sqlite 会话后端 | ✅ | ⏳ 按需排期 |
 | 扩展系统（Node sidecar、包管理器） | ✅ | ⏳ 装配位已留，见 [EXTENSION-PLAN](docs/handoffs/EXTENSION-PLAN.md) |
 | 终端图片检测、photon/WASM 图像处理、发行打包 | ✅ | ⏳ |
