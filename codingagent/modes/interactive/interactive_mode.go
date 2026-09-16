@@ -251,6 +251,21 @@ type InteractiveMode struct {
 	isInitialized bool
 	inputGate     userInputGate
 
+	// Clipboard image paste placeholders (pig-only, opencode-style UX):
+	// pasting an image writes the temp file and inserts "[Image N]" into the
+	// editor instead of the raw path. pendingClipboardImages holds the
+	// current message's pasted paths in paste order and resets after each
+	// submission (numbering restarts per message); clipboardImageLabels maps
+	// path → "[Image N]" label for transcript display only (session-
+	// lifetime, first label wins). The model and the JSONL session keep the
+	// real path — placeholders are expanded at submit time and never
+	// persisted. pi has no equivalent state; the mutex is pig's (paste runs
+	// on its own goroutine, submit on the submit worker, renders on the
+	// event dispatch goroutine).
+	clipboardImagesMu      sync.Mutex
+	pendingClipboardImages []string
+	clipboardImageLabels   map[string]string
+
 	activeStatusIndicator   statusIndicatorItem
 	idleStatus              *components.IdleStatus
 	workingMessage          *string
@@ -1058,10 +1073,17 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 		m.editor.SetText("")
 		m.handleThinkingCommand(searchTerm)
 		return
-	case strings.HasPrefix(text, "/"):
+	case isDeferredInteractiveCommand(text):
 		// Deferred command branches (export/import/share/copy/session/
 		// changelog/hotkeys/clone/debug and easter eggs): handlers land with
-		// their batches.
+		// their batches. Only these KNOWN commands are intercepted — pi's
+		// onSubmit has no unknown-command branch, so any other "/..." text is
+		// submitted to the model verbatim (extension commands and skills are
+		// resolved inside AgentSession.prompt). Intercepting every "/"-prefixed
+		// input here broke the paste-image flow: macOS writes the screenshot to
+		// /var/folders/.../pi-clipboard-*.png and handleClipboardPaste inserts
+		// that path at the cursor, which must reach the model as a message.
+		// See docs/fix/2026-09-16-clipboard-path-eaten-by-slash-command.md.
 		commandName := strings.TrimPrefix(text, "/")
 		if space := strings.Index(commandName, " "); space >= 0 {
 			commandName = commandName[:space]
@@ -1100,7 +1122,9 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 			m.editor.SetText("")
 			_ = m.session().Prompt(ctx, text, nil)
 		} else {
-			m.queueCompactionMessage(text, "steer")
+			// pig-only: expand [Image N] placeholders to the pasted paths
+			// before queueing — the model receives the real path.
+			m.queueCompactionMessage(expandImagePlaceholders(text, m.takeClipboardImagesForSubmit()), "steer")
 		}
 		return
 	}
@@ -1110,8 +1134,11 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 	// queueing.
 	if m.session().IsStreaming() {
 		m.editorAddToHistory(text)
+		// pig-only: expand [Image N] placeholders to the pasted paths before
+		// steering — the model receives the real path.
+		expandedText := expandImagePlaceholders(text, m.takeClipboardImagesForSubmit())
 		m.editor.SetText("")
-		_ = m.session().Prompt(ctx, text, &core.PromptOptions{StreamingBehavior: "steer"})
+		_ = m.session().Prompt(ctx, expandedText, &core.PromptOptions{StreamingBehavior: "steer"})
 		m.updatePendingMessagesDisplay()
 		m.ui.RequestRender(false)
 		return
@@ -1121,8 +1148,36 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 	// chat.
 	m.flushPendingBashComponents()
 
-	m.inputGate.submit(text)
+	// pig-only: expand [Image N] placeholders to the pasted paths — the
+	// model and the session transcript keep the real path, while editor
+	// history recalls the compact placeholder.
+	expandedText := expandImagePlaceholders(text, m.takeClipboardImagesForSubmit())
+	m.inputGate.submit(expandedText)
 	m.editorAddToHistory(text)
+}
+
+// isDeferredInteractiveCommand reports whether text targets one of pi's
+// interactive submit commands whose handler lands in a later batch (pi:
+// setupEditorSubmitHandler branches for export/import/share/copy/session/
+// changelog/hotkeys/clone/debug and the arminsayshi/dementedelves easter
+// eggs). Matching follows pi's branch shapes: arg-taking commands match the
+// bare form and "<cmd> ..."; the rest match exactly. Anything else starting
+// with "/" is ordinary text and must reach the model verbatim.
+func isDeferredInteractiveCommand(text string) bool {
+	for _, cmd := range []string{"export", "import"} {
+		if text == "/"+cmd || strings.HasPrefix(text, "/"+cmd+" ") {
+			return true
+		}
+	}
+	for _, cmd := range []string{
+		"share", "copy", "session", "changelog", "hotkeys", "clone", "debug",
+		"arminsayshi", "dementedelves",
+	} {
+		if text == "/"+cmd {
+			return true
+		}
+	}
+	return false
 }
 
 // handleNameCommand sets the session name (pi: handleNameCommand).
@@ -1748,6 +1803,10 @@ func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *
 		if textContent == "" {
 			return
 		}
+		// pig-only: the transcript shows pasted clipboard images as their
+		// "[Image N]" label; the stored message content keeps the real path
+		// (that is what the model receives and what survives restarts).
+		displayText := m.renderClipboardImageText(textContent)
 		if len(m.chatContainer.Children) > 0 {
 			m.chatContainer.AddChild(tui.NewSpacer(1))
 		}
@@ -1760,11 +1819,11 @@ func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *
 			// Render user message separately if present
 			if skillBlock.UserMessage != nil && *skillBlock.UserMessage != "" {
 				m.chatContainer.AddChild(tui.NewSpacer(1))
-				userComponent := components.NewUserMessageComponent(*skillBlock.UserMessage, lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers())
+				userComponent := components.NewUserMessageComponent(m.renderClipboardImageText(*skillBlock.UserMessage), lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers())
 				m.chatContainer.AddChild(userComponent)
 			}
 		} else {
-			userComponent := components.NewUserMessageComponent(textContent, lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers())
+			userComponent := components.NewUserMessageComponent(displayText, lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers())
 			m.chatContainer.AddChild(userComponent)
 		}
 		if options != nil && options.PopulateHistory {
@@ -7366,10 +7425,20 @@ func (m *InteractiveMode) handleRightClickPaste() {
 	m.ui.RequestRender(false)
 }
 
-// handleClipboardPaste pastes a clipboard image (attached by path) or text
-// at the cursor (pi: handleClipboardPaste).
+// Clipboard reader seams (pig: pi's tests mock the clipboard module
+// functions; Go tests swap these package vars at call time, same pattern as
+// utils.clipboardRunCommandFn).
+var (
+	clipboardImageReaderFn = utils.ReadClipboardImage
+	clipboardTextReaderFn  = utils.ReadClipboardText
+)
+
+// handleClipboardPaste pastes a clipboard image (attached by path, shown as
+// an "[Image N]" placeholder) or text at the cursor (pi:
+// handleClipboardPaste; the placeholder insertion is pig-only — pi inserts
+// the raw temp path, see docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md).
 func (m *InteractiveMode) handleClipboardPaste() {
-	image := utils.ReadClipboardImage(nil)
+	image := clipboardImageReaderFn(nil)
 	if image != nil {
 		ext := utils.ExtensionForImageMimeType(image.MimeType)
 		if ext == "" {
@@ -7381,16 +7450,70 @@ func (m *InteractiveMode) handleClipboardPaste() {
 			return
 		}
 
-		m.editorInsertTextAtCursor(filePath)
+		m.editorInsertTextAtCursor(m.recordClipboardImagePath(filePath))
 		m.ui.RequestRender(false)
 		return
 	}
 
-	text := utils.ReadClipboardText()
+	text := clipboardTextReaderFn()
 	if text != "" {
 		m.editorInsertTextAtCursor(text)
 		m.ui.RequestRender(false)
 	}
+}
+
+// recordClipboardImagePath registers a pasted image temp-file path and
+// returns its opencode-style "[Image N]" placeholder (pig-only). N counts
+// pastes within the current message and restarts after each submission;
+// the display label map keeps the first label per path.
+func (m *InteractiveMode) recordClipboardImagePath(filePath string) string {
+	m.clipboardImagesMu.Lock()
+	defer m.clipboardImagesMu.Unlock()
+	m.pendingClipboardImages = append(m.pendingClipboardImages, filePath)
+	label := fmt.Sprintf("[Image %d]", len(m.pendingClipboardImages))
+	if m.clipboardImageLabels == nil {
+		m.clipboardImageLabels = map[string]string{}
+	}
+	if _, exists := m.clipboardImageLabels[filePath]; !exists {
+		m.clipboardImageLabels[filePath] = label
+	}
+	return label
+}
+
+// takeClipboardImagesForSubmit snapshots and clears the current message's
+// pasted paths (pig-only; called on the submit worker when the message
+// leaves the UI).
+func (m *InteractiveMode) takeClipboardImagesForSubmit() []string {
+	m.clipboardImagesMu.Lock()
+	defer m.clipboardImagesMu.Unlock()
+	images := m.pendingClipboardImages
+	m.pendingClipboardImages = nil
+	return images
+}
+
+// expandImagePlaceholders replaces "[Image N]" placeholders with the pasted
+// paths at submit time — the model receives the real path (pig-only).
+func expandImagePlaceholders(text string, images []string) string {
+	for i, path := range images {
+		text = strings.ReplaceAll(text, fmt.Sprintf("[Image %d]", i+1), path)
+	}
+	return text
+}
+
+// renderClipboardImageText substitutes known pasted image paths with their
+// "[Image N]" labels for transcript display only (pig-only; the stored
+// message content keeps the real path). Labels are lost on restart, in
+// which case the raw paths render as-is.
+func (m *InteractiveMode) renderClipboardImageText(text string) string {
+	m.clipboardImagesMu.Lock()
+	defer m.clipboardImagesMu.Unlock()
+	if len(m.clipboardImageLabels) == 0 {
+		return text
+	}
+	for path, label := range m.clipboardImageLabels {
+		text = strings.ReplaceAll(text, path, label)
+	}
+	return text
 }
 
 // randomUUID is a UUIDv4 string (pi: crypto.randomUUID).
