@@ -8,7 +8,8 @@
 // alert flags from the same stream. 0 = unsampled.
 //
 // Platform split lives in resource_stats_linux.go (procfs) and
-// resource_stats_darwin.go (ps + /dev/fd); everything here is portable.
+// resource_stats_darwin.go (/usr/bin/footprint phys_footprint, ps RSS
+// fallback, /dev/fd); everything here is portable.
 package components
 
 import (
@@ -21,9 +22,10 @@ import (
 
 // Sampling cadence and anomaly thresholds (pig-only).
 const (
-	// footerRSSInterval is how often the resource poller samples. RSS moves
-	// slowly (per-turn growth is ~100KB scale), so 5s is plenty responsive.
-	footerRSSInterval = 5 * time.Second
+	// footerSampleInterval is how often the resource poller samples. Memory
+	// moves slowly (per-turn growth is ~100KB scale), so 5s is plenty
+	// responsive.
+	footerSampleInterval = 5 * time.Second
 
 	// Goroutine leak signals. Trend beats thresholds: gLeakStreakTicks
 	// consecutive monotonic increases (~50s) catch a leak long before any
@@ -48,7 +50,7 @@ const (
 // resourceStats is the poller's published state. All fields are atomic:
 // the poller goroutine writes, footer Render reads.
 type resourceStats struct {
-	rssBytes   atomic.Int64 // resident set size; 0 = unsampled/unsupported
+	memBytes   atomic.Int64 // memory charged to the process (darwin: phys_footprint, matching Activity Monitor's "Memory" column; linux: statm resident); 0 = unsampled/unsupported
 	goroutines atomic.Int64
 	fdCount    atomic.Int64 // open descriptors; 0 = unavailable
 	cpuPercent atomic.Int64 // last window's process CPU, rounded; 0 = no window yet
@@ -61,7 +63,7 @@ type resourceStats struct {
 // zero clears every published value: the segment hides (used when the
 // poller stops on sampler loss or the segment is switched off).
 func (s *resourceStats) zero() {
-	s.rssBytes.Store(0)
+	s.memBytes.Store(0)
 	s.goroutines.Store(0)
 	s.fdCount.Store(0)
 	s.cpuPercent.Store(0)
@@ -78,7 +80,7 @@ func (s *resourceStats) sampleStatic() {
 	if !ok {
 		return
 	}
-	s.rssBytes.Store(r.rss)
+	s.memBytes.Store(r.mem)
 	s.goroutines.Store(r.goroutines)
 	s.fdCount.Store(r.fds)
 }
@@ -86,7 +88,7 @@ func (s *resourceStats) sampleStatic() {
 // resourceReadings is one tick's raw readings (apply is pure over these,
 // so the alert logic is unit-testable without time or platform probes).
 type resourceReadings struct {
-	rss        int64
+	mem        int64
 	goroutines int64
 	fds        int64
 	cpuMicros  int64
@@ -98,11 +100,11 @@ type resourceReadings struct {
 // is moot).
 func readResourceSample() (resourceReadings, bool) {
 	var r resourceReadings
-	rss, ok := readRSSBytes()
+	mem, ok := readMemBytes()
 	if !ok {
 		return r, false
 	}
-	r.rss = rss
+	r.mem = mem
 	r.goroutines = int64(runtime.NumGoroutine())
 	r.fds, _ = readFDCount()
 	r.cpuMicros, r.cpuOK = readProcessCPUMicros()
@@ -125,7 +127,7 @@ type resourcePoller struct {
 // wall time since the previous tick (the CPU rate denominator).
 func (p *resourcePoller) apply(r resourceReadings, elapsed time.Duration) {
 	s := p.stats
-	s.rssBytes.Store(r.rss)
+	s.memBytes.Store(r.mem)
 	s.goroutines.Store(r.goroutines)
 	s.fdCount.Store(r.fds)
 

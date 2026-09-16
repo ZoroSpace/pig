@@ -187,7 +187,7 @@ func (f *FooterComponent) SetShowResourceStats(enabled bool) {
 			// render instead of one interval later (the CPU rate needs two
 			// ticks and starts at "no data").
 			f.res.sampleStatic()
-			f.stopResourcePoller = startResourcePoller(footerRSSInterval, &f.res)
+			f.stopResourcePoller = startResourcePoller(footerSampleInterval, &f.res)
 		}
 		return
 	}
@@ -385,8 +385,8 @@ func (f *FooterComponent) Render(width int) []string {
 	// sampler produced a value (0 = not sampled / unsupported platform).
 	if showResourceStats {
 		var resParts []string
-		if rssBytes := f.res.rssBytes.Load(); rssBytes > 0 {
-			resParts = append(resParts, "MEM"+FormatMemBytes(rssBytes))
+		if memBytes := f.res.memBytes.Load(); memBytes > 0 {
+			resParts = append(resParts, "MEM"+FormatMemBytes(memBytes))
 		}
 		if f.res.alertG.Load() {
 			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!G%d", f.res.goroutines.Load())))

@@ -11,14 +11,14 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/utils"
 )
 
-const testRSS = int64(52 * 1024 * 1024)
+const testMem = int64(52 * 1024 * 1024)
 
 // TestFooterMemHiddenByDefault: the showResourceStats setting gates the
 // render — a sampled value alone must NOT surface the segment.
 func TestFooterMemHiddenByDefault(t *testing.T) {
 	initTestTheme(t)
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
-	footer.res.rssBytes.Store(testRSS)
+	footer.res.memBytes.Store(testMem)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
 	if strings.Contains(statsLine, "MEM") {
@@ -32,7 +32,7 @@ func TestFooterMemShownWhenEnabledAndSampled(t *testing.T) {
 	initTestTheme(t)
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
 	footer.showResourceStats = true
-	footer.res.rssBytes.Store(testRSS)
+	footer.res.memBytes.Store(testMem)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
 	if !strings.Contains(statsLine, "3.0%/1.0M (auto) | MEM52MB") {
@@ -58,7 +58,7 @@ func TestFooterAlertsShownWhenFlagsSet(t *testing.T) {
 	initTestTheme(t)
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
 	footer.showResourceStats = true
-	footer.res.rssBytes.Store(testRSS)
+	footer.res.memBytes.Store(testMem)
 	footer.res.goroutines.Store(387)
 	footer.res.fdCount.Store(210)
 	footer.res.cpuPercent.Store(97)
@@ -79,7 +79,7 @@ func TestFooterAlertsHiddenWhenFlagsFalse(t *testing.T) {
 	initTestTheme(t)
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
 	footer.showResourceStats = true
-	footer.res.rssBytes.Store(testRSS)
+	footer.res.memBytes.Store(testMem)
 	footer.res.goroutines.Store(387)
 	footer.res.fdCount.Store(210)
 	footer.res.cpuPercent.Store(97)
@@ -98,7 +98,7 @@ func TestSetShowResourceStatsLifecycle(t *testing.T) {
 	initTestTheme(t)
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
 	t.Cleanup(footer.Dispose)
-	if _, ok := readRSSBytes(); !ok {
+	if _, ok := readMemBytes(); !ok {
 		t.Skip("no procfs on this platform")
 	}
 
@@ -109,8 +109,8 @@ func TestSetShowResourceStatsLifecycle(t *testing.T) {
 	if !pollerRunning {
 		t.Fatal("SetShowResourceStats(true) did not start the poller")
 	}
-	if footer.res.rssBytes.Load() <= 0 {
-		t.Fatal("SetShowResourceStats(true) did not sample RSS up front")
+	if footer.res.memBytes.Load() <= 0 {
+		t.Fatal("SetShowResourceStats(true) did not sample memory up front")
 	}
 	if footer.res.goroutines.Load() <= 0 {
 		t.Fatal("SetShowResourceStats(true) did not sample the goroutine count")
@@ -123,14 +123,14 @@ func TestSetShowResourceStatsLifecycle(t *testing.T) {
 	if pollerRunning {
 		t.Fatal("SetShowResourceStats(false) did not stop the poller")
 	}
-	if footer.res.rssBytes.Load() != 0 || footer.res.alertG.Load() {
+	if footer.res.memBytes.Load() != 0 || footer.res.alertG.Load() {
 		t.Fatal("SetShowResourceStats(false) left stale sampled state")
 	}
 }
 
 // TestStartResourcePollerSamplesIntoSink: the ticker populates the stats.
 func TestStartResourcePollerSamplesIntoSink(t *testing.T) {
-	if _, ok := readRSSBytes(); !ok {
+	if _, ok := readMemBytes(); !ok {
 		t.Skip("no procfs on this platform")
 	}
 	var stats resourceStats
@@ -153,16 +153,16 @@ func TestStartResourcePollerStopIsIdempotent(t *testing.T) {
 	stop()
 }
 
-// TestReadRSSBytesSanity: on procfs platforms the sampled RSS is plausible.
-func TestReadRSSBytesSanity(t *testing.T) {
-	b, ok := readRSSBytes()
+// TestReadMemBytesSanity: on procfs platforms the sampled memory is plausible.
+func TestReadMemBytesSanity(t *testing.T) {
+	b, ok := readMemBytes()
 	if !ok {
 		t.Skip("no procfs on this platform")
 	}
 	const mb = 1024 * 1024
 	const gb = 1024 * mb
 	if b < mb || b > 64*gb {
-		t.Fatalf("implausible RSS %d bytes", b)
+		t.Fatalf("implausible memory sample %d bytes", b)
 	}
 }
 
@@ -197,7 +197,7 @@ func TestResourcePollerGoroutineStreak(t *testing.T) {
 	var stats resourceStats
 	p := resourcePoller{stats: &stats}
 	readings := func(g int64) resourceReadings {
-		return resourceReadings{rss: testRSS, goroutines: g, fds: 10}
+		return resourceReadings{mem: testMem, goroutines: g, fds: 10}
 	}
 
 	// The first sample seeds the baseline (no streak); 9 further increases
@@ -232,7 +232,7 @@ func TestResourcePollerCPUAlertStreak(t *testing.T) {
 	p := resourcePoller{stats: &stats}
 	reading := func(micros int64) resourceReadings {
 		// Δ1_500_000µs per 5s window = 1.5s CPU / 5s = 30%.
-		return resourceReadings{rss: testRSS, cpuMicros: micros, cpuOK: true}
+		return resourceReadings{mem: testMem, cpuMicros: micros, cpuOK: true}
 	}
 
 	p.apply(reading(1_000_000), 5*time.Second) // first window: no rate yet
@@ -260,16 +260,16 @@ func TestResourcePollerCPUAlertStreak(t *testing.T) {
 func TestResourcePollerFDAlert(t *testing.T) {
 	var stats resourceStats
 	p := resourcePoller{stats: &stats}
-	p.apply(resourceReadings{rss: testRSS, fds: fdThreshold - 10}, 5*time.Second)
+	p.apply(resourceReadings{mem: testMem, fds: fdThreshold - 10}, 5*time.Second)
 	if stats.alertFD.Load() {
 		t.Fatal("FD alert fired below the threshold")
 	}
-	p.apply(resourceReadings{rss: testRSS, fds: fdThreshold + 10}, 5*time.Second)
+	p.apply(resourceReadings{mem: testMem, fds: fdThreshold + 10}, 5*time.Second)
 	if !stats.alertFD.Load() {
 		t.Fatal("FD alert did not fire above the threshold")
 	}
 	// Unavailable (0, no procfs) never alerts.
-	p.apply(resourceReadings{rss: testRSS}, 5*time.Second)
+	p.apply(resourceReadings{mem: testMem}, 5*time.Second)
 	if stats.alertFD.Load() {
 		t.Fatal("FD alert fired with no FD reading")
 	}

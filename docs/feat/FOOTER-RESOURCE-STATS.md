@@ -90,3 +90,14 @@ stats line 末尾以 `|` 与 token 统计隔开：
 ```
 
 回归测试 15 函数（合并去 HEAP 后）：HEAP 渲染用例删除，CPU 纯函数用例改 µs 语义，新增 `TestReadProcessCPUMicrosSanity`（单调性）；darwin 运行时路径无 CI 覆盖（Linux CI），以 `GOOS=darwin go build` 保证编译 + 代码审查级核对。
+
+## MEM 口径对齐活动监视器：ps RSS → phys_footprint（2026-09-16，本节为显示终态）
+
+dogfooding 发现 footer `MEM44MB` 与活动监视器「内存」列 `24MB` 差 ~20MB——两个统计口径不同：ps 报 RSS（全部驻留页，含 pig 自身 ~39MB 二进制的干净 file-backed 页：代码段、嵌入 CJK 词典等），活动监视器是 **phys_footprint**（只记真正记在进程账上的内存：匿名 + 脏 file-backed + 压缩页，Apple TN2439）。实测 pig 交互模式：ps RSS 41.6MB vs footprint 23.3MB，差额正是二进制映射的干净页（vmmap：`__DATA_CONST` 驻留 18.3MB 中脏页仅 2.4MB 等）。真机端到端验收：footer 由 `MEM41MB` 级变为 `MEM22MB`，与同进程 `footprint` 工具读数一致。
+
+- **darwin 采样改为 `/usr/bin/footprint -f bytes <pid>`**：Apple 自家工具，输出的 `Footprint: <N> B` 与 vmmap `Physical footprint` 实测一致（50MB 探针：56164880 B vs 53.8M）；查自己 pid 无需 root，~15ms/次（ps 的 ~10 倍，5s 节奏可忽略）。`footprint` 缺失/解析失败回落 `ps -o rss=`（老 macOS/沙箱环境），回落即回到旧语义。
+- **纯 Go 裸 syscall 无解（2026-09-16 实证）**：`proc_info(SYS_PROC_INFO=336)` 的 PIDINFO 族只有 virtual/resident（proc_taskinfo 96B 无 phys_footprint 字段）；`PROC_INFO_CALL_PIDRUSAGE(8)` 裸调返回全零（copyout 走 libproc 包装的私有路径）；mach `task_info(TASK_VM_INFO)` 是 MIG 消息需 cgo/手搓 mach_msg——footprint 子进程是零 cgo 下唯一同口径路径。
+- **顺带排除头号嫌疑 MADV_FREE**：实验分配 50MB 再释放（含 `debug.FreeOSMemory`、`GODEBUG=madvdontneed=1` 两形态），RSS 与 footprint 都纹丝不动——footprint 口径同样计入 MADV_FREE 页，二者差额与它无关。
+- **Linux 不变**（statm resident）：procfs 无 footprint 等价物，RSS 即本地监视器口径；跨平台语义差异在两平台文件头注释声明。
+- 字段改名 `rssBytes`→`memBytes`（`resourceReadings.rss`→`.mem`、`readRSSBytes`→`readMemBytes`，darwin 侧 `readRSSBytes` 保留为 ps 回落、`footerRSSInterval`→`footerSampleInterval`）。
+- 回归测试 18 函数（+3）：`TestParseFootprintOutput`（`Footprint: <N> B` 解析钉死 + 畸形输出回落）+ `TestReadFootprintBytesSanity`（darwin，真工具读数合理区间）+ `TestReadMemBytesSanity`（原 TestReadRSSBytesSanity 更名，双平台）；真机验收：交互模式 footer 显示 22MB 与 `footprint` 工具/活动监视器一致，同进程 ps RSS 仍 41MB。

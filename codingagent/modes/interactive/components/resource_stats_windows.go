@@ -9,15 +9,18 @@
 // and the footer segment simply stays hidden. When pig gains Windows
 // support, wire real implementations here, all cgo-free:
 //
-//   - RSS:      GetProcessMemoryInfo → WorkingSetSize (x/sys/windows)
+//   - Memory:   GetProcessMemoryInfo → WorkingSetSize (x/sys/windows;
+//     RSS-like; see readMemBytes note below)
 //   - CPU:      GetProcessTimes → kernel+user FILETIMEs (100ns units)
 //   - FD count: no /proc equivalent — GetProcessHandleCount reports
 //     handles (a different currency; the FD alert threshold would need a
 //     Windows-specific baseline, typical processes hold hundreds)
 package components
 
-// readRSSBytes is unavailable on Windows (stub; see file comment).
-func readRSSBytes() (int64, bool) {
+// readMemBytes is unavailable on Windows (stub; see file comment). When
+// implemented, report a phys_footprint-like metric (charged memory) rather
+// than plain working set, matching the darwin/linux sampler semantics.
+func readMemBytes() (int64, bool) {
 	return 0, false
 }
 

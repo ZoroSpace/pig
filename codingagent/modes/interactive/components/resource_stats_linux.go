@@ -10,9 +10,13 @@ import (
 	"strings"
 )
 
-// readRSSBytes reads the current resident set size from /proc/self/statm
-// (field 2, resident pages) scaled by the page size.
-func readRSSBytes() (int64, bool) {
+// readMemBytes reads the memory charged to the process from
+// /proc/self/statm (field 2, resident pages) scaled by the page size.
+// procfs has no phys_footprint equivalent, so on Linux this is the plain
+// RSS — the same number local Linux monitors report; the darwin sampler
+// reports the stricter phys_footprint instead (see
+// resource_stats_darwin.go for the accounting difference).
+func readMemBytes() (int64, bool) {
 	data, err := os.ReadFile("/proc/self/statm")
 	if err != nil {
 		return 0, false
