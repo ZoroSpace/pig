@@ -24,4 +24,4 @@ fi
 
 go build -o "$root/pig" "${static_flags[@]}" "$@" ./cmd/pig
 
-echo "built $root/pig ($(du -h "$root/pig" | cut -f1))"
+echo "built $root/pig ($(du -h "$root/pig" | awk '{print $1}'))"
