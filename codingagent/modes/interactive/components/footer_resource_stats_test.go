@@ -35,8 +35,8 @@ func TestFooterMemShownWhenEnabledAndSampled(t *testing.T) {
 	footer.res.memBytes.Store(testMem)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
-	if !strings.Contains(statsLine, "3.0%/1.0M (auto) | MEM52MB") {
-		t.Fatalf("stats line %q missing %q", statsLine, "3.0%/1.0M (auto) | MEM52MB")
+	if !strings.Contains(statsLine, "3.0%/1.0M (auto) | MEM52.0MB") {
+		t.Fatalf("stats line %q missing %q", statsLine, "3.0%/1.0M (auto) | MEM52.0MB")
 	}
 }
 
@@ -67,7 +67,7 @@ func TestFooterAlertsShownWhenFlagsSet(t *testing.T) {
 	footer.res.alertCPU.Store(true)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
-	want := "MEM52MB·!G387·!FD210·!CPU97%"
+	want := "MEM52.0MB·!G387·!FD210·!CPU97%"
 	if !strings.Contains(statsLine, want) {
 		t.Fatalf("stats line %q missing %q", statsLine, want)
 	}
@@ -288,7 +288,7 @@ func TestFormatMemBytes(t *testing.T) {
 		{mb - 1, "1024KB"},
 		{mb, "1.0MB"},
 		{8_808_038, "8.4MB"}, // 8.4 * mb
-		{52 * mb, "52MB"},
+		{52 * mb, "52.0MB"},
 		{1_288_490_189, "1.2GB"}, // 1.2 * gb
 	}
 	for _, c := range cases {

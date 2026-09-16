@@ -101,3 +101,4 @@ dogfooding 发现 footer `MEM44MB` 与活动监视器「内存」列 `24MB` 差 
 - **Linux 不变**（statm resident）：procfs 无 footprint 等价物，RSS 即本地监视器口径；跨平台语义差异在两平台文件头注释声明。
 - 字段改名 `rssBytes`→`memBytes`（`resourceReadings.rss`→`.mem`、`readRSSBytes`→`readMemBytes`，darwin 侧 `readRSSBytes` 保留为 ps 回落、`footerRSSInterval`→`footerSampleInterval`）。
 - 回归测试 18 函数（+3）：`TestParseFootprintOutput`（`Footprint: <N> B` 解析钉死 + 畸形输出回落）+ `TestReadFootprintBytesSanity`（darwin，真工具读数合理区间）+ `TestReadMemBytesSanity`（原 TestReadRSSBytesSanity 更名，双平台）；真机验收：交互模式 footer 显示 22MB 与 `footprint` 工具/活动监视器一致，同进程 ps RSS 仍 41MB。
+- **显示格式同日追加：MB 恒一位小数**（用户要求与活动监视器「内存」列同款）：`MEM20.0MB` 而非 `MEM20MB`（`FormatMemBytes` 的 MB 分支去掉 <10MB 才带小数的旧规则；KB 整数、GB 原本就一位小数不变）；真机验收 `MEM20.0MB`；`TestFormatMemBytes` 与 footer 渲染两用例同步（`MEM52.0MB`）。

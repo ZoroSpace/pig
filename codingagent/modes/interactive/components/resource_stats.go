@@ -200,7 +200,9 @@ func startResourcePoller(interval time.Duration, stats *resourceStats) (stop fun
 }
 
 // FormatMemBytes formats a byte count for the footer resource segment
-// ("52MB", "8.4MB", "512KB", "1.2GB").
+// ("52.0MB", "8.4MB", "512KB", "1.2GB"). MB always carries one decimal
+// place, matching Activity Monitor's Memory column (user request,
+// 2026-09-16).
 func FormatMemBytes(b int64) string {
 	const kb = 1024
 	const mb = 1024 * kb
@@ -209,11 +211,7 @@ func FormatMemBytes(b int64) string {
 	case b < mb:
 		return fmt.Sprintf("%dKB", (b+kb-1)/kb)
 	case b < gb:
-		m := float64(b) / mb
-		if m < 10 {
-			return fmt.Sprintf("%.1fMB", m)
-		}
-		return fmt.Sprintf("%dMB", int64(m+0.5))
+		return fmt.Sprintf("%.1fMB", float64(b)/mb)
 	default:
 		return fmt.Sprintf("%.1fGB", float64(b)/gb)
 	}
