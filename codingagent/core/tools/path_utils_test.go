@@ -142,12 +142,24 @@ func TestResolveReadPath(t *testing.T) {
 
 func TestPathsCanonicalize(t *testing.T) {
 	// Port of the canonicalizePath/normalizePath/isLocalPath cases of
-	// test/paths.test.ts.
+	// test/paths.test.ts. Expectation values go through realpath too
+	// (pi: expect(canonicalizePath(file)).toBe(realpathSync(file))) —
+	// macOS mounts /var as a symlink to /private/var, so comparing against
+	// the raw joined path would fail even though the implementation is
+	// faithful (docs/fix/2026-09-16-paths-canonicalize-test-expectation.md).
+	realpath := func(t *testing.T, path string) string {
+		t.Helper()
+		resolved, err := filepath.EvalSymlinks(path) // pi: realpathSync
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resolved
+	}
 	t.Run("returns the real path for a regular file", func(t *testing.T) {
 		dir := newTestDir(t)
 		file := filepath.Join(dir, "file.txt")
 		writeTestFile(t, file, "x")
-		if got := utils.CanonicalizePath(file); got != file {
+		if got := utils.CanonicalizePath(file); got != realpath(t, file) {
 			t.Fatalf("got %q", got)
 		}
 	})
@@ -159,13 +171,40 @@ func TestPathsCanonicalize(t *testing.T) {
 		if err := os.Symlink(target, link); err != nil {
 			t.Fatal(err)
 		}
-		if got := utils.CanonicalizePath(link); got != target {
+		if got := utils.CanonicalizePath(link); got != realpath(t, target) {
+			t.Fatalf("got %q", got)
+		}
+	})
+	t.Run("resolves directory symlinks", func(t *testing.T) {
+		dir := newTestDir(t)
+		targetDir := filepath.Join(dir, "target-dir")
+		linkDir := filepath.Join(dir, "link-dir")
+		if err := os.Mkdir(targetDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(targetDir, linkDir); err != nil {
+			t.Fatal(err)
+		}
+		if got := utils.CanonicalizePath(linkDir); got != realpath(t, targetDir) {
 			t.Fatalf("got %q", got)
 		}
 	})
 	t.Run("falls back to the raw path when the target does not exist", func(t *testing.T) {
 		missing := filepath.Join(newTestDir(t), "missing.txt")
 		if got := utils.CanonicalizePath(missing); got != missing {
+			t.Fatalf("got %q", got)
+		}
+	})
+	t.Run("falls back to the raw path for a dangling symlink", func(t *testing.T) {
+		dir := newTestDir(t)
+		target := filepath.Join(dir, "target.txt")
+		link := filepath.Join(dir, "link.txt")
+		// Create a symlink whose target does not exist; realpath would fail,
+		// so canonicalizePath returns the link path (pi: realpathSync throws).
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatal(err)
+		}
+		if got := utils.CanonicalizePath(link); got != link {
 			t.Fatalf("got %q", got)
 		}
 	})
