@@ -34,6 +34,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/components"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	"github.com/ZoroSpace/pig/codingagent/utils"
+	"github.com/ZoroSpace/pig/tui"
 )
 
 // newSubmitTestTheme builds a theme with the full color set (reuses
@@ -266,5 +267,55 @@ func TestTranscriptRendersImagePlaceholderLabel(t *testing.T) {
 	}
 	if strings.Contains(rendered, "/tmp/pasted-shot.png") {
 		t.Fatalf("transcript must not show the raw pasted path, got:\n%s", rendered)
+	}
+}
+
+// stubEditorTerminal provides the terminal surface Editor.Render needs
+// (Rows only — the render path is pure string assembly).
+type stubEditorTerminal struct {
+	tui.Terminal
+}
+
+func (s *stubEditorTerminal) Rows() int    { return 24 }
+func (s *stubEditorTerminal) Columns() int { return 80 }
+
+// stubEditorTUI routes Terminal() to the stub so Editor.Render can run.
+type stubEditorTUI struct {
+	stubRequestRenderTUI
+}
+
+func (s *stubEditorTUI) Terminal() tui.Terminal { return &stubEditorTerminal{} }
+
+func TestImagePlaceholdersAreColorized(t *testing.T) {
+	theme.SetGlobalTheme(newSubmitTestTheme(t))
+
+	// Editor decorator: plain line gets the imagePlaceholder SGR around the
+	// label, visible text unchanged.
+	line := colorizeImagePlaceholders("hello [Image 1] world")
+	if !strings.Contains(line, theme.Fg("imagePlaceholder", "[Image 1]")) {
+		t.Fatalf("expected imagePlaceholder-colored placeholder, got %q", line)
+	}
+	if got := ansiRe.ReplaceAllString(line, ""); got != "hello [Image 1] world" {
+		t.Fatalf("visible text changed: %q", got)
+	}
+
+	// A placeholder split by the embedded fake-cursor span stays uncolored.
+	split := "hello [Im\x1b[7ma\x1b[0mge 1] world"
+	if got := colorizeImagePlaceholders(split); got != split {
+		t.Fatalf("split placeholder should stay untouched, got %q", got)
+	}
+
+	// Integration: CustomEditor.Render applies the decorator; the editor
+	// buffer itself stays plain text.
+	editorTUI := &stubEditorTUI{}
+	editor := components.NewCustomEditor(editorTUI, theme.GetEditorTheme(), core.CreateKeybindingsManager(""), nil)
+	editor.TextDecorator = colorizeImagePlaceholders
+	editor.SetText("[Image 1] hi")
+	rendered := strings.Join(editor.Render(60), "\n")
+	if !strings.Contains(rendered, theme.Fg("imagePlaceholder", "[Image 1]")) {
+		t.Fatalf("rendered editor should colorize the placeholder:\n%q", rendered)
+	}
+	if got := editor.GetText(); got != "[Image 1] hi" {
+		t.Fatalf("editor buffer must stay plain, got %q", got)
 	}
 }

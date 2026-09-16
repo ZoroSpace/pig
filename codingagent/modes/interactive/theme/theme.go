@@ -133,6 +133,11 @@ const (
 	// optional, falling back to muted/text).
 	ColorScrollbarTrack ThemeColor = "scrollbarTrack"
 	ColorScrollbarThumb ThemeColor = "scrollbarThumb"
+	// ImagePlaceholder is a pig-only optional token (pi has no equivalent):
+	// colors the [Image N] clipboard-paste placeholder in the editor
+	// (docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md). Optional, falling back to
+	// accent for themes that do not define it.
+	ColorImagePlaceholder ThemeColor = "imagePlaceholder"
 )
 
 const (
@@ -154,6 +159,8 @@ var optionalThemeColors = map[ThemeColor]bool{
 	ColorScrollbarThumb:  true,
 	ColorThinkingMax:     true,
 	ColorSearchMatchText: true,
+	// pig-only (docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md).
+	ColorImagePlaceholder: true,
 }
 
 var optionalThemeBgs = map[ThemeBg]bool{
@@ -422,6 +429,14 @@ func withThemeColorFallbacks(colors map[string]ColorValue) map[string]ColorValue
 	if _, ok := out["scrollbarThumb"]; !ok {
 		if v, ok := colors["text"]; ok {
 			out["scrollbarThumb"] = v
+		}
+	}
+	// pig-only: [Image N] placeholder falls back to accent (builtin themes
+	// define it as the vars.blue reference; see
+	// docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md).
+	if _, ok := out["imagePlaceholder"]; !ok {
+		if v, ok := colors["accent"]; ok {
+			out["imagePlaceholder"] = v
 		}
 	}
 	if _, ok := out["thinkingMax"]; !ok {

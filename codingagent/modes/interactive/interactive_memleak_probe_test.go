@@ -59,6 +59,11 @@ func probeThemeColors() map[string]theme.ColorValue {
 		"success": "#00ff00", "error": "#ff0000", "warning": "#ffff00",
 		"thinkingText": "#888888", "toolPendingText": "#ffffff", "toolSuccessText": "#00ff00",
 		"toolErrorText": "#ff0000", "customMessageText": "#ffffff",
+		// Markdown inline-code tokens (needed since the clipboard placeholder
+		// renders as inline code in the transcript).
+		"mdCode": "#00ff00", "mdCodeBg": "#1a1a2e",
+		// pig-only imagePlaceholder token (same value as dark.mdLink).
+		"imagePlaceholder": "#81a2be",
 	}
 }
 

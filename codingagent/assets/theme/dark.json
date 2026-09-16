@@ -35,6 +35,7 @@
 		"selectedBg": "selectedBg",
 		"scrollbarTrack": "darkGray",
 		"scrollbarThumb": "text",
+		"imagePlaceholder": "#81a2be",
 		"searchMatchBg": "selectedBg",
 		"searchMatchText": "text",
 		"userMessageBg": "userMsgBg",

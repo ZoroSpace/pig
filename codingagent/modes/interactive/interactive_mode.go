@@ -513,6 +513,9 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 		},
 		EmbedWorkingStatus: true,
 	})
+	// pig-only: colorize pasted-image placeholders in the editor display
+	// (docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md).
+	m.defaultEditor.TextDecorator = colorizeImagePlaceholders
 	m.editor = m.defaultEditor
 	m.editorContainer = &tui.Container{}
 	m.editorContainer.AddChild(m.editor)
@@ -7500,10 +7503,32 @@ func expandImagePlaceholders(text string, images []string) string {
 	return text
 }
 
+// imagePlaceholderRe matches an [Image N] placeholder in a rendered line.
+// The pattern is pure literal, so any match is guaranteed free of escape
+// bytes — a placeholder split by the editor's embedded fake-cursor span
+// (\x1b[7m...\x1b[0m) simply does not match and stays uncolored.
+var imagePlaceholderRe = regexp.MustCompile(`\[Image [0-9]+\]`)
+
+// colorizeImagePlaceholders colorizes [Image N] placeholders in a rendered
+// editor line with the theme imagePlaceholder color (pig-only; blue in the
+// builtin themes, falling back to accent for custom themes — see
+// docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md). Runs at render time; the
+// editor buffer itself stays plain text.
+func colorizeImagePlaceholders(line string) string {
+	if !strings.Contains(line, "[Image ") {
+		return line
+	}
+	return imagePlaceholderRe.ReplaceAllStringFunc(line, func(match string) string {
+		return theme.Fg("imagePlaceholder", match)
+	})
+}
+
 // renderClipboardImageText substitutes known pasted image paths with their
 // "[Image N]" labels for transcript display only (pig-only; the stored
 // message content keeps the real path). Labels are lost on restart, in
-// which case the raw paths render as-is.
+// which case the raw paths render as-is. Labels are backtick-wrapped so
+// markdown renders them as inline code (theme code style — distinct from
+// body text without embedding ANSI into the markdown pipeline).
 func (m *InteractiveMode) renderClipboardImageText(text string) string {
 	m.clipboardImagesMu.Lock()
 	defer m.clipboardImagesMu.Unlock()
@@ -7511,7 +7536,7 @@ func (m *InteractiveMode) renderClipboardImageText(text string) string {
 		return text
 	}
 	for path, label := range m.clipboardImageLabels {
-		text = strings.ReplaceAll(text, path, label)
+		text = strings.ReplaceAll(text, path, "`"+label+"`")
 	}
 	return text
 }

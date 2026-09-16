@@ -42,6 +42,14 @@ type CustomEditor struct {
 	// OnExtensionShortcut handles extension-registered shortcuts. Returns
 	// true if handled.
 	OnExtensionShortcut func(data string) bool
+
+	// TextDecorator post-processes each rendered editor line (pig-only; pi
+	// has no equivalent — added for clipboard image placeholder
+	// colorization, see docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md). Runs on
+	// the fully-rendered line (fake-cursor span already embedded), so a
+	// placeholder split by that span simply stays uncolored; the editor
+	// buffer itself stays plain text.
+	TextDecorator func(line string) string
 }
 
 // NewCustomEditor builds the editor (pi: constructor).
@@ -209,4 +217,20 @@ func (e *CustomEditor) HandleInput(data string) {
 
 	// Pass to parent for editor handling
 	e.Editor.HandleInput(data)
+}
+
+// Render renders the editor with the pig-only text decorator applied per
+// line (pi: CustomEditor has no Render override — pig adds the decorator
+// seam; zero-width SGR output keeps all width math intact). nil decorator
+// falls through to the embedded editor untouched.
+func (e *CustomEditor) Render(width int) []string {
+	lines := e.Editor.Render(width)
+	if e.TextDecorator == nil {
+		return lines
+	}
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		out[i] = e.TextDecorator(line)
+	}
+	return out
 }
