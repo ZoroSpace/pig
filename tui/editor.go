@@ -63,6 +63,16 @@ var pasteMarkerRegex = regexp.MustCompile(`\[paste #(\d+)( (\+\d+ lines|\d+ char
 // Non-global version for single-segment testing (pi: PASTE_MARKER_SINGLE, anchored).
 var pasteMarkerSingle = regexp.MustCompile(`^\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]$`)
 
+// imagePlaceholderRegex matches clipboard-paste image placeholders like
+// `[Image 1]` (pig-only, docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md). Valid
+// placeholders merge into single atomic segments exactly like paste
+// markers, so cursor movement and deletion treat them as one unit.
+var imagePlaceholderRegex = regexp.MustCompile(`\[Image (\d+)\]`)
+
+// atomicSpan is a half-open byte range [start, end) of text to merge into a
+// single segment (pig-only).
+type atomicSpan struct{ start, end int }
+
 // Check if a segment is a paste marker (i.e. was merged by segmentWithMarkers).
 func isPasteMarker(segment string) bool {
 	return len(segment) >= 10 && pasteMarkerSingle.MatchString(segment)
@@ -90,26 +100,30 @@ func graphemeSegmentData(text string) []SegmentData {
 }
 
 // segmentWithMarkers wraps a segmenter and merges graphemes that fall within
-// paste markers into single atomic segments. This makes cursor movement,
+// atomic marker spans into single atomic segments. This makes cursor movement,
 // deletion, word-wrap, etc. treat paste markers as single units.
 //
-// Only markers whose numeric ID exists in validIds are merged.
-func segmentWithMarkers(text string, baseSegmenter SegmenterFunc, validIds map[int]bool) []SegmentData {
-	// Fast path: no paste markers in the text or no valid IDs.
-	if len(validIds) == 0 || !strings.Contains(text, "[paste #") {
+// Only markers whose numeric ID exists in validIds are merged. extraSpans
+// (pig-only) carries additional atomic spans — image placeholders — computed
+// by the caller from its own validity source.
+func segmentWithMarkers(text string, baseSegmenter SegmenterFunc, validIds map[int]bool, extraSpans []atomicSpan) []SegmentData {
+	// Fast path: no paste markers in the text or no valid IDs, and no image
+	// placeholders (pig-only).
+	if (len(validIds) == 0 || !strings.Contains(text, "[paste #")) && !strings.Contains(text, "[Image ") {
 		return baseSegmenter(text)
 	}
 
 	// Find all marker spans with valid IDs.
-	type markerSpan struct{ start, end int }
-	var markers []markerSpan
+	var markers []atomicSpan
 	for _, m := range pasteMarkerRegex.FindAllStringSubmatchIndex(text, -1) {
 		id, err := strconv.Atoi(text[m[2]:m[3]])
 		if err != nil || !validIds[id] {
 			continue
 		}
-		markers = append(markers, markerSpan{start: m[0], end: m[1]})
+		markers = append(markers, atomicSpan{start: m[0], end: m[1]})
 	}
+	markers = append(markers, extraSpans...)
+	sort.Slice(markers, func(i, j int) bool { return markers[i].start < markers[j].start })
 	if len(markers) == 0 {
 		return baseSegmenter(text)
 	}
@@ -125,7 +139,7 @@ func segmentWithMarkers(text string, baseSegmenter SegmenterFunc, validIds map[i
 			markerIdx++
 		}
 
-		var marker *markerSpan
+		var marker *atomicSpan
 		if markerIdx < len(markers) {
 			marker = &markers[markerIdx]
 		}
@@ -419,6 +433,13 @@ type Editor struct {
 	// that is the equivalent of calling super.renderTopBorder).
 	TopBorderOverride func(width int, hiddenLineCount int) (string, bool)
 
+	// ImagePlaceholderValidIds reports the registered [Image N] ids (pig-only;
+	// pi has no equivalent — docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md).
+	// Placeholders with a valid id merge into a single atomic segment (same
+	// mechanics as paste markers); nil or missing ids leave the text fully
+	// editable. Backed by interactive mode's clipboard placeholder registry.
+	ImagePlaceholderValidIds func() map[int]bool
+
 	// Autocomplete support (pi: autocompleteProvider family).
 	autocompleteProvider          AutocompleteProvider
 	autocompleteTriggerCharacters []string
@@ -580,13 +601,37 @@ func (e *Editor) validPasteIds() map[int]bool {
 }
 
 // segment segments text with paste-marker awareness, only merging markers
-// with valid IDs. mode is "word" or "grapheme".
+// with valid IDs. mode is "word" or "grapheme". pig-only extension: valid
+// [Image N] clipboard placeholders merge the same way (docs/feat/
+// CLIPBOARD-IMAGE-PLACEHOLDER.md).
 func (e *Editor) segment(text string, mode string) []SegmentData {
 	base := graphemeSegmentData
 	if mode == "word" {
 		base = wordSegmentData
 	}
-	return segmentWithMarkers(text, base, e.validPasteIds())
+	return segmentWithMarkers(text, base, e.validPasteIds(), e.imagePlaceholderSpans(text))
+}
+
+// imagePlaceholderSpans returns the atomic spans of [Image N] placeholders
+// whose id is registered with the ImagePlaceholderValidIds callback (pig-only;
+// unregistered occurrences — e.g. hand-typed text — stay editable).
+func (e *Editor) imagePlaceholderSpans(text string) []atomicSpan {
+	if e.ImagePlaceholderValidIds == nil || !strings.Contains(text, "[Image ") {
+		return nil
+	}
+	valid := e.ImagePlaceholderValidIds()
+	if len(valid) == 0 {
+		return nil
+	}
+	var spans []atomicSpan
+	for _, m := range imagePlaceholderRegex.FindAllStringSubmatchIndex(text, -1) {
+		id, err := strconv.Atoi(text[m[2]:m[3]])
+		if err != nil || !valid[id] {
+			continue
+		}
+		spans = append(spans, atomicSpan{start: m[0], end: m[1]})
+	}
+	return spans
 }
 
 // GetPaddingX returns the horizontal padding.

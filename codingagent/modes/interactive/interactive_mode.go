@@ -65,6 +65,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -253,18 +254,20 @@ type InteractiveMode struct {
 
 	// Clipboard image paste placeholders (pig-only, opencode-style UX):
 	// pasting an image writes the temp file and inserts "[Image N]" into the
-	// editor instead of the raw path. pendingClipboardImages holds the
-	// current message's pasted paths in paste order and resets after each
-	// submission (numbering restarts per message); clipboardImageLabels maps
-	// path → "[Image N]" label for transcript display only (session-
-	// lifetime, first label wins). The model and the JSONL session keep the
-	// real path — placeholders are expanded at submit time and never
-	// persisted. pi has no equivalent state; the mutex is pig's (paste runs
-	// on its own goroutine, submit on the submit worker, renders on the
-	// event dispatch goroutine).
-	clipboardImagesMu      sync.Mutex
-	pendingClipboardImages []string
-	clipboardImageLabels   map[string]string
+	// editor instead of the raw path. clipboardLabelPaths maps the current
+	// message's labels to their temp paths and resets after each submission;
+	// the number N is allocated as the LOWEST FREE number in the editor text
+	// at paste time, so deleting a placeholder releases its number for reuse
+	// (user request — orphans in the map are overwritten on reuse, never
+	// expanded). clipboardImageLabels maps path → "[Image N]" label for
+	// transcript display only (session-lifetime, first label wins). The
+	// model and the JSONL session keep the real path — placeholders are
+	// expanded at submit time and never persisted. pi has no equivalent
+	// state; the mutex is pig's (paste runs on its own goroutine, submit on
+	// the submit worker, renders on the event dispatch goroutine).
+	clipboardImagesMu    sync.Mutex
+	clipboardLabelPaths  map[string]string
+	clipboardImageLabels map[string]string
 
 	activeStatusIndicator   statusIndicatorItem
 	idleStatus              *components.IdleStatus
@@ -516,6 +519,9 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 	// pig-only: colorize pasted-image placeholders in the editor display
 	// (docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md).
 	m.defaultEditor.TextDecorator = colorizeImagePlaceholders
+	// pig-only: registered placeholders delete/move as one atomic unit
+	// (paste-marker mechanics).
+	m.defaultEditor.ImagePlaceholderValidIds = m.validImagePlaceholderIds
 	m.editor = m.defaultEditor
 	m.editorContainer = &tui.Container{}
 	m.editorContainer.AddChild(m.editor)
@@ -1127,7 +1133,7 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 		} else {
 			// pig-only: expand [Image N] placeholders to the pasted paths
 			// before queueing — the model receives the real path.
-			m.queueCompactionMessage(expandImagePlaceholders(text, m.takeClipboardImagesForSubmit()), "steer")
+			m.queueCompactionMessage(expandImagePlaceholders(text, m.takeClipboardLabelPaths()), "steer")
 		}
 		return
 	}
@@ -1139,7 +1145,7 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 		m.editorAddToHistory(text)
 		// pig-only: expand [Image N] placeholders to the pasted paths before
 		// steering — the model receives the real path.
-		expandedText := expandImagePlaceholders(text, m.takeClipboardImagesForSubmit())
+		expandedText := expandImagePlaceholders(text, m.takeClipboardLabelPaths())
 		m.editor.SetText("")
 		_ = m.session().Prompt(ctx, expandedText, &core.PromptOptions{StreamingBehavior: "steer"})
 		m.updatePendingMessagesDisplay()
@@ -1154,7 +1160,7 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 	// pig-only: expand [Image N] placeholders to the pasted paths — the
 	// model and the session transcript keep the real path, while editor
 	// history recalls the compact placeholder.
-	expandedText := expandImagePlaceholders(text, m.takeClipboardImagesForSubmit())
+	expandedText := expandImagePlaceholders(text, m.takeClipboardLabelPaths())
 	m.inputGate.submit(expandedText)
 	m.editorAddToHistory(text)
 }
@@ -7466,14 +7472,31 @@ func (m *InteractiveMode) handleClipboardPaste() {
 }
 
 // recordClipboardImagePath registers a pasted image temp-file path and
-// returns its opencode-style "[Image N]" placeholder (pig-only). N counts
-// pastes within the current message and restarts after each submission;
-// the display label map keeps the first label per path.
+// returns its opencode-style "[Image N]" placeholder (pig-only). N is the
+// lowest number not present in the editor text, so deleting a placeholder
+// releases its number for reuse (user request); the label→path map entry
+// is overwritten on reuse (orphans never expand). The display label map
+// keeps the first label per path.
 func (m *InteractiveMode) recordClipboardImagePath(filePath string) string {
 	m.clipboardImagesMu.Lock()
 	defer m.clipboardImagesMu.Unlock()
-	m.pendingClipboardImages = append(m.pendingClipboardImages, filePath)
-	label := fmt.Sprintf("[Image %d]", len(m.pendingClipboardImages))
+
+	used := map[int]bool{}
+	for _, match := range imagePlaceholderRe.FindAllStringSubmatch(m.editor.GetText(), -1) {
+		if n, err := strconv.Atoi(match[1]); err == nil {
+			used[n] = true
+		}
+	}
+	n := 1
+	for used[n] {
+		n++
+	}
+	label := fmt.Sprintf("[Image %d]", n)
+
+	if m.clipboardLabelPaths == nil {
+		m.clipboardLabelPaths = map[string]string{}
+	}
+	m.clipboardLabelPaths[label] = filePath
 	if m.clipboardImageLabels == nil {
 		m.clipboardImageLabels = map[string]string{}
 	}
@@ -7483,22 +7506,39 @@ func (m *InteractiveMode) recordClipboardImagePath(filePath string) string {
 	return label
 }
 
-// takeClipboardImagesForSubmit snapshots and clears the current message's
-// pasted paths (pig-only; called on the submit worker when the message
-// leaves the UI).
-func (m *InteractiveMode) takeClipboardImagesForSubmit() []string {
+// validImagePlaceholderIds reports the registered [Image N] ids for the
+// editor's atomic-segment mechanism (paste-marker mechanics: placeholders
+// delete and move as one unit; pig-only).
+func (m *InteractiveMode) validImagePlaceholderIds() map[int]bool {
 	m.clipboardImagesMu.Lock()
 	defer m.clipboardImagesMu.Unlock()
-	images := m.pendingClipboardImages
-	m.pendingClipboardImages = nil
-	return images
+	ids := make(map[int]bool, len(m.clipboardLabelPaths))
+	for label := range m.clipboardLabelPaths {
+		if n, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(label, "[Image "), "]")); err == nil {
+			ids[n] = true
+		}
+	}
+	return ids
+}
+
+// takeClipboardLabelPaths snapshots and clears the current message's
+// label→path map (pig-only; called on the submit worker when the message
+// leaves the UI).
+func (m *InteractiveMode) takeClipboardLabelPaths() map[string]string {
+	m.clipboardImagesMu.Lock()
+	defer m.clipboardImagesMu.Unlock()
+	paths := m.clipboardLabelPaths
+	m.clipboardLabelPaths = nil
+	return paths
 }
 
 // expandImagePlaceholders replaces "[Image N]" placeholders with the pasted
-// paths at submit time — the model receives the real path (pig-only).
-func expandImagePlaceholders(text string, images []string) string {
-	for i, path := range images {
-		text = strings.ReplaceAll(text, fmt.Sprintf("[Image %d]", i+1), path)
+// paths at submit time — the model receives the real path (pig-only). The
+// closing bracket in each label makes plain string replacement safe against
+// number-prefix collisions ([Image 1] does not match inside [Image 10]).
+func expandImagePlaceholders(text string, labelPaths map[string]string) string {
+	for label, path := range labelPaths {
+		text = strings.ReplaceAll(text, label, path)
 	}
 	return text
 }
@@ -7506,8 +7546,9 @@ func expandImagePlaceholders(text string, images []string) string {
 // imagePlaceholderRe matches an [Image N] placeholder in a rendered line.
 // The pattern is pure literal, so any match is guaranteed free of escape
 // bytes — a placeholder split by the editor's embedded fake-cursor span
-// (\x1b[7m...\x1b[0m) simply does not match and stays uncolored.
-var imagePlaceholderRe = regexp.MustCompile(`\[Image [0-9]+\]`)
+// (\x1b[7m...\x1b[0m) simply does not match and stays uncolored. Capture
+// group 1 is the placeholder number.
+var imagePlaceholderRe = regexp.MustCompile(`\[Image (\d+)\]`)
 
 // colorizeImagePlaceholders colorizes [Image N] placeholders in a rendered
 // editor line with the theme imagePlaceholder color (pig-only; blue in the

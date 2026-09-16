@@ -219,25 +219,34 @@ func TestClipboardPasteInsertsImagePlaceholder(t *testing.T) {
 }
 
 func TestClipboardPlaceholderExpandsToPathOnSubmit(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	stubClipboardReaders(t, &utils.ClipboardImage{MimeType: "image/png", Bytes: []byte{1}}, "")
 	m := newSubmitTestMode(t)
 
-	if label := m.recordClipboardImagePath("/tmp/first.png"); label != "[Image 1]" {
-		t.Fatalf("first label = %q, want [Image 1]", label)
+	m.handleClipboardPaste() // [Image 1]
+	first := clipboardTempFiles(t)
+	if len(first) != 1 {
+		t.Fatalf("expected one temp file, got %v", first)
 	}
-	if label := m.recordClipboardImagePath("/tmp/second.png"); label != "[Image 2]" {
-		t.Fatalf("second label = %q, want [Image 2]", label)
+	m.handleClipboardPaste() // [Image 1][Image 2]
+	p2 := newClipboardTempFile(t, first)
+
+	if got := m.editor.GetText(); got != "[Image 1][Image 2]" {
+		t.Fatalf("editor text = %q, want %q", got, "[Image 1][Image 2]")
 	}
 
 	m.processSubmitText(context.Background(), "[Image 2] 对比一下 [Image 1]")
-	if got := submittedInputGateText(t, m); got != "/tmp/second.png 对比一下 /tmp/first.png" {
-		t.Fatalf("submitted %q, want the expanded paths", got)
+	got := submittedInputGateText(t, m)
+	if strings.Contains(got, "[Image") {
+		t.Fatalf("placeholders must expand to paths: %q", got)
+	}
+	if !strings.Contains(got, p2) || !strings.Contains(got, first[0]) {
+		t.Fatalf("submitted %q, want both expanded paths (%s, %s)", got, p2, first[0])
 	}
 
-	// Editor history recalls the compact placeholder, not the raw path.
-	// (History is populated from the pre-expansion text; verified via the
-	// transcript label map below and the editor history indirectly.)
-
-	// Numbering restarts per message after a submission.
+	// Numbering restarts after submission (map + buffer cleared; the real
+	// flow clears the editor once the run loop consumes the submission).
+	m.editor.SetText("")
 	if label := m.recordClipboardImagePath("/tmp/third.png"); label != "[Image 1]" {
 		t.Fatalf("label after resubmit = %q, want [Image 1] (per-message numbering)", label)
 	}
@@ -247,6 +256,73 @@ func TestClipboardPlaceholderExpandsToPathOnSubmit(t *testing.T) {
 	m2.processSubmitText(context.Background(), "[Image 9] nothing pasted")
 	if got := submittedInputGateText(t, m2); got != "[Image 9] nothing pasted" {
 		t.Fatalf("unknown placeholder mangled: %q", got)
+	}
+}
+
+// clipboardTempFiles lists the pi-clipboard-*.png temp files written so far.
+func clipboardTempFiles(t *testing.T) []string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(os.TempDir(), "pi-clipboard-*.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return matches
+}
+
+// newClipboardTempFile returns the one file that is not in before.
+func newClipboardTempFile(t *testing.T, before []string) string {
+	t.Helper()
+	for _, path := range clipboardTempFiles(t) {
+		known := false
+		for _, b := range before {
+			if b == path {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return path
+		}
+	}
+	t.Fatal("no new clipboard temp file")
+	return ""
+}
+
+func TestClipboardPlaceholderNumberingReusesFreedNumbers(t *testing.T) {
+	// User repro: delete [Image 1], paste again — the freed number must be
+	// reused instead of climbing to [Image 3] (allocation scans the editor
+	// buffer, so a deleted placeholder releases its number immediately).
+	t.Setenv("TMPDIR", t.TempDir())
+	stubClipboardReaders(t, &utils.ClipboardImage{MimeType: "image/png", Bytes: []byte{1}}, "")
+	m := newSubmitTestMode(t)
+
+	m.handleClipboardPaste() // [Image 1]
+	f1 := clipboardTempFiles(t)
+	m.handleClipboardPaste() // [Image 1][Image 2]
+	f2 := newClipboardTempFile(t, f1)
+
+	// Whole-unit delete of [Image 1] (editor atomic delete; SetText
+	// reproduces the resulting buffer state).
+	m.editor.SetText("[Image 2]")
+
+	m.handleClipboardPaste() // reuses number 1
+	f3 := newClipboardTempFile(t, append(append([]string{}, f1...), f2))
+	if got := m.editor.GetText(); got != "[Image 2][Image 1]" {
+		t.Fatalf("after delete+repaste = %q, want %q", got, "[Image 2][Image 1]")
+	}
+
+	// Expansion maps each surviving placeholder to its own path; the deleted
+	// first paste's path must not reappear (reuse overwrote the orphan).
+	m.processSubmitText(context.Background(), m.editor.GetText())
+	got := submittedInputGateText(t, m)
+	if strings.Contains(got, "[Image") {
+		t.Fatalf("placeholders must expand to paths: %q", got)
+	}
+	if !strings.Contains(got, f2) || !strings.Contains(got, f3) {
+		t.Fatalf("submitted %q, want expanded paths %s and %s", got, f2, f3)
+	}
+	if strings.Contains(got, f1[0]) {
+		t.Fatalf("deleted first paste must not expand: %q", got)
 	}
 }
 
