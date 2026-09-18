@@ -62,6 +62,8 @@ func probeThemeColors() map[string]theme.ColorValue {
 		// Markdown inline-code tokens (needed since the clipboard placeholder
 		// renders as inline code in the transcript).
 		"mdCode": "#00ff00", "mdCodeBg": "#1a1a2e",
+		// Markdown link token (needed by the earendil easter-egg URL).
+		"mdLink": "#81a2be",
 		// pig-only imagePlaceholder token (same value as dark.mdLink).
 		"imagePlaceholder": "#81a2be",
 	}

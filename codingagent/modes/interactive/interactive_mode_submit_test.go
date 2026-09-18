@@ -135,23 +135,17 @@ func TestClipboardPathSubmissionReachesModel(t *testing.T) {
 }
 
 func TestDeferredInteractiveCommandsStillWarn(t *testing.T) {
+	// The 2026-09-18 batch wired import/copy/session/changelog/hotkeys/clone/
+	// debug + easter eggs (see interactive_mode_commands_test.go); only the
+	// externally-blocked pair stays deferred, each with its own reason.
 	tests := []struct {
 		name string
 		text string
-		want string // warning headline shown to the user
+		want string // full warning text shown to the user
 	}{
-		{"export bare", "/export", "/export"},
-		{"export with path arg", "/export /tmp/session.md", "/export"},
-		{"import with path arg", "/import /tmp/session.md", "/import"},
-		{"share", "/share", "/share"},
-		{"copy", "/copy", "/copy"},
-		{"session", "/session", "/session"},
-		{"changelog", "/changelog", "/changelog"},
-		{"hotkeys", "/hotkeys", "/hotkeys"},
-		{"clone", "/clone", "/clone"},
-		{"debug", "/debug", "/debug"},
-		{"easter egg arminsayshi", "/arminsayshi", "/arminsayshi"},
-		{"easter egg dementedelves", "/dementedelves", "/dementedelves"},
+		{"export bare", "/export", "/export is not yet available (HTML export lands in a later batch)"},
+		{"export with path arg", "/export /tmp/session.md", "/export is not yet available (HTML export lands in a later batch)"},
+		{"share", "/share", "/share is not yet available (GitHub gist sharing lands in a later batch)"},
 	}
 
 	for _, tt := range tests {
@@ -159,8 +153,8 @@ func TestDeferredInteractiveCommandsStillWarn(t *testing.T) {
 			m := newSubmitTestMode(t)
 			m.processSubmitText(context.Background(), tt.text)
 
-			rendered := normalizeRenderedOutput(renderAllChildren(m.chatContainer, 80))
-			if !strings.Contains(rendered, "Warning: "+tt.want+" is not yet available") {
+			rendered := normalizeRenderedOutput(renderAllChildren(m.chatContainer, 200))
+			if !strings.Contains(rendered, "Warning: "+tt.want) {
 				t.Fatalf("missing deferred-command warning for %q, got:\n%s", tt.text, rendered)
 			}
 			// The deferred branch swallows the input: nothing reaches the model.
@@ -172,7 +166,7 @@ func TestDeferredInteractiveCommandsStillWarn(t *testing.T) {
 }
 
 func TestIsDeferredInteractiveCommandBoundaries(t *testing.T) {
-	yes := []string{"/export", "/export x", "/import", "/import y", "/share", "/debug", "/dementedelves"}
+	yes := []string{"/export", "/export x", "/share"}
 	no := []string{
 		"/exports x",                         // longer word, not the command
 		"/exportx",                           // no space boundary
@@ -180,6 +174,16 @@ func TestIsDeferredInteractiveCommandBoundaries(t *testing.T) {
 		"/etc/hosts",                         // arbitrary path
 		"/settings",                          // implemented commands are handled earlier, never deferred
 		"/model",                             // implemented commands are handled earlier, never deferred
+		"/import",                            // wired in the 2026-09-18 batch
+		"/import y",                          // wired in the 2026-09-18 batch
+		"/copy",                              // wired in the 2026-09-18 batch
+		"/session",                           // wired in the 2026-09-18 batch
+		"/changelog",                         // wired in the 2026-09-18 batch
+		"/hotkeys",                           // wired in the 2026-09-18 batch
+		"/clone",                             // wired in the 2026-09-18 batch
+		"/debug",                             // wired in the 2026-09-18 batch
+		"/arminsayshi",                       // wired in the 2026-09-18 batch
+		"/dementedelves",                     // wired in the 2026-09-18 batch
 	}
 	for _, text := range yes {
 		if !isDeferredInteractiveCommand(text) {

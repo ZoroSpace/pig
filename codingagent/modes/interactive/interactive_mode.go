@@ -51,8 +51,10 @@
 package interactive
 
 import (
+	"bytes"
 	"context"
 	crand "crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -1083,22 +1085,64 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 		m.editor.SetText("")
 		m.handleThinkingCommand(searchTerm)
 		return
+	case text == "/import" || strings.HasPrefix(text, "/import "):
+		m.editor.SetText("")
+		m.handleImportCommand(text)
+		return
+	case text == "/copy":
+		// pi: await handleCopyCommand() (defaults: flash=true, preferSelection=false)
+		m.handleCopyCommand(true, false)
+		m.editor.SetText("")
+		return
+	case text == "/session":
+		m.editor.SetText("")
+		m.handleSessionCommand()
+		return
+	case text == "/changelog":
+		m.editor.SetText("")
+		m.handleChangelogCommand()
+		return
+	case text == "/hotkeys":
+		m.editor.SetText("")
+		m.handleHotkeysCommand()
+		return
+	case text == "/clone":
+		m.editor.SetText("")
+		m.handleCloneCommand()
+		return
+	case text == "/reload":
+		m.editor.SetText("")
+		_ = m.handleReloadCommand(ctx)
+		return
+	case text == "/debug":
+		m.handleDebugCommand()
+		m.editor.SetText("")
+		return
+	case text == "/arminsayshi":
+		m.handleArminSaysHi()
+		m.editor.SetText("")
+		return
+	case text == "/dementedelves":
+		m.handleDementedDelves()
+		m.editor.SetText("")
+		return
 	case isDeferredInteractiveCommand(text):
-		// Deferred command branches (export/import/share/copy/session/
-		// changelog/hotkeys/clone/debug and easter eggs): handlers land with
-		// their batches. Only these KNOWN commands are intercepted — pi's
-		// onSubmit has no unknown-command branch, so any other "/..." text is
-		// submitted to the model verbatim (extension commands and skills are
-		// resolved inside AgentSession.prompt). Intercepting every "/"-prefixed
-		// input here broke the paste-image flow: macOS writes the screenshot to
-		// /var/folders/.../pi-clipboard-*.png and handleClipboardPaste inserts
-		// that path at the cursor, which must reach the model as a message.
+		// Deferred command branches (export/share): handlers land with their
+		// batches (export needs Phase 8 export-html for its default HTML path;
+		// share needs the GitHub gist API). Only these KNOWN commands are
+		// intercepted — pi's onSubmit has no unknown-command branch, so any
+		// other "/..." text is submitted to the model verbatim (extension
+		// commands and skills are resolved inside AgentSession.prompt).
+		// Intercepting every "/"-prefixed input here broke the paste-image
+		// flow: macOS writes the screenshot to /var/folders/.../pi-clipboard-*.png
+		// and handleClipboardPaste inserts that path at the cursor, which must
+		// reach the model as a message.
 		// See docs/fix/2026-09-16-clipboard-path-eaten-by-slash-command.md.
 		commandName := strings.TrimPrefix(text, "/")
 		if space := strings.Index(commandName, " "); space >= 0 {
 			commandName = commandName[:space]
 		}
-		m.ShowWarning("/" + commandName + " is not yet available (interactive selectors land in a later batch)")
+		m.ShowWarning("/" + commandName + " is not yet available (" + deferredCommandReason(commandName) + ")")
 		m.editor.SetText("")
 		return
 	}
@@ -1167,27 +1211,36 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 }
 
 // isDeferredInteractiveCommand reports whether text targets one of pi's
-// interactive submit commands whose handler lands in a later batch (pi:
-// setupEditorSubmitHandler branches for export/import/share/copy/session/
-// changelog/hotkeys/clone/debug and the arminsayshi/dementedelves easter
-// eggs). Matching follows pi's branch shapes: arg-taking commands match the
-// bare form and "<cmd> ..."; the rest match exactly. Anything else starting
-// with "/" is ordinary text and must reach the model verbatim.
+// interactive submit commands whose handler is still deferred. Matching
+// follows pi's branch shapes: arg-taking commands match the bare form and
+// "<cmd> ..."; the rest match exactly. Anything else starting with "/" is
+// ordinary text and must reach the model verbatim.
+//
+// History: this list used to cover export/import/share/copy/session/
+// changelog/hotkeys/clone/debug + easter eggs; the 2026-09-18 batch wired
+// all of those, leaving only the externally-blocked pair. /reload was
+// missing from the old list while its handler already existed — typing
+// "/reload" fell through to the model as a plain message (fixed in the
+// same batch; see docs/fix/2026-09-18-reload-command-leaks-to-model.md).
 func isDeferredInteractiveCommand(text string) bool {
-	for _, cmd := range []string{"export", "import"} {
-		if text == "/"+cmd || strings.HasPrefix(text, "/"+cmd+" ") {
-			return true
-		}
+	if text == "/export" || strings.HasPrefix(text, "/export ") {
+		return true
 	}
-	for _, cmd := range []string{
-		"share", "copy", "session", "changelog", "hotkeys", "clone", "debug",
-		"arminsayshi", "dementedelves",
-	} {
-		if text == "/"+cmd {
-			return true
-		}
+	return text == "/share"
+}
+
+// deferredCommandReason returns the user-facing reason a deferred command is
+// unavailable (pig-only wording; the old catch-all "interactive selectors
+// land in a later batch" was stale — the selectors shipped in T6).
+func deferredCommandReason(commandName string) string {
+	switch commandName {
+	case "export":
+		return "HTML export lands in a later batch"
+	case "share":
+		return "GitHub gist sharing lands in a later batch"
+	default:
+		return "it lands in a later batch"
 	}
-	return false
 }
 
 // handleNameCommand sets the session name (pi: handleNameCommand).
@@ -1203,6 +1256,365 @@ func (m *InteractiveMode) handleNameCommand(text string) {
 	m.session().SetSessionName(name)
 	m.showStatus("Session renamed to " + name)
 	m.updateTerminalTitle()
+}
+
+// getPathCommandArgument extracts the first argument of a path-taking command
+// with quote support (pi: getPathCommandArgument). Returns "" for no arg.
+func (m *InteractiveMode) getPathCommandArgument(text string, command string) string {
+	if text == command {
+		return ""
+	}
+	if !strings.HasPrefix(text, command+" ") {
+		return ""
+	}
+
+	argsString := strings.TrimLeft(text[len(command)+1:], " ")
+	if argsString == "" {
+		return ""
+	}
+
+	firstChar := argsString[0]
+	if firstChar == '"' || firstChar == '\'' {
+		closingQuoteIndex := strings.IndexByte(argsString[1:], firstChar)
+		if closingQuoteIndex < 0 {
+			return ""
+		}
+		return argsString[1 : 1+closingQuoteIndex]
+	}
+
+	firstWhitespaceIndex := strings.IndexAny(argsString, " \t\n\r\v\f")
+	if firstWhitespaceIndex < 0 {
+		return argsString
+	}
+	return argsString[:firstWhitespaceIndex]
+}
+
+// handleImportCommand replaces the current session with a JSONL file (pi:
+// handleImportCommand).
+func (m *InteractiveMode) handleImportCommand(text string) {
+	inputPath := m.getPathCommandArgument(text, "/import")
+	if inputPath == "" {
+		m.ShowError("Usage: /import <path.jsonl>")
+		return
+	}
+
+	confirmed := m.showExtensionConfirm(context.Background(), "Import session", fmt.Sprintf("Replace current session with %s?", inputPath), nil)
+	if !confirmed {
+		m.showStatus("Import cancelled")
+		return
+	}
+
+	m.clearStatusIndicator("")
+	cancelled, err := m.runtimeHost.ImportFromJsonl(context.Background(), inputPath, nil)
+	if err == nil {
+		if cancelled {
+			m.showStatus("Import cancelled")
+			return
+		}
+		m.showStatus(fmt.Sprintf("Session imported from: %s", inputPath))
+		return
+	}
+	var missingCwd *core.MissingSessionCwdError
+	if errors.As(err, &missingCwd) {
+		selectedCwd, ok := m.promptForMissingSessionCwd(err)
+		if !ok {
+			m.showStatus("Import cancelled")
+			return
+		}
+		// pi lets second-attempt errors escape the onSubmit promise; routing
+		// them through handleFatalRuntimeError is the sane Go equivalent
+		// (missing-cwd cannot recur with an explicit override).
+		cancelled, err = m.runtimeHost.ImportFromJsonl(context.Background(), inputPath, &selectedCwd)
+		if err != nil {
+			_ = m.handleFatalRuntimeError("Failed to import session", err)
+			return
+		}
+		if cancelled {
+			m.showStatus("Import cancelled")
+			return
+		}
+		m.showStatus(fmt.Sprintf("Session imported from: %s", inputPath))
+		return
+	}
+	var fileNotFound *core.SessionImportFileNotFoundError
+	if errors.As(err, &fileNotFound) {
+		m.ShowError(fmt.Sprintf("Failed to import session: %s", fileNotFound.Error()))
+		return
+	}
+	_ = m.handleFatalRuntimeError("Failed to import session", err)
+}
+
+// handleSessionCommand shows session info and stats (pi:
+// handleSessionCommand).
+func (m *InteractiveMode) handleSessionCommand() {
+	stats := m.session().GetSessionStats()
+	sessionName, _ := m.sessionManager().GetSessionName()
+	entries := m.sessionManager().GetEntries()
+	cacheWaste := core.ComputeCacheWaste(entries, m.modelPriceSource())
+
+	// Cost/token totals per provider/model actually used (e.g. OpenRouter
+	// `auto` resolves to a concrete responseModel). Usage without model
+	// attribution is grouped separately so the breakdown reconciles with the
+	// session total.
+	usageBreakdown := core.GetUsageCostBreakdown(entries)
+
+	current := theme.Current()
+	var info strings.Builder
+	info.WriteString(current.Bold("Session Info") + "\n\n")
+	if sessionName != "" {
+		info.WriteString(current.Fg("dim", "Name:") + " " + sessionName + "\n")
+	}
+	sessionFile := stats.SessionFile
+	if sessionFile == "" {
+		sessionFile = "In-memory"
+	}
+	info.WriteString(current.Fg("dim", "File:") + " " + sessionFile + "\n")
+	info.WriteString(current.Fg("dim", "ID:") + " " + stats.SessionID + "\n\n")
+	info.WriteString(current.Bold("Messages") + "\n")
+	info.WriteString(current.Fg("dim", "Total:") + " " + formatLocaleInt(int64(stats.TotalMessages)) + "\n")
+	info.WriteString(current.Fg("dim", "User:") + " " + formatLocaleInt(int64(stats.UserMessages)) + "\n")
+	info.WriteString(current.Fg("dim", "Assistant:") + " " + formatLocaleInt(int64(stats.AssistantMessages)) + "\n")
+	info.WriteString(current.Fg("dim", "Tools:") + fmt.Sprintf(" %d calls, %d results\n", stats.ToolCalls, stats.ToolResults) + "\n")
+	info.WriteString(current.Bold("Tokens") + "\n")
+	// "Input" is the full prompt volume. With cache activity, split it into
+	// cached (served from cache) vs uncached (everything else) - the only
+	// provider-independent split. Cache writes, where reported, are a detail
+	// of the uncached portion.
+	input, cacheRead, cacheWrite := stats.Tokens.Input, stats.Tokens.CacheRead, stats.Tokens.CacheWrite
+	promptTokens := input + cacheRead + cacheWrite
+	info.WriteString(current.Fg("dim", "Input:") + " " + formatLocaleInt(promptTokens) + "\n")
+	if promptTokens > 0 && (cacheRead > 0 || cacheWrite > 0) {
+		hitRate := current.Fg("dim", fmt.Sprintf("(%.1f%%)", float64(cacheRead)/float64(promptTokens)*100))
+		info.WriteString("  " + current.Fg("dim", "Cached:") + " " + formatLocaleInt(cacheRead) + " " + hitRate + "\n")
+		written := ""
+		if cacheWrite > 0 {
+			written = " " + current.Fg("dim", fmt.Sprintf("(%s written to cache)", formatLocaleInt(cacheWrite)))
+		}
+		info.WriteString("  " + current.Fg("dim", "Uncached:") + " " + formatLocaleInt(input+cacheWrite) + written + "\n")
+	}
+	info.WriteString(current.Fg("dim", "Output:") + " " + formatLocaleInt(stats.Tokens.Output) + "\n")
+	info.WriteString(current.Fg("dim", "Total:") + " " + formatLocaleInt(stats.Tokens.Total) + "\n")
+
+	if stats.Cost > 0 || cacheWaste.MissedTokens > 0 {
+		info.WriteString("\n" + current.Bold("Cost") + "\n")
+		info.WriteString(current.Fg("dim", "Total:") + fmt.Sprintf(" $%.3f", stats.Cost))
+		if len(usageBreakdown) > 1 {
+			for _, entry := range usageBreakdown {
+				info.WriteString(fmt.Sprintf("\n  %s $%.3f %s", current.Fg("dim", entry.Key+":"), entry.Cost,
+					current.Fg("dim", fmt.Sprintf("(%s tokens)", components.FormatTokens(entry.Tokens)))))
+			}
+		}
+		if cacheWaste.MissedTokens > 0 {
+			missLabel := fmt.Sprintf("%d misses", cacheWaste.MissCount)
+			if cacheWaste.MissCount == 1 {
+				missLabel = "1 miss"
+			}
+			detail := fmt.Sprintf("%s tokens, %s", formatLocaleInt(cacheWaste.MissedTokens), missLabel)
+			if cacheWaste.MissedCost >= 0.0001 {
+				info.WriteString("\n" + current.Fg("dim", "Cache Re-billed:") + fmt.Sprintf(" $%.3f %s", cacheWaste.MissedCost,
+					current.Fg("dim", fmt.Sprintf("(%s)", detail))))
+			} else {
+				info.WriteString("\n" + current.Fg("dim", "Cache Re-billed:") + " " + detail)
+			}
+		}
+	}
+
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(tui.NewText(info.String(), 1, 0))
+	m.ui.RequestRender(false)
+}
+
+// formatLocaleInt renders a number with en-US thousands grouping (pi:
+// Number.prototype.toLocaleString() under Node's default locale).
+func formatLocaleInt(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	if len(s) <= 3 {
+		if neg {
+			return "-" + s
+		}
+		return s
+	}
+	var out strings.Builder
+	for i, digit := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			out.WriteByte(',')
+		}
+		out.WriteRune(digit)
+	}
+	if neg {
+		return "-" + out.String()
+	}
+	return out.String()
+}
+
+// handleChangelogCommand renders the bundled changelog (pi:
+// handleChangelogCommand).
+func (m *InteractiveMode) handleChangelogCommand() {
+	changelogPath := codingagent.GetChangelogPath()
+	allEntries := utils.ParseChangelog(changelogPath)
+
+	var changelogMarkdown string
+	if len(allEntries) > 0 {
+		parts := make([]string, 0, len(allEntries))
+		for i := len(allEntries) - 1; i >= 0; i-- { // pi: allEntries.reverse()
+			e := allEntries[i]
+			parts = append(parts, utils.NormalizeChangelogLinks(e.Content, e))
+		}
+		changelogMarkdown = strings.Join(parts, "\n\n")
+	} else {
+		changelogMarkdown = "No changelog entries found."
+	}
+
+	current := theme.Current()
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(components.NewDynamicBorder(nil))
+	m.chatContainer.AddChild(tui.NewText(current.Bold(current.Fg("accent", "What's New")), 1, 0))
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(tui.NewMarkdown(changelogMarkdown, 1, 1, m.getMarkdownThemeWithSettings(), nil, nil))
+	m.chatContainer.AddChild(components.NewDynamicBorder(nil))
+	m.ui.RequestRender(false)
+}
+
+// getAppKeyDisplay returns the capitalized display string for an app
+// keybinding action (pi: getAppKeyDisplay).
+func (m *InteractiveMode) getAppKeyDisplay(action core.AppKeybinding) string {
+	return coretools.KeyDisplayText(action)
+}
+
+// getEditorKeyDisplay returns the capitalized display string for an editor
+// keybinding action (pi: getEditorKeyDisplay).
+func (m *InteractiveMode) getEditorKeyDisplay(action tui.Keybinding) string {
+	return coretools.KeyDisplayText(action)
+}
+
+// handleHotkeysCommand renders the keyboard shortcut tables (pi:
+// handleHotkeysCommand).
+func (m *InteractiveMode) handleHotkeysCommand() {
+	winNewlineNote := ""
+	if runtime.GOOS == "windows" {
+		winNewlineNote = " (Ctrl+Enter on Windows Terminal)"
+	}
+
+	hotkeys := strings.ReplaceAll(fmt.Sprintf(`
+**Navigation**
+| Key | Action |
+|-----|--------|
+| §%s§ / §%s§ / §%s§ / §%s§ | Move cursor / browse history |
+| §%s§ / §%s§ | Move by word |
+| §%s§ | Start of line |
+| §%s§ | End of line |
+| §%s§ | Jump forward to character |
+| §%s§ | Jump backward to character |
+| §%s§ / §%s§ | Scroll by page |
+
+**Editing**
+| Key | Action |
+|-----|--------|
+| §%s§ | Send message |
+| §%s§ | New line%s |
+| §%s§ | Delete word backwards |
+| §%s§ | Delete word forwards |
+| §%s§ | Delete to start of line |
+| §%s§ | Delete to end of line |
+| §%s§ | Paste the most-recently-deleted text |
+| §%s§ | Cycle through the deleted text after pasting |
+| §%s§ | Undo |
+
+**Other**
+| Key | Action |
+|-----|--------|
+| §%s§ | Path completion / accept autocomplete |
+| §%s§ | Cancel autocomplete / abort streaming |
+| §%s§ | Clear editor (first) / exit (second) |
+| §%s§ | Exit (when editor is empty) |
+| §%s§ | Suspend to background |
+| §%s§ | Cycle thinking level |
+| §%s§ / §%s§ | Cycle models |
+| §%s§ | Open model selector |
+| §%s§ | Toggle tool output expansion |
+| §%s§ | Toggle thinking block visibility |
+| §%s§ | Edit message in external editor |
+| §%s§ | Copy last assistant message |
+| §%s§ | Queue follow-up message |
+| §%s§ | Restore queued messages |
+| §%s§ | Paste image or text from clipboard |
+| §/§ | Slash commands |
+| §!§ | Run bash command |
+| §!!§ | Run bash command (excluded from context) |
+`,
+		// Navigation keybindings
+		m.getEditorKeyDisplay("tui.editor.cursorUp"), m.getEditorKeyDisplay("tui.editor.cursorDown"),
+		m.getEditorKeyDisplay("tui.editor.cursorLeft"), m.getEditorKeyDisplay("tui.editor.cursorRight"),
+		m.getEditorKeyDisplay("tui.editor.cursorWordLeft"), m.getEditorKeyDisplay("tui.editor.cursorWordRight"),
+		m.getEditorKeyDisplay("tui.editor.cursorLineStart"),
+		m.getEditorKeyDisplay("tui.editor.cursorLineEnd"),
+		m.getEditorKeyDisplay("tui.editor.jumpForward"),
+		m.getEditorKeyDisplay("tui.editor.jumpBackward"),
+		m.getEditorKeyDisplay("tui.editor.pageUp"), m.getEditorKeyDisplay("tui.editor.pageDown"),
+		// Editing keybindings
+		m.getEditorKeyDisplay("tui.input.submit"),
+		m.getEditorKeyDisplay("tui.input.newLine"), winNewlineNote,
+		m.getEditorKeyDisplay("tui.editor.deleteWordBackward"),
+		m.getEditorKeyDisplay("tui.editor.deleteWordForward"),
+		m.getEditorKeyDisplay("tui.editor.deleteToLineStart"),
+		m.getEditorKeyDisplay("tui.editor.deleteToLineEnd"),
+		m.getEditorKeyDisplay("tui.editor.yank"),
+		m.getEditorKeyDisplay("tui.editor.yankPop"),
+		m.getEditorKeyDisplay("tui.editor.undo"),
+		// Other keybindings
+		m.getEditorKeyDisplay("tui.input.tab"),
+		m.getAppKeyDisplay(core.AppKeybindingInterrupt),
+		m.getAppKeyDisplay(core.AppKeybindingClear),
+		m.getAppKeyDisplay(core.AppKeybindingExit),
+		m.getAppKeyDisplay(core.AppKeybindingSuspend),
+		m.getAppKeyDisplay(core.AppKeybindingThinkingCycle),
+		m.getAppKeyDisplay(core.AppKeybindingModelCycleForward), m.getAppKeyDisplay(core.AppKeybindingModelCycleBackward),
+		m.getAppKeyDisplay(core.AppKeybindingModelSelect),
+		m.getAppKeyDisplay(core.AppKeybindingToolsExpand),
+		m.getAppKeyDisplay(core.AppKeybindingThinkingToggle),
+		m.getAppKeyDisplay(core.AppKeybindingEditorExternal),
+		m.getAppKeyDisplay(core.AppKeybindingMessageCopy),
+		m.getAppKeyDisplay(core.AppKeybindingMessageFollowUp),
+		m.getAppKeyDisplay(core.AppKeybindingMessageDequeue),
+		m.getAppKeyDisplay(core.AppKeybindingClipboardPasteImage),
+	// Go raw strings cannot contain backticks; § is a placeholder for the
+	// markdown code ticks around each key (pi: a template literal with
+	// literal backticks).
+	), "§", "`")
+
+	// Add extension-registered shortcuts. pi iterates the JS Map in
+	// insertion order; the Go map loses ordering, so pig sorts by key for a
+	// deterministic table (declared deviation).
+	extensionRunner := m.session().GetExtensionRunner()
+	shortcuts := extensionRunner.GetShortcuts(m.keybindings.GetEffectiveConfig())
+	if len(shortcuts) > 0 {
+		hotkeys += "\n**Extensions**\n| Key | Action |\n|-----|--------|\n"
+		keys := make([]tui.KeyId, 0, len(shortcuts))
+		for key := range shortcuts {
+			keys = append(keys, key)
+		}
+		sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+		for _, key := range keys {
+			shortcut := shortcuts[key]
+			description := shortcut.Description
+			if description == "" {
+				description = shortcut.ExtensionPath
+			}
+			keyDisplay := coretools.FormatKeyText(string(key), coretools.KeyTextFormatOptions{Capitalize: true})
+			hotkeys += "| `" + keyDisplay + "` | " + description + " |\n"
+		}
+	}
+
+	current := theme.Current()
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(components.NewDynamicBorder(nil))
+	m.chatContainer.AddChild(tui.NewText(current.Bold(current.Fg("accent", "Keyboard Shortcuts")), 1, 0))
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(tui.NewMarkdown(strings.TrimSpace(hotkeys), 1, 1, m.getMarkdownThemeWithSettings(), nil, nil))
+	m.chatContainer.AddChild(components.NewDynamicBorder(nil))
+	m.ui.RequestRender(false)
 }
 
 // subscribeToAgent subscribes the UI to session events (pi:
@@ -2853,6 +3265,105 @@ func (m *InteractiveMode) handleClearCommand() {
 func (m *InteractiveMode) handleCompactCommand(customInstructions string) {
 	m.clearStatusIndicator("")
 	_, _ = m.session().Compact(context.Background(), customInstructions)
+}
+
+// handleCloneCommand duplicates the current session at the current position
+// (pi: handleCloneCommand; declared at interactive-mode.ts 5186, grouped here
+// with the other submit-command handlers).
+func (m *InteractiveMode) handleCloneCommand() {
+	leafID := m.sessionManager().GetLeafID()
+	if leafID == nil {
+		m.showStatus("Nothing to clone yet")
+		return
+	}
+
+	result, err := m.runtimeHost.Fork(context.Background(), *leafID, &core.ForkOptions{Position: "at"})
+	if err != nil {
+		m.ShowError(errorMessageOf(err))
+		return
+	}
+	if result.Cancelled {
+		m.ui.RequestRender(false)
+		return
+	}
+
+	m.editor.SetText("")
+	m.showStatus("Cloned to new session")
+}
+
+// jsonString marshals without HTML escaping (pi: JSON.stringify, which does
+// not escape <, >, &).
+func jsonString(v any) string {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(v); err != nil {
+		return "null"
+	}
+	return strings.TrimRight(buf.String(), "\n")
+}
+
+// handleDebugCommand dumps the current frame and session messages to the
+// debug log (pi: handleDebugCommand). The render call runs inside mutateUI so
+// the frame snapshot is serialized against the render goroutine (pig
+// concurrency note; pi's ui.render runs on the single event loop).
+func (m *InteractiveMode) handleDebugCommand() {
+	m.mutateUI(func() {
+		width := m.ui.Terminal().Columns()
+		height := m.ui.Terminal().Rows()
+		allLines := m.ui.Render(width)
+
+		debugLogPath := codingagent.GetDebugLogPath()
+		debugLines := []string{
+			fmt.Sprintf("Debug output at %s", time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")),
+			fmt.Sprintf("Terminal: %dx%d", width, height),
+			fmt.Sprintf("Total lines: %d", len(allLines)),
+			"",
+			"=== All rendered lines with visible widths ===",
+		}
+		for idx, line := range allLines {
+			debugLines = append(debugLines, fmt.Sprintf("[%d] (w=%d) %s", idx, tui.VisibleWidth(line), jsonString(line)))
+		}
+		debugLines = append(debugLines, "", "=== Agent messages (JSONL) ===")
+		for _, msg := range m.session().Messages() {
+			debugLines = append(debugLines, jsonString(msg))
+		}
+		debugLines = append(debugLines, "")
+		debugData := strings.Join(debugLines, "\n")
+
+		writeErr := os.MkdirAll(filepath.Dir(debugLogPath), 0o755)
+		if writeErr == nil {
+			writeErr = os.WriteFile(debugLogPath, []byte(debugData), 0o644)
+		}
+		// pi lets write errors escape as an unhandled rejection; pig reports
+		// them in the transcript instead (declared deviation).
+		if writeErr != nil {
+			m.ShowError("Failed to write debug log: " + errorMessageOf(writeErr))
+			return
+		}
+
+		current := theme.Current()
+		m.chatContainer.AddChild(tui.NewSpacer(1))
+		m.chatContainer.AddChild(tui.NewText(
+			current.Fg("accent", "✓ Debug log written")+"\n"+current.Fg("muted", debugLogPath), 1, 1))
+		m.ui.RequestRender(false)
+	})
+}
+
+// handleArminSaysHi shows the animated easter-egg art (pi:
+// handleArminSaysHi).
+func (m *InteractiveMode) handleArminSaysHi() {
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(components.NewArminComponent(m.ui))
+	m.ui.RequestRender(false)
+}
+
+// handleDementedDelves shows the Earendil announcement (pi:
+// handleDementedDelves).
+func (m *InteractiveMode) handleDementedDelves() {
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(components.NewEarendilAnnouncementComponent())
+	m.ui.RequestRender(false)
 }
 
 // =========================================================================

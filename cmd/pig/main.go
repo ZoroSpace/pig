@@ -467,12 +467,22 @@ func createSessionManager(ctx context.Context, parsed *cli.Args, cwd string, ses
 	}
 
 	if parsed.Resume != nil {
-		// pi delegates --resume to the TUI session selector
-		// (cli/session-picker.ts + startup-ui); the TUI arrives with the
-		// interactive batch (Phase 6), so the flag is rejected here with a
-		// clear message instead.
-		fmt.Fprintln(os.Stderr, "Error: --resume requires the interactive session picker, which is not yet available (TUI lands in a later phase).")
-		os.Exit(1)
+		// pi delegates --resume to the TUI session picker (cli/session-picker.ts
+		// + startup-ui), which runs before interactive mode mounts.
+		selectedPath, ok := cli.SelectSession(
+			func(onProgress func(loaded, total int)) []core.SessionInfo {
+				return core.ListSessions(cwd, sessionDir, onProgress)
+			},
+			func(onProgress func(loaded, total int)) []core.SessionInfo {
+				return core.ListAllSessions(sessionDir, onProgress)
+			},
+			settingsManager,
+		)
+		if !ok {
+			fmt.Println("No session selected")
+			os.Exit(0)
+		}
+		return openSessionOrExit(selectedPath, sessionDir)
 	}
 
 	if parsed.Continue != nil && *parsed.Continue {

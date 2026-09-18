@@ -184,10 +184,17 @@ pig 的行为对齐有测试兜底：**17 万行 Go 源码 + 7.2 万行测试，
 | `/tree` | 浏览会话分支 |
 | `/resume` | 恢复历史会话 |
 | `/fork` | 从当前会话分支 |
-| `/login` / `/logout` | 管理 provider 认证 |
+| `/login` | 管理 provider 认证（登录） |
+| `/logout` | 移除 provider 认证 |
 | `/trust` | 管理项目级信任 |
 | `/compact` | 压缩当前会话上下文 |
-| `/new` / `/hotkeys` | 新会话 / 查看全部快捷键 |
+| `/session` | 查看会话信息与统计（消息数、token、费用、cache） |
+| `/copy` | 复制最后一条助手回复到剪贴板 |
+| `/import` | 导入 JSONL 会话文件并恢复 |
+| `/name` | 设置会话名称 |
+| `/new` | 开始新会话 |
+| `/reload` | 重载 keybindings、扩展、skills、主题与上下文文件 |
+| `/hotkeys` | 查看全部快捷键 |
 
 按 `Ctrl+P` 可以在已配置的模型之间快速切换。
 
