@@ -51,10 +51,12 @@ const (
 // resourceStats is the poller's published state. All fields are atomic:
 // the poller goroutine writes, footer Render reads.
 type resourceStats struct {
-	memBytes   atomic.Int64 // memory charged to the process (darwin: phys_footprint, matching Activity Monitor's "Memory" column; linux: statm resident); 0 = unsampled/unsupported
-	goroutines atomic.Int64
-	fdCount    atomic.Int64 // open descriptors; 0 = unavailable
-	cpuPercent atomic.Int64 // last window's process CPU, rounded; 0 = no window yet
+	memBytes     atomic.Int64 // memory charged to the process (darwin: phys_footprint, matching Activity Monitor's "Memory" column; linux: statm resident); 0 = unsampled/unsupported
+	goroutines   atomic.Int64
+	fdCount      atomic.Int64 // open descriptors; 0 = unavailable
+	cpuPercent   atomic.Int64 // last window's process CPU, rounded; 0 = no window yet (or genuinely idle)
+	cpuValid     atomic.Bool  // a window rate has been computed (second sample onward); gates the real number over the CPU placeholder
+	cpuSupported atomic.Bool  // the platform yields CPU readings; gates the always-on CPU item (windows stub hides it entirely)
 
 	alertG   atomic.Bool
 	alertFD  atomic.Bool
@@ -68,14 +70,18 @@ func (s *resourceStats) zero() {
 	s.goroutines.Store(0)
 	s.fdCount.Store(0)
 	s.cpuPercent.Store(0)
+	s.cpuValid.Store(false)
+	s.cpuSupported.Store(false)
 	s.alertG.Store(false)
 	s.alertFD.Store(false)
 	s.alertCPU.Store(false)
 }
 
 // sampleStatic fills the instantaneous values (everything except the CPU
-// window rate, which needs two ticks). Used on segment enable so the
-// values appear on the next render instead of one interval later.
+// window rate, which needs two samples). Used on segment enable so the
+// values appear on the next render instead of one interval later; the
+// CPU item renders its placeholder from this first sample (cpuSupported)
+// while the real rate waits for the second.
 func (s *resourceStats) sampleStatic() {
 	r, ok := readResourceSample()
 	if !ok {
@@ -84,6 +90,7 @@ func (s *resourceStats) sampleStatic() {
 	s.memBytes.Store(r.mem)
 	s.goroutines.Store(r.goroutines)
 	s.fdCount.Store(r.fds)
+	s.cpuSupported.Store(r.cpuOK)
 }
 
 // resourceReadings is one tick's raw readings (apply is pure over these,
@@ -132,20 +139,24 @@ func (p *resourcePoller) apply(r resourceReadings, elapsed time.Duration) {
 	s.goroutines.Store(r.goroutines)
 	s.fdCount.Store(r.fds)
 
-	// CPU rate over this window; the first window has no denominator pair.
+	// CPU rate over this window; the first sample has no denominator pair.
 	if r.cpuOK {
+		s.cpuSupported.Store(true)
 		if p.haveCPU && elapsed > 0 {
 			percent := float64(r.cpuMicros-p.prevCPUMicros) / 1e6 / elapsed.Seconds() * 100
 			if percent < 0 {
 				percent = 0 // accounting can straddle two reads
 			}
 			s.cpuPercent.Store(int64(percent + 0.5))
+			s.cpuValid.Store(true) // a rate exists → the footer's real CPU number may render
 		}
 		p.prevCPUMicros = r.cpuMicros
 		p.haveCPU = true
 	} else {
 		p.haveCPU = false
 		s.cpuPercent.Store(0)
+		s.cpuValid.Store(false)
+		s.cpuSupported.Store(false)
 	}
 
 	// Goroutine trend: any non-increase resets the streak.
@@ -170,8 +181,13 @@ func (p *resourcePoller) apply(r resourceReadings, elapsed time.Duration) {
 
 // startResourcePoller samples on a ticker until the returned stop is
 // called (idempotent). Stops on sampler loss: all values zero, segment
-// hides. The first sample lands after one interval; callers wanting
-// instant values call resourceStats.sampleStatic first.
+// hides. Samples once immediately before the first tick: that seed gives
+// the CPU rate its baseline at t0, so the first real number lands after
+// one interval (~5s); until then the footer shows the "CPU-%"
+// placeholder — a process-lifetime average is not representative of
+// current activity, so no rate is published before a full window exists.
+// Callers additionally call resourceStats.sampleStatic so MEM and the
+// placeholder render before the goroutine runs.
 func startResourcePoller(interval time.Duration, stats *resourceStats) (stop func()) {
 	done := make(chan struct{})
 	var once sync.Once
@@ -181,6 +197,12 @@ func startResourcePoller(interval time.Duration, stats *resourceStats) (stop fun
 		var p resourcePoller
 		p.stats = stats
 		last := time.Now()
+		r, ok := readResourceSample()
+		if !ok {
+			stats.zero()
+			return
+		}
+		p.apply(r, 0) // elapsed=0: seeds baselines, computes no CPU rate
 		for {
 			select {
 			case <-done:

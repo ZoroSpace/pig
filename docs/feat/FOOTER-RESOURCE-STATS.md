@@ -102,3 +102,21 @@ dogfooding 发现 footer `MEM44MB` 与活动监视器「内存」列 `24MB` 差 
 - 字段改名 `rssBytes`→`memBytes`（`resourceReadings.rss`→`.mem`、`readRSSBytes`→`readMemBytes`，darwin 侧 `readRSSBytes` 保留为 ps 回落、`footerRSSInterval`→`footerSampleInterval`）。
 - 回归测试 18 函数（+3）：`TestParseFootprintOutput`（`Footprint: <N> B` 解析钉死 + 畸形输出回落）+ `TestReadFootprintBytesSanity`（darwin，真工具读数合理区间）+ `TestReadMemBytesSanity`（原 TestReadRSSBytesSanity 更名，双平台）；真机验收：交互模式 footer 显示 22MB 与 `footprint` 工具/活动监视器一致，同进程 ps RSS 仍 41MB。
 - **显示格式同日追加：MB 恒一位小数**（用户要求与活动监视器「内存」列同款）：`MEM20.0MB` 而非 `MEM20MB`（`FormatMemBytes` 的 MB 分支去掉 <10MB 才带小数的旧规则；KB 整数、GB 原本就一位小数不变）；真机验收 `MEM20.0MB`；`TestFormatMemBytes` 与 footer 渲染两用例同步（`MEM52.0MB`）。
+
+## CPU 常驻显示（2026-09-16，本节为显示终态）
+
+用户要求 CPU 不再「异常才浮出」，改为**常驻显示、排在 MEM 之前**（初版评估「CPU 空闲期信噪比低、适合异常才显示」被推翻）：
+
+- **渲染序固定为 CPU → MEM → !G → !FD**：CPU 项常驻时为普通色 `CPU2%`，异常 streak 期换 warning 色 `!CPU97%`（`!` 前缀语义不变，随位次移到 MEM 之前）。
+- **首个窗口速率落地前显示占位符 `CPU-%`**：CPU% 是速率（ΔCPU/Δ墙钟），首个窗口（~5s）前没有分母对；此时不发布任何速率值（进程启动以来的均值不能代表当前活动），显示 `CPU-%` 占位符（用户指定格式），首个窗口速率算出后替换为真实数字。
+- **门控两态**：外门 `cpuSupported`（平台有 CPU 读数；windows 桩为 false → CPU 项整体隐藏，不挂永久占位符）+ 内门 `cpuValid`（首个窗口速率算出后置位，真实数字替换占位符）。
+- **poller 首采样即播种**：`startResourcePoller` 启动时立即采一次（elapsed=0 只播种基线不算速率），首个真实速率在开启后 ~5s 落地；MEM 靠 `sampleStatic` 即时出现，占位符同样首帧渲染（cpuSupported 同源自该首采/静态采样）。
+- 当前显示形态：
+
+```
+↑181k ↓126k … 3.0%/1.0M (auto) | CPU-%·MEM60.2MB     ← 开启后首帧
+↑181k ↓126k … 3.0%/1.0M (auto) | CPU2%·MEM60.2MB     ← 首个窗口后
+↑181k ↓126k … 3.0%/1.0M (auto) | !CPU97%·MEM60.2MB·!G387·!FD210  ← 异常期
+```
+
+- 回归测试：`TestFooterCPUPlaceholderBeforeFirstWindow` + `TestFooterCPUHiddenWhenUnsupported` + `TestStartResourcePollerCPUPlaceholderFirstSample`（新）+ `TestFooterAlertsShownWhenFlagsSet` / `TestFooterAlertsHiddenWhenFlagsFalse` / `TestResourcePollerCPUAlertStreak` 同步（cpuSupported/cpuValid 两态与 CPU 位次锁定）。

@@ -53,7 +53,8 @@ func TestFooterMemHiddenWhenEnabledButUnsampled(t *testing.T) {
 }
 
 // TestFooterAlertsShownWhenFlagsSet: alert items render warning-colored,
-// "·"-joined after MEM/HEAP, with the sampled values.
+// "·"-joined, with the sampled values; the always-on CPU item sits before
+// MEM and takes its "!CPU" alert form (user request, 2026-09-16).
 func TestFooterAlertsShownWhenFlagsSet(t *testing.T) {
 	initTestTheme(t)
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
@@ -62,19 +63,22 @@ func TestFooterAlertsShownWhenFlagsSet(t *testing.T) {
 	footer.res.goroutines.Store(387)
 	footer.res.fdCount.Store(210)
 	footer.res.cpuPercent.Store(97)
+	footer.res.cpuValid.Store(true)
+	footer.res.cpuSupported.Store(true)
 	footer.res.alertG.Store(true)
 	footer.res.alertFD.Store(true)
 	footer.res.alertCPU.Store(true)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
-	want := "MEM52.0MB·!G387·!FD210·!CPU97%"
+	want := "!CPU97%·MEM52.0MB·!G387·!FD210"
 	if !strings.Contains(statsLine, want) {
 		t.Fatalf("stats line %q missing %q", statsLine, want)
 	}
 }
 
 // TestFooterAlertsHiddenWhenFlagsFalse: sampled values alone never surface
-// alerts — only the poller's anomaly flags do.
+// alerts — only the poller's anomaly flags do. The always-on CPU renders
+// plain ("CPU97%") when its alert flag is false.
 func TestFooterAlertsHiddenWhenFlagsFalse(t *testing.T) {
 	initTestTheme(t)
 	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
@@ -83,12 +87,55 @@ func TestFooterAlertsHiddenWhenFlagsFalse(t *testing.T) {
 	footer.res.goroutines.Store(387)
 	footer.res.fdCount.Store(210)
 	footer.res.cpuPercent.Store(97)
+	footer.res.cpuValid.Store(true)
+	footer.res.cpuSupported.Store(true)
 	t.Cleanup(func() { footer.res.zero() })
 	statsLine := utils.StripAnsi(footer.Render(120)[1])
 	for _, alert := range []string{"!G", "!FD", "!CPU"} {
 		if strings.Contains(statsLine, alert) {
 			t.Fatalf("stats line %q shows %q without anomaly flags", statsLine, alert)
 		}
+	}
+	if !strings.Contains(statsLine, "CPU97%·MEM52.0MB") {
+		t.Fatalf("stats line %q missing always-on %q", statsLine, "CPU97%·MEM52.0MB")
+	}
+}
+
+// TestFooterCPUPlaceholderBeforeFirstWindow: the CPU rate needs a
+// denominator pair, so until the first window rate exists (cpuValid) the
+// always-on item renders the "CPU-%" placeholder — never a stale percent.
+// Without a platform sampler (cpuSupported false) the item hides entirely
+// rather than showing a permanent placeholder.
+func TestFooterCPUPlaceholderBeforeFirstWindow(t *testing.T) {
+	initTestTheme(t)
+	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
+	footer.showResourceStats = true
+	footer.res.memBytes.Store(testMem)
+	footer.res.cpuSupported.Store(true)
+	t.Cleanup(func() { footer.res.zero() })
+	statsLine := utils.StripAnsi(footer.Render(120)[1])
+	if !strings.Contains(statsLine, "CPU-%·MEM52.0MB") {
+		t.Fatalf("stats line %q missing %q", statsLine, "CPU-%·MEM52.0MB")
+	}
+	if strings.Contains(statsLine, "CPU0%") || strings.Contains(statsLine, "CPU97%") {
+		t.Fatalf("stats line %q shows a rate before the first window", statsLine)
+	}
+}
+
+// TestFooterCPUHiddenWhenUnsupported: a platform without a CPU sampler
+// must not render a permanent placeholder.
+func TestFooterCPUHiddenWhenUnsupported(t *testing.T) {
+	initTestTheme(t)
+	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
+	footer.showResourceStats = true
+	footer.res.memBytes.Store(testMem)
+	t.Cleanup(func() { footer.res.zero() })
+	statsLine := utils.StripAnsi(footer.Render(120)[1])
+	if strings.Contains(statsLine, "CPU") {
+		t.Fatalf("stats line %q shows CPU without a platform sampler", statsLine)
+	}
+	if !strings.Contains(statsLine, "| MEM52.0MB") {
+		t.Fatalf("stats line %q missing %q", statsLine, "| MEM52.0MB")
 	}
 }
 
@@ -142,6 +189,29 @@ func TestStartResourcePollerSamplesIntoSink(t *testing.T) {
 	}
 	if stats.goroutines.Load() <= 0 {
 		t.Fatal("poller did not sample into the stats")
+	}
+}
+
+// TestStartResourcePollerCPUPlaceholderFirstSample: the poller's immediate
+// first sample seeds the CPU baseline but computes no rate, so the item is
+// in its placeholder state right after enable (cpuSupported set, cpuValid
+// clear) — the first real number lands at the first tick.
+func TestStartResourcePollerCPUPlaceholderFirstSample(t *testing.T) {
+	if _, ok := readProcessCPUMicros(); !ok {
+		t.Skip("getrusage unavailable on this platform")
+	}
+	var stats resourceStats
+	stop := startResourcePoller(time.Hour, &stats)
+	defer stop()
+	deadline := time.Now().Add(2 * time.Second)
+	for !stats.cpuSupported.Load() && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !stats.cpuSupported.Load() {
+		t.Fatal("cpuSupported not set by the poller's immediate first sample")
+	}
+	if stats.cpuValid.Load() {
+		t.Fatal("cpuValid set before any window rate existed")
 	}
 }
 
@@ -235,13 +305,22 @@ func TestResourcePollerCPUAlertStreak(t *testing.T) {
 		return resourceReadings{mem: testMem, cpuMicros: micros, cpuOK: true}
 	}
 
-	p.apply(reading(1_000_000), 5*time.Second) // first window: no rate yet
+	p.apply(reading(1_000_000), 5*time.Second) // first sample: no rate yet
 	if stats.alertCPU.Load() {
 		t.Fatal("CPU alert fired on the first window")
+	}
+	if !stats.cpuSupported.Load() {
+		t.Fatal("cpuSupported not set on a cpuOK reading")
+	}
+	if stats.cpuValid.Load() {
+		t.Fatal("cpuValid set before any window rate existed")
 	}
 	p.apply(reading(2_500_000), 5*time.Second) // 30%
 	if stats.cpuPercent.Load() != 30 {
 		t.Fatalf("cpuPercent = %d, want 30", stats.cpuPercent.Load())
+	}
+	if !stats.cpuValid.Load() {
+		t.Fatal("cpuValid not set after the first window rate")
 	}
 	if stats.alertCPU.Load() {
 		t.Fatal("CPU alert fired after a single hot window")
