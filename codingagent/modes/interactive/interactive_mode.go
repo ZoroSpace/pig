@@ -531,6 +531,7 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 
 	m.footerDataProviderView = core.NewFooterDataProvider(session.SessionManager.GetCwd())
 	m.footer = components.NewFooterComponent(session, m.footerDataProviderView)
+	m.footer.SetTUI(m.ui) // resource poller wakes the render loop on each sample
 	m.footer.SetAutoCompactEnabled(session.AutoCompactionEnabled())
 	m.footer.SetShowResourceStats(settingsManager.GetShowResourceStats())
 	m.footerContainer = &tui.Container{}

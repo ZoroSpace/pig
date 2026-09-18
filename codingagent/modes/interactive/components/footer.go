@@ -126,9 +126,19 @@ func newFooterSessionView(session *core.AgentSession) footerSessionView {
 	}
 }
 
+// FooterTUI is the TUI surface the footer needs (pig addition — narrow
+// interface per the ModelSelectorTUI precedent): the resource-stats poller
+// must wake the render loop when a sample lands, otherwise fresh values
+// surface only on the next keystroke (the TUI is event-driven and does
+// not redraw while idle).
+type FooterTUI interface {
+	RequestRender(force bool)
+}
+
 // FooterComponent is the footer line pair: pwd (branch, session name) and
 // token/context stats with the right-aligned model name. When resource
-// stats are enabled (pig-only), the stats line gains a "| MEM…" segment.
+// stats are enabled (pig-only), the stats line gains a "| CPU·MEM…"
+// segment.
 type FooterComponent struct {
 	mu sync.Mutex
 
@@ -137,6 +147,7 @@ type FooterComponent struct {
 	session            *core.AgentSession
 	view               footerSessionView
 	footerData         ReadonlyFooterDataProvider
+	ui                 FooterTUI // set via SetTUI; the resource poller's render wake-up handle
 
 	// Resource sampling (pig-only): values are read off-frame on a slow
 	// ticker and cached in res; the sampler runs only while the segment is
@@ -176,6 +187,15 @@ func (f *FooterComponent) SetAutoCompactEnabled(enabled bool) {
 	f.autoCompactEnabled = enabled
 }
 
+// SetTUI injects the render loop handle (pig-only): the resource poller
+// calls RequestRender after each sample so fresh values surface without
+// user input.
+func (f *FooterComponent) SetTUI(ui FooterTUI) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ui = ui
+}
+
 // SetShowResourceStats toggles the footer resource segment (pig-only; pi
 // has no counterpart — the showResourceStats setting). The resource poller
 // starts lazily on first enable and stops while hidden: sampling exists
@@ -188,9 +208,19 @@ func (f *FooterComponent) SetShowResourceStats(enabled bool) {
 		if f.stopResourcePoller == nil {
 			// Sample once up front so the segment appears on the next
 			// render instead of one interval later (the CPU rate needs two
-			// ticks and starts at "no data").
+			// ticks and starts at the "CPU-%" placeholder).
 			f.res.sampleStatic()
-			f.stopResourcePoller = startResourcePoller(footerSampleInterval, &f.res)
+			// The poller notifies the render loop after each ticker sample:
+			// read ui under f.mu, release, then RequestRender — no lock
+			// nesting with the TUI.
+			f.stopResourcePoller = startResourcePoller(footerSampleInterval, &f.res, func() {
+				f.mu.Lock()
+				ui := f.ui
+				f.mu.Unlock()
+				if ui != nil {
+					ui.RequestRender(false)
+				}
+			})
 		}
 		return
 	}

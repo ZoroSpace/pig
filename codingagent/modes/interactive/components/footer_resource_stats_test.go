@@ -5,6 +5,7 @@ package components
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -181,7 +182,7 @@ func TestStartResourcePollerSamplesIntoSink(t *testing.T) {
 		t.Skip("no procfs on this platform")
 	}
 	var stats resourceStats
-	stop := startResourcePoller(10*time.Millisecond, &stats)
+	stop := startResourcePoller(10*time.Millisecond, &stats, nil)
 	defer stop()
 	deadline := time.Now().Add(2 * time.Second)
 	for stats.goroutines.Load() == 0 && time.Now().Before(deadline) {
@@ -201,7 +202,7 @@ func TestStartResourcePollerCPUPlaceholderFirstSample(t *testing.T) {
 		t.Skip("getrusage unavailable on this platform")
 	}
 	var stats resourceStats
-	stop := startResourcePoller(time.Hour, &stats)
+	stop := startResourcePoller(time.Hour, &stats, nil)
 	defer stop()
 	deadline := time.Now().Add(2 * time.Second)
 	for !stats.cpuSupported.Load() && time.Now().Before(deadline) {
@@ -218,10 +219,63 @@ func TestStartResourcePollerCPUPlaceholderFirstSample(t *testing.T) {
 // TestStartResourcePollerStopIsIdempotent: calling stop twice must not panic.
 func TestStartResourcePollerStopIsIdempotent(t *testing.T) {
 	var stats resourceStats
-	stop := startResourcePoller(time.Hour, &stats)
+	stop := startResourcePoller(time.Hour, &stats, nil)
 	stop()
 	stop()
 }
+
+// TestStartResourcePollerNotifiesOnSample: onSample fires after every
+// ticker sample (not the immediate seed) so the footer can wake the render
+// loop — the TUI is event-driven and idle frames would otherwise keep the
+// fresh values invisible until the next keystroke.
+func TestStartResourcePollerNotifiesOnSample(t *testing.T) {
+	if _, ok := readMemBytes(); !ok {
+		t.Skip("no procfs on this platform")
+	}
+	var stats resourceStats
+	var notifications atomic.Int32
+	stop := startResourcePoller(10*time.Millisecond, &stats, func() { notifications.Add(1) })
+	defer stop()
+	deadline := time.Now().Add(2 * time.Second)
+	for notifications.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := notifications.Load(); got < 2 {
+		t.Fatalf("onSample fired %d times, want at least 2 (two ticker samples)", got)
+	}
+}
+
+// TestFooterResourceSampleTriggersRender: with the segment enabled, the
+// poller's sample callback reaches the injected TUI as RequestRender.
+func TestFooterResourceSampleTriggersRender(t *testing.T) {
+	initTestTheme(t)
+	if _, ok := readMemBytes(); !ok {
+		t.Skip("no procfs on this platform")
+	}
+	footer := NewFooterComponentWithView(nil, footerUsageView(nil), createFooterData(1))
+	t.Cleanup(footer.Dispose)
+	fake := &fakeFooterTUI{}
+	footer.SetTUI(fake)
+	oldInterval := footerSampleInterval
+	footerSampleInterval = 10 * time.Millisecond
+	t.Cleanup(func() { footerSampleInterval = oldInterval })
+	footer.SetShowResourceStats(true)
+	t.Cleanup(func() { footer.SetShowResourceStats(false) })
+	deadline := time.Now().Add(2 * time.Second)
+	for fake.renders.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if fake.renders.Load() == 0 {
+		t.Fatal("poller samples did not reach the TUI as RequestRender")
+	}
+}
+
+// fakeFooterTUI records render requests (FooterTUI test seam).
+type fakeFooterTUI struct {
+	renders atomic.Int32
+}
+
+func (f *fakeFooterTUI) RequestRender(force bool) { f.renders.Add(1) }
 
 // TestReadMemBytesSanity: on procfs platforms the sampled memory is plausible.
 func TestReadMemBytesSanity(t *testing.T) {

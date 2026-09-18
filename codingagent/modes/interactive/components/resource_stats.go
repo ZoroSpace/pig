@@ -22,12 +22,14 @@ import (
 )
 
 // Sampling cadence and anomaly thresholds (pig-only).
-const (
+var (
 	// footerSampleInterval is how often the resource poller samples. Memory
 	// moves slowly (per-turn growth is ~100KB scale), so 5s is plenty
-	// responsive.
+	// responsive. A var (not const) so tests can shorten it.
 	footerSampleInterval = 5 * time.Second
+)
 
+const (
 	// Goroutine leak signals. Trend beats thresholds: gLeakStreakTicks
 	// consecutive monotonic increases (~50s) catch a leak long before any
 	// absolute level would, while gAbsolute catches an established leak
@@ -188,7 +190,13 @@ func (p *resourcePoller) apply(r resourceReadings, elapsed time.Duration) {
 // current activity, so no rate is published before a full window exists.
 // Callers additionally call resourceStats.sampleStatic so MEM and the
 // placeholder render before the goroutine runs.
-func startResourcePoller(interval time.Duration, stats *resourceStats) (stop func()) {
+//
+// onSample fires after every ticker sample (not the immediate seed): the
+// TUI is event-driven and does not redraw while idle, so without this
+// fresh values would surface only on the next keystroke. The callback is
+// also what keeps the callback off the pre-Start path: the first tick
+// lands well after the TUI has started.
+func startResourcePoller(interval time.Duration, stats *resourceStats, onSample func()) (stop func()) {
 	done := make(chan struct{})
 	var once sync.Once
 	go func() {
@@ -216,6 +224,9 @@ func startResourcePoller(interval time.Duration, stats *resourceStats) (stop fun
 				elapsed := now.Sub(last)
 				last = now
 				p.apply(r, elapsed)
+				if onSample != nil {
+					onSample()
+				}
 			}
 		}
 	}()

@@ -119,4 +119,5 @@ dogfooding 发现 footer `MEM44MB` 与活动监视器「内存」列 `24MB` 差 
 ↑181k ↓126k … 3.0%/1.0M (auto) | !CPU97%·MEM60.2MB·!G387·!FD210  ← 异常期
 ```
 
-- 回归测试：`TestFooterCPUPlaceholderBeforeFirstWindow` + `TestFooterCPUHiddenWhenUnsupported` + `TestStartResourcePollerCPUPlaceholderFirstSample`（新）+ `TestFooterAlertsShownWhenFlagsSet` / `TestFooterAlertsHiddenWhenFlagsFalse` / `TestResourcePollerCPUAlertStreak` 同步（cpuSupported/cpuValid 两态与 CPU 位次锁定）。
+- **采样后主动唤醒渲染**：poller 每次 ticker 采样后经 `FooterTUI.RequestRender(false)`（窄接口，ModelSelectorTUI 先例；footer 经 `SetTUI` 注入，interactive 装配一行接线）触发重绘——TUI 是事件驱动的，空闲期无输入不重绘，否则新值（含 CPU 占位符→真实速率的替换）要等下一次按键才浮出；回调只读 ui 后释放锁再调 RequestRender，与 TUI 锁零嵌套；首个 tick（~5s）时 TUI 早已 Start，回调不落在启动前路径。`footerSampleInterval` 改包级 var 供测试缩短。
+- 回归测试：`TestFooterCPUPlaceholderBeforeFirstWindow` + `TestFooterCPUHiddenWhenUnsupported` + `TestStartResourcePollerCPUPlaceholderFirstSample` + `TestStartResourcePollerNotifiesOnSample` + `TestFooterResourceSampleTriggersRender`（新）+ `TestFooterAlertsShownWhenFlagsSet` / `TestFooterAlertsHiddenWhenFlagsFalse` / `TestResourcePollerCPUAlertStreak` 同步（cpuSupported/cpuValid 两态、CPU 位次与采样→渲染链路锁定）。
