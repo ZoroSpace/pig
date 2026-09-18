@@ -1185,21 +1185,26 @@ func (e *Editor) handleInputLocked(data string) {
 		if kb.Matches(data, "tui.input.tab") {
 			selected := e.autocompleteList.GetSelectedItem()
 			if selected != nil && e.autocompleteProvider != nil {
-				e.pushUndoSnapshot()
-				e.lastAction = ""
-				result := e.autocompleteProvider.ApplyCompletion(
-					e.state.Lines,
-					e.state.CursorLine,
-					e.state.CursorCol,
-					autocompleteItemFromSelect(*selected),
-					e.autocompletePrefix,
-				)
-				e.state.Lines = result.Lines
-				e.state.CursorLine = result.CursorLine
-				e.setCursorCol(result.CursorCol)
-				e.cancelAutocomplete()
-				if e.OnChange != nil {
-					e.OnChange(e.GetText())
+				if e.autocompleteAcceptIsCurrent() {
+					e.pushUndoSnapshot()
+					e.lastAction = ""
+					result := e.autocompleteProvider.ApplyCompletion(
+						e.state.Lines,
+						e.state.CursorLine,
+						e.state.CursorCol,
+						autocompleteItemFromSelect(*selected),
+						e.autocompletePrefix,
+					)
+					e.state.Lines = result.Lines
+					e.state.CursorLine = result.CursorLine
+					e.setCursorCol(result.CursorCol)
+					e.cancelAutocomplete()
+					if e.OnChange != nil {
+						e.OnChange(e.GetText())
+					}
+				} else {
+					// Stale applied state: reject the accept, keep the text.
+					e.cancelAutocomplete()
 				}
 			}
 			return
@@ -1207,7 +1212,10 @@ func (e *Editor) handleInputLocked(data string) {
 
 		if kb.Matches(data, "tui.select.confirm") {
 			selected := e.autocompleteList.GetSelectedItem()
-			if selected != nil && e.autocompleteProvider != nil {
+			// pig-only hardening: when the guard fails the accept is skipped and
+			// Enter falls through to normal handling (raw submit for the chat
+			// editor) — never a stale-prefix splice.
+			if selected != nil && e.autocompleteProvider != nil && e.autocompleteAcceptIsCurrent() {
 				e.pushUndoSnapshot()
 				e.lastAction = ""
 				result := e.autocompleteProvider.ApplyCompletion(
@@ -2846,6 +2854,11 @@ func (e *Editor) createAutocompleteList(prefix string, items []AutocompleteItem)
 		if e.autocompleteProvider == nil {
 			return
 		}
+		if !e.autocompleteAcceptIsCurrent() {
+			// Stale applied state: reject the click-accept, keep the text.
+			e.cancelAutocomplete()
+			return
+		}
 		e.pushUndoSnapshot()
 		e.lastAction = ""
 		result := e.autocompleteProvider.ApplyCompletion(
@@ -3090,6 +3103,29 @@ func (e *Editor) isAutocompleteRequestCurrent(requestId int, controller *editorA
 		e.getTextLocked() == snapshotText &&
 		e.state.CursorLine == snapshotLine &&
 		e.state.CursorCol == snapshotCol
+}
+
+// autocompleteAcceptIsCurrent reports whether the applied autocomplete state
+// is still consistent with the text before the cursor: every ApplyCompletion
+// branch implicitly assumes line[cursorCol-len(prefix):cursorCol] == prefix,
+// so a stale pair (dropdown applied for an older snapshot while newer
+// keystrokes changed the text) would mis-slice and splice item.Value into
+// the middle of the word.
+//
+// pig-only hardening (pi carries the same latent race in editor.ts's
+// select.confirm/tab handling — same stale-prefix accept, narrower window
+// under JS microtask timing): the accept sites reject stale state instead of
+// applying it, keeping the user's text verbatim.
+// See docs/fix/2026-09-18-autocomplete-stale-accept-mangles-text.md.
+// Must be called under the lock.
+func (e *Editor) autocompleteAcceptIsCurrent() bool {
+	prefix := e.autocompletePrefix
+	if prefix == "" {
+		return true
+	}
+	line := e.state.Lines[e.state.CursorLine]
+	start := e.state.CursorCol - len(prefix)
+	return start >= 0 && start <= len(line) && line[start:e.state.CursorCol] == prefix
 }
 
 // applyAutocompleteSuggestions installs a suggestion dropdown (pi:
