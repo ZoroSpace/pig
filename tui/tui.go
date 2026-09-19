@@ -33,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ZoroSpace/pig/utils"
@@ -622,7 +623,13 @@ type overlayFocusRestoreState struct {
 }
 
 type pendingOsc11BackgroundQuery struct {
-	settled bool
+	// settled is CAS-guarded instead of guarded by b.mu (pig addition):
+	// the timeout timer fires on its own goroutine, while a query issued
+	// from inside input dispatch (component HandleInput → theme detection)
+	// holds b.mu across the resolve-channel wait — the timer taking b.mu
+	// there deadlocks the whole TUI (pi never blocks its event loop, so
+	// this timer path is pig-only concurrency surface).
+	settled atomic.Bool
 	resolve chan *RgbColor
 	timer   *time.Timer
 }
@@ -1290,21 +1297,29 @@ func (b *TuiBase) RemoveInputListener(listener TuiInputListener) {
 }
 
 func (b *TuiBase) OnTerminalColorSchemeChange(listener func(scheme TerminalColorScheme)) func() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.terminalColorSchemeListeners = append(b.terminalColorSchemeListeners, listener)
+	// b.lock (reentrant), not b.mu.Lock (pig addition): QueryTerminal-
+	// ColorScheme registers its settle listener from inside input dispatch
+	// when theme detection runs in a key handler (b.mu already held by the
+	// dispatching goroutine) — a direct Lock() there self-deadlocks the
+	// whole TUI.
+	b.lock(func() {
+		b.terminalColorSchemeListeners = append(b.terminalColorSchemeListeners, listener)
+	})
 	return func() { b.removeTerminalColorSchemeListener(listener) }
 }
 
 func (b *TuiBase) removeTerminalColorSchemeListener(listener func(scheme TerminalColorScheme)) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for i, l := range b.terminalColorSchemeListeners {
-		if utils.SameFuncValue(l, listener) {
-			b.terminalColorSchemeListeners = append(b.terminalColorSchemeListeners[:i], b.terminalColorSchemeListeners[i+1:]...)
-			return
+	// b.lock (reentrant): the unsubscribe closure runs right after the
+	// query resolves — possibly still inside input dispatch (same reason
+	// as OnTerminalColorSchemeChange).
+	b.lock(func() {
+		for i, l := range b.terminalColorSchemeListeners {
+			if utils.SameFuncValue(l, listener) {
+				b.terminalColorSchemeListeners = append(b.terminalColorSchemeListeners[:i], b.terminalColorSchemeListeners[i+1:]...)
+				return
+			}
 		}
-	}
+	})
 }
 
 func (b *TuiBase) SetTerminalColorSchemeNotifications(enabled bool) {
@@ -1617,8 +1632,7 @@ func (b *TuiBase) consumeOsc11BackgroundResponseLocked(data string) bool {
 	if len(b.pendingOsc11BackgroundQueries) > 0 {
 		query := b.pendingOsc11BackgroundQueries[0]
 		b.pendingOsc11BackgroundQueries = b.pendingOsc11BackgroundQueries[1:]
-		if !query.settled {
-			query.settled = true
+		if query.settled.CompareAndSwap(false, true) {
 			if query.timer != nil {
 				query.timer.Stop()
 				query.timer = nil
@@ -1675,18 +1689,21 @@ func (b *TuiBase) consumeCellSizeResponseLocked(data string) bool {
 // QueryTerminalBackgroundColor queries the terminal's default background
 // color with OSC 11 and blocks until the reply or timeoutMs elapses.
 // Returns nil on timeout or unparsable reply (pi: Promise → undefined).
+// Dispatch-safe (pig addition): when called from inside input dispatch
+// (b.mu held by the dispatching goroutine, e.g. a key handler changing the
+// theme), it still returns after timeoutMs — the timeout settle path uses
+// CAS and never takes b.mu. The reply that arrives later is consumed by a
+// subsequent dispatch (a no-op once the query has settled).
 func (b *TuiBase) QueryTerminalBackgroundColor(timeoutMs int) *RgbColor {
 	query := &pendingOsc11BackgroundQuery{resolve: make(chan *RgbColor, 1)}
 	b.lock(func() {
 		query.timer = time.AfterFunc(time.Duration(timeoutMs)*time.Millisecond, func() {
-			b.mu.Lock()
-			if query.settled {
-				b.mu.Unlock()
+			// Must not take b.mu: the querying goroutine may be the input
+			// dispatch itself, holding b.mu across the resolve-channel wait.
+			// CAS-only settle keeps the timeout path deadlock-free.
+			if !query.settled.CompareAndSwap(false, true) {
 				return
 			}
-			query.settled = true
-			query.timer = nil
-			b.mu.Unlock()
 			query.resolve <- nil
 		})
 		b.pendingOsc11BackgroundQueries = append(b.pendingOsc11BackgroundQueries, query)

@@ -254,8 +254,13 @@ func (a *ArminComponent) startAnimation() {
 			case <-a.stopCh:
 				return
 			case <-ticker.C:
+				// tick 写 currentGrid/effectState 必须持锁（pig 并发面：pi 是
+				// 单线程事件循环无此问题）：Render 在锁内读网格，动画 goroutine
+				// 在锁外写会被 -race 逮到（2026-09-19 全量回归实况）。
+				a.mu.Lock()
 				done := a.tickEffect()
-				a.updateDisplay()
+				a.gridVersion++
+				a.mu.Unlock()
 				if a.ui != nil {
 					a.ui.RequestRender(false)
 				}
@@ -489,8 +494,5 @@ func (a *ArminComponent) tickGlitch() bool {
 	return true
 }
 
-func (a *ArminComponent) updateDisplay() {
-	a.mu.Lock()
-	a.gridVersion++
-	a.mu.Unlock()
-}
+// updateDisplay 已内联进 startAnimation 的 tick 分支（gridVersion 递增须与
+// tickEffect 的网格写同锁保护，见循环内注释）。
