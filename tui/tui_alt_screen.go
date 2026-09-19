@@ -349,17 +349,20 @@ func (t *TuiAltScreen) isViewportTUI() {}
 // ViewportTop returns the primary scroll view's offset (pi: viewportTop
 // getter).
 func (t *TuiAltScreen) ViewportTop() int {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.getPrimaryScrollView().ScrollTop()
+	// t.lock (reentrant): dispatch-safe when called from inside input
+	// dispatch (t.mu is the promoted TuiBase.mu; same class as the
+	// CaptureRenderState fix in tui_main_screen.go).
+	var v int
+	t.lock(func() { v = t.getPrimaryScrollView().ScrollTop() })
+	return v
 }
 
 // IsFollowingOutput reports whether the primary scroll view tracks the end
 // (pi: isFollowingOutput getter).
 func (t *TuiAltScreen) IsFollowingOutput() bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.getPrimaryScrollView().IsFollowingEnd()
+	var v bool
+	t.lock(func() { v = t.getPrimaryScrollView().IsFollowingEnd() })
+	return v
 }
 
 // SetLayoutRoot replaces the layout root component (pi: setLayoutRoot).
@@ -2056,9 +2059,11 @@ func (t *TuiAltScreen) SetCopyOnSelect(enabled bool) {
 // HasActiveSelection reports whether a non-empty text selection exists (pi:
 // hasActiveSelection).
 func (t *TuiAltScreen) HasActiveSelection() bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.getActiveSelectionText() != ""
+	// t.lock (reentrant): handleCopyCommand calls this from input dispatch
+	// (Ctrl+X in fullscreen mode self-deadlocked here).
+	var v bool
+	t.lock(func() { v = t.getActiveSelectionText() != "" })
+	return v
 }
 
 // CopyActiveSelectionToClipboard copies the active selection, if any (pi:

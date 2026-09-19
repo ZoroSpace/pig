@@ -198,38 +198,47 @@ func NewTuiMainScreen(terminal Terminal, showHardwareCursor *bool, logDirectory 
 // runs under b.lock() (scheduler/renderNow/stop guarantee this), so it must
 // NOT re-lock; only externally-called state accessors lock here.
 func (m *TuiMainScreen) CaptureRenderState() TuiMainScreenRenderState {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return TuiMainScreenRenderState{
-		PreviousLines:       append([]string(nil), m.previousLines...),
-		PreviousWidth:       m.previousWidth,
-		PreviousHeight:      m.previousHeight,
-		CursorRow:           m.cursorRow,
-		HardwareCursorRow:   m.hardwareCursorRow,
-		MaxLinesRendered:    m.maxLinesRendered,
-		PreviousViewportTop: m.previousViewportTop,
-	}
+	// m.lock (reentrant), not m.mu.Lock: m.mu IS the promoted TuiBase.mu,
+	// and this is called from inside input dispatch (settings-panel TUI
+	// mode switch → switchTuiMode) where the dispatching goroutine already
+	// holds it — a direct Lock() self-deadlocked the whole TUI (see
+	// docs/fix/2026-09-19-terminal-query-dispatch-deadlock.md).
+	var state TuiMainScreenRenderState
+	m.lock(func() {
+		state = TuiMainScreenRenderState{
+			PreviousLines:       append([]string(nil), m.previousLines...),
+			PreviousWidth:       m.previousWidth,
+			PreviousHeight:      m.previousHeight,
+			CursorRow:           m.cursorRow,
+			HardwareCursorRow:   m.hardwareCursorRow,
+			MaxLinesRendered:    m.maxLinesRendered,
+			PreviousViewportTop: m.previousViewportTop,
+		}
+	})
+	return state
 }
 
 // RestoreRenderState restores a snapshot taken by CaptureRenderState.
 func (m *TuiMainScreen) RestoreRenderState(state TuiMainScreenRenderState) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.previousLines = make([]string, len(state.PreviousLines))
-	for i, line := range state.PreviousLines {
-		if IsImageLine(line) {
-			m.previousLines[i] = ""
-		} else {
-			m.previousLines[i] = line
+	// m.lock (reentrant): same dispatch-safety reason as CaptureRenderState
+	// (switchTuiMode calls this right after constructing the next TUI).
+	m.lock(func() {
+		m.previousLines = make([]string, len(state.PreviousLines))
+		for i, line := range state.PreviousLines {
+			if IsImageLine(line) {
+				m.previousLines[i] = ""
+			} else {
+				m.previousLines[i] = line
+			}
 		}
-	}
-	m.previousKittyImageIds = map[int]bool{}
-	m.previousWidth = state.PreviousWidth
-	m.previousHeight = state.PreviousHeight
-	m.cursorRow = state.CursorRow
-	m.hardwareCursorRow = state.HardwareCursorRow
-	m.maxLinesRendered = state.MaxLinesRendered
-	m.previousViewportTop = state.PreviousViewportTop
+		m.previousKittyImageIds = map[int]bool{}
+		m.previousWidth = state.PreviousWidth
+		m.previousHeight = state.PreviousHeight
+		m.cursorRow = state.CursorRow
+		m.hardwareCursorRow = state.HardwareCursorRow
+		m.maxLinesRendered = state.MaxLinesRendered
+		m.previousViewportTop = state.PreviousViewportTop
+	})
 }
 
 func (m *TuiMainScreen) resetRenderState() {

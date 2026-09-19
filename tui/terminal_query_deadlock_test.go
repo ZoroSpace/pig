@@ -121,6 +121,84 @@ func testTerminalQueryFromDispatch(t *testing.T, colorScheme bool) {
 	}
 }
 
+// TestTuiAccessorsSurviveInputDispatch locks in the b.lock reentrancy
+// contract for the accessor family (FullRedraws, cursor/clear getters and
+// setters, GetFocusedComponent, HasOverlay*, Add/RemoveInputListener): all
+// of them are reachable from inside input dispatch via settings callbacks
+// (OnClearOnShrinkChange → SetClearOnShrink was a live self-deadlock, the
+// same class as the Apply freeze).
+func TestTuiAccessorsSurviveInputDispatch(t *testing.T) {
+	term := &dispatchDeadlockTerminal{out: io.Discard}
+	b := newTuiBase(term, TuiModeRegular, &dispatchDeadlockSubclass{}, nil, "")
+
+	comp := &accessorProbeComponent{tui: b, done: make(chan struct{})}
+	b.SetFocus(comp)
+	go func() { b.handleTerminalInput("x") }()
+	select {
+	case <-comp.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("input dispatch deadlocked: accessor took b.mu directly while the dispatching goroutine held it")
+	}
+}
+
+type accessorProbeComponent struct {
+	tui  *TuiBase
+	done chan struct{}
+}
+
+func (c *accessorProbeComponent) HandleInput(data string) {
+	_ = c.tui.FullRedraws()
+	_ = c.tui.GetShowHardwareCursor()
+	c.tui.SetShowHardwareCursor(true)
+	_ = c.tui.GetClearOnShrink()
+	c.tui.SetClearOnShrink(true)
+	_ = c.tui.GetFocusedComponent()
+	_ = c.tui.HasOverlay()
+	_ = c.tui.HasOverlayEntries()
+	unsub := c.tui.AddInputListener(func(data string) *TuiInputListenerResult { return nil })
+	unsub()
+	close(c.done)
+}
+func (c *accessorProbeComponent) Render(width int) []string { return nil }
+func (c *accessorProbeComponent) Invalidate()               {}
+
+// TestTuiRendererAccessorsSurviveInputDispatch covers the renderer-side
+// accessors that switchTuiMode/handleCopyCommand call from inside dispatch:
+// TuiMainScreen.CaptureRenderState (m.mu IS the promoted TuiBase.mu — the
+// direct Lock() there was the actual freeze point of the TUI mode switch)
+// and TuiAltScreen.HasActiveSelection.
+func TestTuiRendererAccessorsSurviveInputDispatch(t *testing.T) {
+	term := &dispatchDeadlockTerminal{out: io.Discard}
+	ms := NewTuiMainScreen(term, nil, "")
+	alt := NewTuiAltScreen(term, nil, "", nil)
+
+	comp := &rendererAccessorProbeComponent{tui: ms, alt: alt, done: make(chan struct{})}
+	ms.SetFocus(comp)
+	go func() { ms.handleTerminalInput("x") }()
+	select {
+	case <-comp.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("input dispatch deadlocked: renderer accessor took the promoted TuiBase.mu directly while the dispatching goroutine held it")
+	}
+}
+
+type rendererAccessorProbeComponent struct {
+	tui  *TuiMainScreen
+	alt  *TuiAltScreen
+	done chan struct{}
+}
+
+func (c *rendererAccessorProbeComponent) HandleInput(data string) {
+	state := c.tui.CaptureRenderState()
+	c.tui.RestoreRenderState(state)
+	_ = c.alt.HasActiveSelection()
+	_ = c.alt.ViewportTop()
+	_ = c.alt.IsFollowingOutput()
+	close(c.done)
+}
+func (c *rendererAccessorProbeComponent) Render(width int) []string { return nil }
+func (c *rendererAccessorProbeComponent) Invalidate()               {}
+
 func TestTerminalQueryRealReplyWinsOverTimeout(t *testing.T) {
 	term := &dispatchDeadlockTerminal{out: io.Discard}
 	b := newTuiBase(term, TuiModeRegular, &dispatchDeadlockSubclass{}, nil, "")

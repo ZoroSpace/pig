@@ -706,16 +706,24 @@ func (b *TuiBase) Mode() TuiMode { return b.mode }
 func (b *TuiBase) Terminal() Terminal { return b.terminal }
 
 // FullRedraws returns the number of full redraws performed so far.
+// The accessors below (FullRedraws … RemoveInputListener) use b.lock
+// (reentrant) instead of b.mu.Lock: they are all callable from inside
+// input dispatch (component HandleInput → settings callbacks →
+// switchTuiMode/applyRuntimeSettings), where the dispatching goroutine
+// already holds b.mu — a direct Lock() self-deadlocks the whole TUI
+// (same class as the OnTerminalColorSchemeChange fix; see
+// docs/fix/2026-09-19-terminal-query-dispatch-deadlock.md).
+
 func (b *TuiBase) FullRedraws() int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.fullRedrawCount
+	var v int
+	b.lock(func() { v = b.fullRedrawCount })
+	return v
 }
 
 func (b *TuiBase) GetShowHardwareCursor() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.showHardwareCursor
+	var v bool
+	b.lock(func() { v = b.showHardwareCursor })
+	return v
 }
 
 func (b *TuiBase) SetShowHardwareCursor(enabled bool) {
@@ -732,24 +740,22 @@ func (b *TuiBase) SetShowHardwareCursor(enabled bool) {
 }
 
 func (b *TuiBase) GetClearOnShrink() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.clearOnShrink
+	var v bool
+	b.lock(func() { v = b.clearOnShrink })
+	return v
 }
 
 // SetClearOnShrink sets whether to trigger full re-render when content
 // shrinks. When true, empty rows are cleared when content shrinks. When
 // false (default), empty rows remain (reduces redraws on slower terminals).
 func (b *TuiBase) SetClearOnShrink(enabled bool) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.clearOnShrink = enabled
+	b.lock(func() { b.clearOnShrink = enabled })
 }
 
 func (b *TuiBase) GetFocusedComponent() Component {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.focusedComponent
+	var v Component
+	b.lock(func() { v = b.focusedComponent })
+	return v
 }
 
 func (b *TuiBase) SetFocus(component Component) {
@@ -1150,16 +1156,16 @@ func (b *TuiBase) hasOverlayLocked() bool {
 
 // HasOverlay checks if there are any visible overlays.
 func (b *TuiBase) HasOverlay() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.hasOverlayLocked()
+	var v bool
+	b.lock(func() { v = b.hasOverlayLocked() })
+	return v
 }
 
 // HasOverlayEntries reports whether any overlay entries exist (visible or not).
 func (b *TuiBase) HasOverlayEntries() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return len(b.overlayStack) > 0
+	var v bool
+	b.lock(func() { v = len(b.overlayStack) > 0 })
+	return v
 }
 
 // isOverlayFocused checks if the focused component is a visible overlay.
@@ -1277,23 +1283,21 @@ func (b *TuiBase) Start() {
 
 // AddInputListener registers an input interceptor; returns the unsubscribe fn.
 func (b *TuiBase) AddInputListener(listener TuiInputListener) func() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.inputListeners = append(b.inputListeners, listener)
+	b.lock(func() { b.inputListeners = append(b.inputListeners, listener) })
 	return func() { b.RemoveInputListener(listener) }
 }
 
 // RemoveInputListener unregisters a previously added listener.
 func (b *TuiBase) RemoveInputListener(listener TuiInputListener) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for i, l := range b.inputListeners {
-		// Listeners are function values; compare by identity via pointer.
-		if utils.SameFuncValue(l, listener) {
-			b.inputListeners = append(b.inputListeners[:i], b.inputListeners[i+1:]...)
-			return
+	b.lock(func() {
+		for i, l := range b.inputListeners {
+			// Listeners are function values; compare by identity via pointer.
+			if utils.SameFuncValue(l, listener) {
+				b.inputListeners = append(b.inputListeners[:i], b.inputListeners[i+1:]...)
+				return
+			}
 		}
-	}
+	})
 }
 
 func (b *TuiBase) OnTerminalColorSchemeChange(listener func(scheme TerminalColorScheme)) func() {

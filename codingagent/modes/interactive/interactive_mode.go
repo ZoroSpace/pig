@@ -642,7 +642,11 @@ func (m *InteractiveMode) Init() error {
 	// Keep one component tree and remount it when changing renderers (pi:
 	// init's mountInteractiveTui block).
 	m.renderWidgets() // Initialize with default spacer
-	if m.options.TuiMode == core.TuiModeFullscreen {
+	// pi creates the chat viewport UNCONDITIONALLY here (fullscreenLayoutRoot
+	// must exist even when starting in regular mode, or the settings-panel
+	// TUI mode switch panics with "Fullscreen layout is not initialized").
+	// The pig-only `if tuiMode == fullscreen` guard was a porting deviation.
+	{
 		scrollbar := m.settingsManager().GetFullscreenScrollbar()
 		viewport := createChatViewport(chatViewportOptions{
 			document:        m.documentContainer,
@@ -3559,7 +3563,21 @@ func (m *InteractiveMode) switchTuiMode(mode core.TuiMode, restoreProgress bool,
 		return false
 	}
 
-	components := append([]tui.Component(nil), previousUi.(*tui.TuiBase).Children...)
+	// previousUi is *TuiMainScreen / *TuiAltScreen, both of which embed
+	// TuiBase BY VALUE — a direct previousUi.(*tui.TuiBase) assertion panics
+	// (found when the settings-panel TUI mode switch silently died; the
+	// panic log was contained by pig panic resilience). Reach the embedded
+	// base through the concrete types instead.
+	var previousBase *tui.TuiBase
+	switch r := previousUi.(type) {
+	case *tui.TuiMainScreen:
+		previousBase = &r.TuiBase
+	case *tui.TuiAltScreen:
+		previousBase = &r.TuiBase
+	case *tui.TuiBase:
+		previousBase = r
+	}
+	components := append([]tui.Component(nil), previousBase.Children...)
 	focus := previousUi.(interface{ GetFocusedComponent() tui.Component }).GetFocusedComponent()
 	terminal := previousUi.Terminal()
 	showHardwareCursor := previousUi.GetShowHardwareCursor()

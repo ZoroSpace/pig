@@ -1,7 +1,7 @@
 # 2026-09-19 设置页 Automatic Theme 的 Apply 卡死（TUI 输入分发 × 终端查询双死锁）
 
-- **日期**：2026-09-19 16:14（修复落盘时间，取自文件 mtime）
-- **状态**：已修复收口（全量 `go test ./... -race -count=1` 28 包 rc=0；tmux 真 TTY 冒烟 Enter/Space 双路径全通）
+- **日期**：2026-09-19 16:14（修复落盘时间，取自文件 mtime）；同日第二轮审计扩大收口（见「第二轮」节）
+- **状态**：已修复收口（全量 `go test ./... -race -count=1` 28 包 rc=0；tmux 真 TTY 冒烟 Enter/Space 双路径 + Clear-on-shrink 切换 + TUI mode 双向切换全通）
 - **涉及文件**：
   - `tui/tui.go`（修复：`pendingOsc11BackgroundQuery.settled` → `atomic.Bool` CAS；`OnTerminalColorSchemeChange`/`removeTerminalColorSchemeListener` 改走可重入 `b.lock`）
   - `tui/terminal_query_deadlock_test.go`（新增回归测试 3 个）
@@ -46,8 +46,18 @@ pi 的 `theme-controller.applyFromSettings` 是 async（`interactive-mode.ts` �
 - `TestColorSchemeQuerySurvivesInputDispatch`：同形态发 DSR 996 查询，listener 注册不得自锁（锁死锁点 A，即用户撞到的首杀点）。stash 验证：FAIL → PASS。
 - `TestTerminalQueryRealReplyWinsOverTimeout`：真实回复与超时竞争时 consume 路径胜出并交付解析色（CAS 语义防过修）。
 
+## 第二轮：TUI mode 切换链路三层修复（同日，真机验证时逐层暴露）
+
+修完访问器后真机验证 TUI mode 切换，逐层暴露三个叠层缺陷：
+
+1. **`switchTuiMode` 类型断言 panic（interactive_mode.go）**：`previousUi.(*tui.TuiBase)` 对 `*TuiMainScreen` 断言必炸（TuiMainScreen/TuiAltScreen 均为值嵌入 TuiBase）——panic 被 pig panic-resilience 收容后切换静默失效（用户可见：切 TUI mode 无反应）。修：类型 switch 取嵌入基座 `&r.TuiBase`。
+2. **`TuiMainScreen.CaptureRenderState`/`RestoreRenderState` 自死锁（tui_main_screen.go）**：`m.mu` 提升自嵌入 TuiBase.mu，直接 `m.mu.Lock()` = b.mu 自锁；断言修好后路径推进到此处即冻结（这才是 settings 切 TUI mode 卡住的真首杀点）。修：改 `m.lock` 重入。同型顺修 `TuiAltScreen.ViewportTop`/`IsFollowingOutput`/`HasActiveSelection`（handleCopyCommand 在 dispatch 内调 HasActiveSelection，fullscreen 下 Ctrl+X 同样会冻结）。回归：`TestTuiRendererAccessorsSurviveInputDispatch`（stash 红→绿）。
+3. **init 无条件创建 chat viewport 的移植偏差（interactive_mode.go）**：pi 的 init 无条件 `createChatViewport` 并赋 `fullscreenLayoutRoot`；pig 错加 `if tuiMode == fullscreen` 守卫，regular 启动后切 fullscreen 时 layout root 为 nil → panic "Fullscreen layout is not initialized"（被收容后静默失效）。修：对齐 pi 无条件创建。
+
+**方法论教训**：验证初期被"画面冻结前帧 + capture 时机"的假象误导（误以为按键生效），最终用临时文件日志逐点插桩定位。所有发现均有 panic-resilience 日志或插桩实证，非推断。
+
 ## 已知项与顺带修复
 
-- **同型隐患未动**：`AddInputListener`/`RemoveInputListener` 仍用直接 `b.mu.Lock()`——当前无 dispatch 内调用路径，不顺手扩大改动面；将来若从 key handler 里注册 input listener 会撞同一颗雷。
+- **同型隐患已同批收口（第二轮审计）**：见文末「第二轮」节——访问器家族 `FullRedraws`/`GetShowHardwareCursor`/`GetClearOnShrink`/`SetClearOnShrink`/`GetFocusedComponent`/`HasOverlay`/`HasOverlayEntries`/`AddInputListener`/`RemoveInputListener` 同样用直接 `b.mu.Lock()`，且 dispatch 内确有调用链：`OnClearOnShrinkChange → SetClearOnShrink`（settings 面板切 "Clear on shrink" 必现同款死锁）、`OnTuiModeChange → switchTuiMode → HasOverlay/GetFocusedComponent/GetShowHardwareCursor/GetClearOnShrink`、`applyRuntimeSettings → SetClearOnShrink`。九个方法统一改 `b.lock`（可重入、panic-safe），回归测试 `TestTuiAccessorsSurviveInputDispatch` 锁定契约。
 - **顺手修复（同日同批，独立事件）**：`components/armin.go` 的 `ArminComponent` 动画 ticker goroutine 在锁外写 `currentGrid`/`effectState`（`tickEffect` + `gridVersion++`），与持锁的 `Render()` 数据竞争，全量 `-race` 逮到（`TestWiredSubmitCommandsReachTheirHandlers/dementedelves`）。修：tick 分支纳入 `a.mu`，`updateDisplay` 内联进循环（gridVersion 递增与网格写同锁）。09-18 SLASH-COMMANDS-COMPLETION 批遗留。
 - **事故记录（流程，非代码）**：冒烟诊断时误用 `pgrep -x pig | head -1` 定位测试进程，SIGQUIT 打到了用户的日常 pig 会话（goroutine dump 到用户终端 + 会话终止）。教训入规：**对 tmux 测试实例操作必须用 `tmux list-panes -t <session> -F '#{pane_pid}'` 取精确 PID，禁止 `pgrep | head` 猜**。
