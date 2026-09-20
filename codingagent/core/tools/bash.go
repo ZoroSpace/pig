@@ -448,6 +448,9 @@ func CreateShellToolDefinition(cwd string, config ShellToolConfig, options *Bash
 		PromptSnippet:    config.PromptSnippet,
 		PromptGuidelines: promptGuidelinesCopy(exposeSessionEnvironment, config.PromptGuidelines),
 		Parameters:       json.RawMessage(bashSchemaJSON),
+		// pi v0.86.0: strict-mode tool sampling is hardcoded (was
+		// getExperimentalToolSampling()).
+		ConstrainedSampling: types.ConstrainedSamplingConfig{Type: "json_schema", Strict: "prefer"},
 		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate agent.AgentToolUpdateCallback, toolCtx ToolExecuteContext) (agent.AgentToolResult, error) {
 			input, err := decodeToolParams[BashToolInput](params)
 			if err != nil {

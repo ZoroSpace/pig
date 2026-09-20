@@ -264,13 +264,12 @@ type resolvedSession struct {
 }
 
 // findLocalSessionByExactId finds an exact session id in the current
-// project (pi: findLocalSessionByExactId).
+// project (pi: findLocalSessionByExactId). v0.86.0 routes through
+// SessionManager.findById: exact IDs only require reading session headers
+// (#9440), no full metadata listing.
 func findLocalSessionByExactId(sessionID string, cwd string, sessionDir string) *resolvedSession {
-	localSessions := core.ListSessions(cwd, sessionDir, nil)
-	for _, session := range localSessions {
-		if session.ID == sessionID {
-			return &resolvedSession{typ: "local", path: session.Path}
-		}
+	if path := core.FindSessionById(cwd, sessionID, sessionDir); path != "" {
+		return &resolvedSession{typ: "local", path: path}
 	}
 	return nil
 }
@@ -284,21 +283,18 @@ func resolveSessionPath(sessionArg string, cwd string, sessionDir string) resolv
 		return resolvedSession{typ: "path", path: utils.ResolvePath(sessionArg, cwd, nil)}
 	}
 
-	// Try to match as session ID in current project first
-	localSessions := core.ListSessions(cwd, sessionDir, nil)
+	// Exact IDs only require reading session headers. Fall back to the full
+	// metadata listing for prefix matches (pi v0.86.0, #9440).
+	if exactLocalMatch := findLocalSessionByExactId(sessionArg, cwd, sessionDir); exactLocalMatch != nil {
+		return *exactLocalMatch
+	}
+
+	localSessions := core.ListSessions(context.Background(), cwd, sessionDir, nil)
 	var localMatch *core.SessionInfo
 	for i := range localSessions {
-		if localSessions[i].ID == sessionArg {
+		if strings.HasPrefix(localSessions[i].ID, sessionArg) {
 			localMatch = &localSessions[i]
 			break
-		}
-	}
-	if localMatch == nil {
-		for i := range localSessions {
-			if strings.HasPrefix(localSessions[i].ID, sessionArg) {
-				localMatch = &localSessions[i]
-				break
-			}
 		}
 	}
 	if localMatch != nil {
@@ -306,7 +302,7 @@ func resolveSessionPath(sessionArg string, cwd string, sessionDir string) resolv
 	}
 
 	// Try global search across all projects
-	allSessions := core.ListAllSessions(sessionDir, nil)
+	allSessions := core.ListAllSessions(context.Background(), sessionDir, nil)
 	var globalMatch *core.SessionInfo
 	for i := range allSessions {
 		if allSessions[i].ID == sessionArg {
@@ -470,11 +466,11 @@ func createSessionManager(ctx context.Context, parsed *cli.Args, cwd string, ses
 		// pi delegates --resume to the TUI session picker (cli/session-picker.ts
 		// + startup-ui), which runs before interactive mode mounts.
 		selectedPath, ok := cli.SelectSession(
-			func(onProgress func(loaded, total int)) []core.SessionInfo {
-				return core.ListSessions(cwd, sessionDir, onProgress)
+			func(onProgress core.SessionListProgress) []core.SessionInfo {
+				return core.ListSessions(context.Background(), cwd, sessionDir, onProgress)
 			},
-			func(onProgress func(loaded, total int)) []core.SessionInfo {
-				return core.ListAllSessions(sessionDir, onProgress)
+			func(onProgress core.SessionListProgress) []core.SessionInfo {
+				return core.ListAllSessions(context.Background(), sessionDir, onProgress)
 			},
 			settingsManager,
 		)

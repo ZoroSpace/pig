@@ -812,8 +812,11 @@ func (l *sessionList) HandleInput(keyData string) {
 }
 
 // sessionsLoader loads one scope's sessions (pi: SessionsLoader — async;
-// pig is sync and runs on a goroutine). onProgress may be nil.
-type sessionsLoader func(onProgress func(loaded, total int)) []core.SessionInfo
+// pig is sync and runs on a goroutine). onProgress may be nil. pi v0.86.0
+// adds partialSessions to the progress callback; pig threads it through
+// (v0.86.0 sync batch) while the selector keeps publishing only totals
+// until the S6-3b interactive batch reworks it.
+type sessionsLoader func(onProgress core.SessionListProgress) []core.SessionInfo
 
 // sessionDeleteResult is the deleteSessionFile outcome (pi: inline return
 // type { ok, method, error? }).
@@ -1224,7 +1227,8 @@ func (s *SessionSelectorComponent) loadScope(scope sessionScope, reason loadScop
 	s.header.setLoading(true)
 	s.requestRender()
 
-	onProgress := func(loaded, total int) {
+	onProgress := func(loaded, total int, partialSessions []core.SessionInfo) {
+		_ = partialSessions // consumed by the interactive batch (pi v0.86.0)
 		s.mutate(func() {
 			if scope != s.scope {
 				return

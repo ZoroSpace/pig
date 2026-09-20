@@ -280,3 +280,41 @@ func TestSessionStatsIgnoresZeroUsageMessagesForPostCompactionContextUsage(t *te
 	_ = time.Now
 	_ = agent.AgentTool{}
 }
+
+// TestSessionStatsIncludesCacheWarmingUsageExactlyOnce ports "includes
+// cache-warming usage exactly once without adding messages" (pi
+// agent-session-stats.test.ts, v0.86.0).
+func TestSessionStatsIncludesCacheWarmingUsageExactlyOnce(t *testing.T) {
+	session, sessionManager := createStatsSession(t)
+
+	model := testModel()
+	usage := types.Usage{
+		Input: 2, Output: 1, CacheRead: 97, CacheWrite: 0, TotalTokens: 100,
+		Cost: types.Cost{Input: 0.001, Output: 0.002, CacheRead: 0.007, CacheWrite: 0, Total: 0.01},
+	}
+	entry, err := sessionManager.AppendUsage("cache_warm", string(model.Provider), model.ID, &usage, "extension override")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Kind != "cache_warm" || entry.Note != "extension override" {
+		t.Fatalf("entry = %+v", entry)
+	}
+
+	stats := session.GetSessionStats()
+	if stats.Tokens.Input != 2 || stats.Tokens.Output != 1 || stats.Tokens.CacheRead != 97 || stats.Tokens.CacheWrite != 0 || stats.Tokens.Total != 100 {
+		t.Fatalf("tokens = %+v", stats.Tokens)
+	}
+	if stats.TotalMessages != 0 {
+		t.Fatalf("totalMessages = %d, want 0", stats.TotalMessages)
+	}
+	if messages := sessionManager.BuildSessionContext().Messages; len(messages) != 0 {
+		t.Fatalf("session context messages = %d, want 0 (usage entries carry no message)", len(messages))
+	}
+	breakdown := GetUsageCostBreakdown(sessionManager.GetEntries())
+	if len(breakdown) != 1 {
+		t.Fatalf("breakdown = %+v, want 1", breakdown)
+	}
+	if breakdown[0].Key != string(model.Provider)+"/"+model.ID || breakdown[0].Cost != 0.01 || breakdown[0].Tokens != 100 {
+		t.Fatalf("breakdown[0] = %+v", breakdown[0])
+	}
+}

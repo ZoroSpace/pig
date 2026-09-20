@@ -12,26 +12,14 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/utils"
 )
 
-// ExportSessionToJsonl writes the current session branch and optional
-// trailing export-only entries as JSONL, returning the file path (pi:
-// exportSessionToJsonl). The trailing callback receives the last branch
-// entry's parent id (nil when the branch is empty) and the export timestamp.
-// An empty outputPath defaults to "session-<timestamp>.jsonl" in the process
-// cwd.
-func ExportSessionToJsonl(sessionManager *SessionManager, outputPath string, createTrailingEntries func(parentID *string, timestamp string) []any) (string, error) {
-	defaultName := "session-" + strings.ReplaceAll(strings.ReplaceAll(time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"), ":", "-"), ".", "-") + ".jsonl"
-	name := outputPath
-	if name == "" {
-		name = defaultName
-	}
-	filePath := utils.ResolvePath(name, "", nil)
-	dir := filepath.Dir(filePath)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return "", err
-		}
-	}
+// TrailingEntries produces export-only entries appended after the branch
+// (pi: TrailingEntries). It receives the last branch entry's parent id (nil
+// when the branch is empty) and the export timestamp.
+type TrailingEntries = func(parentID *string, timestamp string) []any
 
+// SerializeSessionBranch serializes the current branch and optional
+// export-only entries as JSONL (pi: serializeSessionBranch).
+func SerializeSessionBranch(sessionManager *SessionManager, createTrailingEntries TrailingEntries) (string, error) {
 	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
 	version := CURRENT_SESSION_VERSION
 	header := &SessionHeader{
@@ -45,7 +33,7 @@ func ExportSessionToJsonl(sessionManager *SessionManager, outputPath string, cre
 	if err != nil {
 		return "", err
 	}
-	lines := []string{string(headerLine)}
+	entries := []any{json.RawMessage(headerLine)}
 
 	var parentID *string
 	for _, entry := range sessionManager.GetBranch("") {
@@ -53,21 +41,49 @@ func ExportSessionToJsonl(sessionManager *SessionManager, outputPath string, cre
 		if err != nil {
 			return "", err
 		}
-		lines = append(lines, line)
+		entries = append(entries, json.RawMessage(line))
 		id := entry.Base().ID
 		parentID = &id
 	}
 	if createTrailingEntries != nil {
-		for _, entry := range createTrailingEntries(parentID, timestamp) {
-			line, err := json.Marshal(entry)
-			if err != nil {
-				return "", err
-			}
-			lines = append(lines, string(line))
+		entries = append(entries, createTrailingEntries(parentID, timestamp)...)
+	}
+	lines := make([]string, len(entries))
+	for i, entry := range entries {
+		line, err := json.Marshal(entry)
+		if err != nil {
+			return "", err
+		}
+		lines[i] = string(line)
+	}
+	return strings.Join(lines, "\n") + "\n", nil
+}
+
+// ExportSessionToJsonl writes the current session branch and optional
+// trailing export-only entries as JSONL, returning the file path (pi:
+// exportSessionToJsonl). The trailing callback receives the last branch
+// entry's parent id (nil when the branch is empty) and the export timestamp.
+// An empty outputPath defaults to "session-<timestamp>.jsonl" in the process
+// cwd.
+func ExportSessionToJsonl(sessionManager *SessionManager, outputPath string, createTrailingEntries TrailingEntries) (string, error) {
+	defaultName := "session-" + strings.ReplaceAll(strings.ReplaceAll(time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z07:00"), ":", "-"), ".", "-") + ".jsonl"
+	name := outputPath
+	if name == "" {
+		name = defaultName
+	}
+	filePath := utils.ResolvePath(name, "", nil)
+	dir := filepath.Dir(filePath)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", err
 		}
 	}
 
-	if err := os.WriteFile(filePath, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+	content, err := SerializeSessionBranch(sessionManager, createTrailingEntries)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
 		return "", err
 	}
 	return filePath, nil

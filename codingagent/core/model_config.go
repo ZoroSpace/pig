@@ -153,6 +153,13 @@ type ModelsJsonOverrideCost struct {
 	Tiers      []ModelsJsonCostTier `json:"tiers,omitempty"`
 }
 
+// ModelsJsonPromptCache is a best-effort prompt cache lifetime in seconds
+// per retention tier (pi: ModelPromptCacheSchema; values must be > 0).
+type ModelsJsonPromptCache struct {
+	Short *float64 `json:"short,omitempty"`
+	Long  *float64 `json:"long,omitempty"`
+}
+
 // ModelsJsonModel is one model definition (pi: ModelDefinitionSchema).
 type ModelsJsonModel struct {
 	ID               string                      `json:"id"`
@@ -163,6 +170,7 @@ type ModelsJsonModel struct {
 	ThinkingLevelMap *ModelsJsonThinkingLevelMap `json:"thinkingLevelMap,omitempty"`
 	Input            []string                    `json:"input,omitempty"` // "text" | "image"
 	Cost             *ModelsJsonCost             `json:"cost,omitempty"`
+	PromptCache      *ModelsJsonPromptCache      `json:"promptCache,omitempty"`
 	ContextWindow    *float64                    `json:"contextWindow,omitempty"`
 	MaxTokens        *float64                    `json:"maxTokens,omitempty"`
 	SamplingParams   map[string]any              `json:"samplingParams,omitempty"`
@@ -178,6 +186,7 @@ type ModelsJsonModelOverride struct {
 	ThinkingLevelMap *ModelsJsonThinkingLevelMap `json:"thinkingLevelMap,omitempty"`
 	Input            []string                    `json:"input,omitempty"`
 	Cost             *ModelsJsonOverrideCost     `json:"cost,omitempty"`
+	PromptCache      *ModelsJsonPromptCache      `json:"promptCache,omitempty"`
 	ContextWindow    *float64                    `json:"contextWindow,omitempty"`
 	MaxTokens        *float64                    `json:"maxTokens,omitempty"`
 	SamplingParams   map[string]any              `json:"samplingParams,omitempty"`
@@ -448,10 +457,11 @@ func validateOpenAICompletionsCompatFields(value map[string]any, path string, er
 	if entry, present := value["vercelGatewayRouting"]; present {
 		validateVercelGatewayRouting(entry, path+".vercelGatewayRouting", errs)
 	}
-	if entry, present := value["deferredToolsMode"]; present {
-		if s, ok := entry.(string); !ok || s != "kimi" {
-			*errs = append(*errs, schemaError{path: path + ".deferredToolsMode", message: `expected "kimi"`})
-		}
+	if _, present := value["deferredToolsMode"]; present {
+		// pi v0.86.0 removed deferredToolsMode from the models.json schema
+		// (the kimi deferred-tools mode is gone with mid-conversation system
+		// messages); the key is no longer recognized.
+		*errs = append(*errs, schemaError{path: path + ".deferredToolsMode", message: "unexpected property"})
 	}
 	if entry, present := value["sessionAffinityFormat"]; present {
 		if s, ok := entry.(string); !ok || (s != "openai" && s != "openai-nosession" && s != "openrouter") {
@@ -463,8 +473,8 @@ func validateOpenAICompletionsCompatFields(value map[string]any, path string, er
 func validateOpenAIResponsesCompatFields(value map[string]any, path string, errs *[]schemaError) bool {
 	allowed := map[string]bool{
 		"supportsDeveloperRole": true, "sessionAffinityFormat": true, "supportsLongCacheRetention": true,
-		"supportsStrictMode": true, "supportsOpenAIGrammarTools": true, "supportsAdditionalTools": true,
-		"supportsToolSearch": true, "supportsMaxOutputTokens": true,
+		"supportsStrictMode": true, "supportsOpenAIGrammarTools": true,
+		"supportsMaxOutputTokens": true,
 	}
 	matches := true
 	for key := range value {
@@ -476,7 +486,7 @@ func validateOpenAIResponsesCompatFields(value map[string]any, path string, errs
 	if !matches {
 		return false
 	}
-	for _, key := range []string{"supportsDeveloperRole", "supportsLongCacheRetention", "supportsStrictMode", "supportsOpenAIGrammarTools", "supportsAdditionalTools", "supportsToolSearch", "supportsMaxOutputTokens"} {
+	for _, key := range []string{"supportsDeveloperRole", "supportsLongCacheRetention", "supportsStrictMode", "supportsOpenAIGrammarTools", "supportsMaxOutputTokens"} {
 		if entry, present := value[key]; present {
 			expectBool(entry, path+"."+key, errs)
 		}
@@ -494,7 +504,8 @@ func validateAnthropicMessagesCompatFields(value map[string]any, path string, er
 		"supportsEagerToolInputStreaming": true, "supportsLongCacheRetention": true,
 		"sendSessionAffinityHeaders": true, "supportsCacheControlOnTools": true,
 		"supportsTemperature": true, "forceAdaptiveThinking": true, "allowEmptySignature": true,
-		"supportsStrictTools": true, "supportsMidConvoEffort": true, "supportsToolReferences": true,
+		"supportsStrictTools": true, "supportsMidConvoEffort": true,
+		"allowedFallbackModels": true,
 	}
 	matches := true
 	for key := range value {
@@ -507,11 +518,47 @@ func validateAnthropicMessagesCompatFields(value map[string]any, path string, er
 		return false
 	}
 	for key := range allowed {
-		if entry, present := value[key]; present {
+		if entry, present := value[key]; present && key != "allowedFallbackModels" {
 			expectBool(entry, path+"."+key, errs)
 		}
 	}
+	if entry, present := value["allowedFallbackModels"]; present {
+		validateAllowedFallbackModels(entry, path+".allowedFallbackModels", errs)
+	}
 	return true
+}
+
+// validateAllowedFallbackModels checks the anthropic fallback list (pi:
+// allowedFallbackModels — maxItems 3, each { provider, model, cost }).
+func validateAllowedFallbackModels(value any, path string, errs *[]schemaError) {
+	items, ok := value.([]any)
+	if !ok {
+		*errs = append(*errs, schemaError{path: path, message: "expected array"})
+		return
+	}
+	if len(items) > 3 {
+		*errs = append(*errs, schemaError{path: path, message: "expected array to have no more than 3 elements"})
+	}
+	for i, item := range items {
+		itemPath := fmt.Sprintf("%s.%d", path, i)
+		entry, ok := item.(map[string]any)
+		if !ok {
+			*errs = append(*errs, schemaError{path: itemPath, message: "expected object"})
+			continue
+		}
+		for _, key := range []string{"provider", "model"} {
+			if v, present := entry[key]; present {
+				expectString(v, itemPath+"."+key, errs)
+			} else {
+				*errs = append(*errs, schemaError{path: itemPath + "." + key, message: "missing required property"})
+			}
+		}
+		if v, present := entry["cost"]; present {
+			validateCostRequired(v, itemPath+".cost", errs)
+		} else {
+			*errs = append(*errs, schemaError{path: itemPath + ".cost", message: "missing required property"})
+		}
+	}
 }
 
 // validateProviderCompat checks the compat union: the value must satisfy one
@@ -604,6 +651,24 @@ func validateCostTiers(value any, path string, errs *[]schemaError) {
 	}
 }
 
+// validatePromptCache checks the prompt cache lifetime object (pi:
+// ModelPromptCacheSchema; exclusiveMinimum 0 for each tier).
+func validatePromptCache(value any, path string, errs *[]schemaError) {
+	promptCache, ok := value.(map[string]any)
+	if !ok {
+		*errs = append(*errs, schemaError{path: path, message: "expected object"})
+		return
+	}
+	for _, key := range []string{"short", "long"} {
+		if entry, present := promptCache[key]; present {
+			number, isNumber := entry.(float64)
+			if !isNumber || number <= 0 {
+				*errs = append(*errs, schemaError{path: path + "." + key, message: "expected number greater than 0"})
+			}
+		}
+	}
+}
+
 func validateCostOptional(value any, path string, errs *[]schemaError) {
 	cost, ok := value.(map[string]any)
 	if !ok {
@@ -647,6 +712,9 @@ func validateModelDefinition(value any, path string, errs *[]schemaError) {
 	if entry, present := model["cost"]; present {
 		validateCostRequired(entry, path+".cost", errs)
 	}
+	if entry, present := model["promptCache"]; present {
+		validatePromptCache(entry, path+".promptCache", errs)
+	}
 	for _, key := range []string{"contextWindow", "maxTokens"} {
 		if entry, present := model[key]; present {
 			expectNumber(entry, path+"."+key, errs)
@@ -680,6 +748,9 @@ func validateModelOverride(value any, path string, errs *[]schemaError) {
 	}
 	if entry, present := override["cost"]; present {
 		validateCostOptional(entry, path+".cost", errs)
+	}
+	if entry, present := override["promptCache"]; present {
+		validatePromptCache(entry, path+".promptCache", errs)
 	}
 	for _, key := range []string{"contextWindow", "maxTokens"} {
 		if entry, present := override[key]; present {

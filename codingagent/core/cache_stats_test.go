@@ -4,6 +4,7 @@ package core
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
@@ -255,4 +256,49 @@ func TestDetectCacheMiss(t *testing.T) {
 			t.Fatalf("miss = %+v, want undefined", miss)
 		}
 	})
+}
+
+// cacheStatsUsageEntry is the cache-warm usage entry (pi: usageEntry;
+// v0.86.0).
+func cacheStatsUsageEntry(kind string, timestamp int64) SessionEntry {
+	zero := types.Cost{}
+	return &UsageEntry{
+		EntryBase: EntryBase{
+			Type:      "usage",
+			ID:        "usage-" + kind,
+			Timestamp: time.UnixMilli(timestamp).UTC().Format("2006-01-02T15:04:05.000Z07:00"),
+		},
+		Kind:     kind,
+		Provider: "test",
+		Model:    "test-model",
+		Usage: &types.Usage{
+			Input:       0,
+			Output:      0,
+			CacheRead:   100_000,
+			CacheWrite:  0,
+			TotalTokens: 100_000,
+			Cost:        zero,
+		},
+	}
+}
+
+func TestDetectCacheMissUsesCacheWarmUsageEntriesAsRefreshes(t *testing.T) {
+	missMessage := cacheStatsAssistant(struct {
+		input      int64
+		cacheRead  int64
+		cacheWrite int64
+		cost       *types.Cost
+		model      string
+		timestamp  int64
+	}{cacheWrite: 110_000, cost: &types.Cost{CacheWrite: 0.4125}, timestamp: 600_000})
+
+	afterCacheWarm := DetectCacheMiss([]SessionEntry{cacheStatsEntry(cacheTurn1), cacheStatsUsageEntry("cache_warm", 500_000)}, missMessage, cacheStatsModels)
+	afterOtherUsage := DetectCacheMiss([]SessionEntry{cacheStatsEntry(cacheTurn1), cacheStatsUsageEntry("custom_operation", 500_000)}, missMessage, cacheStatsModels)
+
+	if afterCacheWarm == nil || afterCacheWarm.IdleMs != 100_000 {
+		t.Fatalf("afterCacheWarm idleMs = %v, want 100000", afterCacheWarm)
+	}
+	if afterOtherUsage == nil || afterOtherUsage.IdleMs != 600_000 {
+		t.Fatalf("afterOtherUsage idleMs = %v, want 600000", afterOtherUsage)
+	}
 }

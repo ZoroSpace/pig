@@ -3,11 +3,14 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/agent/harness"
@@ -745,4 +748,116 @@ func llmTestModel() *types.Model {
 		ContextWindow: 200000,
 		MaxTokens:     8192,
 	}
+}
+
+// TestFindCutPointFallsBackToLatestCutPointBeforeOversizedToolResults is the
+// #9740 regression: trailing tool results that exceed the budget on their own
+// keep their preceding assistant tool call instead of falling back to the
+// first message (pi v0.86.0).
+func TestFindCutPointFallsBackToLatestCutPointBeforeOversizedToolResults(t *testing.T) {
+	oldUser := createMessageEntry(createUserMessage("old history"))
+	oldAssistant := createMessageEntry(createAssistantMessage("old answer", nil))
+	currentUser := createMessageEntry(createUserMessage("read the large file"))
+	toolCall := createMessageEntry(types.AssistantMessage{
+		Role:       types.RoleAssistant,
+		Content:    []types.Content{types.NewToolCall("call-1", "read", map[string]any{"path": "big.txt"})},
+		Usage:      createMockUsage(10, 0, 0, 0),
+		StopReason: types.StopReasonToolUse,
+		Timestamp:  time.Now().UnixMilli(),
+		API:        "anthropic-messages",
+		Provider:   "anthropic",
+		Model:      "claude-sonnet-4-5",
+	})
+	toolResult := createMessageEntry(types.ToolResultMessage{
+		Role:       types.RoleToolResult,
+		ToolCallID: "call-1",
+		ToolName:   "read",
+		Content:    []types.Content{types.NewTextContent(strings.Repeat("x", 8000))},
+		IsError:    false,
+		Timestamp:  time.Now().UnixMilli(),
+	})
+	entries := []SessionEntry{oldUser, oldAssistant, currentUser, toolCall, toolResult}
+
+	result := FindCutPoint(entries, 0, len(entries), 1000)
+	want := CutPointResult{FirstKeptEntryIndex: 3, TurnStartIndex: 2, IsSplitTurn: true}
+	if result.FirstKeptEntryIndex != want.FirstKeptEntryIndex || result.TurnStartIndex != want.TurnStartIndex || result.IsSplitTurn != want.IsSplitTurn {
+		t.Fatalf("result = %+v, want %+v", result, want)
+	}
+
+	preparation := PrepareCompaction(entries, CompactionSettingsValues{
+		Enabled:          true,
+		ReserveTokens:    DefaultCompactionSettings.ReserveTokens,
+		KeepRecentTokens: 1000,
+	})
+	if preparation == nil {
+		t.Fatal("preparation = nil")
+	}
+	if preparation.FirstKeptEntryID != toolCall.Base().ID {
+		t.Fatalf("firstKeptEntryId = %q, want toolCall %q", preparation.FirstKeptEntryID, toolCall.Base().ID)
+	}
+	if !messagesEqualAgent(preparation.MessagesToSummarize, []agent.AgentMessage{oldUser.Message, oldAssistant.Message}) {
+		t.Fatalf("messagesToSummarize = %v", entryTexts(preparation.MessagesToSummarize))
+	}
+	if !messagesEqualAgent(preparation.TurnPrefixMessages, []agent.AgentMessage{currentUser.Message}) {
+		t.Fatalf("turnPrefixMessages = %v", entryTexts(preparation.TurnPrefixMessages))
+	}
+}
+
+// TestPrepareCompactionSkipsSystemMessages: system messages are prompt
+// state, not conversation history (pi v0.86.0).
+func TestPrepareCompactionSkipsSystemMessages(t *testing.T) {
+	system := createMessageEntry(&types.SystemMessage{
+		Role:      types.RoleSystem,
+		Content:   types.SystemContent{},
+		Sections:  &types.SystemSections{Keys: []string{"preamble"}, Values: map[string]*string{"preamble": lo.ToPtr("current prompt")}},
+		Timestamp: time.Now().UnixMilli(),
+	})
+	user := createMessageEntry(createUserMessage("one long turn"))
+	assistant := createMessageEntry(createAssistantMessage("assistant suffix", nil))
+	preparation := PrepareCompaction([]SessionEntry{system, user, assistant}, CompactionSettingsValues{
+		Enabled:          true,
+		ReserveTokens:    DefaultCompactionSettings.ReserveTokens,
+		KeepRecentTokens: 1,
+	})
+
+	if preparation == nil {
+		t.Fatal("preparation = nil")
+	}
+	if preparation.FirstKeptEntryID != assistant.Base().ID {
+		t.Fatalf("firstKeptEntryId = %q, want assistant %q", preparation.FirstKeptEntryID, assistant.Base().ID)
+	}
+	if !preparation.IsSplitTurn {
+		t.Fatal("expected isSplitTurn true")
+	}
+	if len(preparation.MessagesToSummarize) != 0 {
+		t.Fatalf("messagesToSummarize = %v, want empty", entryTexts(preparation.MessagesToSummarize))
+	}
+	if !messagesEqualAgent(preparation.TurnPrefixMessages, []agent.AgentMessage{user.Message}) {
+		t.Fatalf("turnPrefixMessages = %v", entryTexts(preparation.TurnPrefixMessages))
+	}
+}
+
+// entryTexts renders agent messages for diagnostics.
+func entryTexts(messages []agent.AgentMessage) []string {
+	out := make([]string, 0, len(messages))
+	for _, message := range messages {
+		out = append(out, entryText(message))
+	}
+	return out
+}
+
+// messagesEqualAgent compares two message lists by JSON equality (pig:
+// toEqual on message objects).
+func messagesEqualAgent(a []agent.AgentMessage, b []agent.AgentMessage) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		aj, aerr := json.Marshal(a[i])
+		bj, berr := json.Marshal(b[i])
+		if aerr != nil || berr != nil || string(aj) != string(bj) {
+			return false
+		}
+	}
+	return true
 }

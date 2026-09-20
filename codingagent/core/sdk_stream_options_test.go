@@ -14,7 +14,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/auth"
 	"github.com/ZoroSpace/pig/ai/types"
@@ -231,4 +233,182 @@ func TestCreateAgentSessionStreamOptions(t *testing.T) {
 		// extension factory registering a before_provider_headers handler.
 		t.Skip("extension factories arrive with the extension batch (Phase 7)")
 	})
+}
+
+// --- v0.86.0 cache-warming additions (pi: test/sdk-stream-options.test.ts) ---
+
+// sdkCreateCacheWarmingSession assembles a session with cache warming in
+// idle mode, a prompt-cache model, and a capturing provider (pi:
+// createCacheWarmingSession). populate seeds the session manager before
+// assembly.
+func sdkCreateCacheWarmingSession(t *testing.T, populate func(manager *SessionManager, model *types.Model)) (*AgentSession, func() int, func()) {
+	t.Helper()
+
+	tempDir := t.TempDir()
+	cwd := filepath.Join(tempDir, "project")
+	agentDir := filepath.Join(tempDir, "agent")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	model := &types.Model{
+		ID:            "warming-model",
+		Name:          "Warming Model",
+		API:           ai.ApiOpenAICompletions,
+		Provider:      "warming-provider",
+		BaseURL:       "https://warming.invalid/v1",
+		Reasoning:     false,
+		Input:         []ai.ModelInput{ai.ModelInputText},
+		Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 10, Output: 50, CacheRead: 0.25, CacheWrite: 12.5}},
+		ContextWindow: 128000,
+		MaxTokens:     4096,
+		PromptCache:   ai.ModelPromptCache{ai.CacheRetentionShort: 300},
+	}
+
+	authStorage := NewInMemoryAuthStorage(authStorageData{})
+	if _, err := authStorage.Modify(context.Background(), string(model.Provider), func(current auth.Credential) (auth.Credential, error) {
+		return &auth.ApiKeyCredential{Key: "test-api-key"}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	modelRuntime := CreateModelRuntime(context.Background(), &CreateModelRuntimeOptions{
+		Credentials: authStorage,
+		ModelsPath:  lo.ToPtr(""),
+	})
+
+	providerCalls := 0
+	if err := modelRuntime.RegisterProvider(string(model.Provider), &ProviderConfigInput{
+		API: model.API,
+		StreamSimple: func(ctx context.Context, streamModel *types.Model, llmContext *types.TranscriptContext, providerOptions *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			providerCalls++
+			stream := ai.NewAssistantMessageEventStream()
+			message := &types.AssistantMessage{
+				Role:     types.RoleAssistant,
+				Content:  []types.Content{types.NewTextContent("ok")},
+				API:      model.API,
+				Provider: model.Provider,
+				Model:    model.ID,
+				Usage: types.Usage{
+					CacheRead:   100_000,
+					TotalTokens: 100_000,
+					Cost:        types.Cost{},
+				},
+				StopReason: types.StopReasonStop,
+			}
+			stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: message})
+			stream.Push(types.AssistantMessageEvent{Type: types.EventDone, Message: message})
+			stream.End()
+			return stream
+		},
+		Models: []ProviderConfigInputModel{{
+			ID: model.ID, Name: model.Name, API: model.API, Reasoning: model.Reasoning,
+			Input: model.Input, Cost: model.Cost, ContextWindow: model.ContextWindow, MaxTokens: model.MaxTokens,
+			BaseURL: model.BaseURL,
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sessionManager, err := InMemorySession(cwd, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if populate != nil {
+		populate(sessionManager, model)
+	}
+
+	result, err := CreateAgentSession(context.Background(), &CreateAgentSessionOptions{
+		Cwd:             cwd,
+		AgentDir:        agentDir,
+		Model:           model,
+		ModelRuntime:    modelRuntime,
+		SettingsManager: InMemorySettingsManager(Settings{"cacheWarming": "idle"}, nil),
+		SessionManager:  sessionManager,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cleanup := func() {
+		result.Session.Dispose()
+		modelRuntime.UnregisterProvider(string(model.Provider))
+	}
+	return result.Session, func() int { return providerCalls }, cleanup
+}
+
+// TestCreateAgentSessionSchedulesCacheWarmingAfterRequest ports "schedules
+// cache warming after a completed session request".
+func TestCreateAgentSessionSchedulesCacheWarmingAfterRequest(t *testing.T) {
+	session, providerCalls, cleanup := sdkCreateCacheWarmingSession(t, nil)
+	defer cleanup()
+
+	if err := session.Prompt(context.Background(), "test", nil); err != nil {
+		t.Fatal(err)
+	}
+	if providerCalls() != 1 {
+		t.Fatalf("provider calls = %d, want 1", providerCalls())
+	}
+	status, ok := session.CacheWarmingStatus()
+	if !ok {
+		t.Fatal("cache warming status unavailable")
+	}
+	if status.NextWarmAt <= time.Now().UnixMilli() {
+		t.Fatalf("nextWarmAt = %d, want in the future", status.NextWarmAt)
+	}
+
+	// Equivalent shallow copies remain current, but removing the request
+	// prefix does not.
+	session.Agent.State().Messages = append([]agent.AgentMessage{}, session.Agent.State().Messages...)
+	status, _ = session.CacheWarmingStatus()
+	if status.NextWarmAt <= time.Now().UnixMilli() {
+		t.Fatalf("nextWarmAt after shallow copy = %d, want in the future", status.NextWarmAt)
+	}
+	session.Agent.State().Messages = session.Agent.State().Messages[1:]
+	status, _ = session.CacheWarmingStatus()
+	if status.Reason != "conversation context changed" {
+		t.Fatalf("reason = %q, want %q", status.Reason, "conversation context changed")
+	}
+}
+
+// TestCreateAgentSessionWaitsForNextRequestInsteadOfRestoringWarming ports
+// "waits for the next request instead of restoring cache warming".
+func TestCreateAgentSessionWaitsForNextRequestInsteadOfRestoringWarming(t *testing.T) {
+	var storedModel *types.Model
+	session, providerCalls, cleanup := sdkCreateCacheWarmingSession(t, func(manager *SessionManager, model *types.Model) {
+		storedModel = model
+		_, _ = manager.AppendModelChange(string(model.Provider), model.ID)
+		_, _ = manager.AppendThinkingLevelChange("off")
+		_, _ = manager.AppendMessage(types.UserMessage{
+			Role:      types.RoleUser,
+			Content:   types.UserContent{String: "test"},
+			Timestamp: time.Now().UnixMilli() - 60_000,
+		})
+		assistant := types.AssistantMessage{
+			Role:       types.RoleAssistant,
+			Content:    []types.Content{types.NewTextContent("ok")},
+			API:        model.API,
+			Provider:   model.Provider,
+			Model:      model.ID,
+			Usage:      types.Usage{CacheRead: 100_000, TotalTokens: 100_000, Cost: types.Cost{}},
+			StopReason: types.StopReasonStop,
+			Timestamp:  time.Now().UnixMilli() - 59_000,
+		}
+		_, _ = manager.AppendMessage(assistant)
+		_, _ = manager.AppendUsage("cache_warm", string(model.Provider), model.ID, &assistant.Usage, "")
+	})
+	defer cleanup()
+
+	if providerCalls() != 0 {
+		t.Fatalf("provider calls = %d, want 0", providerCalls())
+	}
+	status, ok := session.CacheWarmingStatus()
+	if !ok {
+		t.Fatal("cache warming status unavailable")
+	}
+	if status.State != "inactive" || status.Reason != "waiting for first request" {
+		t.Fatalf("status = %+v, want inactive/waiting for first request (model %s)", status, storedModel.ID)
+	}
 }

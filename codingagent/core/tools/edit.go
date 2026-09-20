@@ -232,9 +232,12 @@ func CreateEditToolDefinition(cwd string, options *EditToolOptions) *ToolDefinit
 		PromptSnippet:    EditToolSystemPromptContribution.Snippet,
 		PromptGuidelines: append([]string{}, EditToolSystemPromptContribution.Guidelines...),
 		Parameters:       json.RawMessage(editSchemaJSON),
-		PrepareArguments: prepareEditArguments,
-		RenderShell:      "self",
-		NewRenderState:   func() any { return &EditRenderState{} },
+		// pi v0.86.0: strict-mode tool sampling is hardcoded (was
+		// getExperimentalToolSampling()).
+		ConstrainedSampling: types.ConstrainedSamplingConfig{Type: "json_schema", Strict: "prefer"},
+		PrepareArguments:    prepareEditArguments,
+		RenderShell:         "self",
+		NewRenderState:      func() any { return &EditRenderState{} },
 		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate agent.AgentToolUpdateCallback, toolCtx ToolExecuteContext) (agent.AgentToolResult, error) {
 			input, err := decodeToolParams[EditToolInput](params)
 			if err != nil {

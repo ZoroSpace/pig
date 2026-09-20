@@ -4,6 +4,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -489,7 +490,7 @@ func TestSessionManagerCustomFlatSessionDirectory(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 		sessionB := createPersistedSession(projectB, "from B")
 
-		currentA := ListSessions(projectA, tempDir, nil)
+		currentA := ListSessions(context.Background(), projectA, tempDir, nil)
 		var pathsA []string
 		for _, s := range currentA {
 			pathsA = append(pathsA, s.Path)
@@ -498,7 +499,7 @@ func TestSessionManagerCustomFlatSessionDirectory(t *testing.T) {
 			t.Fatalf("pathsA = %#v", pathsA)
 		}
 
-		all := ListAllSessions(tempDir, nil)
+		all := ListAllSessions(context.Background(), tempDir, nil)
 		var pathsAll []string
 		for _, s := range all {
 			pathsAll = append(pathsAll, s.Path)

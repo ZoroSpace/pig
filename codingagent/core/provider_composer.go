@@ -56,11 +56,14 @@ type ProviderConfigInputModel struct {
 	ThinkingLevelMap types.ThinkingLevelMap
 	Input            []ai.ModelInput
 	Cost             ai.ModelCost
-	ContextWindow    int64
-	MaxTokens        int64
-	SamplingParams   map[string]any
-	Headers          map[string]string
-	Compat           ai.ModelCompat
+	// PromptCache is the best-effort prompt cache lifetime per retention
+	// tier (pi: promptCache).
+	PromptCache    types.ModelPromptCache
+	ContextWindow  int64
+	MaxTokens      int64
+	SamplingParams map[string]any
+	Headers        map[string]string
+	Compat         ai.ModelCompat
 }
 
 // ProviderConfigInput is the input type of the extension registerProvider API
@@ -213,6 +216,21 @@ func applyModelOverride(model ai.Model, override *ModelsJsonModelOverride) ai.Mo
 			model.Cost.Tiers = costTiersFromJSON(override.Cost.Tiers)
 		}
 	}
+	if override.PromptCache != nil {
+		// pi: { ...model.promptCache, ...override.promptCache } — the
+		// override wins per retention tier, the base stays for the rest.
+		merged := model.PromptCache
+		if merged == nil {
+			merged = types.ModelPromptCache{}
+		}
+		if override.PromptCache.Short != nil {
+			merged[types.CacheRetentionShort] = int64(*override.PromptCache.Short)
+		}
+		if override.PromptCache.Long != nil {
+			merged[types.CacheRetentionLong] = int64(*override.PromptCache.Long)
+		}
+		model.PromptCache = merged
+	}
 	if override.ContextWindow != nil {
 		model.ContextWindow = int64(*override.ContextWindow)
 	}
@@ -267,6 +285,22 @@ func inputFromJSON(input []string) []ai.ModelInput {
 	out := make([]ai.ModelInput, 0, len(input))
 	for _, entry := range input {
 		out = append(out, ai.ModelInput(entry))
+	}
+	return out
+}
+
+// promptCacheFromJSON converts a models.json promptCache object (pi:
+// definition.promptCache — ModelPromptCacheSchema).
+func promptCacheFromJSON(promptCache *ModelsJsonPromptCache) types.ModelPromptCache {
+	if promptCache == nil {
+		return nil
+	}
+	out := types.ModelPromptCache{}
+	if promptCache.Short != nil {
+		out[types.CacheRetentionShort] = int64(*promptCache.Short)
+	}
+	if promptCache.Long != nil {
+		out[types.CacheRetentionLong] = int64(*promptCache.Long)
 	}
 	return out
 }
@@ -373,6 +407,7 @@ func modelFromJSON(providerID string, definition *ModelsJsonModel, providerConfi
 		ThinkingLevelMap: thinkingLevelMapFromJSON(definition.ThinkingLevelMap),
 		Input:            input,
 		Cost:             cost,
+		PromptCache:      promptCacheFromJSON(definition.PromptCache),
 		ContextWindow:    contextWindow,
 		MaxTokens:        maxTokens,
 		SamplingParams:   definition.SamplingParams,
@@ -524,6 +559,7 @@ func applyExtension(providerID string, models []ai.Model, config *ProviderConfig
 			ThinkingLevelMap: definition.ThinkingLevelMap,
 			Input:            definition.Input,
 			Cost:             definition.Cost,
+			PromptCache:      definition.PromptCache,
 			ContextWindow:    definition.ContextWindow,
 			MaxTokens:        definition.MaxTokens,
 			SamplingParams:   definition.SamplingParams,

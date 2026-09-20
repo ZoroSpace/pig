@@ -37,7 +37,7 @@ func (d *deferredSessions) resolve(sessions []core.SessionInfo) {
 	d.once.Do(func() { close(d.resolved) })
 }
 
-func (d *deferredSessions) load(func(loaded, total int)) []core.SessionInfo {
+func (d *deferredSessions) load(core.SessionListProgress) []core.SessionInfo {
 	d.mu.Lock()
 	d.calls++
 	d.mu.Unlock()
@@ -107,8 +107,8 @@ func TestSessionSelectorPathDelete(t *testing.T) {
 			makeSessionForSelector(func(s *core.SessionInfo) { s.ID = "b" }),
 		}
 		selector, mutator := newSessionSelectorWithLoaders(t,
-			func(func(loaded, total int)) []core.SessionInfo { return sessions },
-			func(func(loaded, total int)) []core.SessionInfo { return nil }, nil, "")
+			func(core.SessionListProgress) []core.SessionInfo { return sessions },
+			func(core.SessionListProgress) []core.SessionInfo { return nil }, nil, "")
 		waitLoaded(t, mutator, selector)
 
 		list := selector.GetSessionList()
@@ -129,8 +129,8 @@ func TestSessionSelectorPathDelete(t *testing.T) {
 			makeSessionForSelector(func(s *core.SessionInfo) { s.ID = "b" }),
 		}
 		selector, mutator := newSessionSelectorWithLoaders(t,
-			func(func(loaded, total int)) []core.SessionInfo { return sessions },
-			func(func(loaded, total int)) []core.SessionInfo { return nil }, nil, "")
+			func(core.SessionListProgress) []core.SessionInfo { return sessions },
+			func(core.SessionListProgress) []core.SessionInfo { return nil }, nil, "")
 		waitLoaded(t, mutator, selector)
 
 		list := selector.GetSessionList()
@@ -149,8 +149,8 @@ func TestSessionSelectorPathDelete(t *testing.T) {
 			makeSessionForSelector(func(s *core.SessionInfo) { s.ID = "b" }),
 		}
 		selector, mutator := newSessionSelectorWithLoaders(t,
-			func(func(loaded, total int)) []core.SessionInfo { return sessions },
-			func(func(loaded, total int)) []core.SessionInfo { return nil }, nil, "")
+			func(core.SessionListProgress) []core.SessionInfo { return sessions },
+			func(core.SessionListProgress) []core.SessionInfo { return nil }, nil, "")
 		waitLoaded(t, mutator, selector)
 
 		list := selector.GetSessionList()
@@ -174,7 +174,7 @@ func TestSessionSelectorPathDelete(t *testing.T) {
 		currentSessions := []core.SessionInfo{makeSessionForSelector(func(s *core.SessionInfo) { s.ID = "current" })}
 		allDeferred := newDeferredSessions()
 		selector, mutator := newSessionSelectorWithLoaders(t,
-			func(func(loaded, total int)) []core.SessionInfo { return currentSessions },
+			func(core.SessionListProgress) []core.SessionInfo { return currentSessions },
 			allDeferred.load, nil, "")
 		waitLoaded(t, mutator, selector)
 
@@ -201,7 +201,7 @@ func TestSessionSelectorPathDelete(t *testing.T) {
 		currentSessions := []core.SessionInfo{makeSessionForSelector(func(s *core.SessionInfo) { s.ID = "current" })}
 		allDeferred := newDeferredSessions()
 		selector, mutator := newSessionSelectorWithLoaders(t,
-			func(func(loaded, total int)) []core.SessionInfo { return currentSessions },
+			func(core.SessionListProgress) []core.SessionInfo { return currentSessions },
 			allDeferred.load, nil, "")
 		waitLoaded(t, mutator, selector)
 
@@ -240,8 +240,8 @@ func TestSessionSelectorPathDelete(t *testing.T) {
 		}
 
 		selector, mutator := newSessionSelectorWithLoaders(t,
-			func(func(loaded, total int)) []core.SessionInfo { return sessions },
-			func(func(loaded, total int)) []core.SessionInfo { return nil }, nil, "")
+			func(core.SessionListProgress) []core.SessionInfo { return sessions },
+			func(core.SessionListProgress) []core.SessionInfo { return nil }, nil, "")
 		waitLoaded(t, mutator, selector)
 
 		output := stripVT(t, strings.Join(selector.Render(120), "\n"))
@@ -272,10 +272,10 @@ func TestSessionSelectorPathDelete(t *testing.T) {
 		})
 
 		selector, mutator := newSessionSelectorWithLoaders(t,
-			func(func(loaded, total int)) []core.SessionInfo {
+			func(core.SessionListProgress) []core.SessionInfo {
 				return []core.SessionInfo{parentOne, parentTwo, childTwo}
 			},
-			func(func(loaded, total int)) []core.SessionInfo { return nil }, nil, "")
+			func(core.SessionListProgress) []core.SessionInfo { return nil }, nil, "")
 		waitLoaded(t, mutator, selector)
 
 		output := stripVT(t, strings.Join(selector.Render(120), "\n"))
@@ -299,8 +299,8 @@ func TestSessionSelectorPathDelete(t *testing.T) {
 			}),
 		}
 		selector, mutator := newSessionSelectorWithLoaders(t,
-			func(func(loaded, total int)) []core.SessionInfo { return sessions },
-			func(func(loaded, total int)) []core.SessionInfo { return nil }, nil, paths.parentAliasA)
+			func(core.SessionListProgress) []core.SessionInfo { return sessions },
+			func(core.SessionListProgress) []core.SessionInfo { return nil }, nil, paths.parentAliasA)
 		waitLoaded(t, mutator, selector)
 
 		list := selector.GetSessionList()

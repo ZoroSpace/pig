@@ -1022,11 +1022,16 @@ func (e *ThinkingLevelSelectEvent) EventType() string { return e.Type }
 // BeforeAgentStartEvent fires before the agent run starts (pi:
 // BeforeAgentStartEvent).
 type BeforeAgentStartEvent struct {
-	Type                string                   `json:"type"`
-	Prompt              string                   `json:"prompt"`
-	Images              []types.ImageContent     `json:"images,omitempty"`
-	SystemPrompt        string                   `json:"systemPrompt"`
-	SystemPromptOptions BuildSystemPromptOptions `json:"systemPromptOptions"`
+	Type   string               `json:"type"`
+	Prompt string               `json:"prompt"`
+	Images []types.ImageContent `json:"images,omitempty"`
+	// SystemPrompt is the current system prompt, rendered from
+	// systemPromptOptions and earlier handler changes (pi v0.86.0: a
+	// getter; pig renders it once per handler dispatch).
+	SystemPrompt string `json:"systemPrompt"`
+	// SystemPromptOptions is mutable; later handlers observe mutations made
+	// by earlier handlers (pi v0.86.0).
+	SystemPromptOptions NormalizedBuildSystemPromptOptions `json:"systemPromptOptions"`
 }
 
 func (e *BeforeAgentStartEvent) EventType() string { return e.Type }
@@ -1043,13 +1048,15 @@ type BeforeAgentStartEventResult struct {
 }
 
 // BeforeAgentStartCombinedResult merges all handler results (pi:
-// emitBeforeAgentStart's inline return shape).
+// emitBeforeAgentStart's inline return shape; v0.86.0 always returns the
+// normalized options).
 type BeforeAgentStartCombinedResult struct {
-	// Messages are the custom messages to inject (pi: messages?).
+	// Messages are the custom messages to inject (pi: messages).
 	Messages []CustomMessagePayload `json:"messages,omitempty"`
-	// SystemPrompt is the (possibly chained) replacement; nil = unchanged
-	// (pi: systemPrompt?).
-	SystemPrompt *string `json:"systemPrompt,omitempty"`
+	// SystemPromptOptions is the normalized, handler-mutated prompt options
+	// (pi: systemPromptOptions; the ForceSystemPrompt field carries a
+	// handler's systemPrompt override).
+	SystemPromptOptions NormalizedBuildSystemPromptOptions `json:"systemPromptOptions"`
 }
 
 // InputEvent fires when the user submits input (pi: InputEvent).

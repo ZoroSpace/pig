@@ -217,7 +217,7 @@ func TestAutoCompactionQueueTriggersThresholdCompactionForErrorMessagesUsingLast
 
 	// A successful assistant message with token usage just over the compaction
 	// threshold, computed from the model so catalog changes do not break it.
-	compactionSettings := settingsManager.GetCompactionSettings()
+	compactionSettings, _ := settingsManager.GetCompactionSettings(nil)
 	contextWindow := model.ContextWindow
 	if contextWindow == 0 {
 		contextWindow = 200000

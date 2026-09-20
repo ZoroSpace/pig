@@ -134,6 +134,9 @@ func CreateReadToolDefinition(cwd string, options *ReadToolOptions) *ToolDefinit
 		PromptSnippet:    ReadToolSystemPromptContribution.Snippet,
 		PromptGuidelines: append([]string{}, ReadToolSystemPromptContribution.Guidelines...),
 		Parameters:       json.RawMessage(readSchemaJSON),
+		// pi v0.86.0: strict-mode tool sampling is hardcoded (was
+		// getExperimentalToolSampling()).
+		ConstrainedSampling: types.ConstrainedSamplingConfig{Type: "json_schema", Strict: "prefer"},
 		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate agent.AgentToolUpdateCallback, toolCtx ToolExecuteContext) (agent.AgentToolResult, error) {
 			input, err := decodeToolParams[ReadToolInput](params)
 			if err != nil {

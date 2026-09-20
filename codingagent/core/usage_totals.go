@@ -81,6 +81,9 @@ func GetUsageCostBreakdown(entries []SessionEntry) []UsageCostBreakdownEntry {
 					usage = message.Usage
 				}
 			}
+		case *UsageEntry:
+			key = string(e.Provider) + "/" + e.Model
+			usage = e.Usage
 		case *BranchSummaryEntry:
 			key = "Tools/summaries"
 			usage = e.Usage

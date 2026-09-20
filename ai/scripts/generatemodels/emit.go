@@ -106,6 +106,33 @@ func writeModel(b *strings.Builder, model *ai.Model, indent string) {
 	if model.Compat != nil {
 		writeCompat(b, model.Compat, indent)
 	}
+	// PromptCache is applied post-construction (applyPromptCacheMetadata),
+	// mirroring pi's runtime assignment order; emitted deterministically in
+	// retention-tier order (pi: ANTHROPIC_PROMPT_CACHE { short, long }).
+	if len(model.PromptCache) > 0 {
+		b.WriteString(indent)
+		b.WriteString("PromptCache: ModelPromptCache{\n")
+		for _, tier := range []ai.CacheRetention{ai.CacheRetentionShort, ai.CacheRetentionLong} {
+			if ttl, ok := model.PromptCache[tier]; ok {
+				writeField(b, indent+"\t", tierConstName(tier), strconv.FormatInt(ttl, 10))
+			}
+		}
+		b.WriteString(indent)
+		b.WriteString("},\n")
+	}
+}
+
+// tierConstName maps a retention tier to its unqualified constant name
+// (generated file is package ai, same as the constants).
+func tierConstName(tier ai.CacheRetention) string {
+	switch tier {
+	case ai.CacheRetentionShort:
+		return "CacheRetentionShort"
+	case ai.CacheRetentionLong:
+		return "CacheRetentionLong"
+	default:
+		return "CacheRetention(" + strconv.Quote(string(tier)) + ")"
+	}
 }
 
 var thinkingLevelOrder = []ai.ModelThinkingLevel{

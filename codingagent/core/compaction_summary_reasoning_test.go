@@ -215,7 +215,12 @@ func TestHonorsCallerSuppliedRoutingSessionAndToolChoiceWithoutPromptCaching(t *
 	}
 }
 
-func TestPreservesTheStandaloneSplitTurnSummaryPrompt(t *testing.T) {
+// TestPreservesPreviousSummaryWithoutEmptyHistoryRequestForSplitTurn ports
+// "preserves the previous summary without an empty history request for a
+// split turn" (pi v0.86.0 rename of TestPreservesTheStandaloneSplitTurnSummary
+// Prompt): a split turn with no new messages to summarize skips the history
+// request entirely and seeds the merged summary with the previous summary.
+func TestPreservesPreviousSummaryWithoutEmptyHistoryRequestForSplitTurn(t *testing.T) {
 	mock := newSummaryMock(t, &mockSummaryResponse)
 
 	preparation := &CompactionPreparation{
@@ -224,15 +229,24 @@ func TestPreservesTheStandaloneSplitTurnSummaryPrompt(t *testing.T) {
 		TurnPrefixMessages:  summarizationMessages,
 		IsSplitTurn:         true,
 		TokensBefore:        100,
+		PreviousSummary:     "previous checkpoint",
 		FileOps:             CreateFileOps(),
 		Settings:            CompactionSettingsValues{Enabled: true, ReserveTokens: 2000, KeepRecentTokens: 20},
 	}
 
-	if _, err := Compact(t.Context(), preparation, createTestModel(false, 8192), "test-key", nil, "", "", nil, nil, nil, nil, ""); err != nil {
+	result, err := Compact(t.Context(), preparation, createTestModel(false, 8192), "test-key", nil, "", "", nil, nil, nil, nil, "")
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(mock.contexts) == 0 || len(mock.contexts[0].Messages) == 0 {
+	// Only the turn-prefix summary request is sent — no empty history request.
+	if len(mock.contexts) != 1 {
+		t.Fatalf("summary requests = %d, want 1", len(mock.contexts))
+	}
+	if !strings.Contains(result.Summary, "previous checkpoint") {
+		t.Fatalf("summary lost the previous summary: %s", result.Summary)
+	}
+	if len(mock.contexts[0].Messages) == 0 {
 		t.Fatal("expected captured request context")
 	}
 	userMsg, ok := mock.contexts[0].Messages[0].(types.UserMessage)

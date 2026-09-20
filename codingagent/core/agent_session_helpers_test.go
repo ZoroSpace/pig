@@ -188,6 +188,10 @@ func createAgentTestSession(t *testing.T, options *createAgentTestSessionOptions
 	if streamFn == nil {
 		streamFn = defaultStreamFn
 	}
+	seedSystemPrompt := "Test"
+	if cfg.OmitSeedSystemPrompt {
+		seedSystemPrompt = ""
+	}
 	agentOptions := agent.AgentOptions{
 		StreamFn: streamFn,
 		// pi's createHarness runs through the SDK assembly, which installs
@@ -197,7 +201,7 @@ func createAgentTestSession(t *testing.T, options *createAgentTestSessionOptions
 		// createAgentSession overrides it — mirror that here).
 
 		ConvertToLlm: harness.ConvertToLlm,
-		InitialState: &agent.AgentState{Model: model, SystemPrompt: "Test", ThinkingLevel: cfg.ThinkingLevel},
+		InitialState: &agent.AgentState{Model: model, SystemPrompt: seedSystemPrompt, ThinkingLevel: cfg.ThinkingLevel},
 	}
 	if cfg.GetAPIKey {
 		agentOptions.GetApiKey = func(types.ProviderID) string { return "test-key" }
@@ -249,6 +253,11 @@ type createAgentTestSessionOptions struct {
 	BaseToolsOverride map[string]agent.AgentTool
 	// Cwd overrides the session working directory.
 	Cwd string
+	// OmitSeedSystemPrompt leaves the initial state's system prompt empty
+	// so the transcript starts without a leading system message (pig-only:
+	// the default helper seeds "Test", matching pi harnesses that seed a
+	// prompt; the v0.86.0 system-prompt suites need the unseeded path).
+	OmitSeedSystemPrompt bool
 }
 
 // GetModelRuntime returns the runtime behind the registry (pi:

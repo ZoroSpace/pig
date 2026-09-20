@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/samber/lo"
 )
 
 func TestBuildSystemPrompt(t *testing.T) {
@@ -17,7 +19,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 				Cwd:           mustGetwdForPrompt(),
 			})
 
-			if !strings.Contains(prompt, "Available tools:\n(none)") {
+			if !strings.Contains(prompt, "<tools>\n(none)\n") {
 				t.Fatalf("prompt = %q", prompt)
 			}
 		})
@@ -31,6 +33,54 @@ func TestBuildSystemPrompt(t *testing.T) {
 			})
 
 			if !strings.Contains(prompt, "Show file paths clearly") {
+				t.Fatalf("prompt = %q", prompt)
+			}
+		})
+	})
+
+	t.Run("prompt structure", func(t *testing.T) {
+		t.Run("keeps the default and custom prompt prefixes exact", func(t *testing.T) {
+			defaultPrompt := BuildSystemPrompt(BuildSystemPromptOptions{Cwd: "/tmp", SelectedTools: []string{}, ContextFiles: []ContextFile{}, Skills: []Skill{}})
+			customPrompt := BuildSystemPrompt(BuildSystemPromptOptions{
+				CustomPrompt:  "You are Exact.",
+				Cwd:           "/tmp",
+				SelectedTools: []string{},
+				ContextFiles:  []ContextFile{},
+				Skills:        []Skill{},
+			})
+
+			if !strings.HasPrefix(defaultPrompt, "You are an expert coding assistant operating inside pi") {
+				t.Fatalf("default prompt = %q", defaultPrompt)
+			}
+			if !strings.HasPrefix(customPrompt, "You are Exact.\n\n<cwd>") {
+				t.Fatalf("custom prompt = %q", customPrompt)
+			}
+		})
+
+		t.Run("preserves an exact forced prompt without sections", func(t *testing.T) {
+			got := BuildSystemPrompt(BuildSystemPromptOptions{ForceSystemPrompt: lo.ToPtr("exact"), Cwd: "/tmp"})
+			if got != "exact" {
+				t.Fatalf("got %q", got)
+			}
+		})
+
+		t.Run("maps appended instructions and project context to stable sections", func(t *testing.T) {
+			prompt := BuildSystemPrompt(BuildSystemPromptOptions{
+				CustomPrompt:       "You are Exact.",
+				AppendSystemPrompt: "Additional instructions.",
+				ContextFiles:       []ContextFile{{Path: "/tmp/AGENTS.md", Content: "Project instructions."}},
+				SelectedTools:      []string{},
+				Skills:             []Skill{},
+				Cwd:                "/tmp",
+			})
+
+			if !strings.Contains(prompt, "<addendum>\nAdditional instructions.\n</addendum>") {
+				t.Fatalf("prompt = %q", prompt)
+			}
+			if !strings.Contains(prompt, "<project_context>\nProject-specific instructions and guidelines:\n\n<project_instructions path=\"/tmp/AGENTS.md\">") {
+				t.Fatalf("prompt = %q", prompt)
+			}
+			if !strings.Contains(prompt, "<cwd>\n/tmp\n</cwd>") {
 				t.Fatalf("prompt = %q", prompt)
 			}
 		})
@@ -186,7 +236,7 @@ func TestBuildSystemPromptSkillsToolFallback(t *testing.T) {
 			Skills:        []Skill{testSkill},
 			Cwd:           mustGetwdForPrompt(),
 		})
-		if !strings.Contains(prompt, "<available_skills>") {
+		if !strings.Contains(prompt, "<skills>") || !strings.Contains(prompt, "<available_skills>") {
 			t.Fatalf("prompt missing skills section: %q", prompt)
 		}
 		if !strings.Contains(prompt, "<name>test-skill</name>") {
@@ -205,7 +255,7 @@ func TestBuildSystemPromptSkillsToolFallback(t *testing.T) {
 			Skills:        []Skill{testSkill},
 			Cwd:           mustGetwdForPrompt(),
 		})
-		if !strings.Contains(prompt, "<available_skills>") {
+		if !strings.Contains(prompt, "<skills>") || !strings.Contains(prompt, "<available_skills>") {
 			t.Fatalf("prompt missing skills section: %q", prompt)
 		}
 		if !strings.Contains(prompt, "Use bash to load a skill's file") {

@@ -864,17 +864,20 @@ func (r *ExtensionRunner) EmitToolCall(ctx context.Context, event *ToolCallEvent
 }
 
 // EmitBeforeAgentStart runs before_agent_start handlers and merges their
-// results (pi: emitBeforeAgentStart).
+// results (pi: emitBeforeAgentStart; v0.86.0 always returns the normalized
+// options — a handler's systemPrompt override is recorded as
+// forceSystemPrompt, and later handlers observe earlier mutations).
 func (r *ExtensionRunner) EmitBeforeAgentStart(
 	ctx context.Context,
 	prompt string,
 	images []types.ImageContent,
-	systemPrompt string,
 	systemPromptOptions BuildSystemPromptOptions,
 ) (*BeforeAgentStartCombinedResult, error) {
-	currentSystemPrompt := systemPrompt
+	currentOptions := NormalizeBuildSystemPromptOptions(systemPromptOptions)
+	renderCurrentSystemPrompt := func() string {
+		return BuildSystemPrompt(currentOptions.buildSystemPromptOptions())
+	}
 	var messages []CustomMessagePayload
-	systemPromptModified := false
 	for _, ext := range r.extensions {
 		handlers := ext.Handlers["before_agent_start"]
 		if len(handlers) == 0 {
@@ -887,8 +890,8 @@ func (r *ExtensionRunner) EmitBeforeAgentStart(
 				Type:                "before_agent_start",
 				Prompt:              prompt,
 				Images:              images,
-				SystemPrompt:        currentSystemPrompt,
-				SystemPromptOptions: systemPromptOptions,
+				SystemPrompt:        renderCurrentSystemPrompt(),
+				SystemPromptOptions: currentOptions,
 			}
 			result, err := handler(ctx, handlerCtx, event)
 			if err != nil {
@@ -903,19 +906,14 @@ func (r *ExtensionRunner) EmitBeforeAgentStart(
 				messages = append(messages, *beforeResult.Message)
 			}
 			if beforeResult.SystemPrompt != nil {
-				currentSystemPrompt = *beforeResult.SystemPrompt
-				systemPromptModified = true
+				currentOptions.ForceSystemPrompt = *beforeResult.SystemPrompt
 			}
 		}
 	}
-	if len(messages) > 0 || systemPromptModified {
-		combined := &BeforeAgentStartCombinedResult{Messages: messages}
-		if systemPromptModified {
-			combined.SystemPrompt = &currentSystemPrompt
-		}
-		return combined, nil
-	}
-	return nil, nil
+	return &BeforeAgentStartCombinedResult{
+		Messages:            messages,
+		SystemPromptOptions: currentOptions,
+	}, nil
 }
 
 // EmitResourcesDiscover runs resources_discover handlers (pi:
@@ -1016,6 +1014,33 @@ func EmitSessionShutdownEvent(ctx context.Context, extensionRunner *ExtensionRun
 // EmitContext applies extension context transforms (pi: emitContext). pi
 // structuredClones the messages first so handlers cannot mutate the caller's
 // slice; pig clones via JSON round-trip (reducer precedent).
+// EmitCacheWarmingDecision returns the event's own action unless a handler
+// overrides it; the last override wins (pi: emitCacheWarmingDecision;
+// v0.86.0).
+func (r *ExtensionRunner) EmitCacheWarmingDecision(ctx context.Context, event *CacheWarmingDecisionEvent) CacheWarmingAction {
+	action := event.Action
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["cache_warming_decision"]
+		if len(handlers) == 0 {
+			continue
+		}
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			result, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{ExtensionPath: ext.Path, Event: event.Type, Error: err.Error()})
+				continue
+			}
+			if decisionResult, ok := result.(*CacheWarmingDecisionEventResult); ok && decisionResult != nil && decisionResult.Action != "" {
+				action = decisionResult.Action
+			}
+		}
+	}
+	return action
+}
+
+// EmitContext runs context handlers (pi: emitContext).
 func (r *ExtensionRunner) EmitContext(ctx context.Context, messages []agent.AgentMessage) []agent.AgentMessage {
 	currentMessages := cloneAgentMessages(messages)
 

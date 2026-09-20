@@ -34,8 +34,8 @@ func newTestSelector(t *testing.T, sessions []core.SessionInfo, options *Session
 	tui.SetKeybindings(core.NewKeybindingsManager(nil, "").KeybindingsManager)
 	mutator := &testMutator{}
 	selector := NewSessionSelectorComponent(
-		func(func(loaded, total int)) []core.SessionInfo { return sessions },
-		func(func(loaded, total int)) []core.SessionInfo { return nil },
+		func(core.SessionListProgress) []core.SessionInfo { return sessions },
+		func(core.SessionListProgress) []core.SessionInfo { return nil },
 		func(string) {}, func() {}, func() {}, func() {},
 		options,
 		"",

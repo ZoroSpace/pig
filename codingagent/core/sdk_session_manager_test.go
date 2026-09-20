@@ -134,7 +134,7 @@ func TestCreateAgentSessionSessionManagerDefaults(t *testing.T) {
 		if result.Session.SessionManager != sessionManager {
 			t.Fatal("expected the explicit session manager to be used")
 		}
-		if got := result.Session.SystemPrompt(); !strings.Contains(got, "Current working directory: "+sessionCwd) {
+		if got := result.Session.SystemPrompt(); !strings.Contains(got, "<cwd>\n"+sessionCwd+"\n</cwd>") {
 			t.Fatalf("system prompt missing cwd line:\n%s", got)
 		}
 

@@ -1,28 +1,39 @@
 // clipboard.go (pi: src/utils/clipboard.ts) — system clipboard text
-// read/write with OSC 52 fallback for remote sessions.
+// read/write with OSC 52 fallback for remote sessions (rewritten in pi
+// v0.86.0 around runClipboardCommand).
 //
 // Segment deviations:
-//   - pi's clipboard-native.ts is a Node native addon (clipboard-rs). pig has
-//     no native addon; every platform goes through the external tools (and
-//     OSC 52). Reads therefore gain platform-tool fallbacks that pi's native
-//     addon covered (pbpaste / powershell Get-Clipboard / xclip / xsel).
-//   - The Linux native-addon skip (clipboard-rs is X11-only, does not retain
-//     selection ownership) is moot for the same reason; the external-tool
-//     chain below is the only path, matching pi's effective Linux behavior.
+//   - pi's native path (getNativeClipboard()) has no Go equivalent:
+//     pig's GetNativeClipboard() is nil (S6-2). Every platform goes through
+//     the external tools (and OSC 52); reads gain platform-tool fallbacks
+//     that pi's native addon covered (pbpaste / powershell Get-Clipboard /
+//     xclip / xsel), and writes skip the non-Linux native setText step.
+//     Declared; see docs/feat/MAC-CLIPBOARD-IMAGE.md for the image-path
+//     equivalent.
+//   - pi returns `string | null`; pig returns "" for null (existing
+//     signature).
 package utils
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
-	"strings"
-	"time"
 )
 
 const maxOsc52EncodedLength = 100_000
+
+// clipboardCommandTimeoutMs is the shared 5s budget (pi: timeoutMs: 5000).
+const clipboardCommandTimeoutMs = 5000
+
+// clipboardPlatformFn indirections the platform lookup (pig-only test seam;
+// pi: node:os platform() mock).
+var clipboardPlatformFn = func() string { return runtime.GOOS }
+
+// clipboardRunCommandOptionsFn indirections runClipboardCommand for the text
+// path (pig-only test seam; pi: vi.mock of ./clipboard-command.ts). The
+// image path keeps the legacy clipboardRunCommandFn seam.
+var clipboardRunCommandOptionsFn = runClipboardCommand
 
 // osc52Writer is the stdout seam for emitOsc52 (pig: tests).
 var osc52Writer = func(b []byte) (int, error) { return os.Stdout.Write(b) }
@@ -47,49 +58,9 @@ func emitOsc52(text string) bool {
 	return true
 }
 
-// clipboardRunInput runs a command with stdin input and a timeout (pi:
-// execSync with { input, timeout, stdio: ["pipe","ignore","ignore"] }).
-func clipboardRunInput(command string, args []string, input string, timeout time.Duration) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, command, args...)
-	cmd.Stdin = strings.NewReader(input)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Run() == nil
-}
-
-// copyToX11Clipboard tries xclip then xsel (pi: copyToX11Clipboard).
-func copyToX11Clipboard(input string, timeout time.Duration) bool {
-	if clipboardRunInput("xclip", []string{"-selection", "clipboard"}, input, timeout) {
-		return true
-	}
-	return clipboardRunInput("xsel", []string{"--clipboard", "--input"}, input, timeout)
-}
-
-// readClipboardCommandText runs a read command with pi's READ_CLIPBOARD
-// options (5s timeout, 50MB cap is not enforceable portably — declared).
-func readClipboardCommandText(command string, args ...string) (string, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, command, args...).Output()
-	if err != nil {
-		return "", false
-	}
-	return string(out), true
-}
-
-// readWaylandClipboardText reads via wl-paste (pi: readWaylandClipboardText).
-func readWaylandClipboardText() (string, bool) {
-	text, ok := readClipboardCommandText("wl-paste", "--no-newline", "--type", "text")
-	if !ok {
-		return "", false
-	}
-	return text, true
-}
-
-// isWaylandSessionEnv is clipboard-image's isWaylandSession (same-package
-// reuse; see clipboard_image.go).
+// isWaylandSessionEnv reports a Wayland session (pi: isWaylandSession,
+// clipboard-image.ts). isWaylandSessionEnv lives here; see
+// clipboard_image.go for the exported alias.
 func isWaylandSessionEnv(env func(string) string) bool {
 	if env == nil {
 		env = os.Getenv
@@ -97,105 +68,115 @@ func isWaylandSessionEnv(env func(string) string) bool {
 	return env("WAYLAND_DISPLAY") != "" || env("XDG_SESSION_TYPE") == "wayland"
 }
 
+// IsWaylandSession reports a Wayland session (pi: isWaylandSession,
+// clipboard-image.ts; kept for callers).
+func IsWaylandSession(env func(string) string) bool {
+	return isWaylandSessionEnv(env)
+}
+
 // ReadClipboardText reads plain text from the system clipboard (pi:
-// readClipboardText). "" = nothing available.
+// readClipboardText; v0.86.0 chains the platform tools via
+// runClipboardCommand). "" = nothing available (pi null).
 func ReadClipboardText() string {
-	env := os.Getenv
-	if runtime.GOOS == "linux" && isWaylandSessionEnv(env) && env("WAYLAND_DISPLAY") != "" {
-		if text, ok := readWaylandClipboardText(); ok {
-			return text
+	if clipboardPlatformFn() == "linux" {
+		type clipboardCommand struct {
+			command string
+			args    []string
+		}
+		var commands []clipboardCommand
+		if os.Getenv("TERMUX_VERSION") != "" {
+			commands = append(commands, clipboardCommand{command: "termux-clipboard-get"})
+		}
+		if os.Getenv("WAYLAND_DISPLAY") != "" {
+			commands = append(commands, clipboardCommand{command: "wl-paste", args: []string{"--no-newline", "--type", "text"}})
+		}
+		if os.Getenv("DISPLAY") != "" {
+			commands = append(commands,
+				clipboardCommand{command: "xclip", args: []string{"-selection", "clipboard", "-out"}},
+				clipboardCommand{command: "xsel", args: []string{"--clipboard", "--output"}},
+			)
+		}
+		for _, command := range commands {
+			if bytes, ok := clipboardRunCommandOptionsFn(command.command, command.args,
+				&clipboardCommandOptions{TimeoutMs: clipboardCommandTimeoutMs}); ok {
+				text := string(bytes)
+				if text == "" {
+					return "" // pi: bytes.toString("utf8") || null
+				}
+				return text
+			}
 		}
 	}
 
-	// pi's native-addon half; pig uses platform tools (declared deviation).
-	switch runtime.GOOS {
-	case "darwin":
-		if text, ok := readClipboardCommandText("pbpaste"); ok {
-			return strings.TrimSuffix(text, "\n")
-		}
-	case "windows":
-		if text, ok := readClipboardCommandText("powershell.exe", "-NoProfile", "-Command",
-			"Get-Clipboard -Raw"); ok {
-			return strings.TrimSuffix(text, "\r\n")
-		}
-	default:
-		// Linux: prefer wayland (above), then X11 tools.
-		if text, ok := readClipboardCommandText("xclip", "-selection", "clipboard", "-o"); ok {
-			return text
-		}
-		if text, ok := readClipboardCommandText("xsel", "--clipboard", "--output"); ok {
-			return text
-		}
-	}
+	// pi's native getText() half; pig has no native clipboard (file header):
+	// nil → null → "". A native failure is swallowed like pi's try/catch.
 	return ""
 }
 
 // CopyToClipboard writes text to the system clipboard, preferring direct
-// clipboard writes and falling back to OSC 52 (pi: copyToClipboard). See the
-// file header for the native-addon deviation.
+// clipboard writes and emitting OSC 52 for remote sessions (pi:
+// copyToClipboard; v0.86.0 — "Direct writes precede OSC 52 so the terminal
+// cannot race the native writer"). See the file header for the native-addon
+// deviation.
 func CopyToClipboard(text string) error {
+	p := clipboardPlatformFn()
 	copied := false
 
-	p := runtime.GOOS
+	// pi first tries the native clipboard on non-Linux platforms; pig has no
+	// native clipboard, so the tool chain runs on every platform.
 
-	// Prefer direct clipboard writes. Emitting OSC 52 first can make terminals
-	// write the same native clipboard concurrently with the addon, and very large
-	// OSC 52 payloads can desynchronize terminal rendering.
-	//
-	// On Linux, pi skips the native addon (clipboard-rs is X11-only and does
-	// not retain selection ownership); pig's tool chain below is the same
-	// effective path (see file header).
-	if p != "linux" {
+	if !copied {
+		type clipboardWriteCommand struct {
+			command string
+			args    []string
+		}
+		var commands []clipboardWriteCommand
 		switch p {
 		case "darwin":
-			copied = clipboardRunInput("pbcopy", nil, text, 5*time.Second)
+			commands = append(commands, clipboardWriteCommand{command: "pbcopy"})
 		case "windows":
-			copied = clipboardRunInput("clip", nil, text, 5*time.Second)
+			commands = append(commands, clipboardWriteCommand{command: "clip"})
+		default:
+			if os.Getenv("TERMUX_VERSION") != "" {
+				commands = append(commands, clipboardWriteCommand{command: "termux-clipboard-set"})
+			}
+			if os.Getenv("WAYLAND_DISPLAY") != "" {
+				commands = append(commands, clipboardWriteCommand{command: "wl-copy"})
+			}
+			if os.Getenv("DISPLAY") != "" {
+				commands = append(commands,
+					clipboardWriteCommand{command: "xclip", args: []string{"-selection", "clipboard"}},
+					clipboardWriteCommand{command: "xsel", args: []string{"--clipboard", "--input"}},
+				)
+			}
 		}
-	}
-
-	remote := isRemoteSession(nil)
-	if copied && !remote {
-		return nil
-	}
-
-	if !copied {
-		// Linux. Try Termux, Wayland, or X11 clipboard tools.
-		if os.Getenv("TERMUX_VERSION") != "" {
-			if clipboardRunInput("termux-clipboard-set", nil, text, 5*time.Second) {
+		for _, command := range commands {
+			if _, ok := clipboardRunCommandOptionsFn(command.command, command.args,
+				&clipboardCommandOptions{Input: text, HasInput: true, TimeoutMs: clipboardCommandTimeoutMs}); ok {
 				copied = true
-			}
-		}
-
-		if !copied {
-			hasWaylandDisplay := os.Getenv("WAYLAND_DISPLAY") != ""
-			hasX11Display := os.Getenv("DISPLAY") != ""
-			isWayland := isWaylandSessionEnv(nil)
-			if isWayland && hasWaylandDisplay {
-				if _, err := exec.LookPath("wl-copy"); err == nil {
-					// wl-copy daemonizes; a failed run falls through to the
-					// xclip/OSC 52 fallbacks.
-					if clipboardRunInput("wl-copy", nil, text, 5*time.Second) {
-						copied = true
-					} else if hasX11Display {
-						copied = copyToX11Clipboard(text, 5*time.Second)
-					}
-				} else if hasX11Display {
-					copied = copyToX11Clipboard(text, 5*time.Second)
-				}
-			} else if hasX11Display {
-				copied = copyToX11Clipboard(text, 5*time.Second)
+				break
 			}
 		}
 	}
 
-	if remote || !copied {
-		osc52Copied := emitOsc52(text)
-		copied = copied || osc52Copied
+	if isRemoteSession(nil) {
+		copied = emitOsc52(text) || copied
 	}
 
 	if !copied {
-		return fmt.Errorf("Failed to copy to clipboard")
+		if p == "linux" {
+			if os.Getenv("TERMUX_VERSION") != "" {
+				return fmt.Errorf("Clipboard unavailable: install the Termux:API app and `termux-api` package")
+			}
+			if os.Getenv("WAYLAND_DISPLAY") != "" {
+				return fmt.Errorf("Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access")
+			}
+			if os.Getenv("DISPLAY") != "" {
+				return fmt.Errorf("Clipboard unavailable: install `xclip` or `xsel`, or check X11 access")
+			}
+			return fmt.Errorf("Clipboard unavailable: no Wayland or X11 display detected")
+		}
+		return fmt.Errorf("Clipboard unavailable")
 	}
 	return nil
 }

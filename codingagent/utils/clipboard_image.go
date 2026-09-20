@@ -1,29 +1,36 @@
-// clipboard_image.go (pi: src/utils/clipboard-image.ts) — read an image from
-// the system clipboard (Wayland / X11 / WSL PowerShell paths).
+// clipboard_image.go (pi: src/utils/clipboard-image.ts) — read an image
+// from the system clipboard (Wayland / X11 / WSL PowerShell paths).
+//
+// pi v0.86.0 reworked the chain around a three-state protocol: a backend
+// that answers but has no image returns null (pi) and stops the chain, while
+// a backend that cannot answer returns undefined (pi) and falls through to
+// the next backend ("An empty Wayland clipboard must not fall through to
+// stale X11 clipboard contents"). pig models the two nils with
+// clipboardImageResult.
 //
 // Segment deviations:
-//   - pi converts unsupported formats (e.g. BMP from WSLg) to PNG via photon
-//     (WASM). The photon pipeline lands with Phase 8; convertToPng returns
-//     not-ok until then (declared).
-//   - pi's native-addon half (clipboard.hasImage/getImageBinary) has no Go
-//     equivalent. On darwin pig substitutes external tools (pig-only,
-//     docs/feat/MAC-CLIPBOARD-IMAGE.md): osascript ships with every macOS and
-//     reads the PNG pasteboard flavor; optional pngpaste (user-installed)
-//     covers TIFF-only clipboards. Windows still reports nothing (declared).
+//   - pi converts unsupported formats (e.g. Windows DIB data wrapped as BMP)
+//     to PNG via photon (WASM). The photon pipeline lands with Phase 8;
+//     convertToPng returns not-ok until then (declared).
+//   - pi's native path (getNativeClipboard().getImage()) has no Go
+//     equivalent: pig's GetNativeClipboard() is nil (S6-2). On darwin pig
+//     substitutes external tools (pig-only, docs/feat/MAC-CLIPBOARD-IMAGE.md):
+//     osascript ships with every macOS and reads the PNG pasteboard flavor;
+//     optional pngpaste (user-installed) covers TIFF-only clipboards. pi's
+//     detectSupportedImageMimeType probe is unnecessary on that path — both
+//     tools yield image/png verbatim (declared). Windows still reports
+//     nothing (declared).
 package utils
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
-	"time"
 )
 
 // ClipboardImage is an image read from the clipboard (pi: ClipboardImage).
@@ -43,11 +50,6 @@ const (
 	// screenshots can take seconds; the 3s read default is too tight.
 	clipboardDefaultOsascriptTimeoutMs = 10000
 )
-
-// IsWaylandSession reports a Wayland session (pi: isWaylandSession).
-func IsWaylandSession(env func(string) string) bool {
-	return isWaylandSessionEnv(env)
-}
 
 // clipboardBaseMimeType strips parameters and lowercases (pi: baseMimeType).
 func clipboardBaseMimeType(mimeType string) string {
@@ -115,31 +117,54 @@ func isSupportedImageMimeType(mimeType string) bool {
 	return false
 }
 
-// clipboardRunCommand spawns a command with a timeout (pi: runCommand);
-// ok=false on any failure (pi returns empty stdout + ok=false).
+// clipboardRunCommand spawns a command with a timeout — the read-path
+// wrapper over runClipboardCommand (pi: runClipboardCommand with no input;
+// ok=false = pi undefined). Kept with the legacy signature for the
+// clipboardRunCommandFn test seam.
 func clipboardRunCommand(command string, args []string, timeoutMs int64) ([]byte, bool) {
-	if timeoutMs == 0 {
-		timeoutMs = clipboardDefaultReadTimeoutMs
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, command, args...).Output()
-	if err != nil {
-		return nil, false
-	}
-	return out, true
+	return runClipboardCommand(command, args, &clipboardCommandOptions{TimeoutMs: timeoutMs})
 }
 
 // clipboardRunCommandFn indirections clipboardRunCommand (pig-only test seam:
 // tests stub it so the darwin paths never spawn real clipboard processes).
 var clipboardRunCommandFn = clipboardRunCommand
 
+// clipboardImageResult is pi's `ClipboardImage | null | undefined` (pig:
+// three-state protocol).
+type clipboardImageResult struct {
+	// image is non-nil when an image was found (pi ClipboardImage).
+	image *ClipboardImage
+	// none=true means the backend answered and has no image (pi null);
+	// none=false with a nil image means the backend is unavailable (pi
+	// undefined) and the chain should fall through.
+	none bool
+}
+
+// clipboardImageUnavailable is pi's undefined.
+var clipboardImageUnavailable = clipboardImageResult{}
+
+// ReadClipboardImage's chain state (pi: the undefined | null | image local).
+const (
+	clipboardStateUndefined = iota
+	clipboardStateNull
+	clipboardStateImage
+)
+
+// clipboardImageNone returns pi's null.
+func clipboardImageNone() clipboardImageResult { return clipboardImageResult{none: true} }
+
+// clipboardImageFound wraps a discovered image (pi: the image object).
+func clipboardImageFound(image *ClipboardImage) clipboardImageResult {
+	return clipboardImageResult{image: image}
+}
+
 // readClipboardImageViaWlPaste reads via wl-paste type negotiation (pi:
-// readClipboardImageViaWlPaste).
-func readClipboardImageViaWlPaste() *ClipboardImage {
-	list, ok := clipboardRunCommand("wl-paste", []string{"--list-types"}, clipboardDefaultListTimeoutMs)
+// readClipboardImageViaWlPaste). Unavailable → undefined (fall through);
+// answered-but-no-image → null (stop the chain).
+func readClipboardImageViaWlPaste() clipboardImageResult {
+	list, ok := clipboardRunCommandFn("wl-paste", []string{"--list-types"}, clipboardDefaultListTimeoutMs)
 	if !ok {
-		return nil
+		return clipboardImageUnavailable
 	}
 
 	var types []string
@@ -152,15 +177,18 @@ func readClipboardImageViaWlPaste() *ClipboardImage {
 
 	selectedType := selectPreferredImageMimeType(types)
 	if selectedType == "" {
-		return nil
+		return clipboardImageNone()
 	}
 
-	data, ok := clipboardRunCommand("wl-paste", []string{"--type", selectedType, "--no-newline"}, 0)
-	if !ok || len(data) == 0 {
-		return nil
+	data, ok := clipboardRunCommandFn("wl-paste", []string{"--type", selectedType, "--no-newline"}, 0)
+	if !ok {
+		return clipboardImageUnavailable
+	}
+	if len(data) == 0 {
+		return clipboardImageNone()
 	}
 
-	return &ClipboardImage{Bytes: data, MimeType: clipboardBaseMimeType(selectedType)}
+	return clipboardImageFound(&ClipboardImage{Bytes: data, MimeType: clipboardBaseMimeType(selectedType)})
 }
 
 // clipboardIsWSL detects WSL (pi: isWSL).
@@ -179,21 +207,22 @@ func clipboardIsWSL(env func(string) string) bool {
 }
 
 // readClipboardImageViaPowerShell reads the Windows clipboard from WSL (pi:
-// readClipboardImageViaPowerShell).
-func readClipboardImageViaPowerShell() *ClipboardImage {
+// readClipboardImageViaPowerShell). Any failure is null (pi: the WSL path
+// never reports "unavailable" — it terminates the chain).
+func readClipboardImageViaPowerShell() clipboardImageResult {
 	uuid := make([]byte, 16)
 	_, _ = rand.Read(uuid)
 	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("pi-wsl-clip-%x-%x-%x-%x.png",
 		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10]))
 
-	winPath, ok := clipboardRunCommand("wslpath", []string{"-w", tmpFile}, clipboardDefaultListTimeoutMs)
+	winPath, ok := clipboardRunCommandFn("wslpath", []string{"-w", tmpFile}, clipboardDefaultListTimeoutMs)
 	if !ok {
-		return nil
+		return clipboardImageNone()
 	}
 
 	winPathStr := strings.TrimSpace(string(winPath))
 	if winPathStr == "" {
-		return nil
+		return clipboardImageNone()
 	}
 
 	psQuotedWinPath := strings.ReplaceAll(winPathStr, "'", "''")
@@ -205,30 +234,31 @@ func readClipboardImageViaPowerShell() *ClipboardImage {
 		"if ($img) { $img.Save($path, [System.Drawing.Imaging.ImageFormat]::Png); Write-Output 'ok' } else { Write-Output 'empty' }",
 	}, "; ")
 
-	result, ok := clipboardRunCommand("powershell.exe", []string{"-NoProfile", "-Command", psScript},
+	result, ok := clipboardRunCommandFn("powershell.exe", []string{"-NoProfile", "-Command", psScript},
 		clipboardDefaultPowershellTimeoutMs)
 	if !ok {
-		return nil
+		return clipboardImageNone()
 	}
 
 	output := strings.TrimSpace(string(result))
 	if output != "ok" {
-		return nil
+		return clipboardImageNone()
 	}
 
 	bytes, err := os.ReadFile(tmpFile)
 	if err != nil || len(bytes) == 0 {
 		_ = os.Remove(tmpFile)
-		return nil
+		return clipboardImageNone()
 	}
 	_ = os.Remove(tmpFile)
-	return &ClipboardImage{Bytes: bytes, MimeType: "image/png"}
+	return clipboardImageFound(&ClipboardImage{Bytes: bytes, MimeType: "image/png"})
 }
 
 // readClipboardImageViaXclip enumerates TARGETS and reads the best type (pi:
-// readClipboardImageViaXclip).
-func readClipboardImageViaXclip() *ClipboardImage {
-	targets, ok := clipboardRunCommand("xclip",
+// readClipboardImageViaXclip). Unavailable → undefined (fall through);
+// answered-but-no-image-type → null (stop the chain).
+func readClipboardImageViaXclip() clipboardImageResult {
+	targets, ok := clipboardRunCommandFn("xclip",
 		[]string{"-selection", "clipboard", "-t", "TARGETS", "-o"}, clipboardDefaultListTimeoutMs)
 
 	var candidateTypes []string
@@ -241,38 +271,49 @@ func readClipboardImageViaXclip() *ClipboardImage {
 		}
 	}
 
+	preferred := selectPreferredImageMimeType(candidateTypes)
+	if ok && preferred == "" {
+		return clipboardImageNone()
+	}
+	// pi: tryTypes is a Set — the preferred type dedupes against the
+	// supported list.
 	var tryTypes []string
-	if preferred := selectPreferredImageMimeType(candidateTypes); preferred != "" {
-		tryTypes = append([]string{preferred}, supportedImageMimeTypes...)
+	if preferred != "" {
+		tryTypes = append(tryTypes, preferred)
+		for _, t := range supportedImageMimeTypes {
+			if t != preferred {
+				tryTypes = append(tryTypes, t)
+			}
+		}
 	} else {
-		tryTypes = append([]string{}, supportedImageMimeTypes...)
+		tryTypes = append(tryTypes, supportedImageMimeTypes...)
 	}
 
 	for _, mimeType := range tryTypes {
-		data, ok := clipboardRunCommand("xclip", []string{"-selection", "clipboard", "-t", mimeType, "-o"}, 0)
+		data, ok := clipboardRunCommandFn("xclip", []string{"-selection", "clipboard", "-t", mimeType, "-o"}, 0)
 		if ok && len(data) > 0 {
-			return &ClipboardImage{Bytes: data, MimeType: clipboardBaseMimeType(mimeType)}
+			return clipboardImageFound(&ClipboardImage{Bytes: data, MimeType: clipboardBaseMimeType(mimeType)})
 		}
 	}
 
-	return nil
+	return clipboardImageUnavailable
 }
 
 // readClipboardImageViaOsascript reads the PNG pasteboard flavor via osascript
 // (pig-only; darwin transport for pi's native-addon getImageBinary, which
 // returns image/png as well). ok=false when the clipboard carries no PNG
 // flavor (osascript exits non-zero) or the output does not decode.
-func readClipboardImageViaOsascript() *ClipboardImage {
+func readClipboardImageViaOsascript() clipboardImageResult {
 	out, ok := clipboardRunCommandFn("osascript",
 		[]string{"-e", `the clipboard as «class PNGf»`}, clipboardDefaultOsascriptTimeoutMs)
 	if !ok {
-		return nil
+		return clipboardImageNone()
 	}
 	bytes, ok := decodeOsascriptPngData(out)
 	if !ok || len(bytes) == 0 {
-		return nil
+		return clipboardImageNone()
 	}
-	return &ClipboardImage{Bytes: bytes, MimeType: "image/png"}
+	return clipboardImageFound(&ClipboardImage{Bytes: bytes, MimeType: "image/png"})
 }
 
 // decodeOsascriptPngData decodes osascript's binary-literal output
@@ -302,12 +343,12 @@ func decodeOsascriptPngData(output []byte) ([]byte, bool) {
 // (pig-only fallback for readClipboardImageViaOsascript; it also converts
 // TIFF-only clipboards, which the PNGf flavor path cannot see). Absent or
 // failing tool → nil.
-func readClipboardImageViaPngpaste() *ClipboardImage {
+func readClipboardImageViaPngpaste() clipboardImageResult {
 	data, ok := clipboardRunCommandFn("pngpaste", []string{"-"}, 0)
 	if !ok || len(data) == 0 {
-		return nil
+		return clipboardImageNone()
 	}
-	return &ClipboardImage{Bytes: data, MimeType: "image/png"}
+	return clipboardImageFound(&ClipboardImage{Bytes: data, MimeType: "image/png"})
 }
 
 // ReadClipboardImageOptions parameterize ReadClipboardImage (pi: the options
@@ -320,7 +361,7 @@ type ReadClipboardImageOptions struct {
 }
 
 // ReadClipboardImage reads an image from the system clipboard (pi:
-// readClipboardImage); nil = nothing available.
+// readClipboardImage; v0.86.0 three-state chain); nil = nothing available.
 func ReadClipboardImage(options *ReadClipboardImageOptions) *ClipboardImage {
 	env := os.Getenv
 	platform := runtime.GOOS
@@ -337,44 +378,64 @@ func ReadClipboardImage(options *ReadClipboardImageOptions) *ClipboardImage {
 		return nil
 	}
 
+	// pi's `let image: ClipboardImage | null | undefined` becomes a state
+	// variable: undefined = chain may fall through, null = chain stops.
+	state := clipboardStateUndefined
 	var image *ClipboardImage
+
+	assign := func(result clipboardImageResult) {
+		switch {
+		case result.image != nil:
+			state = clipboardStateImage
+			image = result.image
+		case result.none:
+			state = clipboardStateNull
+		default:
+			state = clipboardStateUndefined
+		}
+	}
+
+	// native is pig's stand-in for pi's getNativeClipboard() path: the
+	// darwin external-tool chain (declared; see file header). Windows
+	// reports nothing.
+	native := func() clipboardImageResult {
+		if platform != "darwin" {
+			return clipboardImageUnavailable
+		}
+		if result := readClipboardImageViaOsascript(); result.image != nil {
+			return result
+		}
+		return readClipboardImageViaPngpaste()
+	}
 
 	if platform == "linux" {
 		wsl := clipboardIsWSL(env)
-		wayland := isWaylandSessionEnv(env)
-
-		if wayland || wsl {
-			image = readClipboardImageViaWlPaste()
-			if image == nil {
-				image = readClipboardImageViaXclip()
+		if isWaylandSessionEnv(env) || wsl {
+			assign(readClipboardImageViaWlPaste())
+		}
+		if state == clipboardStateUndefined {
+			assign(readClipboardImageViaXclip())
+		}
+		// pi: if (!image && wsl) image = (await powershell()) ?? image — a
+		// null result preserves the current null/undefined state.
+		if state != clipboardStateImage && wsl {
+			if result := readClipboardImageViaPowerShell(); result.image != nil {
+				assign(result)
 			}
 		}
-
-		if image == nil && wsl {
-			image = readClipboardImageViaPowerShell()
+		if state == clipboardStateUndefined {
+			assign(native())
 		}
-
-		// pi's native-addon half has no equivalent (file header); the
-		// non-wayland X11 fallback still runs.
-		if image == nil && !wayland {
-			image = readClipboardImageViaXclip()
-		}
-	} else if platform == "darwin" {
-		// pig-only: osascript first (always present), then pngpaste when
-		// installed (TIFF-only clipboards; see file header).
-		image = readClipboardImageViaOsascript()
-		if image == nil {
-			image = readClipboardImageViaPngpaste()
-		}
+	} else {
+		assign(native())
 	}
-	// Windows: pi's native-addon half only — no Go equivalent (declared).
 
 	if image == nil {
 		return nil
 	}
 
-	// Convert unsupported formats (e.g., BMP from WSLg) to PNG. The photon
-	// pipeline lands with Phase 8 (declared).
+	// Convert unsupported formats (e.g., Windows DIB data wrapped as BMP) to
+	// PNG. The photon pipeline lands with Phase 8 (declared).
 	if !isSupportedImageMimeType(image.MimeType) {
 		return nil
 	}

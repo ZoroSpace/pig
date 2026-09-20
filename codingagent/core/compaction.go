@@ -121,8 +121,13 @@ func getMessageFromEntryForCompaction(entry SessionEntry) agent.AgentMessage {
 	if _, ok := entry.(*CompactionEntry); ok {
 		return nil
 	}
+	// pi v0.86.0: system messages are prompt state, not conversation; the
+	// compaction entry carries their replay.
 	messages := SessionEntryToContextMessages(entry)
 	if len(messages) > 0 {
+		if messages[0].MessageRole() == types.RoleSystem {
+			return nil
+		}
 		return messages[0]
 	}
 	return nil
@@ -370,12 +375,21 @@ func FindCutPoint(entries []SessionEntry, startIndex int, endIndex int, keepRece
 
 		// Check if we've exceeded the budget
 		if accumulatedTokens >= keepRecentTokens {
-			// Find the closest valid cut point at or after this entry
+			// pi v0.86.0 (#9740): prefer the closest valid cut point at or
+			// after this entry. If trailing tool results exceed the budget by
+			// themselves, keep their preceding assistant tool call instead of
+			// falling back to the first message.
+			cutIndex = cutPoints[0]
+			found := false
 			for _, c := range cutPoints {
 				if c >= i {
 					cutIndex = c
+					found = true
 					break
 				}
+			}
+			if !found {
+				cutIndex = cutPoints[len(cutPoints)-1]
 			}
 			break
 		}
@@ -909,7 +923,13 @@ func Compact(
 	var summaryUsage *types.Usage
 
 	if preparation.IsSplitTurn && len(preparation.TurnPrefixMessages) > 0 {
-		historyText := "No prior history."
+		// pi v0.86.0: the prior compaction's summary seeds the history half,
+		// so the merged summary carries the earlier summary forward even when
+		// there are no new messages to summarize.
+		historyText := preparation.PreviousSummary
+		if historyText == "" {
+			historyText = "No prior history."
+		}
 		var historyUsage *types.Usage
 		if len(preparation.MessagesToSummarize) > 0 {
 			historyResult, err := GenerateSummaryWithUsage(

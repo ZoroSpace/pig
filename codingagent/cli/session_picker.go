@@ -12,7 +12,7 @@ import (
 )
 
 // SessionsLoader loads the session list (pi: SessionsLoader).
-type SessionsLoader = func(onProgress func(loaded, total int)) []core.SessionInfo
+type SessionsLoader = func(onProgress core.SessionListProgress) []core.SessionInfo
 
 // SelectSession shows the TUI session selector and returns the selected
 // session path (ok=false if cancelled). The onExit callback exits the process

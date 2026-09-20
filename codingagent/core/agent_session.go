@@ -269,6 +269,11 @@ const (
 	AgentSessionEventBashExecutionUpdate            agent.AgentEventType = "bash_execution_update"
 )
 
+// errCompactionCancelled is the sentinel thrown when an extension cancels
+// compaction (pi: new Error("Compaction cancelled")); the message is part
+// of the observable behavior.
+var errCompactionCancelled = errors.New("Compaction cancelled")
+
 // AgentSessionEventListener listens to agent session events (pi:
 // AgentSessionEventListener). pig wraps listeners in listenerEntry so
 // unsubscribe can identify the exact registration (Go funcs are not
@@ -318,6 +323,10 @@ type AgentSessionConfig struct {
 	// ModelRuntime is the canonical model/auth runtime used by
 	// coding-agent internals.
 	ModelRuntime *ModelRuntime
+	// CacheWarmer keeps the prompt cache entry of the last session request
+	// warm (pi: cacheWarmer; v0.86.0). pig takes the surface the session
+	// consumes (pi: Pick<CacheWarmer, ...>).
+	CacheWarmer CacheWarmerSurface
 	// InitialActiveToolNames are the initial active built-in tool names.
 	// Default: [read, bash, edit, write].
 	InitialActiveToolNames []string
@@ -522,11 +531,18 @@ type AgentSession struct {
 	toolPromptSnippets      map[string]string
 	toolPromptGuidelines    map[string][]string
 
-	// baseSystemPrompt (without extension appends) is used to apply fresh
-	// appends each turn
-	baseSystemPrompt        string
-	baseSystemPromptOptions BuildSystemPromptOptions
-	systemPromptOverride    string
+	// baseSystemPromptOptions is the prompt state without extension appends
+	// (pi: _baseSystemPromptOptions; v0.86.0 normalized shape).
+	baseSystemPromptOptions NormalizedBuildSystemPromptOptions
+	// runSystemPromptOptions holds prompt options after before_agent_start
+	// mutations for the active run (pi: _runSystemPromptOptions).
+	runSystemPromptOptions *NormalizedBuildSystemPromptOptions
+	// agentRunAbortRequested marks an abort requested while an agent run is
+	// active (pi: _agentRunAbortRequested; v0.86.0).
+	agentRunAbortRequested bool
+	// cacheWarmer keeps the last session request's prompt cache entry warm
+	// (pi: _cacheWarmer; v0.86.0).
+	cacheWarmer CacheWarmerSurface
 
 	// lastAssistantMessage tracks the last assistant message for
 	// auto-compaction check.
@@ -581,6 +597,13 @@ func NewAgentSession(config AgentSessionConfig) *AgentSession {
 	s.toolDefinitions = map[string]toolDefinitionEntry{}
 	s.toolPromptSnippets = map[string]string{}
 	s.toolPromptGuidelines = map[string][]string{}
+	s.cacheWarmer = config.CacheWarmer
+	if s.cacheWarmer != nil {
+		warmer := s.cacheWarmer
+		warmer.SetOnWarmed(func(entry *UsageEntry) {
+			s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventEntryAppended}, Entry: entry})
+		})
+	}
 
 	// Always subscribe to agent events for internal handling
 	// (session persistence, extensions, auto-compaction, retry logic)
@@ -588,11 +611,15 @@ func NewAgentSession(config AgentSessionConfig) *AgentSession {
 
 	s.installAgentToolHooks()
 	s.installAgentNextTurnRefresh()
+	s.installAgentForcedPromptProjection()
 
 	s.buildRuntime(buildRuntimeOptions{
 		activeToolNames:          s.initialActiveToolNames,
 		includeAllExtensionTools: true,
 	})
+	if s.initialActiveToolNames == nil {
+		s.restoreToolsFromTranscript()
+	}
 
 	s.runAutoCompactionFn = s.runAutoCompaction
 	s.emitExtensionEventFn = s.emitExtensionEvent
@@ -788,7 +815,13 @@ func (s *AgentSession) compactBeforeNextAssistantResponse(ctx context.Context, l
 		return llmContext
 	}
 	model := s.Model()
-	settings := s.SettingsManager.GetCompactionSettings()
+	// pi: getCompactionSettings(model) throws on invalid settings; pig
+	// panics here so the agent-loop recover converts it into a run failure
+	// like pi's rejection.
+	settings, err := s.SettingsManager.GetCompactionSettings(model)
+	if err != nil {
+		panic(err)
+	}
 	if model == nil || model.ContextWindow <= 0 {
 		return llmContext
 	}
@@ -824,32 +857,76 @@ func (s *AgentSession) installAgentNextTurnRefresh() {
 		if previous != nil {
 			previousSnapshot = previous(ctx, turn)
 		}
-		previousContext := &agent.AgentContext{}
+		nextContext := &agent.AgentContext{}
 		if turn.Context != nil {
 			copied := *turn.Context
-			previousContext = &copied
+			nextContext = &copied
 		}
 		if previousSnapshot != nil && previousSnapshot.Context != nil {
 			copied := *previousSnapshot.Context
-			previousContext = &copied
+			nextContext = &copied
 		}
 
-		// pi v0.86.0: the loop context no longer carries the system prompt;
-		// prompt changes flow through transcript system messages (declareTool
-		// Changes inserts them). systemPromptOverride is wired to that path in
-		// the coding-agent sync batch.
+		// pi v0.86.0: the next request's prompt loadout is re-derived here.
+		// The active tool set is authoritative; the session prompt and the
+		// provider-visible transcript sections are updated in step via the
+		// returned system patch message (pi: _preparePromptAndToolLoadout +
+		// _runSystemPromptOptions assignment).
+		s.mu.Lock()
+		runOptions := s.runSystemPromptOptions
+		baseOptions := s.baseSystemPromptOptions
+		s.mu.Unlock()
+		var currentOptions NormalizedBuildSystemPromptOptions
+		if runOptions != nil {
+			currentOptions = *runOptions
+		} else {
+			currentOptions = baseOptions
+		}
+		merged := NormalizeBuildSystemPromptOptions(BuildSystemPromptOptions{
+			CustomPrompt:       currentOptions.CustomPrompt,
+			ForceSystemPrompt:  lo.Ternary(currentOptions.ForceSystemPrompt != "", lo.ToPtr(currentOptions.ForceSystemPrompt), nil),
+			SelectedTools:      s.GetActiveToolNames(),
+			ToolSnippets:       mergedStringMaps(baseOptions.ToolSnippets, currentOptions.ToolSnippets),
+			ToolGuidelines:     mergedGuidelineMaps(baseOptions.ToolGuidelines, currentOptions.ToolGuidelines),
+			PromptGuidelines:   currentOptions.PromptGuidelines,
+			AppendSystemPrompt: currentOptions.AppendSystemPrompt,
+			Cwd:                currentOptions.Cwd,
+			ContextFiles:       currentOptions.ContextFiles,
+			Skills:             currentOptions.Skills,
+		})
+		var nextMessages []agent.AgentMessage
+		if nextContext != nil {
+			nextMessages = nextContext.Messages
+		}
+		updateMessage := s.preparePromptAndToolLoadoutForMessages(&merged, nextMessages)
+		// Keep session.SystemPrompt() and ctx.getSystemPrompt() in step with
+		// what the provider sees (pi: this._runSystemPromptOptions = options).
+		s.mu.Lock()
+		mergedCopy := merged
+		s.runSystemPromptOptions = &mergedCopy
+		s.mu.Unlock()
+
 		stateTools := s.Agent.State().Tools
 		contextTools := make([]*agent.AgentTool, len(stateTools))
 		for i := range stateTools {
 			toolCopy := stateTools[i]
 			contextTools[i] = &toolCopy
 		}
-		previousContext.Tools = contextTools
+		nextContext.Tools = contextTools
 
-		update := &agent.AgentLoopTurnUpdate{Context: previousContext}
+		update := &agent.AgentLoopTurnUpdate{Context: nextContext}
 		if previousSnapshot != nil {
 			*update = *previousSnapshot
-			update.Context = previousContext
+			update.Context = nextContext
+		}
+		if updateMessage != nil {
+			var prevMessages []agent.AgentMessage
+			if previousSnapshot != nil {
+				prevMessages = previousSnapshot.Messages
+			}
+			update.Messages = append(append([]agent.AgentMessage{}, prevMessages...), updateMessage)
+		} else if previousSnapshot != nil {
+			update.Messages = previousSnapshot.Messages
 		}
 		state := s.Agent.State()
 		update.Model = state.Model
@@ -932,6 +1009,9 @@ func (s *AgentSession) emitAgentSettled(ctx context.Context) {
 	s.isAgentRunActive = false
 	s.mu.Unlock()
 	defer s.resolveIdleWaitIfIdle()
+	if s.cacheWarmer != nil {
+		s.cacheWarmer.OnAgentSettled()
+	}
 	_, _ = s.extensionRunner.Emit(ctx, &AgentSettledEvent{Type: "agent_settled"})
 	s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventAgentSettled}})
 }
@@ -979,8 +1059,9 @@ func (s *AgentSession) handleAgentEvent(ctx context.Context, event agent.AgentEv
 		if custom, ok := event.Message.(harness.CustomMessage); ok {
 			// Persist as CustomMessageEntry
 			_, _ = s.SessionManager.AppendCustomMessageEntry(custom.CustomType, custom.Content, custom.Display, custom.Details)
-		} else if role := event.Message.MessageRole(); role == types.RoleUser || role == types.RoleAssistant || role == types.RoleToolResult {
+		} else if role := event.Message.MessageRole(); role == types.RoleSystem || role == types.RoleUser || role == types.RoleAssistant || role == types.RoleToolResult {
 			// Regular LLM message - persist as SessionMessageEntry
+			// (pi v0.86.0 adds the system role).
 			_, _ = s.SessionManager.AppendMessage(event.Message)
 		}
 		// Other message types (bashExecution, compactionSummary, branchSummary) are persisted elsewhere
@@ -1013,6 +1094,12 @@ func (s *AgentSession) handleAgentEvent(ctx context.Context, event agent.AgentEv
 }
 
 func (s *AgentSession) willRetryAfterAgentEnd(event agent.AgentEvent) bool {
+	s.mu.Lock()
+	aborted := s.agentRunAbortRequested
+	s.mu.Unlock()
+	if aborted {
+		return false
+	}
 	settings := s.SettingsManager.GetRetrySettings()
 	if !settings.Enabled {
 		return false
@@ -1183,7 +1270,7 @@ func (s *AgentSession) emitExtensionEvent(ctx context.Context, event agent.Agent
 			// Untyped extension handlers can return messages with null/missing
 			// content; normalize so it never enters agent state or session history.
 			normalized := replacement
-			if role := replacement.MessageRole(); role == types.RoleUser || role == types.RoleAssistant || role == types.RoleToolResult || role == "custom" {
+			if role := replacement.MessageRole(); role == types.RoleSystem || role == types.RoleUser || role == types.RoleAssistant || role == types.RoleToolResult || role == "custom" {
 				if messageContentNil(replacement) {
 					normalized = withEmptyContent(replacement)
 				}
@@ -1257,6 +1344,10 @@ func (s *AgentSession) Dispose() {
 	s.disconnectFromAgent()
 	s.mu.Lock()
 	s.eventListeners = nil
+	if s.cacheWarmer != nil {
+		s.cacheWarmer.SetOnWarmed(nil)
+		s.cacheWarmer.Cancel()
+	}
 	s.mu.Unlock()
 	// pi's dispose wraps this in try/catch already; errors are swallowed.
 	_ = ai.CleanupSessionResources(s.SessionID())
@@ -1269,6 +1360,24 @@ func (s *AgentSession) Dispose() {
 // State returns the full agent state (pi: get state).
 func (s *AgentSession) State() *agent.AgentState {
 	return s.Agent.State()
+}
+
+// CacheWarmingStatus returns the current cache-warming state and the policy
+// inputs that produced it (pi: get cacheWarmingStatus; v0.86.0).
+func (s *AgentSession) CacheWarmingStatus() (CacheWarmingStatus, bool) {
+	if s.cacheWarmer == nil {
+		return CacheWarmingStatus{}, false
+	}
+	return s.cacheWarmer.GetStatus(), true
+}
+
+// SetCacheWarmingMode persists the cache-warming mode and immediately
+// reconciles active warming (pi: setCacheWarmingMode; v0.86.0).
+func (s *AgentSession) SetCacheWarmingMode(mode CacheWarmingMode) {
+	s.SettingsManager.SetCacheWarmingMode(mode)
+	if s.cacheWarmer != nil {
+		s.cacheWarmer.OnModeChanged()
+	}
 }
 
 // Model returns the current model; nil = not yet selected (pi: get model).
@@ -1298,8 +1407,20 @@ func (s *AgentSession) IsIdle() bool {
 
 // SystemPrompt returns the current effective system prompt (includes any
 // per-turn extension modifications) (pi: get systemPrompt).
+// SystemPrompt returns the current effective system prompt, including
+// changes not yet sent to the model (pi: get systemPrompt; v0.86.0 renders
+// from the run/base prompt options).
 func (s *AgentSession) SystemPrompt() string {
-	return s.Agent.State().SystemPrompt
+	s.mu.Lock()
+	runOptions := s.runSystemPromptOptions
+	s.mu.Unlock()
+	if runOptions != nil {
+		return BuildSystemPrompt(runOptions.buildSystemPromptOptions())
+	}
+	s.mu.Lock()
+	baseOptions := s.baseSystemPromptOptions
+	s.mu.Unlock()
+	return BuildSystemPrompt(baseOptions.buildSystemPromptOptions())
 }
 
 // RetryAttempt returns the current retry attempt (0 if not retrying) (pi:
@@ -1377,17 +1498,11 @@ func (s *AgentSession) SetActiveToolsByName(toolNames []string) {
 	}
 	s.Agent.SetTools(toolsList)
 
-	// Rebuild base system prompt with new tool set
-	basePrompt := s.rebuildSystemPrompt(validToolNames)
-	s.mu.Lock()
-	s.baseSystemPrompt = basePrompt
-	override := s.systemPromptOverride
-	s.mu.Unlock()
-	if override != "" {
-		s.Agent.State().SystemPrompt = override
-	} else {
-		s.Agent.State().SystemPrompt = basePrompt
-	}
+	// Rebuild base system prompt with new tool set (pi v0.86.0: the next
+	// request's tool loadout and prompt sections are declared by
+	// _preparePromptAndToolLoadout; agent.state.systemPrompt is no longer
+	// written here).
+	s.rebuildSystemPrompt(validToolNames)
 }
 
 // IsCompacting reports whether compaction or branch summarization is currently
@@ -1508,7 +1623,7 @@ func normalizePromptGuidelines(guidelines []string) []string {
 	return unique
 }
 
-func (s *AgentSession) rebuildSystemPrompt(toolNames []string) string {
+func (s *AgentSession) rebuildSystemPrompt(toolNames []string) {
 	validToolNames := make([]string, 0, len(toolNames))
 	s.mu.Lock()
 	for _, name := range toolNames {
@@ -1517,14 +1632,14 @@ func (s *AgentSession) rebuildSystemPrompt(toolNames []string) string {
 		}
 	}
 	toolSnippets := map[string]string{}
-	var promptGuidelines []string
-	for _, name := range validToolNames {
+	for _, name := range s.toolRegistryOrder() {
 		if snippet, ok := s.toolPromptSnippets[name]; ok && snippet != "" {
 			toolSnippets[name] = snippet
 		}
-		if toolGuidelines, ok := s.toolPromptGuidelines[name]; ok {
-			promptGuidelines = append(promptGuidelines, toolGuidelines...)
-		}
+	}
+	toolGuidelines := map[string][]string{}
+	for name, guidelines := range s.toolPromptGuidelines {
+		toolGuidelines[name] = guidelines
 	}
 	s.mu.Unlock()
 
@@ -1537,7 +1652,7 @@ func (s *AgentSession) rebuildSystemPrompt(toolNames []string) string {
 		loadedContextFiles = append(loadedContextFiles, ContextFile{Path: agentsFile.Path, Content: agentsFile.Content})
 	}
 
-	options := BuildSystemPromptOptions{
+	options := NormalizeBuildSystemPromptOptions(BuildSystemPromptOptions{
 		Cwd:                s.cwd,
 		Skills:             loadedSkills,
 		ContextFiles:       loadedContextFiles,
@@ -1545,12 +1660,25 @@ func (s *AgentSession) rebuildSystemPrompt(toolNames []string) string {
 		AppendSystemPrompt: appendSystemPrompt,
 		SelectedTools:      validToolNames,
 		ToolSnippets:       toolSnippets,
-		PromptGuidelines:   promptGuidelines,
-	}
+		ToolGuidelines:     toolGuidelines,
+	})
 	s.mu.Lock()
 	s.baseSystemPromptOptions = options
 	s.mu.Unlock()
-	return BuildSystemPrompt(options)
+}
+
+// toolRegistryOrder lists the registry names in insertion order (pig: pi
+// iterates the Map; pig needs the tracked order).
+func (s *AgentSession) toolRegistryOrder() []string {
+	names := make([]string, 0, len(s.toolRegistry))
+	seen := map[string]bool{}
+	for _, name := range s.toolDefinitionOrder {
+		if _, ok := s.toolRegistry[name]; ok && !seen[name] {
+			names = append(names, name)
+			seen[name] = true
+		}
+	}
+	return names
 }
 
 // ============================================================================
@@ -1561,13 +1689,18 @@ func (s *AgentSession) rebuildSystemPrompt(toolNames []string) string {
 // _runAgentPrompt).
 func (s *AgentSession) runAgentPrompt(ctx context.Context, messages []agent.AgentMessage) error {
 	s.mu.Lock()
+	s.agentRunAbortRequested = false
 	s.isAgentRunActive = true
 	s.mu.Unlock()
 	settled := false
 	defer func() {
 		s.mu.Lock()
-		s.systemPromptOverride = ""
+		aborted := s.agentRunAbortRequested
+		s.runSystemPromptOptions = nil
 		s.mu.Unlock()
+		if aborted {
+			s.finishCancelledRetry()
+		}
 		s.flushPendingBashMessages()
 		s.flushPendingCustomMessages()
 		if !settled {
@@ -1586,6 +1719,12 @@ func (s *AgentSession) runAgentPrompt(ctx context.Context, messages []agent.Agen
 		if !shouldContinue {
 			break
 		}
+		s.mu.Lock()
+		aborted := s.agentRunAbortRequested
+		s.mu.Unlock()
+		if aborted {
+			break
+		}
 		if err := s.Agent.Continue(ctx); err != nil {
 			return err
 		}
@@ -1602,6 +1741,18 @@ func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 	msg := s.lastAssistantMessage
 	s.lastAssistantMessage = nil
 	s.mu.Unlock()
+
+	// pi v0.86.0: an abort request ends the post-run loop immediately; the
+	// deferred cleanup finishes the cancelled retry.
+	checkAbort := func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.agentRunAbortRequested
+	}
+	if checkAbort() {
+		s.finishCancelledRetry()
+		return false, nil
+	}
 	if msg == nil {
 		return false, nil
 	}
@@ -1612,8 +1763,16 @@ func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 			return false, err
 		}
 		if shouldRetry {
+			if checkAbort() {
+				s.finishCancelledRetry()
+				return false, nil
+			}
 			return true, nil
 		}
+	}
+	if checkAbort() {
+		s.finishCancelledRetry()
+		return false, nil
 	}
 
 	s.mu.Lock()
@@ -1636,12 +1795,15 @@ func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	if shouldCompact {
-		return true, nil
+		return !checkAbort(), nil
 	}
 
 	// The agent loop drains both queues before emitting agent_end. Any messages
 	// here were queued by agent_end extension handlers and need a continuation.
-	return s.Agent.HasQueuedMessages(), nil
+	s.mu.Lock()
+	aborted := s.agentRunAbortRequested
+	s.mu.Unlock()
+	return !aborted && s.Agent.HasQueuedMessages(), nil
 }
 
 // Prompt sends a prompt to the agent (pi: prompt). It handles extension
@@ -1691,35 +1853,28 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 		}
 
 		// Emit input event for extension interception (before skill/template expansion)
-		currentText := text
+		source := InputSourceInteractive
+		if options != nil && options.Source != "" {
+			source = options.Source
+		}
+		var streamingBehavior string
+		if s.IsStreaming() && options != nil {
+			streamingBehavior = options.StreamingBehavior
+		}
 		var currentImages []types.ImageContent
 		if options != nil {
 			currentImages = options.Images
 		}
-		if s.extensionRunner.HasHandlers("input") {
-			source := InputSourceInteractive
-			if options != nil && options.Source != "" {
-				source = options.Source
-			}
-			var streamingBehavior string
-			if s.IsStreaming() && options != nil {
-				streamingBehavior = options.StreamingBehavior
-			}
-			inputResult, err := s.extensionRunner.EmitInput(ctx, currentText, currentImages, source, streamingBehavior)
-			if err != nil {
-				return err
-			}
-			if inputResult.Action == "handled" {
-				accept()
-				return nil
-			}
-			if inputResult.Action == "transform" {
-				currentText = inputResult.Text
-				if inputResult.Images != nil {
-					currentImages = inputResult.Images
-				}
-			}
+		processedInput, err := s.runInputHandlers(ctx, text, currentImages, source, streamingBehavior)
+		if err != nil {
+			return err
 		}
+		if processedInput == nil {
+			accept()
+			return nil
+		}
+		currentText := processedInput.text
+		currentImages = processedInput.images
 
 		// Expand skill commands (/skill:name args) and prompt templates (/template args)
 		expandedText := currentText
@@ -1802,37 +1957,49 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 		s.mu.Unlock()
 
 		// Emit before_agent_start extension event
-		result, err := s.extensionRunner.EmitBeforeAgentStart(ctx, expandedText, currentImages, s.baseSystemPrompt, s.baseSystemPromptOptionsSnapshot())
+		s.mu.Lock()
+		selectedToolsBefore := append([]string{}, s.baseSystemPromptOptions.SelectedTools...)
+		s.mu.Unlock()
+		result, err := s.extensionRunner.EmitBeforeAgentStart(ctx, expandedText, currentImages, s.baseSystemPromptOptionsSnapshot())
 		if err != nil {
 			return err
 		}
-		// Add all custom messages from extensions
-		if result != nil {
-			for _, msg := range result.Messages {
-				messages = append(messages, harness.CustomMessage{
-					Role:       "custom",
-					CustomType: msg.CustomType,
-					// Untyped extensions can pass null/missing content; normalize at ingestion.
-					Content:   normalizePayloadContent(msg.Content),
-					Display:   msg.Display,
-					Details:   msg.Details,
-					Timestamp: time.Now().UnixMilli(),
-				})
+		// Handlers may edit event.systemPromptOptions.selectedTools or call
+		// setActiveTools(), which updates the live loadout instead. An
+		// explicit edit wins; otherwise the live loadout is authoritative,
+		// so a setActiveTools() call is not undone here (pi v0.86.0).
+		handlerEditedTools := len(result.SystemPromptOptions.SelectedTools) != len(selectedToolsBefore)
+		if !handlerEditedTools {
+			for i, name := range result.SystemPromptOptions.SelectedTools {
+				if name != selectedToolsBefore[i] {
+					handlerEditedTools = true
+					break
+				}
 			}
 		}
-		// Apply extension-modified system prompt, or reset to base
-		if result != nil && result.SystemPrompt != nil {
-			s.mu.Lock()
-			s.systemPromptOverride = *result.SystemPrompt
-			s.mu.Unlock()
-			s.Agent.State().SystemPrompt = *result.SystemPrompt
-		} else {
-			// Ensure we're using the base prompt (in case previous turn had modifications)
-			s.mu.Lock()
-			s.systemPromptOverride = ""
-			basePrompt := s.baseSystemPrompt
-			s.mu.Unlock()
-			s.Agent.State().SystemPrompt = basePrompt
+		if !handlerEditedTools {
+			result.SystemPromptOptions.SelectedTools = s.GetActiveToolNames()
+		}
+		for _, msg := range result.Messages {
+			messages = append(messages, harness.CustomMessage{
+				Role:       "custom",
+				CustomType: msg.CustomType,
+				// Untyped extensions can pass null/missing content; normalize at ingestion.
+				Content:   normalizePayloadContent(msg.Content),
+				Display:   msg.Display,
+				Details:   msg.Details,
+				Timestamp: time.Now().UnixMilli(),
+			})
+		}
+		// Apply the prompt and tool loadout for the next request (pi v0.86.0:
+		// _preparePromptAndToolLoadout returns a system message patching the
+		// prompt sections the model currently has).
+		updateMessage := s.preparePromptAndToolLoadout(&result.SystemPromptOptions)
+		s.mu.Lock()
+		s.runSystemPromptOptions = &result.SystemPromptOptions
+		s.mu.Unlock()
+		if updateMessage != nil {
+			messages = append([]agent.AgentMessage{*updateMessage}, messages...)
 		}
 		return nil
 	}()
@@ -1855,7 +2022,200 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 func (s *AgentSession) baseSystemPromptOptionsSnapshot() BuildSystemPromptOptions {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.baseSystemPromptOptions
+	return s.baseSystemPromptOptions.buildSystemPromptOptions()
+}
+
+// processedInput is the outcome of the input handler chain (pi:
+// _runInputHandlers's inline return; nil = handled).
+type processedInput struct {
+	text   string
+	images []types.ImageContent
+}
+
+// runInputHandlers runs the input extension handler chain (pi:
+// _runInputHandlers; v0.86.0 extraction). Returns nil when a handler
+// handled the input.
+func (s *AgentSession) runInputHandlers(ctx context.Context, text string, images []types.ImageContent, source InputSource, streamingBehavior string) (*processedInput, error) {
+	if !s.extensionRunner.HasHandlers("input") {
+		return &processedInput{text: text, images: images}, nil
+	}
+	inputResult, err := s.extensionRunner.EmitInput(ctx, text, images, source, streamingBehavior)
+	if err != nil {
+		return nil, err
+	}
+	switch inputResult.Action {
+	case "handled":
+		return nil, nil
+	case "transform":
+		out := &processedInput{text: inputResult.Text, images: images}
+		if inputResult.Images != nil {
+			out.images = inputResult.Images
+		}
+		return out, nil
+	default:
+		return &processedInput{text: text, images: images}, nil
+	}
+}
+
+// preparePromptAndToolLoadout applies a prompt and tool loadout for the
+// next request. Sets the executable tools and returns a system message
+// patching the prompt sections the model currently has (replayed from
+// `messages`), or nil when the prompt is unchanged. Tool changes are
+// declared by the agent loop before the request (pi:
+// _preparePromptAndToolLoadout; v0.86.0).
+//
+// A forced prompt does not affect the transcript: the structured sections
+// are still diffed and persisted, and the forced text is projected onto the
+// request by installAgentForcedPromptProjection.
+func (s *AgentSession) preparePromptAndToolLoadout(options *NormalizedBuildSystemPromptOptions) *types.SystemMessage {
+	return s.preparePromptAndToolLoadoutForMessages(options, s.Agent.State().Messages)
+}
+
+// preparePromptAndToolLoadoutForMessages is the message-parameterized
+// variant used by the prepare-next-turn hook (pi passes nextContext.messages).
+func (s *AgentSession) preparePromptAndToolLoadoutForMessages(options *NormalizedBuildSystemPromptOptions, messages []agent.AgentMessage) *types.SystemMessage {
+	// pi: selectedTools dedupe + registry filter.
+	seenTools := map[string]bool{}
+	var selectedTools []string
+	for _, name := range options.SelectedTools {
+		if seenTools[name] {
+			continue
+		}
+		seenTools[name] = true
+		s.mu.Lock()
+		_, registered := s.toolRegistry[name]
+		s.mu.Unlock()
+		if registered {
+			selectedTools = append(selectedTools, name)
+		}
+	}
+	options.SelectedTools = selectedTools
+	var toolsList []agent.AgentTool
+	for _, name := range options.SelectedTools {
+		s.mu.Lock()
+		tool, ok := s.toolRegistry[name]
+		s.mu.Unlock()
+		if ok {
+			toolsList = append(toolsList, tool)
+		}
+	}
+	if toolsList == nil {
+		toolsList = []agent.AgentTool{}
+	}
+	s.Agent.SetTools(toolsList)
+
+	var transcript aiutils.TranscriptMessages
+	for _, message := range messages {
+		if typed, ok := message.(types.Message); ok {
+			transcript = append(transcript, typed)
+		}
+	}
+	var previous *types.SystemSections
+	if current := aiutils.GetCurrentSystemMessage(transcript); current != nil {
+		previous = current.Sections
+	}
+	sections := DiffSystemPromptSections(previous, BuildSystemPromptSections(options.buildSystemPromptOptions()))
+	if sections == nil {
+		return nil
+	}
+	return &types.SystemMessage{
+		Role:      types.RoleSystem,
+		Content:   types.SystemContent{},
+		Sections:  sections,
+		Timestamp: time.Now().UnixMilli(),
+	}
+}
+
+// installAgentForcedPromptProjection sends a forced prompt as the
+// provider's leading system prompt without recording it (pi:
+// _installAgentForcedPromptProjection; v0.86.0).
+//
+// A before_agent_start handler that returns systemPrompt needs that exact
+// text at the head of the request; a mid-conversation system message would
+// leave the original prompt in place. The forced text is a rendering of the
+// current prompt, so the transcript keeps its structured sections and the
+// request is projected instead: the system messages collapse into one head
+// holding the forced text and the current tools. Runs after the context
+// extension handlers.
+func (s *AgentSession) installAgentForcedPromptProjection() {
+	previousTransformContext := s.Agent.TransformContext
+	s.Agent.TransformContext = func(ctx context.Context, messages []agent.AgentMessage) []agent.AgentMessage {
+		transformed := messages
+		if previousTransformContext != nil {
+			transformed = previousTransformContext(ctx, messages)
+		}
+		s.mu.Lock()
+		runOptions := s.runSystemPromptOptions
+		s.mu.Unlock()
+		if runOptions == nil || runOptions.ForceSystemPrompt == "" {
+			return transformed
+		}
+		var transcript aiutils.TranscriptMessages
+		for _, message := range transformed {
+			if typed, ok := message.(types.Message); ok {
+				transcript = append(transcript, typed)
+			}
+		}
+		current := aiutils.GetCurrentSystemMessage(transcript)
+		head := types.SystemMessage{
+			Role:      types.RoleSystem,
+			Content:   types.SystemContent{String: runOptions.ForceSystemPrompt},
+			Timestamp: time.Now().UnixMilli(),
+		}
+		if current != nil {
+			head.ToolsAdded = current.ToolsAdded
+			head.Timestamp = current.Timestamp
+		}
+		out := make([]agent.AgentMessage, 0, len(transformed)+1)
+		out = append(out, head)
+		for _, message := range transformed {
+			if message.MessageRole() == types.RoleSystem {
+				continue
+			}
+			out = append(out, message)
+		}
+		return out
+	}
+}
+
+// restoreToolsFromTranscript restores the active tool loadout declared by
+// the session transcript, if it declares one (pi:
+// _restoreToolsFromTranscript; v0.86.0).
+func (s *AgentSession) restoreToolsFromTranscript() {
+	sessionContext := s.SessionManager.BuildSessionContext()
+	var transcript aiutils.TranscriptMessages
+	for _, message := range sessionContext.Messages {
+		if typed, ok := message.(types.Message); ok {
+			transcript = append(transcript, typed)
+		}
+	}
+	current := aiutils.GetCurrentSystemMessage(transcript)
+	if current == nil {
+		return
+	}
+	var toolNames []string
+	for _, tool := range current.ToolsAdded {
+		s.mu.Lock()
+		_, ok := s.toolRegistry[tool.Name]
+		s.mu.Unlock()
+		if ok {
+			toolNames = append(toolNames, tool.Name)
+		}
+	}
+	var toolsList []agent.AgentTool
+	for _, name := range toolNames {
+		s.mu.Lock()
+		registered, ok := s.toolRegistry[name]
+		s.mu.Unlock()
+		if ok {
+			toolsList = append(toolsList, registered)
+		}
+	}
+	if toolsList == nil {
+		toolsList = []agent.AgentTool{}
+	}
+	s.Agent.SetTools(toolsList)
+	s.rebuildSystemPrompt(toolNames)
 }
 
 // tryExecuteExtensionCommand tries to execute an extension command. Returns
@@ -1949,39 +2309,65 @@ func mustStripFrontmatter(content string) string {
 // the current assistant turn finishes executing its tool calls, before the
 // next LLM call. Expands skill commands and prompt templates. Errors on
 // extension commands (pi: steer).
-func (s *AgentSession) Steer(ctx context.Context, text string, images []types.ImageContent) error {
-	// Check for extension commands (cannot be queued)
-	if strings.HasPrefix(text, "/") {
-		if err := s.throwIfExtensionCommand(text); err != nil {
-			return err
-		}
+func (s *AgentSession) Steer(ctx context.Context, text string, images []types.ImageContent, options *QueueUserInputOptions) error {
+	source := InputSourceInteractive
+	if options != nil && options.Source != "" {
+		source = options.Source
 	}
-
-	// Expand skill commands and prompt templates
-	expandedText := s.expandSkillCommand(ctx, text)
-	expandedText = ExpandPromptTemplate(expandedText, s.PromptTemplates())
-
-	s.queueSteer(expandedText, images)
-	return nil
+	return s.queueUserInput(ctx, text, images, "steer", source)
 }
 
 // FollowUp queues a follow-up message to be processed after the agent finishes.
 // Delivered only when agent has no more tool calls or steering messages.
 // Expands skill commands and prompt templates. Errors on extension commands
 // (pi: followUp).
-func (s *AgentSession) FollowUp(ctx context.Context, text string, images []types.ImageContent) error {
-	// Check for extension commands (cannot be queued)
+func (s *AgentSession) FollowUp(ctx context.Context, text string, images []types.ImageContent, options *QueueUserInputOptions) error {
+	source := InputSourceInteractive
+	if options != nil && options.Source != "" {
+		source = options.Source
+	}
+	return s.queueUserInput(ctx, text, images, "followUp", source)
+}
+
+// QueueUserInputOptions parameterizes Steer/FollowUp (pi: the options param
+// of steer()/followUp(); v0.86.0).
+type QueueUserInputOptions struct {
+	// Source is the input source reported to "input" extension handlers;
+	// "" = interactive (pi: options.source defaults to "interactive").
+	Source InputSource
+}
+
+// queueUserInput validates extension commands, runs the input handler
+// chain, expands skill commands and prompt templates, and queues via the
+// requested behavior (pi: _queueUserInput; v0.86.0 extraction).
+func (s *AgentSession) queueUserInput(ctx context.Context, text string, images []types.ImageContent, behavior string, source InputSource) error {
 	if strings.HasPrefix(text, "/") {
+		// Check for extension commands (cannot be queued)
 		if err := s.throwIfExtensionCommand(text); err != nil {
 			return err
 		}
 	}
 
-	// Expand skill commands and prompt templates
-	expandedText := s.expandSkillCommand(ctx, text)
+	var streamingBehavior string
+	if s.IsStreaming() {
+		streamingBehavior = behavior
+	}
+	processedInput, err := s.runInputHandlers(ctx, text, images, source, streamingBehavior)
+	if err != nil {
+		return err
+	}
+	if processedInput == nil {
+		return nil
+	}
+
+	expandedText := s.expandSkillCommand(ctx, processedInput.text)
 	expandedText = ExpandPromptTemplate(expandedText, s.PromptTemplates())
 
-	s.queueFollowUp(expandedText, images)
+	if behavior == "steer" {
+		s.queueSteer(expandedText, processedInput.images)
+	} else {
+		s.queueFollowUp(expandedText, processedInput.images)
+	}
 	return nil
 }
 
@@ -2221,6 +2607,11 @@ func (s *AgentSession) GetResourceLoader() ResourceLoader {
 // Abort aborts the current operation and waits for the agent to become idle
 // (pi: abort).
 func (s *AgentSession) Abort(ctx context.Context) error {
+	s.mu.Lock()
+	if s.isAgentRunActive {
+		s.agentRunAbortRequested = true
+	}
+	s.mu.Unlock()
 	s.AbortRetry()
 	s.AbortCompaction()
 	s.AbortBranchSummary()
@@ -2564,9 +2955,10 @@ func (s *AgentSession) runDefaultCompaction(
 // pig materializes ai.RetryPolicy).
 func retryPolicyFromSettings(settings RetrySettingsValues) *ai.RetryPolicy {
 	return &ai.RetryPolicy{
-		Enabled:     settings.Enabled,
-		MaxRetries:  int(settings.MaxRetries),
-		BaseDelayMs: settings.BaseDelayMs,
+		Enabled:         settings.Enabled,
+		MaxRetries:      int(settings.MaxRetries),
+		BaseDelayMs:     settings.BaseDelayMs,
+		MaxAgentDelayMs: lo.ToPtr(settings.MaxAgentDelayMs),
 	}
 }
 
@@ -2631,7 +3023,6 @@ func (s *AgentSession) Compact(ctx context.Context, customInstructions string) (
 	s.compactionCancel = cancel
 	s.mu.Unlock()
 	s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventCompactionStart}, Reason: "manual"})
-	fromExtension := false
 
 	defer func() {
 		s.mu.Lock()
@@ -2643,12 +3034,16 @@ func (s *AgentSession) Compact(ctx context.Context, customInstructions string) (
 		s.resolveIdleWaitIfIdle()
 	}()
 
+	fromExtension := false
+	cancelledByExtension := false
 	fail := func(err error) (*CompactionResult, error) {
-		message := err.Error()
-		aborted := message == "Compaction cancelled" || errors.Is(err, context.Canceled)
+		// pi v0.86.0: aborted = compactionAbortController.signal.aborted ||
+		// cancelledByExtension (the "Compaction cancelled" string check is
+		// gone).
+		aborted := compactionCtx.Err() != nil || cancelledByExtension
 		errorMessage := ""
 		if !aborted {
-			errorMessage = fmt.Sprintf("Compaction failed: %s", message)
+			errorMessage = fmt.Sprintf("Compaction failed: %s", err.Error())
 		}
 		s.emit(&AgentSessionEvent{
 			AgentEvent:   agent.AgentEvent{Type: AgentSessionEventCompactionEnd},
@@ -2677,7 +3072,11 @@ func (s *AgentSession) Compact(ctx context.Context, customInstructions string) (
 	}
 
 	pathEntries := s.SessionManager.GetBranch("")
-	settings := s.SettingsManager.GetCompactionSettings()
+	// pi: settings resolve after the model check, before the auth resolution.
+	settings, settingsErr := s.SettingsManager.GetCompactionSettings(model)
+	if settingsErr != nil {
+		return fail(settingsErr)
+	}
 
 	preparation := PrepareCompaction(pathEntries, settings)
 	if preparation == nil {
@@ -2706,7 +3105,8 @@ func (s *AgentSession) Compact(ctx context.Context, customInstructions string) (
 		}
 		if beforeResult, ok := result.(*SessionBeforeCompactResult); ok && beforeResult != nil {
 			if beforeResult.Cancel {
-				return fail(fmt.Errorf("Compaction cancelled"))
+				cancelledByExtension = true
+				return fail(errCompactionCancelled)
 			}
 			if beforeResult.Compaction != nil {
 				extensionCompaction = beforeResult.Compaction
@@ -2826,7 +3226,12 @@ func (s *AgentSession) AbortBranchSummary() {
 // Returns whether the post-run loop should call agent.Continue for overflow
 // recovery or queued messages.
 func (s *AgentSession) checkCompaction(ctx context.Context, assistantMessage *types.AssistantMessage, skipAbortedCheck bool) (bool, error) {
-	settings := s.SettingsManager.GetCompactionSettings()
+	// pi: getCompactionSettings(this.model) throws on invalid settings; the
+	// error propagates to the prompt caller like pi's rejection.
+	settings, err := s.SettingsManager.GetCompactionSettings(s.Model())
+	if err != nil {
+		return false, err
+	}
 	if !settings.Enabled {
 		return false, nil
 	}
@@ -2957,14 +3362,23 @@ func (s *AgentSession) runAutoCompactionChecked(ctx context.Context, reason stri
 // function after preparation and extension interception (pi:
 // _runAutoCompaction).
 func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, willRetry bool) (bool, error) {
-	settings := s.SettingsManager.GetCompactionSettings()
+	// pi: getCompactionSettings(model) runs outside the try; a throw
+	// propagates to the caller (checkCompaction) like any run error.
+	model := s.Model()
+	settings, settingsErr := s.SettingsManager.GetCompactionSettings(model)
+	if settingsErr != nil {
+		return false, settingsErr
+	}
+	var autoCtx context.Context
 	started := false
 	fromExtension := false
+	cancelledByExtension := false
 
-	// pi: finally { this._autoCompactionAbortController = undefined;
-	// this._resolveIdleWaitIfIdle(); } — pig previously cleared the cancel
-	// func at function start, leaving IsCompacting stuck true after a
-	// completed auto-compaction; surfaced by the v0.85.1 isIdle change.
+	// pi: finally { if (this._autoCompactionAbortController ===
+	// abortController) this._autoCompactionAbortController = undefined;
+	// this._resolveIdleWaitIfIdle(); } — pig's cancel func is not
+	// comparable, so the guarded clear degrades to an unconditional one
+	// (v0.85.1 fix, kept).
 	defer func() {
 		s.mu.Lock()
 		s.autoCompactionCancel = nil
@@ -2972,83 +3386,97 @@ func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, wil
 		s.resolveIdleWaitIfIdle()
 	}()
 
-	fail := func(errorMessage string) (bool, error) {
+	// fail is pi's catch block: aborted (cancel or extension) suppresses
+	// the error message; events fire only once started.
+	fail := func(err error) (bool, error) {
+		message := err.Error()
+		aborted := (autoCtx != nil && autoCtx.Err() != nil) || cancelledByExtension
 		if started {
-			formattedErrorMessage := fmt.Sprintf("Auto-compaction failed: %s", errorMessage)
-			if reason == "overflow" {
-				formattedErrorMessage = fmt.Sprintf("Context overflow recovery failed: %s", errorMessage)
+			errorMessage := ""
+			if !aborted {
+				if reason == "overflow" {
+					message = fmt.Sprintf("Context overflow recovery failed: %s", message)
+				} else {
+					message = fmt.Sprintf("Auto-compaction failed: %s", message)
+				}
+				errorMessage = message
 			}
 			s.emit(&AgentSessionEvent{
 				AgentEvent:   agent.AgentEvent{Type: AgentSessionEventCompactionEnd},
 				Reason:       reason,
-				ErrorMessage: formattedErrorMessage,
+				Aborted:      aborted,
+				ErrorMessage: errorMessage,
 			})
 			_ = s.emitSessionCompactFailed(ctx, &SessionCompactFailedEvent{
 				Type:          "session_compact_failed",
 				Reason:        reason,
-				ErrorMessage:  formattedErrorMessage,
+				ErrorMessage:  errorMessage,
+				Aborted:       aborted,
+				WillRetry:     false,
 				FromExtension: fromExtension,
 			})
 		}
 		return false, nil
 	}
 
-	model := s.Model()
 	if model == nil {
 		return false, nil
 	}
 
-	auth, err := s.getSummarizationRequestAuth(ctx, model)
-	if err != nil {
-		return fail(err.Error())
-	}
-
 	pathEntries := s.SessionManager.GetBranch("")
-
 	preparation := PrepareCompaction(pathEntries, settings)
 	if preparation == nil {
 		return false, nil
 	}
 
-	s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventCompactionStart}, Reason: reason})
 	autoCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	s.mu.Lock()
 	s.autoCompactionCancel = cancel
 	s.mu.Unlock()
 	started = true
+	s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventCompactionStart}, Reason: reason})
+	if autoCtx.Err() != nil {
+		return fail(autoCtx.Err())
+	}
+
+	auth, err := s.getSummarizationRequestAuth(autoCtx, model)
+	if err != nil {
+		return fail(err)
+	}
+	if autoCtx.Err() != nil {
+		return fail(autoCtx.Err())
+	}
 
 	var extensionCompaction *CompactionResult
 
 	if s.extensionRunner.HasHandlers("session_before_compact") {
 		result, err := s.extensionRunner.Emit(autoCtx, &SessionBeforeCompactEvent{
-			Type:          "session_before_compact",
-			Preparation:   preparation,
-			BranchEntries: pathEntries,
-			Reason:        reason,
-			WillRetry:     willRetry,
+			Type:               "session_before_compact",
+			Preparation:        preparation,
+			BranchEntries:      pathEntries,
+			CustomInstructions: "",
+			Reason:             reason,
+			WillRetry:          willRetry,
 		})
 		if err != nil {
-			return fail(err.Error())
+			return fail(err)
 		}
 		if beforeResult, ok := result.(*SessionBeforeCompactResult); ok && beforeResult != nil {
 			if beforeResult.Cancel {
-				s.emit(&AgentSessionEvent{
-					AgentEvent: agent.AgentEvent{Type: AgentSessionEventCompactionEnd},
-					Reason:     reason,
-					Aborted:    true,
-				})
-				_ = s.emitSessionCompactFailed(ctx, &SessionCompactFailedEvent{
-					Type:    "session_compact_failed",
-					Reason:  reason,
-					Aborted: true,
-				})
-				return false, nil
+				// pi v0.86.0: cancellation is a throw, so the unified catch
+				// path emits compaction_end/session_compact_failed with
+				// aborted=true (v0.85.1 emitted them inline here).
+				cancelledByExtension = true
+				return fail(errCompactionCancelled)
 			}
 			if beforeResult.Compaction != nil {
 				extensionCompaction = beforeResult.Compaction
 				fromExtension = true
 			}
 		}
+	}
+	if autoCtx.Err() != nil {
+		return fail(autoCtx.Err())
 	}
 
 	var summary string
@@ -3068,7 +3496,7 @@ func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, wil
 		// Shared default summary generator, also used by manual compaction.
 		compactResult, err := s.runDefaultCompaction(autoCtx, preparation, auth.model, auth, "", reason)
 		if err != nil {
-			return fail(err.Error())
+			return fail(err)
 		}
 		summary = compactResult.Summary
 		firstKeptEntryID = compactResult.FirstKeptEntryID
@@ -3078,22 +3506,11 @@ func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, wil
 	}
 
 	if autoCtx.Err() != nil {
-		s.emit(&AgentSessionEvent{
-			AgentEvent: agent.AgentEvent{Type: AgentSessionEventCompactionEnd},
-			Reason:     reason,
-			Aborted:    true,
-		})
-		_ = s.emitSessionCompactFailed(ctx, &SessionCompactFailedEvent{
-			Type:          "session_compact_failed",
-			Reason:        reason,
-			Aborted:       true,
-			FromExtension: fromExtension,
-		})
-		return false, nil
+		return fail(autoCtx.Err())
 	}
 
 	if _, err := s.SessionManager.AppendCompaction(summary, firstKeptEntryID, tokensBefore, details, lo.ToPtr(fromExtension), usage); err != nil {
-		return fail(err.Error())
+		return fail(err)
 	}
 	newEntries := s.SessionManager.GetEntries()
 	sessionContext := s.SessionManager.BuildSessionContext()
@@ -3226,11 +3643,7 @@ func (s *AgentSession) extendResourcesFromExtensions(ctx context.Context, reason
 	}
 
 	s.resourceLoader.ExtendResources(extensionPaths)
-	basePrompt := s.rebuildSystemPrompt(s.GetActiveToolNames())
-	s.mu.Lock()
-	s.baseSystemPrompt = basePrompt
-	s.mu.Unlock()
-	s.Agent.State().SystemPrompt = basePrompt
+	s.rebuildSystemPrompt(s.GetActiveToolNames())
 	return nil
 }
 
@@ -3808,7 +4221,12 @@ func (s *AgentSession) prepareRetry(ctx context.Context, message *types.Assistan
 	attempt := s.retryAttempt
 	s.mu.Unlock()
 
-	delayMs := settings.BaseDelayMs * (int64(1) << uint(attempt-1))
+	// pi v0.86.0: delayMs = retryDelayMs(settings, attempt) — the agent
+	// retry delay cap (settings.retry.maxAgentDelayMs) now applies.
+	delayMs := aiutils.RetryDelayMs(&ai.RetryPolicy{
+		BaseDelayMs:     settings.BaseDelayMs,
+		MaxAgentDelayMs: lo.ToPtr(settings.MaxAgentDelayMs),
+	}, attempt)
 
 	s.emit(&AgentSessionEvent{
 		AgentEvent:  agent.AgentEvent{Type: AgentSessionEventAutoRetryStart},
@@ -3836,18 +4254,30 @@ func (s *AgentSession) prepareRetry(ctx context.Context, message *types.Assistan
 	if err != nil {
 		// Aborted during sleep - emit end event so UI can clean up
 		cancel()
-		s.mu.Lock()
-		attempt := s.retryAttempt
-		s.retryAttempt = 0
-		s.mu.Unlock()
-		s.emit(&AgentSessionEvent{
-			AgentEvent: agent.AgentEvent{Type: AgentSessionEventAutoRetryEnd},
-			Attempt:    attempt,
-			FinalError: "Retry cancelled",
-		})
+		s.finishCancelledRetry()
 		return false, nil
 	}
 	return true, nil
+}
+
+// finishCancelledRetry emits the auto_retry_end event for a cancelled retry
+// and resets the attempt counter (pi: _finishCancelledRetry; v0.86.0
+// extraction). No-op when no retry was in progress.
+func (s *AgentSession) finishCancelledRetry() {
+	s.mu.Lock()
+	if s.retryAttempt == 0 {
+		s.mu.Unlock()
+		return
+	}
+	attempt := s.retryAttempt
+	s.retryAttempt = 0
+	s.mu.Unlock()
+	s.emit(&AgentSessionEvent{
+		AgentEvent: agent.AgentEvent{Type: AgentSessionEventAutoRetryEnd},
+		Success:    false,
+		Attempt:    attempt,
+		FinalError: "Retry cancelled",
+	})
 }
 
 // AbortRetry cancels the in-progress retry (pi: abortRetry).
@@ -4106,6 +4536,11 @@ func (s *AgentSession) NavigateTree(ctx context.Context, targetID string, option
 	if s.IsStreaming() {
 		return nil, fmt.Errorf("Wait for the current response to finish before navigating the session tree.")
 	}
+	if s.IsCompacting() {
+		// pi v0.86.0: navigation during compaction would append on a stale
+		// branch after the summary lands.
+		return nil, fmt.Errorf("Wait for the current compaction or tree navigation to finish before navigating the session tree.")
+	}
 	if options == nil {
 		options = &NavigateTreeOptions{}
 	}
@@ -4309,6 +4744,8 @@ func (s *AgentSession) NavigateTree(ctx context.Context, targetID string, option
 	// Update agent state
 	sessionContext := s.SessionManager.BuildSessionContext()
 	s.Agent.SetMessages(sessionContext.Messages)
+	// pi v0.86.0: restore the tool loadout declared by the target branch.
+	s.restoreToolsFromTranscript()
 
 	// Emit session_tree event
 	fromExtensionValue := fromExtension
@@ -4403,6 +4840,12 @@ func (s *AgentSession) GetSessionStats() SessionStats {
 
 	for _, entry := range s.SessionManager.GetEntries() {
 		switch typed := entry.(type) {
+		case *UsageEntry:
+			// pi v0.86.0: persisted usage entries (cache warming) contribute
+			// to the totals without participating in context.
+			if typed.Usage != nil {
+				AddUsageToTotals(&usageTotals, *typed.Usage)
+			}
 		case *BranchSummaryEntry:
 			if typed.Usage != nil {
 				AddUsageToTotals(&usageTotals, *typed.Usage)
@@ -4602,4 +5045,30 @@ func (s *AgentSession) HasExtensionHandlers(eventType string) bool {
 // error handlers) (pi: get extensionRunner).
 func (s *AgentSession) GetExtensionRunner() *ExtensionRunner {
 	return s.extensionRunner
+}
+
+// mergedStringMaps merges base and run tool snippet maps (pi:
+// { ...base.toolSnippets, ...run.toolSnippets }).
+func mergedStringMaps(base, run map[string]string) map[string]string {
+	merged := make(map[string]string, len(base)+len(run))
+	for name, value := range base {
+		merged[name] = value
+	}
+	for name, value := range run {
+		merged[name] = value
+	}
+	return merged
+}
+
+// mergedGuidelineMaps merges base and run tool guideline maps (pi:
+// { ...base.toolGuidelines, ...run.toolGuidelines }).
+func mergedGuidelineMaps(base, run map[string][]string) map[string][]string {
+	merged := make(map[string][]string, len(base)+len(run))
+	for name, values := range base {
+		merged[name] = values
+	}
+	for name, values := range run {
+		merged[name] = values
+	}
+	return merged
 }

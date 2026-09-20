@@ -3131,11 +3131,11 @@ func (m *InteractiveMode) flushCompactionQueue(ctx context.Context, willRetry bo
 					return err
 				}
 			} else if message.Mode == "followUp" {
-				if err := m.session().FollowUp(ctx, message.Text, nil); err != nil {
+				if err := m.session().FollowUp(ctx, message.Text, nil, nil); err != nil {
 					return err
 				}
 			} else {
-				if err := m.session().Steer(ctx, message.Text, nil); err != nil {
+				if err := m.session().Steer(ctx, message.Text, nil, nil); err != nil {
 					return err
 				}
 			}
@@ -6641,14 +6641,14 @@ func (m *InteractiveMode) handleTreeNavigation(entryID string, done func()) {
 func (m *InteractiveMode) showSessionSelector() {
 	m.showSelector(func(done func()) selectorComponent {
 		selector := components.NewSessionSelectorComponent(
-			func(onProgress func(loaded, total int)) []core.SessionInfo {
-				return core.ListSessions(m.sessionManager().GetCwd(), m.sessionManager().GetSessionDir(), onProgress)
+			func(onProgress core.SessionListProgress) []core.SessionInfo {
+				return core.ListSessions(context.Background(), m.sessionManager().GetCwd(), m.sessionManager().GetSessionDir(), onProgress)
 			},
-			func(onProgress func(loaded, total int)) []core.SessionInfo {
+			func(onProgress core.SessionListProgress) []core.SessionInfo {
 				if m.sessionManager().UsesDefaultSessionDir() {
-					return core.ListAllSessions("", onProgress)
+					return core.ListAllSessions(context.Background(), "", onProgress)
 				}
-				return core.ListAllSessions(m.sessionManager().GetSessionDir(), onProgress)
+				return core.ListAllSessions(context.Background(), m.sessionManager().GetSessionDir(), onProgress)
 			},
 			func(sessionPath string) {
 				done()

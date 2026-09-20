@@ -4,6 +4,7 @@ package core
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -267,5 +268,137 @@ func TestAgentSessionRetryPromptWaitsForFullAgentLoopWhenRetryProducesToolCalls(
 	}
 	if callCount != 4 {
 		t.Fatalf("callCount after follow-up = %d, want 4", callCount)
+	}
+}
+
+// --- v0.86.0 additions (pi: test/agent-session-retry.test.ts + retry-events) ---
+
+// retryErrorStream builds a stream fn that fails the first `failCount` calls
+// with overloaded_error and succeeds afterwards (the common retry fixture).
+func retryErrorStream(failCount *int, successText string) agent.StreamFn {
+	return func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		stream := newMockAssistantStream()
+		var msg types.AssistantMessage
+		if *failCount > 0 {
+			*failCount--
+			msg = testAssistantMessage("", withStopReason(types.StopReasonError), withErrorMessage("overloaded_error"))
+			stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: &msg})
+			stream.Push(types.AssistantMessageEvent{Type: types.EventError, Reason: types.StopReasonError, Message: &msg})
+		} else {
+			msg = testAssistantMessage(successText)
+			stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: &msg})
+			stream.Push(types.AssistantMessageEvent{Type: types.EventDone, Reason: types.StopReasonStop, Message: &msg})
+		}
+		stream.End()
+		return stream.AssistantMessageEventStream
+	}
+}
+
+// TestAgentSessionRetryCapsAgentDelay ports "caps agent retry delay"
+// (regression #8826): baseDelayMs doubling is clamped to maxAgentDelayMs.
+func TestAgentSessionRetryCapsAgentDelay(t *testing.T) {
+	failCount := 4
+	session, _, settingsManager := createAgentTestSession(t, &createAgentTestSessionOptions{
+		GetAPIKey: true,
+		StreamFn:  retryErrorStream(&failCount, "Success"),
+	})
+	defer session.Dispose()
+	settingsManager.ApplyOverrides(Settings{"retry": map[string]any{
+		"enabled": true, "maxRetries": float64(5), "baseDelayMs": float64(1), "maxAgentDelayMs": float64(5),
+	}})
+
+	var delays []int64
+	session.Subscribe(func(event *AgentSessionEvent) {
+		if event.Type == AgentSessionEventAutoRetryStart {
+			delays = append(delays, event.DelayMs)
+		}
+	})
+
+	if err := session.Prompt(context.Background(), "Test", nil); err != nil {
+		t.Fatal(err)
+	}
+	// 1, 2, 4 double normally; the next 8 clamps to the 5ms cap.
+	if len(delays) != 4 || delays[0] != 1 || delays[1] != 2 || delays[2] != 4 || delays[3] != 5 {
+		t.Fatalf("delays = %v, want [1 2 4 5]", delays)
+	}
+}
+
+// TestAgentSessionRetryFinalizesStateWhenAbortRequestedAfterFailedAttempt
+// ports "finalizes retry state when abort is requested after a retry attempt
+// fails" (regression #9340).
+func TestAgentSessionRetryFinalizesStateWhenAbortRequestedAfterFailedAttempt(t *testing.T) {
+	failCount := 99
+	session, _, settingsManager := createAgentTestSession(t, &createAgentTestSessionOptions{
+		GetAPIKey: true,
+		StreamFn:  retryErrorStream(&failCount, "Success"),
+	})
+	defer session.Dispose()
+	settingsManager.ApplyOverrides(Settings{"retry": map[string]any{
+		"enabled": true, "maxRetries": float64(3), "baseDelayMs": float64(0),
+	}})
+
+	var mu sync.Mutex
+	errorCount := 0
+	var agentEnds []*AgentSessionEvent
+	var retryEnds []*AgentSessionEvent
+	session.Subscribe(func(event *AgentSessionEvent) {
+		if event.Type == AgentSessionEventAutoRetryEnd {
+			mu.Lock()
+			retryEnds = append(retryEnds, event)
+			mu.Unlock()
+		}
+		if event.Type != agent.AgentEventMessageEnd {
+			return
+		}
+		assistant, ok := event.Message.(types.AssistantMessage)
+		if !ok || assistant.StopReason != types.StopReasonError {
+			return
+		}
+		mu.Lock()
+		errorCount++
+		shouldAbort := errorCount == 2
+		mu.Unlock()
+		if shouldAbort {
+			// pi: void harness.session.abort() — the abort request is
+			// recorded synchronously during message_end handling.
+			_ = session.Abort(context.Background())
+		}
+	})
+	session.Subscribe(func(event *AgentSessionEvent) {
+		if event.Type == agent.AgentEventAgentEnd {
+			mu.Lock()
+			agentEnds = append(agentEnds, event)
+			mu.Unlock()
+		}
+	})
+
+	if err := session.Prompt(context.Background(), "test", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if session.RetryAttempt() != 0 {
+		t.Fatalf("retryAttempt = %d, want 0", session.RetryAttempt())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(agentEnds) == 0 {
+		t.Fatal("missing agent_end event")
+	}
+	last := agentEnds[len(agentEnds)-1]
+	if last.WillRetry {
+		t.Fatal("agent_end willRetry = true, want false")
+	}
+	if len(retryEnds) == 0 {
+		t.Fatal("missing auto_retry_end event")
+	}
+	retryEnd := retryEnds[len(retryEnds)-1]
+	if retryEnd.Success {
+		t.Fatal("auto_retry_end success = true, want false")
+	}
+	if retryEnd.Attempt != 1 {
+		t.Fatalf("auto_retry_end attempt = %d, want 1", retryEnd.Attempt)
+	}
+	if retryEnd.FinalError != "Retry cancelled" {
+		t.Fatalf("finalError = %q, want %q", retryEnd.FinalError, "Retry cancelled")
 	}
 }

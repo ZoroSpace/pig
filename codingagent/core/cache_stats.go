@@ -137,6 +137,24 @@ func scanCacheMisses(entries []SessionEntry, models ModelPriceSource) cacheMissS
 		case *CompactionEntry, *BranchSummaryEntry:
 			prev = nil
 			continue
+		case *UsageEntry:
+			// pi: a cache_warm usage entry reports the prompt size of the
+			// warm request, keeping the miss detection baseline current
+			// across idle warming refreshes.
+			if e.Kind != "cache_warm" || e.Usage == nil {
+				continue
+			}
+			usage := e.Usage
+			promptTokens := usage.Input + usage.CacheRead + usage.CacheWrite
+			if promptTokens > 0 {
+				prev = &previousRequest{
+					promptTokens:  promptTokens,
+					modelKey:      string(e.Provider) + "/" + e.Model,
+					timestamp:     isoToMillis(e.Timestamp),
+					reportedCache: true,
+				}
+			}
+			continue
 		case *SessionMessageEntry:
 			if e.Message.MessageRole() != ai.RoleAssistant {
 				continue

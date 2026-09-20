@@ -39,15 +39,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/ZoroSpace/pig/ai/types"
+	aiutils "github.com/ZoroSpace/pig/ai/utils"
 	"github.com/ZoroSpace/pig/codingagent"
 	"github.com/ZoroSpace/pig/codingagent/utils"
 	"github.com/ZoroSpace/pig/tui"
@@ -104,6 +108,7 @@ import (
 //	sessionDir?: string
 //	httpProxy?: string
 //	httpIdleTimeoutMs?: number
+//	cacheWarming?: CacheWarmingMode                       — default "streaming"; global only because each refresh costs money (v0.86.0)
 //	websocketConnectTimeoutMs?: number
 //	tuiMode?: TuiMode                                    — default "regular"
 //	fullscreenExitOutput?: FullscreenExitOutput          — default "transcript"
@@ -252,7 +257,24 @@ type CompactionSettings struct {
 	Enabled          *bool  // default: true
 	ReserveTokens    *int64 // default: 16384
 	KeepRecentTokens *int64 // default: 20000
+	// ModelOverrides overrides token settings per exact "provider/modelId"
+	// key (pi: modelOverrides; v0.86.0).
+	ModelOverrides map[string]CompactionModelOverride
 }
+
+// CompactionModelOverride overrides one model's compaction token settings
+// (pi: CompactionModelOverride; v0.86.0).
+type CompactionModelOverride struct {
+	ReserveTokens    *int64
+	KeepRecentTokens *int64
+}
+
+// DefaultCompactionTokenSettings mirrors pi's DEFAULT_COMPACTION_TOKEN_SETTINGS
+// (v0.86.0).
+var DefaultCompactionTokenSettings = struct {
+	ReserveTokens    int64
+	KeepRecentTokens int64
+}{ReserveTokens: 16384, KeepRecentTokens: 20000}
 
 // BranchSummarySettings holds the branch summary settings shape (pi:
 // BranchSummarySettings).
@@ -271,10 +293,31 @@ type ProviderRetrySettings struct {
 
 // RetrySettings holds the agent retry settings shape (pi: RetrySettings).
 type RetrySettings struct {
-	Enabled     *bool                  // default: true
-	MaxRetries  *int64                 // default: 3
-	BaseDelayMs *int64                 // default: 2000 (exponential backoff: 2s, 4s, 8s)
-	Provider    *ProviderRetrySettings // pi: provider?
+	Enabled     *bool  // default: true
+	MaxRetries  *int64 // default: 3
+	BaseDelayMs *int64 // default: 2000 (exponential backoff: 2s, 4s, 8s)
+	// MaxAgentDelayMs caps each computed agent retry delay (default: 60000)
+	// (pi: maxAgentDelayMs; v0.86.0).
+	MaxAgentDelayMs *int64
+	Provider        *ProviderRetrySettings // pi: provider?
+}
+
+// CacheWarmingMode is a cache-warming profile (pi: CacheWarmingMode;
+// v0.86.0). "idle" also warms between agent runs.
+type CacheWarmingMode string
+
+// CacheWarmingModes lists the valid profiles in declaration order (pi:
+// CACHE_WARMING_MODES).
+var CacheWarmingModes = []CacheWarmingMode{"off", "streaming", "idle"}
+
+// IsValidCacheWarmingMode reports whether the value is a known profile.
+func IsValidCacheWarmingMode(mode string) bool {
+	for _, candidate := range CacheWarmingModes {
+		if string(candidate) == mode {
+			return true
+		}
+	}
+	return false
 }
 
 // TerminalSettings holds the terminal rendering settings shape (pi:
@@ -1538,36 +1581,137 @@ func (m *SettingsManager) SetCompactionEnabled(enabled bool) {
 	m.save()
 }
 
+// validateCompactionTokenValue mirrors pi's typeof/isSafeInteger/>=0 chain
+// exactly; invalid values render like pi's String(value).
+func validateCompactionTokenValue(value any) (float64, bool) {
+	number, isNumber := value.(float64)
+	if !isNumber || math.IsNaN(number) || math.IsInf(number, 0) || number != math.Trunc(number) || number < 0 || number > 9007199254740991 {
+		return 0, false
+	}
+	return number, true
+}
+
+// getCompactionTokenSetting resolves one token setting through model
+// override, ordinary setting, then built-in default (pi:
+// getCompactionTokenSetting; v0.86.0). Invalid values throw in pi — pig
+// reports the error through the (setting, error) pair; callers treat a
+// non-nil error like pi's thrown Error.
+func (m *SettingsManager) getCompactionTokenSetting(field string, model *types.Model) (int64, error) {
+	compaction, ok := settingsObject(m.settings, "compaction")
+	var ordinary float64
+	ordinaryPresent := false
+	if ok {
+		if value, present := compaction[field]; present {
+			number, valid := validateCompactionTokenValue(value)
+			if !valid {
+				return 0, fmt.Errorf("Invalid compaction.%s setting: %s. Expected a non-negative safe integer.", field, formatSettingValue(value))
+			}
+			ordinary = number
+			ordinaryPresent = true
+		}
+	}
+
+	modelKey := ""
+	if model != nil {
+		modelKey = string(model.Provider) + "/" + model.ID
+	}
+	var overrideValue float64
+	overridePresent := false
+	if modelKey != "" && ok {
+		overridesRaw, present := compaction["modelOverrides"]
+		if present {
+			overrides, mergeable := isMergeableObject(overridesRaw)
+			if !mergeable {
+				return 0, fmt.Errorf("Invalid compaction.modelOverrides[%q] setting: %s. Expected an object.", modelKey, formatSettingValue(overridesRaw))
+			}
+			entryRaw, present := overrides[modelKey]
+			if present {
+				entry, mergeable := isMergeableObject(entryRaw)
+				if !mergeable {
+					return 0, fmt.Errorf("Invalid compaction.modelOverrides[%q] setting: %s. Expected an object.", modelKey, formatSettingValue(entryRaw))
+				}
+				if value, present := entry[field]; present {
+					number, valid := validateCompactionTokenValue(value)
+					if !valid {
+						return 0, fmt.Errorf("Invalid compaction.modelOverrides[%q].%s setting: %s. Expected a non-negative safe integer.", modelKey, field, formatSettingValue(value))
+					}
+					overrideValue = number
+					overridePresent = true
+				}
+			}
+		}
+	}
+
+	switch {
+	case overridePresent:
+		return int64(overrideValue), nil
+	case ordinaryPresent:
+		return int64(ordinary), nil
+	case field == "reserveTokens":
+		return DefaultCompactionTokenSettings.ReserveTokens, nil
+	default:
+		return DefaultCompactionTokenSettings.KeepRecentTokens, nil
+	}
+}
+
+// formatSettingValue renders a settings value like pi's String(value) in
+// the invalid-setting error messages (JS String() semantics for the shapes
+// JSON can produce).
+func formatSettingValue(value any) string {
+	if value == nil {
+		return "null"
+	}
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case float64:
+		return jsNumberToString(typed)
+	case bool:
+		if typed {
+			return "true"
+		}
+		return "false"
+	case []any:
+		parts := make([]string, len(typed))
+		for i, item := range typed {
+			parts[i] = formatSettingValue(item)
+		}
+		return strings.Join(parts, ",")
+	default:
+		return "[object Object]"
+	}
+}
+
+// jsNumberToString renders a float64 like JS String(number).
+func jsNumberToString(v float64) string {
+	if math.IsNaN(v) {
+		return "NaN"
+	}
+	if math.IsInf(v, 1) {
+		return "Infinity"
+	}
+	if math.IsInf(v, -1) {
+		return "-Infinity"
+	}
+	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
 // GetCompactionReserveTokens returns the compaction reserve (pi:
-// getCompactionReserveTokens).
-func (m *SettingsManager) GetCompactionReserveTokens() int64 {
+// getCompactionReserveTokens — throws on invalid settings; pig returns an
+// error per the GetHTTPIdleTimeoutMs convention). model nil = TS undefined.
+func (m *SettingsManager) GetCompactionReserveTokens(model *types.Model) (int64, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	compaction, ok := settingsObject(m.settings, "compaction")
-	if !ok {
-		return 16384
-	}
-	reserve, ok := settingsNumber(compaction, "reserveTokens")
-	if !ok {
-		return 16384
-	}
-	return int64(reserve)
+	return m.getCompactionTokenSetting("reserveTokens", model)
 }
 
 // GetCompactionKeepRecentTokens returns the compaction retention (pi:
-// getCompactionKeepRecentTokens).
-func (m *SettingsManager) GetCompactionKeepRecentTokens() int64 {
+// getCompactionKeepRecentTokens — throws on invalid settings; pig returns
+// an error). model nil = TS undefined.
+func (m *SettingsManager) GetCompactionKeepRecentTokens(model *types.Model) (int64, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	compaction, ok := settingsObject(m.settings, "compaction")
-	if !ok {
-		return 20000
-	}
-	keepRecent, ok := settingsNumber(compaction, "keepRecentTokens")
-	if !ok {
-		return 20000
-	}
-	return int64(keepRecent)
+	return m.getCompactionTokenSetting("keepRecentTokens", model)
 }
 
 // CompactionSettingsValues is the resolved compaction settings shape (pi:
@@ -1579,13 +1723,22 @@ type CompactionSettingsValues struct {
 }
 
 // GetCompactionSettings returns the resolved compaction settings (pi:
-// getCompactionSettings).
-func (m *SettingsManager) GetCompactionSettings() CompactionSettingsValues {
+// getCompactionSettings — throws on invalid settings; pig returns an
+// error). model nil = TS undefined.
+func (m *SettingsManager) GetCompactionSettings(model *types.Model) (CompactionSettingsValues, error) {
+	reserveTokens, err := m.GetCompactionReserveTokens(model)
+	if err != nil {
+		return CompactionSettingsValues{}, err
+	}
+	keepRecentTokens, err := m.GetCompactionKeepRecentTokens(model)
+	if err != nil {
+		return CompactionSettingsValues{}, err
+	}
 	return CompactionSettingsValues{
 		Enabled:          m.GetCompactionEnabled(),
-		ReserveTokens:    m.GetCompactionReserveTokens(),
-		KeepRecentTokens: m.GetCompactionKeepRecentTokens(),
-	}
+		ReserveTokens:    reserveTokens,
+		KeepRecentTokens: keepRecentTokens,
+	}, nil
 }
 
 // BranchSummarySettingsValues is the resolved branch summary shape (pi:
@@ -1662,12 +1815,39 @@ func (m *SettingsManager) SetRetryEnabled(enabled bool) {
 	m.save()
 }
 
+// GetCacheWarmingMode reads the cache-warming profile from global settings
+// only, because warming costs money (pi: getCacheWarmingMode; v0.86.0).
+// Unset/unknown values resolve to "streaming".
+func (m *SettingsManager) GetCacheWarmingMode() CacheWarmingMode {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if value, present := m.globalSettings["cacheWarming"]; present {
+		if mode, ok := value.(string); ok && IsValidCacheWarmingMode(mode) {
+			return CacheWarmingMode(mode)
+		}
+	}
+	return "streaming"
+}
+
+// SetCacheWarmingMode persists the cache-warming profile (pi:
+// setCacheWarmingMode; v0.86.0).
+func (m *SettingsManager) SetCacheWarmingMode(mode CacheWarmingMode) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.globalSettings["cacheWarming"] = string(mode)
+	m.markModified("cacheWarming", "")
+	m.save()
+}
+
 // RetrySettingsValues is the resolved retry shape (pi: getRetrySettings's
 // inline object literal).
 type RetrySettingsValues struct {
 	Enabled     bool
 	MaxRetries  int64
 	BaseDelayMs int64
+	// MaxAgentDelayMs caps each computed agent retry delay (pi:
+	// maxAgentDelayMs; v0.86.0).
+	MaxAgentDelayMs int64
 }
 
 // GetRetrySettings returns the resolved retry settings (pi:
@@ -1678,6 +1858,7 @@ func (m *SettingsManager) GetRetrySettings() RetrySettingsValues {
 	enabled := true
 	maxRetries := 3.0
 	baseDelayMs := 2000.0
+	maxAgentDelayMs := aiutils.DefaultMaxAgentRetryDelayMs
 	if retry, ok := settingsObject(m.settings, "retry"); ok {
 		if value, present := settingsBool(retry, "enabled"); present {
 			enabled = value
@@ -1688,11 +1869,15 @@ func (m *SettingsManager) GetRetrySettings() RetrySettingsValues {
 		if value, present := settingsNumber(retry, "baseDelayMs"); present {
 			baseDelayMs = value
 		}
+		if value, present := settingsNumber(retry, "maxAgentDelayMs"); present {
+			maxAgentDelayMs = int64(value)
+		}
 	}
 	return RetrySettingsValues{
-		Enabled:     enabled,
-		MaxRetries:  int64(maxRetries),
-		BaseDelayMs: int64(baseDelayMs),
+		Enabled:         enabled,
+		MaxRetries:      int64(maxRetries),
+		BaseDelayMs:     int64(baseDelayMs),
+		MaxAgentDelayMs: maxAgentDelayMs,
 	}
 }
 

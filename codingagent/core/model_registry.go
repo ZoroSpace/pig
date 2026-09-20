@@ -121,6 +121,18 @@ func (r *ModelRegistry) GetProvider(provider string) ai.Provider {
 	return r.runtime.GetProvider(provider)
 }
 
+// Stream streams through the configured provider with request-time
+// authentication (pi: stream).
+func (r *ModelRegistry) Stream(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.ModelsStreamOptions) *ai.AssistantMessageEventStream {
+	return r.runtime.Stream(ctx, model, llmContext, options)
+}
+
+// StreamSimple streams with provider-neutral options and request-time
+// authentication (pi: streamSimple).
+func (r *ModelRegistry) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.ModelsSimpleStreamOptions) *ai.AssistantMessageEventStream {
+	return r.runtime.StreamSimple(ctx, model, llmContext, options)
+}
+
 // Complete dispatches one completion (pi: complete).
 func (r *ModelRegistry) Complete(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.ModelsStreamOptions) (*ai.AssistantMessage, error) {
 	return r.runtime.Complete(ctx, model, llmContext, options)

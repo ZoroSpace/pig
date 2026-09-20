@@ -72,12 +72,23 @@ func TestNoExtensionPathEmitDefaults(t *testing.T) {
 		t.Fatalf("expected continue, got %+v", result)
 	}
 
-	combined, err := runner.EmitBeforeAgentStart(ctx, "hello", nil, "prompt", BuildSystemPromptOptions{})
+	combined, err := runner.EmitBeforeAgentStart(ctx, "hello", nil, BuildSystemPromptOptions{Cwd: "/tmp/project"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if combined != nil {
-		t.Fatalf("expected nil combined result, got %+v", combined)
+	// pi v0.86.0: the combined result is always returned, with the
+	// normalized options materialized.
+	if combined == nil {
+		t.Fatal("expected combined result, got nil")
+	}
+	if len(combined.Messages) != 0 {
+		t.Fatalf("expected no messages, got %+v", combined.Messages)
+	}
+	if combined.SystemPromptOptions.Cwd != "/tmp/project" {
+		t.Fatalf("expected normalized cwd %q, got %q", "/tmp/project", combined.SystemPromptOptions.Cwd)
+	}
+	if combined.SystemPromptOptions.Sections == nil {
+		t.Fatal("expected normalized sections to be materialized")
 	}
 
 	toolCall, err := runner.EmitToolCall(ctx, &ToolCallEvent{Type: "tool_call", ToolName: "read", ToolCallID: "tc1"})

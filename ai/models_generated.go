@@ -2490,6 +2490,10 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
+			},
 		},
 		"claude-fable-5-1": {
 			ID:        "claude-fable-5-1",
@@ -2514,6 +2518,10 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 				SupportsMidConvoToolChanges:    lo.ToPtr(true),
 			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
+			},
 		},
 		"claude-haiku-4-5": {
 			ID:            "claude-haiku-4-5",
@@ -2528,6 +2536,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     64000,
 			Compat: &AnthropicMessagesCompat{
 				SupportsStrictTools: lo.ToPtr(true),
+			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
 			},
 		},
 		"claude-haiku-4-5-20251001": {
@@ -2544,6 +2556,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				SupportsStrictTools: lo.ToPtr(true),
 			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
+			},
 		},
 		"claude-opus-4-5": {
 			ID:            "claude-opus-4-5",
@@ -2559,6 +2575,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				SupportsStrictTools: lo.ToPtr(true),
 			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
+			},
 		},
 		"claude-opus-4-5-20251101": {
 			ID:            "claude-opus-4-5-20251101",
@@ -2573,6 +2593,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     64000,
 			Compat: &AnthropicMessagesCompat{
 				SupportsStrictTools: lo.ToPtr(true),
+			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
 			},
 		},
 		"claude-opus-4-6": {
@@ -2592,6 +2616,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				ForceAdaptiveThinking: lo.ToPtr(true),
 				SupportsStrictTools:   lo.ToPtr(true),
+			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
 			},
 		},
 		"claude-opus-4-7": {
@@ -2613,6 +2641,10 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsTemperature:   lo.ToPtr(false),
 				ForceAdaptiveThinking: lo.ToPtr(true),
 				SupportsStrictTools:   lo.ToPtr(true),
+			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
 			},
 		},
 		"claude-opus-4-8": {
@@ -2636,6 +2668,10 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsStrictTools:            lo.ToPtr(true),
 				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 				SupportsMidConvoToolChanges:    lo.ToPtr(true),
+			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
 			},
 		},
 		"claude-opus-5": {
@@ -2676,6 +2712,10 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
+			},
 		},
 		"claude-sonnet-4-5": {
 			ID:            "claude-sonnet-4-5",
@@ -2691,6 +2731,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				SupportsStrictTools: lo.ToPtr(true),
 			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
+			},
 		},
 		"claude-sonnet-4-5-20250929": {
 			ID:            "claude-sonnet-4-5-20250929",
@@ -2705,6 +2749,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     64000,
 			Compat: &AnthropicMessagesCompat{
 				SupportsStrictTools: lo.ToPtr(true),
+			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
 			},
 		},
 		"claude-sonnet-4-6": {
@@ -2725,6 +2773,10 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking: lo.ToPtr(true),
 				SupportsStrictTools:   lo.ToPtr(true),
 			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
+			},
 		},
 		"claude-sonnet-5": {
 			ID:        "claude-sonnet-5",
@@ -2744,6 +2796,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				ForceAdaptiveThinking: lo.ToPtr(true),
 				SupportsStrictTools:   lo.ToPtr(true),
+			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
 			},
 		},
 	},
@@ -14512,7 +14568,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.03668, Output: 0.07336, CacheRead: 0.007336, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0364, Output: 0.0728, CacheRead: 0.00728, CacheWrite: 0}},
 			ContextWindow: 1024000,
 			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
@@ -18374,7 +18430,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.52, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.7, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
@@ -19645,9 +19701,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5742, Output: 1.7226, CacheRead: 0.01914, CacheWrite: 0}},
-			ContextWindow: 1024000,
-			MaxTokens:     384000,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.56232, Output: 1.68696, CacheRead: 0.017892, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     393216,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -19832,7 +19888,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.25, CacheRead: 0.015, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     131072,
+			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -25756,4 +25812,4 @@ var MODELS = map[ProviderID]map[string]Model{
 // MODELSGeneratedAt is the generation timestamp shared by all built-in
 // provider catalogs, Unix milliseconds (pi: providers/data/.manifest.json
 // generatedAt). 0 means unknown; pi models the unknown case as undefined.
-var MODELSGeneratedAt int64 = 1789887071538
+var MODELSGeneratedAt int64 = 1789907718313

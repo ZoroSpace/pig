@@ -181,6 +181,10 @@ func ConvertToLlm(messages []agent.AgentMessage) []types.Message {
 	converted := make([]types.Message, 0, len(messages))
 	for _, message := range messages {
 		switch m := message.(type) {
+		case types.SystemMessage:
+			converted = append(converted, m)
+		case *types.SystemMessage:
+			converted = append(converted, m)
 		case types.UserMessage:
 			converted = append(converted, m)
 		case types.AssistantMessage:

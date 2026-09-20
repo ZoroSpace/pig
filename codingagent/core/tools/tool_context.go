@@ -168,8 +168,8 @@ type ToolDefinition struct {
 	PromptGuidelines []string
 	// Parameters is the TypeBox schema (pi: parameters).
 	Parameters json.RawMessage
-	// ConstrainedSampling is pi's constrainedSampling; nil = undefined (the
-	// experimental flag wiring arrives with the config batch).
+	// ConstrainedSampling is pi's constrainedSampling (pi v0.86.0 hardcodes
+	// the strict-mode request at bash/read/write/edit); nil = undefined.
 	ConstrainedSampling any
 	// ExecutionMode is the per-tool execution mode override (pi:
 	// executionMode).

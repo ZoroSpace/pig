@@ -89,7 +89,7 @@ func TestAgentSessionConcurrentSteerWhileStreaming(t *testing.T) {
 	waitForStreaming(t, session)
 
 	// steer should work while streaming
-	if err := session.Steer(context.Background(), "Steering message", nil); err != nil {
+	if err := session.Steer(context.Background(), "Steering message", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if session.PendingMessageCount() != 1 {
@@ -110,7 +110,7 @@ func TestAgentSessionConcurrentFollowUpWhileStreaming(t *testing.T) {
 	waitForStreaming(t, session)
 
 	// followUp should work while streaming
-	if err := session.FollowUp(context.Background(), "Follow-up message", nil); err != nil {
+	if err := session.FollowUp(context.Background(), "Follow-up message", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if session.PendingMessageCount() != 1 {
@@ -387,8 +387,8 @@ func TestAgentSessionConcurrentWaitsForQueuedAgentEventsBeforeEmittingToolCall(t
 		t.Fatalf("snapshots = %v, want 2", snapshots)
 	}
 	for i, snapshot := range snapshots {
-		if strings.Join(snapshot, ",") != "user,assistant" {
-			t.Fatalf("snapshot %d = %v, want [user assistant]", i, snapshot)
+		if strings.Join(snapshot, ",") != "system,user,assistant" {
+			t.Fatalf("snapshot %d = %v, want [system user assistant]", i, snapshot)
 		}
 	}
 }
@@ -456,7 +456,7 @@ func TestAgentSessionConcurrentPersistsMessageEndEventsInOrderWithSlowExtensionH
 			roles = append(roles, string(messageEntry.Message.MessageRole()))
 		}
 	}
-	if strings.Join(roles, ",") != "user,assistant,toolResult,assistant" {
+	if strings.Join(roles, ",") != "system,user,assistant,toolResult,assistant" {
 		t.Fatalf("roles = %v", roles)
 	}
 }

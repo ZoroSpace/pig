@@ -2101,3 +2101,138 @@ func TestModelRegistryHeadersOnlyOverrideKeepsCustomProviderModelsAfterRefresh(t
 		t.Fatalf("headers = %+v", authResult.Headers)
 	}
 }
+
+// --- v0.86.0 additions (pi: test/model-registry.test.ts) ---
+
+// TestModelRegistryAnthropicOverrideReplacesAllowedFallbackMetadata ports
+// "Anthropic model override replaces allowed fallback metadata".
+func TestModelRegistryAnthropicOverrideReplacesAllowedFallbackMetadata(t *testing.T) {
+	h := newRegistryHarness(t)
+	h.writeRawModelsJSON(t, map[string]any{
+		"anthropic": map[string]any{
+			"modelOverrides": map[string]any{
+				"claude-fable-5": map[string]any{
+					"compat": map[string]any{
+						"allowedFallbackModels": []any{
+							map[string]any{
+								"provider": "anthropic",
+								"model":    "claude-opus-5",
+								"cost":     map[string]any{"input": 5, "output": 25, "cacheRead": 0.5, "cacheWrite": 6.25},
+							},
+							map[string]any{
+								"provider": "anthropic",
+								"model":    "claude-opus-4-8",
+								"cost":     map[string]any{"input": 4, "output": 20, "cacheRead": 0.4, "cacheWrite": 5},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	registry := h.createRegistry(t)
+	fable := registry.Find("anthropic", "claude-fable-5")
+	if fable == nil {
+		t.Fatal("claude-fable-5 missing")
+	}
+	if registry.GetError() != "" {
+		t.Fatalf("registry error = %q", registry.GetError())
+	}
+	compat, ok := fable.Compat.(*ai.AnthropicMessagesCompat)
+	if !ok {
+		t.Fatalf("compat type = %T", fable.Compat)
+	}
+	if len(compat.AllowedFallbackModels) != 2 {
+		t.Fatalf("allowedFallbackModels = %+v", compat.AllowedFallbackModels)
+	}
+	if compat.AllowedFallbackModels[0].Model != "claude-opus-5" || compat.AllowedFallbackModels[0].Cost.Input != 5 ||
+		compat.AllowedFallbackModels[0].Cost.Output != 25 || compat.AllowedFallbackModels[0].Cost.CacheRead != 0.5 ||
+		compat.AllowedFallbackModels[0].Cost.CacheWrite != 6.25 {
+		t.Fatalf("fallback[0] = %+v", compat.AllowedFallbackModels[0])
+	}
+	if compat.AllowedFallbackModels[1].Model != "claude-opus-4-8" || compat.AllowedFallbackModels[1].Cost.Input != 4 {
+		t.Fatalf("fallback[1] = %+v", compat.AllowedFallbackModels[1])
+	}
+}
+
+// TestModelRegistryEmptyAllowedFallbackOverrideDisablesServerSideFallback
+// ports "empty allowed fallback model override disables server-side
+// fallback".
+func TestModelRegistryEmptyAllowedFallbackOverrideDisablesServerSideFallback(t *testing.T) {
+	h := newRegistryHarness(t)
+	h.writeRawModelsJSON(t, map[string]any{
+		"anthropic": map[string]any{
+			"modelOverrides": map[string]any{
+				"claude-fable-5": map[string]any{
+					"compat": map[string]any{"allowedFallbackModels": []any{}},
+				},
+			},
+		},
+	})
+	registry := h.createRegistry(t)
+	fable := registry.Find("anthropic", "claude-fable-5")
+	if fable == nil {
+		t.Fatal("claude-fable-5 missing")
+	}
+	if registry.GetError() != "" {
+		t.Fatalf("registry error = %q", registry.GetError())
+	}
+	compat, ok := fable.Compat.(*ai.AnthropicMessagesCompat)
+	if !ok {
+		t.Fatalf("compat type = %T", fable.Compat)
+	}
+	if compat.AllowedFallbackModels == nil || len(compat.AllowedFallbackModels) != 0 {
+		t.Fatalf("allowedFallbackModels = %+v, want empty non-nil", compat.AllowedFallbackModels)
+	}
+}
+
+// TestModelRegistryCustomModelAndOverrideCarryPromptCacheLifetimes ports
+// "custom model and model override carry prompt cache lifetimes" — overrides
+// merge per retention tier with the built-in catalog.
+func TestModelRegistryCustomModelAndOverrideCarryPromptCacheLifetimes(t *testing.T) {
+	h := newRegistryHarness(t)
+	h.writeRawModelsJSON(t, map[string]any{
+		"openrouter": map[string]any{
+			"baseUrl": "https://my-proxy.example.com/v1",
+			"api":     "openai-completions",
+			"models": []any{
+				map[string]any{"id": "custom/cached-model", "promptCache": map[string]any{"short": 120}},
+			},
+			"modelOverrides": map[string]any{
+				"anthropic/claude-sonnet-4": map[string]any{"promptCache": map[string]any{"short": 300}},
+			},
+		},
+		"anthropic": map[string]any{
+			"modelOverrides": map[string]any{
+				"claude-sonnet-4-6": map[string]any{"promptCache": map[string]any{"long": 1800}},
+			},
+		},
+	})
+	registry := h.createRegistry(t)
+	if registry.GetError() != "" {
+		t.Fatalf("registry error = %q", registry.GetError())
+	}
+	openrouter := getModelsForProvider(registry, "openrouter")
+
+	cached := lo.FindOrElse(openrouter, ai.Model{}, func(m ai.Model) bool { return m.ID == "custom/cached-model" })
+	if cached.PromptCache[ai.CacheRetentionShort] != 120 || len(cached.PromptCache) != 1 {
+		t.Fatalf("custom promptCache = %+v", cached.PromptCache)
+	}
+	overridden := lo.FindOrElse(openrouter, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+	if overridden.PromptCache[ai.CacheRetentionShort] != 300 || len(overridden.PromptCache) != 1 {
+		t.Fatalf("override promptCache = %+v", overridden.PromptCache)
+	}
+	untouched := lo.FindOrElse(openrouter, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4" })
+	if len(untouched.PromptCache) != 0 {
+		t.Fatalf("untouched promptCache = %+v, want unset", untouched.PromptCache)
+	}
+	// Overrides merge per tier with the built-in catalog (short 300 from the
+	// catalog, long 1800 from the override).
+	sonnet := registry.Find("anthropic", "claude-sonnet-4-6")
+	if sonnet == nil {
+		t.Fatal("claude-sonnet-4-6 missing")
+	}
+	if sonnet.PromptCache[ai.CacheRetentionShort] != 300 || sonnet.PromptCache[ai.CacheRetentionLong] != 1800 {
+		t.Fatalf("merged promptCache = %+v", sonnet.PromptCache)
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/agent/harness"
@@ -344,6 +346,22 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 	}
 
 	extensionRunnerRef := &ExtensionRunnerRef{}
+	agentRef := &agentRefBox{}
+
+	// pi v0.86.0: the cache warmer re-sends the last session request with a
+	// one-token output cap before the prompt cache entry expires.
+	cacheWarmer := NewCacheWarmer(
+		modelRuntime,
+		sessionManager,
+		func() CacheWarmingMode { return settingsManager.GetCacheWarmingMode() },
+		func(ctx context.Context, event *CacheWarmingDecisionEvent) (CacheWarmingAction, error) {
+			runner := extensionRunnerRef.Current
+			if runner == nil {
+				return event.Action, nil
+			}
+			return runner.EmitCacheWarmingDecision(ctx, event), nil
+		},
+	)
 
 	agentOptions, err := buildSdkAgentOptions(buildSdkAgentOptionsInput{
 		settingsManager:     settingsManager,
@@ -353,6 +371,8 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		model:               model,
 		thinkingLevel:       thinkingLevel,
 		convertToLlmWrapper: convertToLlmWithBlockImages,
+		cacheWarmer:         cacheWarmer,
+		agentRef:            agentRef,
 	})
 	if err != nil {
 		return nil, err
@@ -362,6 +382,7 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 	if err != nil {
 		return nil, err
 	}
+	agentRef.current = agentInstance
 
 	// Restore messages if session has existing data
 	if hasExistingSession {
@@ -387,6 +408,7 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		ResourceLoader:         resourceLoader,
 		CustomTools:            options.CustomTools,
 		ModelRuntime:           modelRuntime,
+		CacheWarmer:            cacheWarmer,
 		InitialActiveToolNames: initialActiveToolNames,
 		AllowedToolNames:       allowedToolNames,
 		ExcludedToolNames:      options.ExcludeTools,
@@ -427,13 +449,111 @@ type buildSdkAgentOptionsInput struct {
 	model               *types.Model
 	thinkingLevel       agent.ThinkingLevel
 	convertToLlmWrapper func(messages []agent.AgentMessage) []types.Message
+	cacheWarmer         *CacheWarmer
+	// agentRef lets the streamFn closure reach the agent instance that is
+	// constructed from these very options (pi: the `agent` variable is
+	// assigned by the surrounding scope).
+	agentRef *agentRefBox
 }
+
+// agentRefBox is a mutable single-value box (pig addition, see agentRef).
+type agentRefBox struct{ current *agent.Agent }
 
 // buildSdkAgentOptions assembles the agent options (pi: the new Agent({...})
 // literal inside createAgentSession).
 func buildSdkAgentOptions(input buildSdkAgentOptionsInput) (*agent.AgentOptions, error) {
 	settingsManager := input.settingsManager
 	extensionRunnerRef := input.extensionRunnerRef
+	sessionManager := input.sessionManager
+	modelRuntime := input.modelRuntime
+	cacheWarmer := input.cacheWarmer
+
+	// buildRequestOptions assembles the request options shared by the
+	// session streamFn (pi: buildRequestOptions; v0.86.0 extraction).
+	buildRequestOptions := func(model *types.Model, options *types.SimpleStreamOptions) *ai.ModelsSimpleStreamOptions {
+		providerRetrySettings := settingsManager.GetProviderRetrySettings()
+		httpIdleTimeoutMs, _ := settingsManager.GetHTTPIdleTimeoutMs()
+		// SDKs treat timeout=0 as 0ms (immediate timeout), not "no
+		// timeout". Use max int32 to effectively disable the timeout.
+		effectiveTimeoutMs := httpIdleTimeoutMs
+		if effectiveTimeoutMs == 0 {
+			effectiveTimeoutMs = 2147483647
+		}
+		streamOptions := types.SimpleStreamOptions{}
+		if options != nil {
+			streamOptions = *options
+		}
+		// pi: options?.timeoutMs ?? settings ?? effective — the request
+		// value wins whenever request options were supplied. pig's int64
+		// TimeoutMs cannot distinguish explicit 0 from unset (declared
+		// deviation: with non-nil request options the request TimeoutMs
+		// is authoritative verbatim, 0 included).
+		requestOptionsProvided := options != nil
+		if !requestOptionsProvided {
+			if providerRetrySettings.TimeoutMs != nil {
+				streamOptions.TimeoutMs = *providerRetrySettings.TimeoutMs
+			} else {
+				streamOptions.TimeoutMs = effectiveTimeoutMs
+			}
+			if wsTimeout, err := settingsManager.GetWebSocketConnectTimeoutMs(); err == nil {
+				streamOptions.WebsocketConnectTimeoutMs = wsTimeout
+			}
+		}
+		if streamOptions.MaxRetries == nil && providerRetrySettings.MaxRetries != nil {
+			streamOptions.MaxRetries = lo.ToPtr(int(*providerRetrySettings.MaxRetries))
+		}
+		if streamOptions.MaxRetryDelayMs == nil {
+			delay := providerRetrySettings.MaxRetryDelayMs
+			streamOptions.MaxRetryDelayMs = &delay
+		}
+		headerRunner := extensionRunnerRef.Current
+		transformHeaders := func(requestHeaders types.ProviderHeaders) (types.ProviderHeaders, error) {
+			headers := MergeProviderAttributionHeaders(model, settingsManager, streamOptions.SessionID, requestHeaders)
+			if headerRunner != nil && headerRunner.HasHandlers("before_provider_headers") {
+				mutated := headerRunner.EmitBeforeProviderHeaders(context.Background(), orEmptyHeaders(headers))
+				return mutated, nil
+			}
+			return headers, nil
+		}
+		return &ai.ModelsSimpleStreamOptions{
+			SimpleStreamOptions: streamOptions,
+			ModelsRequestTransforms: ai.ModelsRequestTransforms{
+				TransformHeaders: transformHeaders,
+			},
+		}
+	}
+
+	// cacheContextIsCurrent builds the warmer's currency check: the current
+	// transcript must still extend the request's prefix (pi:
+	// cacheContextIsCurrent; v0.86.0). Agent state may shallow-copy the
+	// messages array or refresh the model object without changing the
+	// provider request, so top-level object identity is not a valid cache
+	// key. pig compares per-message deep equality — messages are immutable
+	// once appended, so value equality matches pi's object identity here.
+	cacheContextIsCurrent := func(requestModel *types.Model, requestMessages []agent.AgentMessage) func() bool {
+		return func() bool {
+			current := input.agentRef.current
+			if current == nil {
+				return false
+			}
+			state := current.State()
+			if state.Model == nil || requestModel == nil {
+				return false
+			}
+			if state.Model.Provider != requestModel.Provider || state.Model.ID != requestModel.ID {
+				return false
+			}
+			if len(requestMessages) > len(state.Messages) {
+				return false
+			}
+			for index, message := range requestMessages {
+				if !reflect.DeepEqual(message, state.Messages[index]) {
+					return false
+				}
+			}
+			return true
+		}
+	}
 
 	options := &agent.AgentOptions{
 		InitialState: &agent.AgentState{
@@ -444,56 +564,16 @@ func buildSdkAgentOptions(input buildSdkAgentOptionsInput) (*agent.AgentOptions,
 		},
 		ConvertToLlm: input.convertToLlmWrapper,
 		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
-			providerRetrySettings := settingsManager.GetProviderRetrySettings()
-			httpIdleTimeoutMs, _ := settingsManager.GetHTTPIdleTimeoutMs()
-			// SDKs treat timeout=0 as 0ms (immediate timeout), not "no
-			// timeout". Use max int32 to effectively disable the timeout.
-			effectiveTimeoutMs := httpIdleTimeoutMs
-			if effectiveTimeoutMs == 0 {
-				effectiveTimeoutMs = 2147483647
+			requestOptions := buildRequestOptions(model, options)
+			// Compaction and summaries use their own routing ids; only session
+			// requests replace the cache entry, so warming restarts from them.
+			// Keep warming while the current transcript still extends the
+			// request's prefix.
+			if options != nil && options.SessionID == sessionManager.GetSessionID() && cacheWarmer != nil {
+				requestMessages := slices.Clone(input.agentRef.current.State().Messages)
+				cacheWarmer.Start(CacheWarmRequest{Model: model, Context: llmContext, Options: requestOptions}, cacheContextIsCurrent(model, requestMessages))
 			}
-			streamOptions := types.SimpleStreamOptions{}
-			if options != nil {
-				streamOptions = *options
-			}
-			// pi: options?.timeoutMs ?? settings ?? effective — the request
-			// value wins whenever request options were supplied. pig's int64
-			// TimeoutMs cannot distinguish explicit 0 from unset (declared
-			// deviation: with non-nil request options the request TimeoutMs
-			// is authoritative verbatim, 0 included).
-			requestOptionsProvided := options != nil
-			if !requestOptionsProvided {
-				if providerRetrySettings.TimeoutMs != nil {
-					streamOptions.TimeoutMs = *providerRetrySettings.TimeoutMs
-				} else {
-					streamOptions.TimeoutMs = effectiveTimeoutMs
-				}
-				if wsTimeout, err := settingsManager.GetWebSocketConnectTimeoutMs(); err == nil {
-					streamOptions.WebsocketConnectTimeoutMs = wsTimeout
-				}
-			}
-			if streamOptions.MaxRetries == nil && providerRetrySettings.MaxRetries != nil {
-				streamOptions.MaxRetries = lo.ToPtr(int(*providerRetrySettings.MaxRetries))
-			}
-			if streamOptions.MaxRetryDelayMs == nil {
-				delay := providerRetrySettings.MaxRetryDelayMs
-				streamOptions.MaxRetryDelayMs = &delay
-			}
-			headerRunner := extensionRunnerRef.Current
-			transformHeaders := func(requestHeaders types.ProviderHeaders) (types.ProviderHeaders, error) {
-				headers := MergeProviderAttributionHeaders(model, settingsManager, streamOptions.SessionID, requestHeaders)
-				if headerRunner != nil && headerRunner.HasHandlers("before_provider_headers") {
-					mutated := headerRunner.EmitBeforeProviderHeaders(ctx, orEmptyHeaders(headers))
-					return mutated, nil
-				}
-				return headers, nil
-			}
-			return input.modelRuntime.StreamSimple(ctx, model, &ai.Context{Messages: llmContext.Messages}, &ai.ModelsSimpleStreamOptions{
-				SimpleStreamOptions: streamOptions,
-				ModelsRequestTransforms: ai.ModelsRequestTransforms{
-					TransformHeaders: transformHeaders,
-				},
-			})
+			return modelRuntime.StreamSimple(ctx, model, &ai.Context{Messages: llmContext.Messages}, requestOptions)
 		},
 		OnPayload: func(payload any, _ *types.Model) any {
 			runner := extensionRunnerRef.Current

@@ -181,7 +181,7 @@ var Keybindings = func() tui.KeybindingDefinitions {
 	defs["app.thinking.toggle"] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+t"), Description: "Toggle thinking blocks"}
 	defs["app.session.toggleNamedFilter"] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+n"), Description: "Toggle named session filter"}
 	defs["app.editor.external"] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+g"), Description: "Open external editor"}
-	defs["app.message.copy"] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+x"), Description: "Copy message to clipboard"}
+	defs["app.message.copy"] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+x"), Description: "Copy selection or last assistant message"}
 	defs["app.message.followUp"] = tui.KeybindingDefinition{
 		DefaultKeys: func() []tui.KeyId {
 			if windows {
