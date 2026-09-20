@@ -21,9 +21,11 @@ func mustDeepSeekModel(t *testing.T) *types.Model {
 	if !ok {
 		t.Fatal("deepseek not in catalog")
 	}
-	model, ok := models["deepseek-v4-flash"]
+	// v0.86.0 upstream rename: deepseek-chat is retired; the provider ships
+	// deepseek-flash (V4.1 Flash) and deepseek-v4-pro.
+	model, ok := models["deepseek-flash"]
 	if !ok {
-		t.Fatal("deepseek-chat not in catalog")
+		t.Fatal("deepseek-flash not in catalog")
 	}
 	return &model
 }
@@ -119,7 +121,7 @@ func TestDeepSeekStreamSimpleText(t *testing.T) {
 		t.Fatalf("expected 1 request, got %d", len(*captured))
 	}
 	params := (*captured)[0]
-	if params["model"] != "deepseek-v4-flash" {
+	if params["model"] != "deepseek-flash" {
 		t.Fatalf("model = %v", params["model"])
 	}
 	if params["stream"] != true {

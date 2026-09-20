@@ -140,3 +140,80 @@ func TestBedrockConverseStreamFullChainTransportE2E(t *testing.T) {
 		}
 	}
 }
+
+// TestBedrockConverseStreamCacheDetails1hCost prices the 1h cache details at
+// 2x while preserving the total cache write (pi
+// test/bedrock-cache-write-1h-cost.test.ts, regression for pi #9457; the TS
+// mock of the AWS SDK becomes a local eventstream server here, mirroring the
+// full-chain transport probe above).
+func TestBedrockConverseStreamCacheDetails1hCost(t *testing.T) {
+	resetBedrockEnv(t)
+
+	events := []struct {
+		eventType string
+		payload   map[string]any
+	}{
+		{"messageStart", map[string]any{"role": "assistant"}},
+		{"metadata", map[string]any{
+			"usage": map[string]any{
+				"inputTokens":           100,
+				"outputTokens":          5,
+				"totalTokens":           1_000_105,
+				"cacheWriteInputTokens": 1_000_000,
+				"cacheDetails": []any{
+					map[string]any{"ttl": "1h", "inputTokens": 150_000},
+					map[string]any{"ttl": "5m", "inputTokens": 600_000},
+					map[string]any{"ttl": "1h", "inputTokens": 250_000},
+				},
+			},
+		}},
+		{"messageStop", map[string]any{"stopReason": "end_turn"}},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/vnd.amazon.eventstream")
+		w.WriteHeader(http.StatusOK)
+		for _, event := range events {
+			frame := bedrockEventFrame(t, map[string]string{
+				":message-type": "event",
+				":event-type":   event.eventType,
+			}, event.payload)
+			if _, err := w.Write(frame); err != nil {
+				t.Errorf("write frame: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	baseModel, ok := ai.MODELS["amazon-bedrock"]["us.anthropic.claude-opus-4-8"]
+	if !ok {
+		t.Skip("us.anthropic.claude-opus-4-8 not in the builtin catalog")
+	}
+	model := baseModel
+	model.BaseURL = server.URL
+
+	s := BedrockConverseStream{}.StreamSimple(context.Background(), &model, bedrockTestContext(), &types.SimpleStreamOptions{
+		StreamOptions: types.StreamOptions{
+			ProviderRequestOptions: types.ProviderRequestOptions{
+				Env: types.ProviderEnv{"AWS_BEDROCK_SKIP_AUTH": "1"},
+			},
+		},
+	})
+	for range s.Events() {
+	}
+	message := s.Result()
+	if message.StopReason != types.StopReasonStop {
+		t.Fatalf("stopReason = %q (%s)", message.StopReason, message.ErrorMessage)
+	}
+
+	if message.Usage.CacheWrite != 1_000_000 {
+		t.Fatalf("cacheWrite = %+v, want 1000000", message.Usage.CacheWrite)
+	}
+	if message.Usage.CacheWrite1h == nil || *message.Usage.CacheWrite1h != 400_000 {
+		t.Fatalf("cacheWrite1h = %+v, want 400000", message.Usage.CacheWrite1h)
+	}
+	expectedCacheWriteCost := (600_000*model.Cost.CacheWrite + 400_000*model.Cost.Input*2) / 1_000_000
+	if diff := message.Usage.Cost.CacheWrite - expectedCacheWriteCost; diff > 1e-9 || diff < -1e-9 {
+		t.Fatalf("cost.cacheWrite = %v, want ~%v", message.Usage.Cost.CacheWrite, expectedCacheWriteCost)
+	}
+}

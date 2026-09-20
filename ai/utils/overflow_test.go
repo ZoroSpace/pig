@@ -5,17 +5,25 @@
 package utils
 
 import (
+	"github.com/samber/lo"
+
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
 )
 
 func createErrorMessage(errorMessage string) types.AssistantMessage {
+	return createErrorMessageWithProvider(errorMessage, "ollama")
+}
+
+// v0.86.0: the provider is parameterized for the Cerebras bodyless-error
+// scoping regression (pi #9482).
+func createErrorMessageWithProvider(errorMessage string, provider string) types.AssistantMessage {
 	return types.AssistantMessage{
 		Role:     types.RoleAssistant,
 		Content:  []types.Content{},
 		API:      types.ApiOpenAICompletions,
-		Provider: "ollama",
+		Provider: types.ProviderID(provider),
 		Model:    "qwen3.5:35b",
 		Usage: types.Usage{
 			Cost: types.Cost{},
@@ -239,5 +247,19 @@ func TestIsContextOverflowDetectsVolcengineArkExceedMaxMessageTokens(t *testing.
 	)
 	if !IsContextOverflow(&message, 262144) {
 		t.Fatal("want overflow")
+	}
+}
+
+func TestIsContextOverflowScopesBodylessErrorsToCerebras(t *testing.T) {
+	// Regression for pi #9482: bodyless 400/413 are overflow errors only for
+	// Cerebras; other providers report a bodyless request failure that must
+	// not be treated as overflow.
+	for _, errorMessage := range []string{"400 status code (no body)", "413 status code (no body)"} {
+		if !IsContextOverflow(lo.ToPtr(createErrorMessageWithProvider(errorMessage, "cerebras")), 131072) {
+			t.Errorf("%s (cerebras): want overflow", errorMessage)
+		}
+		if IsContextOverflow(lo.ToPtr(createErrorMessageWithProvider(errorMessage, "opencode-go")), 1000000) {
+			t.Errorf("%s (opencode-go): want no overflow", errorMessage)
+		}
 	}
 }

@@ -467,8 +467,6 @@ func stringConstName(typeName, value string) string {
 		return maxTokensFieldConsts[value]
 	case "CacheControlFormat":
 		return cacheControlConsts[value]
-	case "DeferredToolsMode":
-		return deferredToolsConsts[value]
 	case "ChatTemplateVar":
 		return chatTemplateVarConsts[value]
 	case "ThinkingTokenBudgetField":
@@ -557,10 +555,6 @@ var maxTokensFieldConsts = map[string]string{
 
 var cacheControlConsts = map[string]string{
 	"anthropic": "CacheControlAnthropic",
-}
-
-var deferredToolsConsts = map[string]string{
-	"kimi": "DeferredToolsKimi",
 }
 
 var chatTemplateVarConsts = map[string]string{

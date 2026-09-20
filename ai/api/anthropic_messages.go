@@ -761,8 +761,8 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 
 			var copilotDynamicHeaders map[string]string
 			if model.Provider == types.ProviderID("github-copilot") {
-				hasImages := HasCopilotVisionInput(llmContext.Messages)
-				copilotDynamicHeaders = BuildCopilotDynamicHeaders(llmContext.Messages, hasImages)
+				hasImages := HasCopilotVisionInput(normalizedContext.Messages)
+				copilotDynamicHeaders = BuildCopilotDynamicHeaders(normalizedContext.Messages, hasImages)
 			}
 
 			cacheRetention, _ := getCacheControl(model, options.CacheRetention, options.Env)
@@ -773,7 +773,7 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 
 			created := createAnthropicClient(model, apiKey, options.Headers, options.Fetch, copilotDynamicHeaders, cacheSessionID)
 
-			params, err := buildAnthropicParams(model, llmContext, created.isOAuthToken, options)
+			params, err := buildAnthropicParams(model, normalizedContext, created.isOAuthToken, options)
 			if err != nil {
 				return err
 			}

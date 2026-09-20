@@ -248,6 +248,27 @@ func inputOf(m *ModelsDevModel) []ai.ModelInput {
 // `cost: { input: m.cost?.input || 0, ... }` four-field form; tiers are not
 // carried for the ported providers — pi uses getModelsDevCost only for
 // github-copilot, which pig has not ported yet).
+// modelsDevFlatCostOf builds the flat cost shape used by every inline
+// models.dev block except github-copilot (pi: the inline
+// `cost: { input: m.cost?.input || 0, ... }` literals — no tiers).
+func modelsDevFlatCostOf(c *ModelsDevCost) ai.ModelCost {
+	var rates ai.ModelCostRates
+	if c != nil {
+		if c.Input != nil {
+			rates.Input = *c.Input
+		}
+		if c.Output != nil {
+			rates.Output = *c.Output
+		}
+		if c.CacheRead != nil {
+			rates.CacheRead = *c.CacheRead
+		}
+		if c.CacheWrite != nil {
+			rates.CacheWrite = *c.CacheWrite
+		}
+	}
+	return ai.ModelCost{ModelCostRates: rates}
+}
 func modelsDevCostOf(c *ModelsDevCost) ai.ModelCost {
 	var input, output, cacheRead, cacheWrite *float64
 	var tiers []ai.ModelCostTier

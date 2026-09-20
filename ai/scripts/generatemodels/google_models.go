@@ -88,6 +88,23 @@ func processGoogleModels(data ModelsDevCatalog) []*ai.Model {
 			}
 		}
 		thinkingLevelMap := getGoogleThinkingLevelMap(modelID, source.ReasoningOptions)
+		// pi v0.86.0 builds the google cost flat (processGoogleModels): no
+		// cost.tiers, unlike the generic getModelsDevCost path.
+		cost := ai.ModelCostRates{}
+		if source.Cost != nil {
+			if source.Cost.Input != nil {
+				cost.Input = *source.Cost.Input
+			}
+			if source.Cost.Output != nil {
+				cost.Output = *source.Cost.Output
+			}
+			if source.Cost.CacheRead != nil {
+				cost.CacheRead = *source.Cost.CacheRead
+			}
+			if source.Cost.CacheWrite != nil {
+				cost.CacheWrite = *source.Cost.CacheWrite
+			}
+		}
 		models = append(models, &ai.Model{
 			ID:               modelID,
 			Name:             orString(m.Name, modelID),
@@ -97,7 +114,7 @@ func processGoogleModels(data ModelsDevCatalog) []*ai.Model {
 			Reasoning:        boolVal(source.Reasoning),
 			ThinkingLevelMap: derefThinkingLevelMap(thinkingLevelMap),
 			Input:            inputOf(source),
-			Cost:             modelsDevCostOf(source.Cost),
+			Cost:             ai.ModelCost{ModelCostRates: cost},
 			ContextWindow:    int64Or(limitContext(source), 4096),
 			MaxTokens:        int64Or(limitOutput(source), 4096),
 		})

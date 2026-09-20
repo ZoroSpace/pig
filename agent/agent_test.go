@@ -8,13 +8,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // ---- shared fixtures ----
@@ -999,7 +1004,9 @@ func TestAgentForwardsShouldStopAfterTurn(t *testing.T) {
 	if !sawRunContext.Load() {
 		t.Error("shouldStopAfterTurn did not receive a live run context")
 	}
-	wantRoles := []types.Role{types.RoleUser, types.RoleAssistant, types.RoleToolResult}
+	// v0.86.0: the loop announces the tool loadout with a leading system
+	// message (pi: expect(callbackContextRoles).toEqual(["system", ...])).
+	wantRoles := []types.Role{types.RoleSystem, types.RoleUser, types.RoleAssistant, types.RoleToolResult}
 	if len(callbackContextRoles) != len(wantRoles) {
 		t.Fatalf("context roles = %v, want %v", callbackContextRoles, wantRoles)
 	}
@@ -1042,5 +1049,246 @@ func TestAgentForwardsSessionID(t *testing.T) {
 	}
 	if receivedSessionID.Load() == nil || *receivedSessionID.Load() != "session-def" {
 		t.Errorf("sessionId = %v, want session-def", receivedSessionID.Load())
+	}
+}
+
+// --- pi v0.86.0 agent.test.ts: transcript state / tool-change declaration.
+
+// agentTestTool builds a minimal executable tool (pi: createTool).
+func agentTestTool(name string) AgentTool {
+	return AgentTool{
+		Tool: types.Tool{Name: name, Description: name + " tool", Parameters: json.RawMessage(`{"type":"object","properties":{}}`)},
+		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate AgentToolUpdateCallback) (AgentToolResult, error) {
+			return AgentToolResult{Content: []types.Content{types.NewTextContent("ok")}}, nil
+		},
+	}
+}
+
+// agentTestDoneStreamFn returns a stream fn that records the system-message
+// tool deltas of every request and answers "done" (pi: the request recorder
+// in the tool-change tests).
+func agentTestDoneStreamFn(requests *[][]string) StreamFn {
+	return func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		var deltas []string
+		for _, message := range llmContext.Messages {
+			if sys, ok := message.(types.SystemMessage); ok {
+				added := "+"
+				for i, tool := range sys.ToolsAdded {
+					if i > 0 {
+						added += ","
+					}
+					added += tool.Name
+				}
+				deltas = append(deltas, added)
+				removed := "-"
+				for i, ref := range sys.ToolsRemoved {
+					if i > 0 {
+						removed += ","
+					}
+					removed += ref.Name
+				}
+				deltas = append(deltas, removed)
+			}
+		}
+		*requests = append(*requests, deltas)
+		return mockStreamFn(doneEvent(agentTestAssistantMessage("done")))(ctx, model, llmContext, options)
+	}
+}
+
+func agentSystemMessageAt(messages []AgentMessage, index int) types.SystemMessage {
+	message := messages[index]
+	if sys, ok := message.(types.SystemMessage); ok {
+		return sys
+	}
+	if sys, ok := message.(*types.SystemMessage); ok {
+		return *sys
+	}
+	panic(fmt.Sprintf("messages[%d] = %T, want SystemMessage", index, message))
+}
+
+func TestAgentConvertsInitialPromptAndToolsIntoTranscriptState(t *testing.T) {
+	tool := agentTestTool("echo")
+	agent, err := NewAgent(AgentOptions{
+		InitialState: &AgentState{SystemPrompt: "You are helpful.", Tools: []AgentTool{tool}},
+		StreamFn:     unusedStreamFunction,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial := agentSystemMessageAt(agent.State().Messages, 0)
+	if initial.Role != types.RoleSystem || initial.Content.String != "You are helpful." {
+		t.Fatalf("initial = %+v", initial)
+	}
+	if len(initial.ToolsAdded) != 1 || initial.ToolsAdded[0].Name != "echo" {
+		t.Fatalf("toolsAdded = %+v", initial.ToolsAdded)
+	}
+}
+
+func TestAgentDeclaresToolLoadoutChangesBeforeNextRequest(t *testing.T) {
+	first := agentTestTool("first")
+	second := agentTestTool("second")
+	var requests [][]string
+	agent, err := NewAgent(AgentOptions{
+		InitialState: &AgentState{SystemPrompt: "You are helpful.", Tools: []AgentTool{first}},
+		StreamFn:     agentTestDoneStreamFn(&requests),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := agent.PromptText(context.Background(), "one"); err != nil {
+		t.Fatal(err)
+	}
+	agent.State().Tools = []AgentTool{second}
+	if err := agent.PromptText(context.Background(), "two"); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.PromptText(context.Background(), "three"); err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		{"+first", "-"},
+		{"+first", "-", "+second", "-first"},
+		{"+first", "-", "+second", "-first"},
+	}
+	if len(requests) != len(want) {
+		t.Fatalf("requests = %v, want %v", requests, want)
+	}
+	for i := range want {
+		if !reflect.DeepEqual(requests[i], want[i]) {
+			t.Fatalf("requests[%d] = %v, want %v", i, requests[i], want[i])
+		}
+	}
+
+	var update *types.SystemMessage
+	for _, message := range agent.State().Messages {
+		if sys, ok := message.(types.SystemMessage); ok && len(sys.ToolsRemoved) > 0 {
+			sysCopy := sys
+			update = &sysCopy
+		}
+	}
+	if update == nil || len(update.ToolsAdded) != 1 || update.ToolsAdded[0].Name != "second" ||
+		len(update.ToolsRemoved) != 1 || update.ToolsRemoved[0].Name != "first" {
+		t.Fatalf("update = %+v", update)
+	}
+}
+
+func TestAgentMergesToolChangesIntoPendingSystemMessage(t *testing.T) {
+	tool := agentTestTool("echo")
+	agent, err := NewAgent(AgentOptions{
+		InitialState: &AgentState{SystemPrompt: "You are helpful."},
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			count := 0
+			for _, message := range llmContext.Messages {
+				if message.MessageRole() == types.RoleSystem {
+					count++
+				}
+			}
+			if count != 2 {
+				t.Errorf("system messages in transcript = %d, want 2", count)
+			}
+			return mockStreamFn(doneEvent(agentTestAssistantMessage("done")))(ctx, model, llmContext, options)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	agent.State().Tools = []AgentTool{tool}
+	err = agent.Prompt(context.Background(),
+		types.SystemMessage{
+			Role:      types.RoleSystem,
+			Content:   types.SystemContent{},
+			Sections:  &types.SystemSections{Keys: []string{"skills"}, Values: map[string]*string{"skills": lo.ToPtr("<skills>x</skills>")}},
+			Timestamp: 1,
+		},
+		types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 2},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged := agentSystemMessageAt(agent.State().Messages, 1)
+	if merged.Role != types.RoleSystem || merged.Content.String != "" || merged.Timestamp != 1 {
+		t.Fatalf("merged = %+v", merged)
+	}
+	if merged.Sections == nil || len(merged.Sections.Keys) != 1 || merged.Sections.Keys[0] != "skills" {
+		t.Fatalf("sections = %+v", merged.Sections)
+	}
+	if len(merged.ToolsAdded) != 1 || merged.ToolsAdded[0].Name != "echo" || merged.ToolsAdded[0].Description != "echo tool" {
+		t.Fatalf("toolsAdded = %+v", merged.ToolsAdded)
+	}
+}
+
+func TestAgentRewritesPendingToolDeclarationsToMatchExecutableSet(t *testing.T) {
+	agent, err := NewAgent(AgentOptions{
+		InitialState: &AgentState{SystemPrompt: "You are helpful.", Tools: []AgentTool{agentTestTool("first")}},
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			return mockStreamFn(doneEvent(agentTestAssistantMessage("done")))(ctx, model, llmContext, options)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The pending message claims to add `second` and remove `first`, but the
+	// executable set still has `first` and lacks `second`: the executable set
+	// wins.
+	err = agent.Prompt(context.Background(),
+		types.SystemMessage{
+			Role:         types.RoleSystem,
+			Content:      types.SystemContent{},
+			Sections:     &types.SystemSections{Keys: []string{"note"}, Values: map[string]*string{"note": lo.ToPtr("<note>x</note>")}},
+			ToolsAdded:   []types.Tool{utils.ToToolDeclaration(agentTestTool("second").Tool)},
+			ToolsRemoved: []types.ToolReference{{Name: "first"}},
+			Timestamp:    1,
+		},
+		types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 2},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewritten := agentSystemMessageAt(agent.State().Messages, 1)
+	if rewritten.Role != types.RoleSystem || rewritten.Content.String != "" || rewritten.Timestamp != 1 {
+		t.Fatalf("rewritten = %+v", rewritten)
+	}
+	if rewritten.Sections == nil || len(rewritten.Sections.Keys) != 1 || rewritten.Sections.Keys[0] != "note" {
+		t.Fatalf("sections = %+v", rewritten.Sections)
+	}
+	if len(rewritten.ToolsAdded) != 0 || len(rewritten.ToolsRemoved) != 0 {
+		t.Fatalf("tool fields = %+v / %+v", rewritten.ToolsAdded, rewritten.ToolsRemoved)
+	}
+	current := utils.GetCurrentSystemMessage(agent.State().Messages)
+	if current == nil || len(current.ToolsAdded) != 1 || current.ToolsAdded[0].Name != "first" {
+		t.Fatalf("current = %+v", current)
+	}
+}
+
+func TestAgentRestoresTranscriptBaselineOnReset(t *testing.T) {
+	tool := agentTestTool("echo")
+	agent, err := NewAgent(AgentOptions{
+		InitialState: &AgentState{
+			SystemPrompt: "You are helpful.",
+			Tools:        []AgentTool{tool},
+			Messages:     []AgentMessage{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "old"}, Timestamp: 1}},
+		},
+		StreamFn: unusedStreamFunction,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := agent.Reset(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(agent.State().Messages) != 1 {
+		t.Fatalf("messages = %d, want 1", len(agent.State().Messages))
+	}
+	initial := agentSystemMessageAt(agent.State().Messages, 0)
+	if initial.Role != types.RoleSystem || initial.Content.String != "You are helpful." {
+		t.Fatalf("initial = %+v", initial)
+	}
+	if len(initial.ToolsAdded) != 1 || initial.ToolsAdded[0].Name != "echo" {
+		t.Fatalf("toolsAdded = %+v", initial.ToolsAdded)
 	}
 }

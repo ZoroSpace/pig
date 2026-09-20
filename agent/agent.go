@@ -52,7 +52,8 @@ func defaultConvertToLlm(messages []AgentMessage) []types.Message {
 	var out []types.Message
 	for _, message := range messages {
 		switch message.MessageRole() {
-		case types.RoleUser, types.RoleAssistant, types.RoleToolResult:
+		// v0.86.0: system messages ride the transcript.
+		case types.RoleSystem, types.RoleUser, types.RoleAssistant, types.RoleToolResult:
 			out = append(out, message)
 		}
 	}
@@ -265,7 +266,9 @@ func NewAgent(options AgentOptions) (*Agent, error) {
 	}
 	if initialMessage := utils.CreateInitialSystemMessage(agent.state.SystemPrompt, initialTools); initialMessage != nil &&
 		(len(agent.state.Messages) == 0 || agent.state.Messages[0].MessageRole() != types.RoleSystem) {
-		agent.state.Messages = append([]AgentMessage{initialMessage}, agent.state.Messages...)
+		// Value form: adapter message switches match value types (JSONL
+		// decoding produces values).
+		agent.state.Messages = append([]AgentMessage{*initialMessage}, agent.state.Messages...)
 	}
 	agent.state.SystemPrompt = utils.GetCurrentSystemPrompt(agent.state.Messages)
 
@@ -471,7 +474,7 @@ func (a *Agent) Reset() error {
 	// v0.86.0: clear conversation state while retaining the replayed
 	// prompt/tool baseline.
 	if baseline := utils.GetCurrentSystemMessage(a.state.Messages); baseline != nil {
-		a.state.Messages = []AgentMessage{baseline}
+		a.state.Messages = []AgentMessage{*baseline}
 	} else {
 		a.state.Messages = []AgentMessage{}
 	}

@@ -27,6 +27,7 @@ func CreateInitialSystemMessage(systemPrompt string, tools []tool) *systemMessag
 		return nil
 	}
 	msg := &systemMessage{
+		Role:      aitypes.RoleSystem,
 		Content:   aitypes.SystemContent{String: systemPrompt},
 		Timestamp: 0,
 	}
@@ -46,7 +47,10 @@ func NormalizeContext(context *aitypes.Context) *aitypes.TranscriptContext {
 	}
 	var messages []aitypes.Message
 	if initial != nil {
-		messages = append(messages, initial)
+		// Embed the value form: pig's canonical transcript shape is value
+		// messages (JSONL decoding produces values), and adapter switches
+		// match value types.
+		messages = append(messages, *initial)
 	}
 	if context != nil {
 		messages = append(messages, context.Messages...)
@@ -92,37 +96,41 @@ func WithoutInitialSystemMessage(messages []aitypes.Message) []aitypes.Message {
 
 // GetCurrentTools resolves the tools available after applying every
 // transcript delta in order.
+//
+// pi builds a single TS Map: delete drops the key, set on an existing key
+// updates in place, set on a deleted/new key appends at the end of the
+// iteration order. The ordered slice below emulates exactly that (a
+// two-pass rebuild would leave stale entries for add-then-remove
+// histories).
 func GetCurrentTools(messages TranscriptMessages) []tool {
 	tools := make(map[string]tool)
+	var order []string
 	for _, message := range messages {
 		m, ok := asSystemMessage(message)
 		if !ok {
 			continue
 		}
 		for _, ref := range m.ToolsRemoved {
-			delete(tools, ref.Name)
+			if _, exists := tools[ref.Name]; exists {
+				delete(tools, ref.Name)
+				for i, name := range order {
+					if name == ref.Name {
+						order = append(order[:i], order[i+1:]...)
+						break
+					}
+				}
+			}
 		}
 		for _, t := range m.ToolsAdded {
+			if _, exists := tools[t.Name]; !exists {
+				order = append(order, t.Name)
+			}
 			tools[t.Name] = t
 		}
 	}
-	out := make([]tool, 0, len(tools))
-	// Preserve first-declaration order like the TS Map insertion order.
-	seen := make(map[string]bool)
-	for _, message := range messages {
-		m, ok := asSystemMessage(message)
-		if !ok {
-			continue
-		}
-		for _, ref := range m.ToolsRemoved {
-			delete(seen, ref.Name)
-		}
-		for _, t := range m.ToolsAdded {
-			if !seen[t.Name] {
-				seen[t.Name] = true
-				out = append(out, tools[t.Name])
-			}
-		}
+	out := make([]tool, 0, len(order))
+	for _, name := range order {
+		out = append(out, tools[name])
 	}
 	return out
 }
@@ -150,12 +158,23 @@ func GetCurrentSystemMessage(messages TranscriptMessages) *systemMessage {
 		}
 		if m.Sections != nil {
 			for _, name := range m.Sections.Keys {
-				if _, existed := sections[name]; !existed && m.Sections.Values[name] != nil {
-					sectionOrder = append(sectionOrder, name)
-				}
+				// Emulate the TS Map in pi: delete removes the key from the
+				// iteration order, set on an existing key updates in place,
+				// set on a deleted/new key appends at the end.
 				if m.Sections.Values[name] == nil {
-					delete(sections, name)
+					if _, existed := sections[name]; existed {
+						delete(sections, name)
+						for i, ordered := range sectionOrder {
+							if ordered == name {
+								sectionOrder = append(sectionOrder[:i], sectionOrder[i+1:]...)
+								break
+							}
+						}
+					}
 				} else {
+					if _, existed := sections[name]; !existed {
+						sectionOrder = append(sectionOrder, name)
+					}
 					sections[name] = m.Sections.Values[name]
 				}
 			}
@@ -170,6 +189,7 @@ func GetCurrentSystemMessage(messages TranscriptMessages) *systemMessage {
 		ts = *timestamp
 	}
 	msg := &systemMessage{
+		Role:      aitypes.RoleSystem,
 		Content:   aitypes.SystemContent{String: joinDouble(content)},
 		Timestamp: ts,
 	}
@@ -216,7 +236,8 @@ func CollapseSystemMessages(context *aitypes.TranscriptContext) *aitypes.Transcr
 		messages = append(messages, message)
 	}
 	if head != nil {
-		messages = append([]aitypes.Message{head}, messages...)
+		// Value form for the same reason as NormalizeContext.
+		messages = append([]aitypes.Message{*head}, messages...)
 	}
 	return &aitypes.TranscriptContext{Messages: messages}
 }

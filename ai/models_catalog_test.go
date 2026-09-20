@@ -91,3 +91,25 @@ func TestBuiltinCatalogMatchesPiData(t *testing.T) {
 		})
 	}
 }
+
+// Regression test for pi #9209 (v0.86.0): all GitHub Copilot GPT models
+// route through the Responses API (pi: model-catalog-types.test.ts "routes
+// all GitHub Copilot GPT models through the Responses API").
+func TestBuiltinCatalogCopilotGPTModelsUseResponsesAPI(t *testing.T) {
+	models, ok := MODELS[ProviderID("github-copilot")]
+	if !ok {
+		t.Fatal("github-copilot missing from the builtin catalog")
+	}
+	count := 0
+	for id, model := range models {
+		if len(id) >= 4 && id[:4] == "gpt-" {
+			count++
+			if model.API != ApiOpenAIResponses {
+				t.Errorf("copilot model %s api = %s, want %s", id, model.API, ApiOpenAIResponses)
+			}
+		}
+	}
+	if count == 0 {
+		t.Fatal("no gpt-* models in the github-copilot catalog")
+	}
+}

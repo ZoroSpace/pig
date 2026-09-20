@@ -147,7 +147,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax: lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -212,9 +212,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax: lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.3, Output: 16.5, CacheRead: 0.33, CacheWrite: 4.125}},
 			ContextWindow: 1000000,
-			MaxTokens:     64000,
+			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -234,9 +234,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
-			Compat: &BedrockCompat{
-				SupportsStrictMode: lo.ToPtr(true),
-			},
 		},
 		"apac.amazon.nova-lite-v1:0": {
 			ID:            "apac.amazon.nova-lite-v1:0",
@@ -274,6 +271,18 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 300000,
 			MaxTokens:     10000,
 		},
+		"apac.anthropic.claude-sonnet-4-20250514-v1:0": {
+			ID:            "apac.anthropic.claude-sonnet-4-20250514-v1:0",
+			Name:          "Claude Sonnet 4 (APAC)",
+			API:           Api("bedrock-converse-stream"),
+			Provider:      ProviderID("amazon-bedrock"),
+			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			ContextWindow: 200000,
+			MaxTokens:     64000,
+		},
 		"au.anthropic.claude-haiku-4-5-20251001-v1:0": {
 			ID:            "au.anthropic.claude-haiku-4-5-20251001-v1:0",
 			Name:          "Claude Haiku 4.5 (AU)",
@@ -282,7 +291,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.1, CacheWrite: 1.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.1, Output: 5.5, CacheRead: 0.11, CacheWrite: 1.375}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
 			Compat: &BedrockCompat{
@@ -300,7 +309,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax: lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 16.5, Output: 82.5, CacheRead: 1.65, CacheWrite: 20.625}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -335,7 +344,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
@@ -351,7 +360,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
@@ -363,7 +372,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.3, Output: 16.5, CacheRead: 0.33, CacheWrite: 4.125}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
 			Compat: &BedrockCompat{
@@ -400,12 +409,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
-			Compat: &BedrockCompat{
-				SupportsStrictMode: lo.ToPtr(true),
-			},
 		},
 		"ca.amazon.nova-lite-v1:0": {
 			ID:            "ca.amazon.nova-lite-v1:0",
@@ -610,6 +616,18 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
+		"eu.anthropic.claude-sonnet-4-20250514-v1:0": {
+			ID:            "eu.anthropic.claude-sonnet-4-20250514-v1:0",
+			Name:          "Claude Sonnet 4 (EU)",
+			API:           Api("bedrock-converse-stream"),
+			Provider:      ProviderID("amazon-bedrock"),
+			BaseURL:       "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			ContextWindow: 200000,
+			MaxTokens:     64000,
+		},
 		"eu.anthropic.claude-sonnet-4-5-20250929-v1:0": {
 			ID:            "eu.anthropic.claude-sonnet-4-5-20250929-v1:0",
 			Name:          "Claude Sonnet 4.5 (EU)",
@@ -638,7 +656,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.3, Output: 16.5, CacheRead: 0.33, CacheWrite: 4.125}},
 			ContextWindow: 1000000,
-			MaxTokens:     64000,
+			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -658,9 +676,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
-			Compat: &BedrockCompat{
-				SupportsStrictMode: lo.ToPtr(true),
-			},
 		},
 		"eu.mistral.pixtral-large-2502-v1:0": {
 			ID:            "eu.mistral.pixtral-large-2502-v1:0",
@@ -816,6 +831,18 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
+		"global.anthropic.claude-sonnet-4-20250514-v1:0": {
+			ID:            "global.anthropic.claude-sonnet-4-20250514-v1:0",
+			Name:          "Claude Sonnet 4 (Global)",
+			API:           Api("bedrock-converse-stream"),
+			Provider:      ProviderID("amazon-bedrock"),
+			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			ContextWindow: 200000,
+			MaxTokens:     64000,
+		},
 		"global.anthropic.claude-sonnet-4-5-20250929-v1:0": {
 			ID:            "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
 			Name:          "Claude Sonnet 4.5 (Global)",
@@ -844,7 +871,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
 			ContextWindow: 1000000,
-			MaxTokens:     64000,
+			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -864,9 +891,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
-			Compat: &BedrockCompat{
-				SupportsStrictMode: lo.ToPtr(true),
-			},
 		},
 		"global.openai.gpt-5.6-luna": {
 			ID:        "global.openai.gpt-5.6-luna",
@@ -878,13 +902,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.8, CacheRead: 0.04, CacheWrite: 0.5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -901,13 +920,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 8, Output: 30, CacheRead: 0.8, CacheWrite: 10}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -921,13 +935,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 2.5},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 18, CacheRead: 0.4, CacheWrite: 5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 2.5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -941,13 +950,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 20, Output: 75, CacheRead: 2, CacheWrite: 25}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -1021,13 +1025,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 0.44, Output: 1.98, CacheRead: 0.044, CacheWrite: 0.55}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -1044,13 +1043,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 19.8, CacheRead: 0.44, CacheWrite: 5.5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -1074,7 +1068,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.1, CacheWrite: 1.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.1, Output: 5.5, CacheRead: 0.11, CacheWrite: 1.375}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
 			Compat: &BedrockCompat{
@@ -1093,7 +1087,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
@@ -1109,7 +1103,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
@@ -1125,7 +1119,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
@@ -1137,7 +1131,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.3, Output: 16.5, CacheRead: 0.33, CacheWrite: 4.125}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
 			Compat: &BedrockCompat{
@@ -1155,9 +1149,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax: lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.3, Output: 16.5, CacheRead: 0.33, CacheWrite: 4.125}},
 			ContextWindow: 1000000,
-			MaxTokens:     64000,
+			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -1174,12 +1168,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
-			Compat: &BedrockCompat{
-				SupportsStrictMode: lo.ToPtr(true),
-			},
 		},
 		"meta.llama3-1-70b-instruct-v1:0": {
 			ID:            "meta.llama3-1-70b-instruct-v1:0",
@@ -1554,13 +1545,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 0.44, Output: 1.98, CacheRead: 0.044, CacheWrite: 0.55}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -1577,13 +1563,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 4.4, Output: 22, CacheRead: 0.44, CacheWrite: 5.5},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 8.8, Output: 33, CacheRead: 0.88, CacheWrite: 11}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4.4, Output: 22, CacheRead: 0.44, CacheWrite: 5.5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -1600,13 +1581,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 19.8, CacheRead: 0.44, CacheWrite: 5.5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -1623,13 +1599,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 11, Output: 55, CacheRead: 1.1, CacheWrite: 13.75},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 22, Output: 82.5, CacheRead: 2.2, CacheWrite: 27.5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 11, Output: 55, CacheRead: 1.1, CacheWrite: 13.75}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -1934,7 +1905,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 11, Output: 55, CacheRead: 1.1, CacheWrite: 13.75}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
@@ -1963,7 +1934,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.1, CacheWrite: 1.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.1, Output: 5.5, CacheRead: 0.11, CacheWrite: 1.375}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
 			Compat: &BedrockCompat{
@@ -1990,7 +1961,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
 			Compat: &BedrockCompat{
@@ -2008,7 +1979,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax: lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -2027,7 +1998,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
@@ -2043,7 +2014,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 		},
@@ -2059,9 +2030,21 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
+		},
+		"us.anthropic.claude-sonnet-4-20250514-v1:0": {
+			ID:            "us.anthropic.claude-sonnet-4-20250514-v1:0",
+			Name:          "Claude Sonnet 4 (US)",
+			API:           Api("bedrock-converse-stream"),
+			Provider:      ProviderID("amazon-bedrock"),
+			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			ContextWindow: 200000,
+			MaxTokens:     64000,
 		},
 		"us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
 			ID:            "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -2071,7 +2054,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.3, Output: 16.5, CacheRead: 0.33, CacheWrite: 4.125}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
 			Compat: &BedrockCompat{
@@ -2089,9 +2072,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax: lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.3, Output: 16.5, CacheRead: 0.33, CacheWrite: 4.125}},
 			ContextWindow: 1000000,
-			MaxTokens:     64000,
+			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -2108,12 +2091,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:   lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
-			Compat: &BedrockCompat{
-				SupportsStrictMode: lo.ToPtr(true),
-			},
 		},
 		"us.meta.llama3-1-70b-instruct-v1:0": {
 			ID:            "us.meta.llama3-1-70b-instruct-v1:0",
@@ -2197,13 +2177,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 0.44, Output: 1.98, CacheRead: 0.044, CacheWrite: 0.55}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -2220,13 +2195,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 4.4, Output: 22, CacheRead: 0.44, CacheWrite: 5.5},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 8.8, Output: 33, CacheRead: 0.88, CacheWrite: 11}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4.4, Output: 22, CacheRead: 0.44, CacheWrite: 5.5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -2240,13 +2210,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 19.8, CacheRead: 0.44, CacheWrite: 5.5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -2260,13 +2225,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 11, Output: 55, CacheRead: 1.1, CacheWrite: 13.75},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 22, Output: 82.5, CacheRead: 2.2, CacheWrite: 27.5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 11, Output: 55, CacheRead: 1.1, CacheWrite: 13.75}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -2497,8 +2457,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
-				ForceAdaptiveThinking: lo.ToPtr(true),
-				SupportsStrictTools:   lo.ToPtr(true),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsStrictTools:            lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SupportsMidConvoToolChanges:    lo.ToPtr(true),
 				AllowedFallbackModels: []AnthropicAllowedFallbackModel{
 					AnthropicAllowedFallbackModel{
 						Provider: ProviderID("anthropic"),
@@ -2546,8 +2508,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
-				ForceAdaptiveThinking: lo.ToPtr(true),
-				SupportsStrictTools:   lo.ToPtr(true),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsStrictTools:            lo.ToPtr(true),
+				SupportsMidConvoEffort:         lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SupportsMidConvoToolChanges:    lo.ToPtr(true),
 			},
 		},
 		"claude-haiku-4-5": {
@@ -2666,9 +2631,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
-				SupportsTemperature:   lo.ToPtr(false),
-				ForceAdaptiveThinking: lo.ToPtr(true),
-				SupportsStrictTools:   lo.ToPtr(true),
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsStrictTools:            lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SupportsMidConvoToolChanges:    lo.ToPtr(true),
 			},
 		},
 		"claude-opus-5": {
@@ -2687,9 +2654,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
-				SupportsTemperature:   lo.ToPtr(false),
-				ForceAdaptiveThinking: lo.ToPtr(true),
-				SupportsStrictTools:   lo.ToPtr(true),
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsStrictTools:            lo.ToPtr(true),
+				SupportsMidConvoEffort:         lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SupportsMidConvoToolChanges:    lo.ToPtr(true),
 				AllowedFallbackModels: []AnthropicAllowedFallbackModel{
 					AnthropicAllowedFallbackModel{
 						Provider: ProviderID("anthropic"),
@@ -3434,6 +3404,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3465,6 +3436,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3496,6 +3468,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3527,6 +3500,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3565,6 +3539,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3603,6 +3578,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3641,6 +3617,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3672,6 +3649,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3710,6 +3688,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3748,6 +3727,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3779,6 +3759,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3810,6 +3791,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3841,6 +3823,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3879,6 +3862,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3917,6 +3901,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3955,6 +3940,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -3993,6 +3979,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -4031,6 +4018,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -4062,6 +4050,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -4093,6 +4082,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -4124,6 +4114,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
@@ -4792,6 +4783,31 @@ var MODELS = map[ProviderID]map[string]Model{
 					{ModelCostRates: ModelCostRates{Input: 4, Output: 18, CacheRead: 0.4, CacheWrite: 5}, InputTokensAbove: 272000},
 				},
 			},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsStrictMode:         lo.ToPtr(true),
+				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+			},
+		},
+		"gpt-6-astra": {
+			ID:        "gpt-6-astra",
+			Name:      "GPT-6 Astra",
+			API:       Api("openai-responses"),
+			Provider:  ProviderCloudflareAIGateway,
+			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &OpenAIResponsesCompat{
@@ -5694,9 +5710,9 @@ var MODELS = map[ProviderID]map[string]Model{
 		},
 	},
 	ProviderDeepSeek: {
-		"deepseek-v4-flash": {
-			ID:        "deepseek-v4-flash",
-			Name:      "DeepSeek V4 Flash",
+		"deepseek-flash": {
+			ID:        "deepseek-flash",
+			Name:      "DeepSeek V4.1 Flash",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderDeepSeek,
 			BaseURL:   "https://api.deepseek.com",
@@ -5708,8 +5724,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.28, CacheRead: 0.0028, CacheWrite: 0}},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
@@ -5735,7 +5751,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.435, Output: 0.87, CacheRead: 0.003625, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.32, Output: 3.96, CacheRead: 0.044, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
@@ -5749,12 +5765,21 @@ var MODELS = map[ProviderID]map[string]Model{
 	},
 	ProviderFireworks: {
 		"accounts/fireworks/models/deepseek-v4-flash-0731": {
-			ID:            "accounts/fireworks/models/deepseek-v4-flash-0731",
-			Name:          "DeepSeek V4 Flash 0731",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/deepseek-v4-flash-0731",
+			Name:      "DeepSeek V4 Flash 0731",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
 			ContextWindow: 1000000,
@@ -5764,15 +5789,26 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/deepseek-v4-flash-vision-exp": {
-			ID:            "accounts/fireworks/models/deepseek-v4-flash-vision-exp",
-			Name:          "DeepSeek V4 Flash Vision Exp",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/deepseek-v4-flash-vision-exp",
+			Name:      "DeepSeek V4 Flash Vision Exp",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
 			ContextWindow: 1000000,
@@ -5782,15 +5818,55 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
+		"accounts/fireworks/models/deepseek-v4-pro": {
+			ID:        "accounts/fireworks/models/deepseek-v4-pro",
+			Name:      "DeepSeek V4 Pro",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     nil,
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 1.2, CacheRead: 0.6, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     384000,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/deepseek-v4-pro-0813": {
-			ID:            "accounts/fireworks/models/deepseek-v4-pro-0813",
-			Name:          "DeepSeek V4 Pro 0813",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/deepseek-v4-pro-0813",
+			Name:      "DeepSeek V4 Pro 0813",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.32, Output: 3.96, CacheRead: 0.044, CacheWrite: 0}},
 			ContextWindow: 1000000,
@@ -5800,15 +5876,26 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/deepseek-v4p1-flash": {
-			ID:            "accounts/fireworks/models/deepseek-v4p1-flash",
-			Name:          "DeepSeek V4.1 Flash",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/deepseek-v4p1-flash",
+			Name:      "DeepSeek V4.1 Flash",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
 			ContextWindow: 1000000,
@@ -5818,6 +5905,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/glm-5p2": {
@@ -5830,8 +5919,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("high"),
-				ModelThinkingMedium:  lo.ToPtr("high"),
+				ModelThinkingLow:     nil,
+				ModelThinkingMedium:  nil,
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingXHigh:   nil,
 				ModelThinkingMax:     lo.ToPtr("max"),
@@ -5848,12 +5937,21 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 		},
 		"accounts/fireworks/models/glm-5p3": {
-			ID:            "accounts/fireworks/models/glm-5p3",
-			Name:          "GLM 5.3",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/glm-5p3",
+			Name:      "GLM 5.3",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
 			ContextWindow: 1048573,
@@ -5863,15 +5961,26 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/glm-5p3-flash": {
-			ID:            "accounts/fireworks/models/glm-5p3-flash",
-			Name:          "GLM 5.3 Flash",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/glm-5p3-flash",
+			Name:      "GLM 5.3 Flash",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.5, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 1048573,
@@ -5881,15 +5990,26 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/gpt-oss-120b": {
-			ID:            "accounts/fireworks/models/gpt-oss-120b",
-			Name:          "GPT OSS 120B",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/gpt-oss-120b",
+			Name:      "GPT OSS 120B",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
+			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.015, CacheWrite: 0}},
 			ContextWindow: 131072,
@@ -5899,6 +6019,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/inkling": {
@@ -5917,6 +6039,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/kimi-k2p6": {
@@ -5935,6 +6058,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/kimi-k2p7-code": {
@@ -5953,6 +6077,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/kimi-k3": {
@@ -5966,7 +6091,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
 				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingMedium:  nil,
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingXHigh:   nil,
 				ModelThinkingMax:     lo.ToPtr("max"),
@@ -5984,13 +6109,51 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
+		"accounts/fireworks/models/minimax-m2p7": {
+			ID:        "accounts/fireworks/models/minimax-m2p7",
+			Name:      "MiniMax-M2.7",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 1.2, CacheRead: 0.6, CacheWrite: 0}},
+			ContextWindow: 196608,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
 		"accounts/fireworks/models/minimax-m3": {
-			ID:            "accounts/fireworks/models/minimax-m3",
-			Name:          "MiniMax-M3",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/minimax-m3",
+			Name:      "MiniMax-M3",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
+			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
 			ContextWindow: 512000,
@@ -6000,33 +6163,26 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
-			},
-		},
-		"accounts/fireworks/models/mistral-large-3-fp8": {
-			ID:            "accounts/fireworks/models/mistral-large-3-fp8",
-			Name:          "Mistral Large 3 675B Instruct 2512",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     false,
-			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     262144,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/muse-glimmer-30b": {
-			ID:            "accounts/fireworks/models/muse-glimmer-30b",
-			Name:          "Muse Glimmer 30B",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/muse-glimmer-30b",
+			Name:      "Muse Glimmer 30B",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     nil,
+			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.35, Output: 1.5, CacheRead: 0.04, CacheWrite: 0}},
 			ContextWindow: 131072,
@@ -6036,6 +6192,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/nemotron-3-ultra-nvfp4": {
@@ -6054,6 +6212,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b": {
@@ -6072,15 +6231,25 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/qwen3p7-plus": {
-			ID:            "accounts/fireworks/models/qwen3p7-plus",
-			Name:          "Qwen 3.7 Plus",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/qwen3p7-plus",
+			Name:      "Qwen 3.7 Plus",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
+			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.6, CacheRead: 0.08, CacheWrite: 0}},
 			ContextWindow: 262144,
@@ -6090,15 +6259,26 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/qwen3p8-2p4t-a95b": {
-			ID:            "accounts/fireworks/models/qwen3p8-2p4t-a95b",
-			Name:          "Qwen3.8 2.4T A95B",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/qwen3p8-2p4t-a95b",
+			Name:      "Qwen3.8 2.4T A95B",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    nil,
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     nil,
+			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.25, CacheWrite: 0}},
 			ContextWindow: 262144,
@@ -6108,15 +6288,26 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/qwen3p8-max": {
-			ID:            "accounts/fireworks/models/qwen3p8-max",
-			Name:          "Qwen3.8 Max",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/models/qwen3p8-max",
+			Name:      "Qwen3.8 Max",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    nil,
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     nil,
+			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.25, CacheWrite: 0}},
 			ContextWindow: 262144,
@@ -6126,6 +6317,66 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
+		"accounts/fireworks/routers/deepseek-flash-latest": {
+			ID:        "accounts/fireworks/routers/deepseek-flash-latest",
+			Name:      "DeepSeek Flash Latest",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     384000,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
+		"accounts/fireworks/routers/deepseek-pro-latest": {
+			ID:        "accounts/fireworks/routers/deepseek-pro-latest",
+			Name:      "DeepSeek Pro Latest",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     nil,
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.32, Output: 3.96, CacheRead: 0.044, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     384000,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/routers/glm-5p2-fast": {
@@ -6138,8 +6389,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("high"),
-				ModelThinkingMedium:  lo.ToPtr("high"),
+				ModelThinkingLow:     nil,
+				ModelThinkingMedium:  nil,
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingXHigh:   nil,
 				ModelThinkingMax:     lo.ToPtr("max"),
@@ -6156,12 +6407,21 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 		},
 		"accounts/fireworks/routers/glm-5p3-fast": {
-			ID:            "accounts/fireworks/routers/glm-5p3-fast",
-			Name:          "GLM 5.3 Fast",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderFireworks,
-			BaseURL:       "https://api.fireworks.ai/inference",
-			Reasoning:     true,
+			ID:        "accounts/fireworks/routers/glm-5p3-fast",
+			Name:      "GLM 5.3 Fast",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.1, Output: 6.6, CacheRead: 0.39, CacheWrite: 0}},
 			ContextWindow: 1048572,
@@ -6171,6 +6431,124 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:      lo.ToPtr(false),
 				SendSessionAffinityHeaders:      lo.ToPtr(true),
 				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
+		"accounts/fireworks/routers/glm-fast-latest": {
+			ID:        "accounts/fireworks/routers/glm-fast-latest",
+			Name:      "GLM 5.3 Fast (Latest)",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.1, Output: 6.6, CacheRead: 0.39, CacheWrite: 0}},
+			ContextWindow: 1048572,
+			MaxTokens:     262144,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
+		"accounts/fireworks/routers/glm-flash-latest": {
+			ID:        "accounts/fireworks/routers/glm-flash-latest",
+			Name:      "GLM Flash Latest (GLM 5.3 Flash)",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.5, CacheRead: 0.03, CacheWrite: 0}},
+			ContextWindow: 1048573,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
+		"accounts/fireworks/routers/glm-latest": {
+			ID:        "accounts/fireworks/routers/glm-latest",
+			Name:      "GLM Latest",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
+			ContextWindow: 1048573,
+			MaxTokens:     262144,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
+		"accounts/fireworks/routers/kimi-fast-latest": {
+			ID:        "accounts/fireworks/routers/kimi-fast-latest",
+			Name:      "Kimi Fast Latest",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4.5, Output: 22.5, CacheRead: 0.45, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/routers/kimi-k3-fast": {
@@ -6184,7 +6562,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
 				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingMedium:  nil,
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingXHigh:   nil,
 				ModelThinkingMax:     lo.ToPtr("max"),
@@ -6200,6 +6578,83 @@ var MODELS = map[ProviderID]map[string]Model{
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 				SupportsLongCacheRetention: lo.ToPtr(false),
+			},
+		},
+		"accounts/fireworks/routers/kimi-latest": {
+			ID:        "accounts/fireworks/routers/kimi-latest",
+			Name:      "Kimi Latest",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
+		"accounts/fireworks/routers/minimax-latest": {
+			ID:        "accounts/fireworks/routers/minimax-latest",
+			Name:      "MiniMax Latest",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderFireworks,
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
+			ContextWindow: 512000,
+			MaxTokens:     512000,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
+			},
+		},
+		"accounts/fireworks/routers/qwen-max-latest": {
+			ID:            "accounts/fireworks/routers/qwen-max-latest",
+			Name:          "Qwen Max Latest (Qwen3.8 Max)",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderFireworks,
+			BaseURL:       "https://api.fireworks.ai/inference",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.25, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 	},
@@ -6227,7 +6682,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				"User-Agent":             "GitHubCopilotChat/0.35.0",
 			},
 			Compat: &AnthropicMessagesCompat{
-				ForceAdaptiveThinking: lo.ToPtr(true),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 			},
 		},
 		"claude-fable-5.1": {
@@ -6253,7 +6709,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				"User-Agent":             "GitHubCopilotChat/0.35.0",
 			},
 			Compat: &AnthropicMessagesCompat{
-				ForceAdaptiveThinking: lo.ToPtr(true),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 			},
 		},
 		"claude-haiku-4.5": {
@@ -6327,8 +6784,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				"User-Agent":             "GitHubCopilotChat/0.35.0",
 			},
 			Compat: &AnthropicMessagesCompat{
-				SupportsTemperature:   lo.ToPtr(false),
-				ForceAdaptiveThinking: lo.ToPtr(true),
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 			},
 		},
 		"claude-opus-5": {
@@ -6354,8 +6812,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				"User-Agent":             "GitHubCopilotChat/0.35.0",
 			},
 			Compat: &AnthropicMessagesCompat{
-				SupportsTemperature:   lo.ToPtr(false),
-				ForceAdaptiveThinking: lo.ToPtr(true),
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 			},
 		},
 		"claude-sonnet-4.6": {
@@ -6593,6 +7052,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Compat: &OpenAIResponsesCompat{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.4-mini": {
@@ -6623,6 +7083,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Compat: &OpenAIResponsesCompat{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.4-nano": {
@@ -6684,6 +7145,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Compat: &OpenAIResponsesCompat{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.6-luna": {
@@ -6719,6 +7181,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Compat: &OpenAIResponsesCompat{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.6-sol": {
@@ -6754,6 +7217,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Compat: &OpenAIResponsesCompat{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.6-terra": {
@@ -6789,18 +7253,24 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Compat: &OpenAIResponsesCompat{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-6-astra": {
 			ID:        "gpt-6-astra",
 			Name:      "GPT-6 Astra",
-			API:       ApiOpenAICompletions,
+			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingXHigh: lo.ToPtr("xhigh"),
-				ModelThinkingMax:   lo.ToPtr("max"),
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input: []ModelInput{ModelInputText, ModelInputImage},
 			Cost: ModelCost{
@@ -6817,10 +7287,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				"Editor-Version":         "vscode/1.107.0",
 				"User-Agent":             "GitHubCopilotChat/0.35.0",
 			},
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:           lo.ToPtr(false),
-				SupportsDeveloperRole:   lo.ToPtr(false),
-				SupportsReasoningEffort: lo.ToPtr(false),
+			Compat: &OpenAIResponsesCompat{
+				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"grok-4.5": {
@@ -6990,53 +7459,38 @@ var MODELS = map[ProviderID]map[string]Model{
 	},
 	ProviderID("google"): {
 		"deep-research-max-preview-04-2026": {
-			ID:        "deep-research-max-preview-04-2026",
-			Name:      "Deep Research Max Preview (Apr-21-2026)",
-			API:       Api("google-generative-ai"),
-			Provider:  ProviderID("google"),
-			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 18, CacheRead: 0.4, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			ID:            "deep-research-max-preview-04-2026",
+			Name:          "Deep Research Max Preview (Apr-21-2026)",
+			API:           Api("google-generative-ai"),
+			Provider:      ProviderID("google"),
+			BaseURL:       "https://generativelanguage.googleapis.com/v1beta",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     65536,
 		},
 		"deep-research-preview-04-2026": {
-			ID:        "deep-research-preview-04-2026",
-			Name:      "Deep Research Preview (Apr-21-2026)",
-			API:       Api("google-generative-ai"),
-			Provider:  ProviderID("google"),
-			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 18, CacheRead: 0.4, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			ID:            "deep-research-preview-04-2026",
+			Name:          "Deep Research Preview (Apr-21-2026)",
+			API:           Api("google-generative-ai"),
+			Provider:      ProviderID("google"),
+			BaseURL:       "https://generativelanguage.googleapis.com/v1beta",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     65536,
 		},
 		"gemini-2.5-computer-use-preview-10-2025": {
-			ID:        "gemini-2.5-computer-use-preview-10-2025",
-			Name:      "Gemini 2.5 Computer Use Preview 10-2025",
-			API:       Api("google-generative-ai"),
-			Provider:  ProviderID("google"),
-			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			ID:            "gemini-2.5-computer-use-preview-10-2025",
+			Name:          "Gemini 2.5 Computer Use Preview 10-2025",
+			API:           Api("google-generative-ai"),
+			Provider:      ProviderID("google"),
+			BaseURL:       "https://generativelanguage.googleapis.com/v1beta",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     65536,
 		},
@@ -7065,19 +7519,14 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     65536,
 		},
 		"gemini-2.5-pro": {
-			ID:        "gemini-2.5-pro",
-			Name:      "Gemini 2.5 Pro",
-			API:       Api("google-generative-ai"),
-			Provider:  ProviderID("google"),
-			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0.125, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			ID:            "gemini-2.5-pro",
+			Name:          "Gemini 2.5 Pro",
+			API:           Api("google-generative-ai"),
+			Provider:      ProviderID("google"),
+			BaseURL:       "https://generativelanguage.googleapis.com/v1beta",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0.125, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     65536,
 		},
@@ -7089,7 +7538,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0.05, CacheWrite: 0}},
@@ -7104,7 +7559,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1.5, CacheRead: 0.025, CacheWrite: 0}},
@@ -7119,7 +7580,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     nil,
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 30, CacheRead: 0, CacheWrite: 0}},
@@ -7134,7 +7601,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1.5, CacheRead: 0.025, CacheWrite: 0}},
@@ -7149,7 +7622,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 4.5, CacheRead: 0, CacheWrite: 0}},
@@ -7166,17 +7645,14 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("LOW"),
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("HIGH"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 18, CacheRead: 0.4, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     65536,
 		},
@@ -7190,17 +7666,14 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("LOW"),
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("HIGH"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 18, CacheRead: 0.4, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     65536,
 		},
@@ -7212,7 +7685,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 9, CacheRead: 0.15, CacheWrite: 0}},
@@ -7227,7 +7706,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2.5, CacheRead: 0.03, CacheWrite: 0}},
@@ -7242,7 +7727,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 3.75, CacheRead: 0.075, CacheWrite: 0}},
@@ -7257,7 +7748,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 3.75, CacheRead: 0.075, CacheWrite: 0}},
@@ -7272,7 +7769,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 3.75, CacheRead: 0.075, CacheWrite: 0}},
@@ -7287,7 +7790,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 9, CacheRead: 0.15, CacheWrite: 0}},
@@ -7302,7 +7811,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1.5, CacheRead: 0.025, CacheWrite: 0}},
@@ -7393,7 +7908,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0.05, CacheWrite: 0}},
@@ -7408,7 +7929,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1.5, CacheRead: 0.025, CacheWrite: 0}},
@@ -7425,9 +7952,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("LOW"),
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("HIGH"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0}},
@@ -7444,9 +7973,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("LOW"),
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("HIGH"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0}},
@@ -7461,7 +7992,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 9, CacheRead: 0.15, CacheWrite: 0}},
@@ -7476,7 +8013,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2.5, CacheRead: 0.03, CacheWrite: 0}},
@@ -7491,7 +8034,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 3.75, CacheRead: 0.075, CacheWrite: 0}},
@@ -7506,7 +8055,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 3.75, CacheRead: 0.075, CacheWrite: 0}},
@@ -7521,7 +8076,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 3.75, CacheRead: 0.075, CacheWrite: 0}},
@@ -7536,7 +8097,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 9, CacheRead: 0.15, CacheWrite: 0}},
@@ -7551,7 +8118,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1.5, CacheRead: 0.025, CacheWrite: 0}},
@@ -9105,19 +9678,14 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     131072,
 		},
 		"MiniMax-M3": {
-			ID:        "MiniMax-M3",
-			Name:      "MiniMax-M3",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderMinimax,
-			BaseURL:   "https://api.minimax.io/anthropic",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.12, CacheWrite: 0}, InputTokensAbove: 512000},
-				},
-			},
+			ID:            "MiniMax-M3",
+			Name:          "MiniMax-M3",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderMinimax,
+			BaseURL:       "https://api.minimax.io/anthropic",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     512000,
 		},
@@ -9148,19 +9716,14 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     131072,
 		},
 		"MiniMax-M3": {
-			ID:        "MiniMax-M3",
-			Name:      "MiniMax-M3",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderMinimaxCN,
-			BaseURL:   "https://api.minimaxi.com/anthropic",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.12, CacheWrite: 0}, InputTokensAbove: 512000},
-				},
-			},
+			ID:            "MiniMax-M3",
+			Name:          "MiniMax-M3",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderMinimaxCN,
+			BaseURL:       "https://api.minimaxi.com/anthropic",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     512000,
 		},
@@ -9785,6 +10348,29 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
+		"z-ai/glm-5.3": {
+			ID:            "z-ai/glm-5.3",
+			Name:          "GLM-5.3",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderNVIDIA,
+			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
+			Headers: map[string]string{
+				"NVCF-POLL-SECONDS": "3600",
+			},
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:              lo.ToPtr(false),
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				SupportsReasoningEffort:    lo.ToPtr(false),
+				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:         lo.ToPtr(false),
+				SupportsLongCacheRetention: lo.ToPtr(false),
+			},
+		},
 		"z-ai/glm-5.3-flash": {
 			ID:            "z-ai/glm-5.3-flash",
 			Name:          "GLM-5.3-Flash",
@@ -10270,7 +10856,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 0},
 				Tiers: []ModelCostTier{
 					{ModelCostRates: ModelCostRates{Input: 5, Output: 22.5, CacheRead: 0.5, CacheWrite: 0}, InputTokensAbove: 272000},
-					{ModelCostRates: ModelCostRates{Input: 5, Output: 22.5, CacheRead: 0.5, CacheWrite: 0}, InputTokensAbove: 272000},
 				},
 			},
 			ContextWindow: 272000,
@@ -10355,7 +10940,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelCostRates: ModelCostRates{Input: 30, Output: 180, CacheRead: 0, CacheWrite: 0},
 				Tiers: []ModelCostTier{
 					{ModelCostRates: ModelCostRates{Input: 60, Output: 270, CacheRead: 0, CacheWrite: 0}, InputTokensAbove: 272000},
-					{ModelCostRates: ModelCostRates{Input: 60, Output: 270, CacheRead: 0, CacheWrite: 0}, InputTokensAbove: 272000},
 				},
 			},
 			ContextWindow: 1050000,
@@ -10388,7 +10972,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelCostRates: ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0},
 				Tiers: []ModelCostTier{
 					{ModelCostRates: ModelCostRates{Input: 10, Output: 45, CacheRead: 1, CacheWrite: 0}, InputTokensAbove: 272000},
-					{ModelCostRates: ModelCostRates{Input: 10, Output: 45, CacheRead: 1, CacheWrite: 0}, InputTokensAbove: 272000},
 				},
 			},
 			ContextWindow: 272000,
@@ -10420,7 +11003,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost: ModelCost{
 				ModelCostRates: ModelCostRates{Input: 30, Output: 180, CacheRead: 0, CacheWrite: 0},
 				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 60, Output: 270, CacheRead: 0, CacheWrite: 0}, InputTokensAbove: 272000},
 					{ModelCostRates: ModelCostRates{Input: 60, Output: 270, CacheRead: 0, CacheWrite: 0}, InputTokensAbove: 272000},
 				},
 			},
@@ -10484,7 +11066,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost: ModelCost{
 				ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5},
 				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 8, Output: 30, CacheRead: 0.8, CacheWrite: 10}, InputTokensAbove: 272000},
 					{ModelCostRates: ModelCostRates{Input: 8, Output: 30, CacheRead: 0.8, CacheWrite: 10}, InputTokensAbove: 272000},
 				},
 			},
@@ -10551,7 +11132,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost: ModelCost{
 				ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5},
 				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 20, Output: 75, CacheRead: 2, CacheWrite: 25}, InputTokensAbove: 272000},
 					{ModelCostRates: ModelCostRates{Input: 20, Output: 75, CacheRead: 2, CacheWrite: 25}, InputTokensAbove: 272000},
 				},
 			},
@@ -10754,51 +11334,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
 			},
 		},
-		"gpt-5.4": {
-			ID:        "gpt-5.4",
-			Name:      "GPT-5.4",
-			API:       Api("openai-codex-responses"),
-			Provider:  ProviderID("openai-codex"),
-			BaseURL:   "https://chatgpt.com/backend-api",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: lo.ToPtr("low"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 5, Output: 22.5, CacheRead: 0.5, CacheWrite: 0}, InputTokensAbove: 272000},
-				},
-			},
-			ContextWindow: 272000,
-			MaxTokens:     128000,
-			Compat: &OpenAIResponsesCompat{
-				SupportsOpenAIGrammarTools: lo.ToPtr(true),
-				SupportsToolSearch:         lo.ToPtr(true),
-			},
-		},
-		"gpt-5.4-mini": {
-			ID:        "gpt-5.4-mini",
-			Name:      "GPT-5.4 mini",
-			API:       Api("openai-codex-responses"),
-			Provider:  ProviderID("openai-codex"),
-			BaseURL:   "https://chatgpt.com/backend-api",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: lo.ToPtr("low"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-			},
-			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 4.5, CacheRead: 0.075, CacheWrite: 0}},
-			ContextWindow: 272000,
-			MaxTokens:     128000,
-			Compat: &OpenAIResponsesCompat{
-				SupportsOpenAIGrammarTools: lo.ToPtr(true),
-				SupportsToolSearch:         lo.ToPtr(true),
-			},
-		},
 		"gpt-5.5": {
 			ID:        "gpt-5.5",
 			Name:      "GPT-5.5",
@@ -10972,7 +11507,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
-				ForceAdaptiveThinking: lo.ToPtr(true),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 			},
 		},
 		"claude-fable-5-1": {
@@ -10992,7 +11528,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
-				ForceAdaptiveThinking: lo.ToPtr(true),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 			},
 		},
 		"claude-haiku-4-5": {
@@ -11073,8 +11610,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
-				SupportsTemperature:   lo.ToPtr(false),
-				ForceAdaptiveThinking: lo.ToPtr(true),
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 			},
 		},
 		"claude-opus-5": {
@@ -11093,41 +11631,32 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
-				SupportsTemperature:   lo.ToPtr(false),
-				ForceAdaptiveThinking: lo.ToPtr(true),
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
 			},
 		},
 		"claude-sonnet-4": {
-			ID:        "claude-sonnet-4",
-			Name:      "Claude Sonnet 4",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderOpenCode,
-			BaseURL:   "https://opencode.ai/zen",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 6, Output: 22.5, CacheRead: 0.6, CacheWrite: 7.5}, InputTokensAbove: 200000},
-				},
-			},
+			ID:            "claude-sonnet-4",
+			Name:          "Claude Sonnet 4",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderOpenCode,
+			BaseURL:       "https://opencode.ai/zen",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
 		},
 		"claude-sonnet-4-5": {
-			ID:        "claude-sonnet-4-5",
-			Name:      "Claude Sonnet 4.5",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderOpenCode,
-			BaseURL:   "https://opencode.ai/zen",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 6, Output: 22.5, CacheRead: 0.6, CacheWrite: 7.5}, InputTokensAbove: 200000},
-				},
-			},
+			ID:            "claude-sonnet-4-5",
+			Name:          "Claude Sonnet 4.5",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderOpenCode,
+			BaseURL:       "https://opencode.ai/zen",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
 		},
@@ -11251,6 +11780,33 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:                  lo.ToPtr(false),
 			},
 		},
+		"deepseek-v4.1-flash": {
+			ID:        "deepseek-v4.1-flash",
+			Name:      "DeepSeek V4.1 Flash",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenCode,
+			BaseURL:   "https://opencode.ai/zen/v1",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     384000,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:         lo.ToPtr(false),
+				SupportsDeveloperRole: lo.ToPtr(false),
+				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
+				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
+			},
+		},
 		"gemini-3-flash": {
 			ID:        "gemini-3-flash",
 			Name:      "Gemini 3 Flash",
@@ -11259,7 +11815,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://opencode.ai/zen/v1",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0.05, CacheWrite: 0}},
@@ -11276,17 +11838,14 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("LOW"),
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("HIGH"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 18, CacheRead: 0.4, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     65536,
 		},
@@ -11298,7 +11857,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://opencode.ai/zen/v1",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 9, CacheRead: 0.15, CacheWrite: 0}},
@@ -11313,7 +11878,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://opencode.ai/zen/v1",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2.5, CacheRead: 0.03, CacheWrite: 0}},
@@ -11328,7 +11899,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://opencode.ai/zen/v1",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 7.5, CacheRead: 0.15, CacheWrite: 0}},
@@ -11343,7 +11920,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://opencode.ai/zen/v1",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 7.5, CacheRead: 0.15, CacheWrite: 0}},
@@ -11358,7 +11941,13 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://opencode.ai/zen/v1",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff: nil,
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 7.5, CacheRead: 0.15, CacheWrite: 0}},
@@ -11743,18 +12332,14 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 5, Output: 22.5, CacheRead: 0.5, CacheWrite: 0}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 0}},
 			ContextWindow: 272000,
 			MaxTokens:     128000,
 			Compat: &OpenAIResponsesCompat{
 				SessionAffinityFormat:      lo.ToPtr(SessionAffinityOpenAINoSession),
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.4-mini": {
@@ -11780,6 +12365,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &OpenAIResponsesCompat{
 				SessionAffinityFormat:      lo.ToPtr(SessionAffinityOpenAINoSession),
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.4-nano": {
@@ -11830,6 +12416,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &OpenAIResponsesCompat{
 				SessionAffinityFormat:      lo.ToPtr(SessionAffinityOpenAINoSession),
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.5": {
@@ -11848,18 +12435,14 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 10, Output: 45, CacheRead: 1, CacheWrite: 0}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &OpenAIResponsesCompat{
 				SessionAffinityFormat:      lo.ToPtr(SessionAffinityOpenAINoSession),
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.5-pro": {
@@ -11903,23 +12486,19 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.8, CacheRead: 0.04, CacheWrite: 0.5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &OpenAIResponsesCompat{
 				SessionAffinityFormat:      lo.ToPtr(SessionAffinityOpenAINoSession),
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.6-sol": {
 			ID:        "gpt-5.6-sol",
-			Name:      "GPT-5.6 Sol (50% Off)",
+			Name:      "GPT-5.6 Sol",
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
@@ -11933,18 +12512,14 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 15, CacheRead: 0.4, CacheWrite: 5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &OpenAIResponsesCompat{
 				SessionAffinityFormat:      lo.ToPtr(SessionAffinityOpenAINoSession),
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-5.6-terra": {
@@ -11963,18 +12538,14 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 3.125},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 5, Output: 22.5, CacheRead: 0.5, CacheWrite: 6.25}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 3.125}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &OpenAIResponsesCompat{
 				SessionAffinityFormat:      lo.ToPtr(SessionAffinityOpenAINoSession),
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"gpt-6-astra": {
@@ -11993,18 +12564,14 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 20, Output: 75, CacheRead: 2, CacheWrite: 25}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &OpenAIResponsesCompat{
 				SessionAffinityFormat:      lo.ToPtr(SessionAffinityOpenAINoSession),
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+				SupportsAdditionalTools:    lo.ToPtr(true),
 			},
 		},
 		"grok-4.5": {
@@ -12023,13 +12590,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   nil,
 				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.3, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 12, CacheRead: 0.6, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.3, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     500000,
 			Compat: &OpenAIResponsesCompat{
@@ -12052,13 +12614,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 12, CacheRead: 1, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     500000,
 			Compat: &OpenAIResponsesCompat{
@@ -12315,7 +12872,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMedium:  lo.ToPtr("medium"),
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-				ModelThinkingMax:     lo.ToPtr("max"),
+				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 4.25, CacheRead: 0.15, CacheWrite: 0}},
@@ -12407,6 +12964,18 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 262144,
 			MaxTokens:     65536,
 		},
+		"qwen3.8-flash": {
+			ID:            "qwen3.8-flash",
+			Name:          "Qwen3.8 Flash",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderOpenCode,
+			BaseURL:       "https://opencode.ai/zen",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.47, CacheRead: 0.016, CacheWrite: 0.2}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
+		},
 	},
 	ProviderOpenCodeGo: {
 		"deepseek-v4-flash": {
@@ -12495,10 +13064,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:   "https://opencode.ai/zen/go/v1",
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
 				ModelThinkingMedium:  nil,
 				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
@@ -12624,17 +13195,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.8, CacheRead: 0.04, CacheWrite: 0.5}, InputTokensAbove: 272000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &OpenAIResponsesCompat{
-				SessionAffinityFormat: lo.ToPtr(SessionAffinityOpenAINoSession),
+				SessionAffinityFormat:   lo.ToPtr(SessionAffinityOpenAINoSession),
+				SupportsAdditionalTools: lo.ToPtr(true),
 			},
 		},
 		"grok-4.6": {
@@ -12653,13 +13220,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 12, CacheRead: 1, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     500000,
 			Compat: &OpenAIResponsesCompat{
@@ -12855,19 +13417,14 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 		},
 		"minimax-m3": {
-			ID:        "minimax-m3",
-			Name:      "MiniMax-M3",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderOpenCodeGo,
-			BaseURL:   "https://opencode.ai/zen/go",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.12, CacheWrite: 0}, InputTokensAbove: 512000},
-				},
-			},
+			ID:            "minimax-m3",
+			Name:          "MiniMax-M3",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderOpenCodeGo,
+			BaseURL:       "https://opencode.ai/zen/go",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
 		},
@@ -12920,19 +13477,14 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 		},
 		"qwen3.6-plus": {
-			ID:        "qwen3.6-plus",
-			Name:      "Qwen3.6 Plus",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderOpenCodeGo,
-			BaseURL:   "https://opencode.ai/zen/go/v1",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0.05, CacheWrite: 0.625},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.2, CacheWrite: 2.5}, InputTokensAbove: 256000},
-				},
-			},
+			ID:            "qwen3.6-plus",
+			Name:          "Qwen3.6 Plus",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenCodeGo,
+			BaseURL:       "https://opencode.ai/zen/go/v1",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0.05, CacheWrite: 0.625}},
 			ContextWindow: 1000000,
 			MaxTokens:     65536,
 			Compat: &OpenAICompletionsCompat{
@@ -12960,19 +13512,14 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 		},
 		"qwen3.7-plus": {
-			ID:        "qwen3.7-plus",
-			Name:      "Qwen3.7 Plus",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderOpenCodeGo,
-			BaseURL:   "https://opencode.ai/zen/go/v1",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.6, CacheRead: 0.04, CacheWrite: 0.5},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 1.2, Output: 4.8, CacheRead: 0.12, CacheWrite: 1.5}, InputTokensAbove: 256000},
-				},
-			},
+			ID:            "qwen3.7-plus",
+			Name:          "Qwen3.7 Plus",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenCodeGo,
+			BaseURL:       "https://opencode.ai/zen/go/v1",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.6, CacheRead: 0.04, CacheWrite: 0.5}},
 			ContextWindow: 1000000,
 			MaxTokens:     65536,
 			Compat: &OpenAICompletionsCompat{
@@ -13481,7 +14028,7 @@ var MODELS = map[ProviderID]map[string]Model{
 		},
 		"anthropic/claude-opus-5": {
 			ID:        "anthropic/claude-opus-5",
-			Name:      "Claude Opus 5",
+			Name:      "Anthropic: Claude Opus 5",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
@@ -13501,7 +14048,7 @@ var MODELS = map[ProviderID]map[string]Model{
 		},
 		"anthropic/claude-opus-5:batch": {
 			ID:        "anthropic/claude-opus-5:batch",
-			Name:      "Claude Opus 5 (batch)",
+			Name:      "Anthropic: Claude Opus 5 (batch)",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
@@ -13829,9 +14376,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2574, Output: 1.0287, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 128000,
-			MaxTokens:     16000,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.32, Output: 0.89, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 163840,
+			MaxTokens:     16384,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -13965,7 +14512,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.08554, Output: 0.17108, CacheRead: 0.017108, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.03668, Output: 0.07336, CacheRead: 0.007336, CacheWrite: 0}},
 			ContextWindow: 1024000,
 			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
@@ -13990,7 +14537,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.12, CacheRead: 0.012, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.08, CacheRead: 0.016, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
@@ -14040,9 +14587,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2156, Output: 0.6468, CacheRead: 0.00686, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     943718,
+			MaxTokens:     262144,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:                       lo.ToPtr(false),
 				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
@@ -14090,9 +14637,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.6, Output: 3.2, CacheRead: 0.135, CacheWrite: 0}},
-			ContextWindow: 1048576,
-			MaxTokens:     393216,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.422298, Output: 0.844596, CacheRead: 0.035192, CacheWrite: 0}},
+			ContextWindow: 1024000,
+			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:                       lo.ToPtr(false),
 				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
@@ -14115,9 +14662,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.57948, Output: 1.73844, CacheRead: 0.018438, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.66, Output: 1.98, CacheRead: 0.022, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     393216,
+			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:                       lo.ToPtr(false),
 				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
@@ -14686,22 +15233,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
 			},
 		},
-		"google/gemma-4-31b-it:batch": {
-			ID:            "google/gemma-4-31b-it:batch",
-			Name:          "Google: Gemma 4 31B (batch)",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderOpenRouter,
-			BaseURL:       "https://openrouter.ai/api/v1",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.39, Output: 0.97, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     235929,
-			Compat: &OpenAICompletionsCompat{
-				SupportsDeveloperRole: lo.ToPtr(false),
-				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
-			},
-		},
 		"google/gemma-4-31b-it:free": {
 			ID:            "google/gemma-4-31b-it:free",
 			Name:          "Google: Gemma 4 31B (free)",
@@ -15020,9 +15551,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.35, Output: 1.5, CacheRead: 0.04, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.04, CacheWrite: 0}},
 			ContextWindow: 131072,
-			MaxTokens:     117964,
+			MaxTokens:     16384,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -15132,7 +15663,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.55, Output: 2.2, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 2.2, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     40000,
 			Compat: &OpenAICompletionsCompat{
@@ -15380,22 +15911,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
 			},
 		},
-		"mistralai/mistral-large-2512": {
-			ID:            "mistralai/mistral-large-2512",
-			Name:          "Mistral: Mistral Large 3 2512",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderOpenRouter,
-			BaseURL:       "https://openrouter.ai/api/v1",
-			Reasoning:     false,
-			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.5, CacheRead: 0.05, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     209715,
-			Compat: &OpenAICompletionsCompat{
-				SupportsDeveloperRole: lo.ToPtr(false),
-				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
-			},
-		},
 		"mistralai/mistral-large-2512:batch": {
 			ID:            "mistralai/mistral-large-2512:batch",
 			Name:          "Mistral: Mistral Large 3 2512 (batch)",
@@ -15556,6 +16071,22 @@ var MODELS = map[ProviderID]map[string]Model{
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
 			},
 		},
+		"mistralai/mistral-small-3.1-24b-instruct": {
+			ID:            "mistralai/mistral-small-3.1-24b-instruct",
+			Name:          "Mistral: Mistral Small 3.1 24B",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.351, Output: 0.555, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 128000,
+			MaxTokens:     102400,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole: lo.ToPtr(false),
+				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
+			},
+		},
 		"mistralai/mistral-small-3.2-24b-instruct": {
 			ID:            "mistralai/mistral-small-3.2-24b-instruct",
 			Name:          "Mistral: Mistral Small 3.2 24B",
@@ -15564,8 +16095,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.2, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 128000,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.09375, Output: 0.25, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 256000,
 			MaxTokens:     16384,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
@@ -15693,7 +16224,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.71, Output: 3.5, CacheRead: 0.15, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.7062, Output: 3.21, CacheRead: 0.18, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
@@ -15709,7 +16240,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.648138, Output: 13.282724, CacheRead: 0.302644, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.7, Output: 8.5, CacheRead: 0.17, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -15773,7 +16304,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0.03, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.24, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
@@ -15869,9 +16400,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.08, Output: 0.2, CacheRead: 0.04, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.2, CacheRead: 0.04, CacheWrite: 0}},
 			ContextWindow: 262144,
-			MaxTokens:     131072,
+			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -17105,9 +17636,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.037, Output: 0.17, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.075, CacheWrite: 0}},
 			ContextWindow: 131072,
-			MaxTokens:     117964,
+			MaxTokens:     65536,
 			Compat: &OpenAICompletionsCompat{
 				ThinkingFormat: lo.ToPtr(ThinkingFormatOpenRouter),
 			},
@@ -17428,6 +17959,22 @@ var MODELS = map[ProviderID]map[string]Model{
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     32768,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole: lo.ToPtr(false),
+				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
+			},
+		},
+		"prism-ml/ternary-bonsai-2-27b": {
+			ID:            "prism-ml/ternary-bonsai-2-27b",
+			Name:          "PrismML: Ternary Bonsai 2 27B",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.5, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
@@ -17827,9 +18374,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     16384,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.52, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 131072,
+			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -17939,9 +18486,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1625, Output: 1.3, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     65536,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3125, Output: 1.25, CacheRead: 0.15625, CacheWrite: 0}},
+			ContextWindow: 256000,
+			MaxTokens:     16384,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -17972,8 +18519,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.15, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     235929,
+			ContextWindow: 256000,
+			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -18211,9 +18758,25 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.214, Output: 2.55, CacheRead: 0.15, CacheWrite: 0}},
-			ContextWindow: 262144,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.42, Output: 3, CacheRead: 0.085, CacheWrite: 0}},
+			ContextWindow: 1000000,
 			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole: lo.ToPtr(false),
+				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
+			},
+		},
+		"qwen/qwen3.8-27b:free": {
+			ID:            "qwen/qwen3.8-27b:free",
+			Name:          "Qwen: Qwen3.8 27B (free)",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -18403,7 +18966,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0825, Output: 0.33, CacheRead: 0.020625, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.132, Output: 0.528, CacheRead: 0.033, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     128000,
 			Compat: &OpenAICompletionsCompat{
@@ -18443,22 +19006,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
 			},
 		},
-		"thedrummer/unslopnemo-12b": {
-			ID:            "thedrummer/unslopnemo-12b",
-			Name:          "TheDrummer: UnslopNemo 12B",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderOpenRouter,
-			BaseURL:       "https://openrouter.ai/api/v1",
-			Reasoning:     false,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 1024000,
-			MaxTokens:     819200,
-			Compat: &OpenAICompletionsCompat{
-				SupportsDeveloperRole: lo.ToPtr(false),
-				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
-			},
-		},
 		"thinkingmachines/inkling": {
 			ID:            "thinkingmachines/inkling",
 			Name:          "Thinking Machines: Inkling",
@@ -18486,22 +19033,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.45, Output: 1.2, CacheRead: 0.1, CacheWrite: 0}},
 			ContextWindow: 524288,
 			MaxTokens:     262144,
-			Compat: &OpenAICompletionsCompat{
-				SupportsDeveloperRole: lo.ToPtr(false),
-				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
-			},
-		},
-		"thinkingmachines/inkling-small:batch": {
-			ID:            "thinkingmachines/inkling-small:batch",
-			Name:          "Thinking Machines: Inkling Small (batch)",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderOpenRouter,
-			BaseURL:       "https://openrouter.ai/api/v1",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.2, CacheRead: 0.1, CacheWrite: 0}},
-			ContextWindow: 524288,
-			MaxTokens:     471859,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -18550,6 +19081,22 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     262144,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole: lo.ToPtr(false),
+				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
+			},
+		},
+		"unbiased/pareto": {
+			ID:            "unbiased/pareto",
+			Name:          "Pareto",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 7.5, CacheRead: 0.25, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -18886,9 +19433,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.14, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6496, Output: 2.0416, CacheRead: 0.12064, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     128000,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -18918,9 +19465,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
-			ContextWindow: 1048575,
-			MaxTokens:     943717,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.896, Output: 2.816, CacheRead: 0.1664, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -18934,7 +19481,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.25, CacheRead: 0.015, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.09, Output: 0.3, CacheRead: 0.018, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -18953,6 +19500,22 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.25, CacheRead: 0.015, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole: lo.ToPtr(false),
+				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
+			},
+		},
+		"z-ai/glm-5.3-flashx": {
+			ID:            "z-ai/glm-5.3-flashx",
+			Name:          "Z.ai: GLM 5.3 FlashX",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.37, Output: 1.25, CacheRead: 0.075, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -19066,9 +19629,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.015, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     393216,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.52, CacheRead: 0.0026, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -19082,9 +19645,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.57948, Output: 1.73844, CacheRead: 0.018438, CacheWrite: 0}},
-			ContextWindow: 1048576,
-			MaxTokens:     393216,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5742, Output: 1.7226, CacheRead: 0.01914, CacheWrite: 0}},
+			ContextWindow: 1024000,
+			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -19106,9 +19669,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.1, CacheRead: 0.01, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.08, CacheRead: 0.016, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     393216,
+			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:                       lo.ToPtr(false),
 				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
@@ -19155,7 +19718,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.1, Output: 10.95, CacheRead: 0.23, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.7, Output: 8.5, CacheRead: 0.17, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -19283,9 +19846,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.8775, Output: 2.97, CacheRead: 0.1755, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     235929,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.8442, Output: 2.6532, CacheRead: 0.15678, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 				ThinkingFormat:        lo.ToPtr(ThinkingFormatOpenRouter),
@@ -19437,6 +20000,33 @@ var MODELS = map[ProviderID]map[string]Model{
 				ThinkingFormat:          lo.ToPtr(ThinkingFormatQwen),
 			},
 		},
+		"deepseek-v4.1-flash": {
+			ID:        "deepseek-v4.1-flash",
+			Name:      "DeepSeek V4.1 Flash",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderQwenTokenPlan,
+			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     384000,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:           lo.ToPtr(false),
+				SupportsDeveloperRole:   lo.ToPtr(false),
+				SupportsReasoningEffort: lo.ToPtr(true),
+				ThinkingFormat:          lo.ToPtr(ThinkingFormatQwen),
+			},
+		},
 		"glm-5": {
 			ID:        "glm-5",
 			Name:      "GLM-5",
@@ -19500,6 +20090,33 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
 				ModelThinkingLow:     nil,
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:           lo.ToPtr(false),
+				SupportsDeveloperRole:   lo.ToPtr(false),
+				SupportsReasoningEffort: lo.ToPtr(true),
+				ThinkingFormat:          lo.ToPtr(ThinkingFormatQwen),
+			},
+		},
+		"glm-5.3": {
+			ID:        "glm-5.3",
+			Name:      "GLM-5.3",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderQwenTokenPlan,
+			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
 				ModelThinkingMedium:  nil,
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingXHigh:   nil,
@@ -19852,7 +20469,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
 				ModelThinkingMedium:  nil,
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingXHigh:   nil,
@@ -19932,6 +20549,33 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
 				ModelThinkingLow:     nil,
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:           lo.ToPtr(false),
+				SupportsDeveloperRole:   lo.ToPtr(false),
+				SupportsReasoningEffort: lo.ToPtr(true),
+				ThinkingFormat:          lo.ToPtr(ThinkingFormatQwen),
+			},
+		},
+		"glm-5.3": {
+			ID:        "glm-5.3",
+			Name:      "GLM-5.3",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderQwenTokenPlanCN,
+			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
 				ModelThinkingMedium:  nil,
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingXHigh:   nil,
@@ -20928,6 +21572,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 0.24, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 40960,
 			MaxTokens:     16384,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen-3-235b": {
 			ID:            "alibaba/qwen-3-235b",
@@ -20940,6 +21587,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.88, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     16384,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen-3-30b": {
 			ID:            "alibaba/qwen-3-30b",
@@ -20952,6 +21602,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 0.5, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 40960,
 			MaxTokens:     16384,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen-3-32b": {
 			ID:            "alibaba/qwen-3-32b",
@@ -20964,6 +21617,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.16, Output: 0.64, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen-3.6-max-preview": {
 			ID:            "alibaba/qwen-3.6-max-preview",
@@ -20976,6 +21632,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.3, Output: 7.8, CacheRead: 0.13, CacheWrite: 1.625}},
 			ContextWindow: 240000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-235b-a22b-thinking": {
 			ID:            "alibaba/qwen3-235b-a22b-thinking",
@@ -20988,6 +21647,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 4, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-coder": {
 			ID:            "alibaba/qwen3-coder",
@@ -21000,6 +21662,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 7.5, CacheRead: 0.3, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-coder-30b-a3b": {
 			ID:            "alibaba/qwen3-coder-30b-a3b",
@@ -21012,6 +21677,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-coder-next": {
 			ID:            "alibaba/qwen3-coder-next",
@@ -21024,6 +21692,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-coder-plus": {
 			ID:            "alibaba/qwen3-coder-plus",
@@ -21036,6 +21707,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-max": {
 			ID:            "alibaba/qwen3-max",
@@ -21048,6 +21722,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 6, CacheRead: 0.24, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-max-preview": {
 			ID:            "alibaba/qwen3-max-preview",
@@ -21060,6 +21737,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 6, CacheRead: 0.24, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-max-thinking": {
 			ID:            "alibaba/qwen3-max-thinking",
@@ -21072,6 +21752,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 6, CacheRead: 0.24, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-next-80b-a3b-instruct": {
 			ID:            "alibaba/qwen3-next-80b-a3b-instruct",
@@ -21082,8 +21765,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 131072,
-			MaxTokens:     32768,
+			ContextWindow: 262114,
+			MaxTokens:     262114,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-next-80b-a3b-thinking": {
 			ID:            "alibaba/qwen3-next-80b-a3b-thinking",
@@ -21094,8 +21780,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 131072,
-			MaxTokens:     32768,
+			ContextWindow: 262144,
+			MaxTokens:     262144,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-vl-235b-a22b-instruct": {
 			ID:            "alibaba/qwen3-vl-235b-a22b-instruct",
@@ -21108,6 +21797,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.6, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     129024,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-vl-instruct": {
 			ID:            "alibaba/qwen3-vl-instruct",
@@ -21120,6 +21812,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.6, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     129024,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3-vl-thinking": {
 			ID:            "alibaba/qwen3-vl-thinking",
@@ -21132,6 +21827,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 4, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.5-flash": {
 			ID:            "alibaba/qwen3.5-flash",
@@ -21144,6 +21842,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.4, CacheRead: 0.01, CacheWrite: 0.125}},
 			ContextWindow: 1000000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.5-plus": {
 			ID:            "alibaba/qwen3.5-plus",
@@ -21156,6 +21857,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 2.5, CacheRead: 0.04, CacheWrite: 0.5}},
 			ContextWindow: 1000000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.6-27b": {
 			ID:            "alibaba/qwen3.6-27b",
@@ -21168,6 +21872,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 3.6, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.6-plus": {
 			ID:            "alibaba/qwen3.6-plus",
@@ -21180,6 +21887,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0.05, CacheWrite: 0.625}},
 			ContextWindow: 1000000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.7-flash": {
 			ID:            "alibaba/qwen3.7-flash",
@@ -21192,6 +21902,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.03, Output: 0.13, CacheRead: 0.006, CacheWrite: 0.038}},
 			ContextWindow: 991000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.7-max": {
 			ID:            "alibaba/qwen3.7-max",
@@ -21204,6 +21917,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 7.5, CacheRead: 0.5, CacheWrite: 3.125}},
 			ContextWindow: 991000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.7-plus": {
 			ID:            "alibaba/qwen3.7-plus",
@@ -21216,6 +21932,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.6, CacheRead: 0.08, CacheWrite: 0.5}},
 			ContextWindow: 1000000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.8-2.4t-a95b": {
 			ID:            "alibaba/qwen3.8-2.4t-a95b",
@@ -21228,6 +21947,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.25, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.8-27b": {
 			ID:            "alibaba/qwen3.8-27b",
@@ -21240,6 +21962,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0.1, CacheWrite: 0.625}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.8-flash": {
 			ID:            "alibaba/qwen3.8-flash",
@@ -21252,6 +21977,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.47, CacheRead: 0.016, CacheWrite: 0.2}},
 			ContextWindow: 991000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.8-max": {
 			ID:            "alibaba/qwen3.8-max",
@@ -21261,9 +21989,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://ai-gateway.vercel.sh",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.25, CacheWrite: 2.5}},
-			ContextWindow: 1000000,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.25, CacheWrite: 0}},
+			ContextWindow: 262144,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"alibaba/qwen3.8-max-0902": {
 			ID:            "alibaba/qwen3.8-max-0902",
@@ -21276,6 +22007,24 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.25, CacheWrite: 2.5}},
 			ContextWindow: 991000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
+		"alibaba/qwen3.8-omni-flash": {
+			ID:            "alibaba/qwen3.8-omni-flash",
+			Name:          "Qwen 3.8 Omni Flash",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.47, CacheRead: 0.016, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"amazon/nova-2-lite": {
 			ID:            "amazon/nova-2-lite",
@@ -21288,6 +22037,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2.5, CacheRead: 0.075, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"amazon/nova-lite": {
 			ID:            "amazon/nova-lite",
@@ -21300,6 +22052,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.24, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 300000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"amazon/nova-micro": {
 			ID:            "amazon/nova-micro",
@@ -21312,6 +22067,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.035, Output: 0.14, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"amazon/nova-pro": {
 			ID:            "amazon/nova-pro",
@@ -21324,6 +22082,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.8, Output: 3.2, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 300000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"anthropic/claude-3-haiku": {
 			ID:            "anthropic/claude-3-haiku",
@@ -21336,6 +22097,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1.25, CacheRead: 0.03, CacheWrite: 0.3}},
 			ContextWindow: 200000,
 			MaxTokens:     4096,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"anthropic/claude-fable-5": {
 			ID:        "anthropic/claude-fable-5",
@@ -21355,6 +22119,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"anthropic/claude-fable-5.1": {
@@ -21375,6 +22140,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"anthropic/claude-haiku-4.5": {
@@ -21388,6 +22154,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.1, CacheWrite: 1.25}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"anthropic/claude-opus-4": {
 			ID:            "anthropic/claude-opus-4",
@@ -21400,6 +22169,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 15, Output: 75, CacheRead: 1.5, CacheWrite: 18.75}},
 			ContextWindow: 200000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"anthropic/claude-opus-4.5": {
 			ID:            "anthropic/claude-opus-4.5",
@@ -21412,6 +22184,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
 			ContextWindow: 200000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"anthropic/claude-opus-4.6": {
 			ID:        "anthropic/claude-opus-4.6",
@@ -21429,6 +22204,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"anthropic/claude-opus-4.7": {
@@ -21449,6 +22225,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				SupportsTemperature:   lo.ToPtr(false),
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"anthropic/claude-opus-4.8": {
@@ -21469,6 +22246,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				SupportsTemperature:   lo.ToPtr(false),
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"anthropic/claude-opus-4.8-fast": {
@@ -21489,6 +22267,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				SupportsTemperature:   lo.ToPtr(false),
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"anthropic/claude-opus-5": {
@@ -21509,6 +22288,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				SupportsTemperature:   lo.ToPtr(false),
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"anthropic/claude-opus-5-fast": {
@@ -21529,6 +22309,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Compat: &AnthropicMessagesCompat{
 				SupportsTemperature:   lo.ToPtr(false),
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"anthropic/claude-sonnet-4": {
@@ -21542,6 +22323,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
 			ContextWindow: 1000000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"anthropic/claude-sonnet-4.5": {
 			ID:            "anthropic/claude-sonnet-4.5",
@@ -21554,6 +22338,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
 			ContextWindow: 1000000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"anthropic/claude-sonnet-4.6": {
 			ID:        "anthropic/claude-sonnet-4.6",
@@ -21571,6 +22358,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"anthropic/claude-sonnet-5": {
@@ -21590,6 +22378,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
 				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
 		"arcee-ai/trinity-large-thinking": {
@@ -21603,6 +22392,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 0.9, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262100,
 			MaxTokens:     80000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"bytedance/seed-1.6": {
 			ID:            "bytedance/seed-1.6",
@@ -21615,6 +22407,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 2, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"bytedance/seed-1.8": {
 			ID:            "bytedance/seed-1.8",
@@ -21627,6 +22422,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 2, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"bytedance/seed-2.1-turbo": {
 			ID:            "bytedance/seed-2.1-turbo",
@@ -21639,6 +22437,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 2.5, CacheRead: 0.1, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     262144,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"cohere/command-a": {
 			ID:            "cohere/command-a",
@@ -21651,6 +22452,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 10, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     8000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-r1": {
 			ID:            "deepseek/deepseek-r1",
@@ -21663,6 +22467,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.35, Output: 5.4, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v3.1": {
 			ID:            "deepseek/deepseek-v3.1",
@@ -21675,6 +22482,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 0.95, CacheRead: 0.13, CacheWrite: 0}},
 			ContextWindow: 163840,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v3.1-terminus": {
 			ID:            "deepseek/deepseek-v3.1-terminus",
@@ -21687,6 +22497,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.27, Output: 1, CacheRead: 0.135, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v3.2": {
 			ID:            "deepseek/deepseek-v3.2",
@@ -21699,6 +22512,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.62, Output: 1.85, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v3.2-thinking": {
 			ID:            "deepseek/deepseek-v3.2-thinking",
@@ -21711,6 +22527,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.62, Output: 1.85, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v4-flash": {
 			ID:            "deepseek/deepseek-v4-flash",
@@ -21723,6 +22542,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.26, CacheRead: 0.028, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     384000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v4-flash-0731": {
 			ID:            "deepseek/deepseek-v4-flash-0731",
@@ -21735,6 +22557,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.076, Output: 0.153, CacheRead: 0.014, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     384000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v4-flash-vision-exp": {
 			ID:            "deepseek/deepseek-v4-flash-vision-exp",
@@ -21747,6 +22572,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     1048576,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v4-pro": {
 			ID:            "deepseek/deepseek-v4-pro",
@@ -21759,6 +22587,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.66, Output: 1.98, CacheRead: 0.022, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     384000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v4-pro-0813": {
 			ID:            "deepseek/deepseek-v4-pro-0813",
@@ -21771,6 +22602,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.66, Output: 1.98, CacheRead: 0.066, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     384000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"deepseek/deepseek-v4.1-flash": {
 			ID:            "deepseek/deepseek-v4.1-flash",
@@ -21780,9 +22614,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://ai-gateway.vercel.sh",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.015, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     384000,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.03, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-2.5-flash": {
 			ID:            "google/gemini-2.5-flash",
@@ -21795,6 +22632,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2.5, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-2.5-flash-lite": {
 			ID:            "google/gemini-2.5-flash-lite",
@@ -21807,6 +22647,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.4, CacheRead: 0.01, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-2.5-pro": {
 			ID:            "google/gemini-2.5-pro",
@@ -21819,6 +22662,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0.125, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-3-flash": {
 			ID:            "google/gemini-3-flash",
@@ -21831,6 +22677,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     65000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-3.1-flash-lite": {
 			ID:            "google/gemini-3.1-flash-lite",
@@ -21843,6 +22692,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1.5, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     65000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-3.1-pro-preview": {
 			ID:            "google/gemini-3.1-pro-preview",
@@ -21855,6 +22707,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-3.5-flash": {
 			ID:            "google/gemini-3.5-flash",
@@ -21867,6 +22722,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 9, CacheRead: 0.15, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-3.5-flash-lite": {
 			ID:            "google/gemini-3.5-flash-lite",
@@ -21879,6 +22737,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2.5, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     65000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-3.6-flash": {
 			ID:            "google/gemini-3.6-flash",
@@ -21891,6 +22752,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 3.75, CacheRead: 0.075, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-3.7-flash": {
 			ID:            "google/gemini-3.7-flash",
@@ -21903,6 +22767,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 3.75, CacheRead: 0.075, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemini-3.8-flash": {
 			ID:            "google/gemini-3.8-flash",
@@ -21915,6 +22782,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 3.75, CacheRead: 0.075, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemma-4-26b-a4b-it": {
 			ID:            "google/gemma-4-26b-a4b-it",
@@ -21927,6 +22797,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.015, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"google/gemma-4-31b-it": {
 			ID:            "google/gemma-4-31b-it",
@@ -21939,6 +22812,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inception/mercury-2": {
 			ID:            "inception/mercury-2",
@@ -21951,6 +22827,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 0.75, CacheRead: 0.025, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inception/mercury-2.5": {
 			ID:            "inception/mercury-2.5",
@@ -21963,6 +22842,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.15, CacheRead: 0.004, CacheWrite: 0}},
 			ContextWindow: 260000,
 			MaxTokens:     65536,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inception/mercury-coder-small": {
 			ID:            "inception/mercury-coder-small",
@@ -21975,6 +22857,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 32000,
 			MaxTokens:     16384,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inclusionai/ling-3.0-flash": {
 			ID:            "inclusionai/ling-3.0-flash",
@@ -21987,6 +22872,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.021, Output: 0.063, CacheRead: 0.0042, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inclusionai/ling-3.0-flash-fin": {
 			ID:            "inclusionai/ling-3.0-flash-fin",
@@ -21999,6 +22887,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inclusionai/ling-3.0-flash-fin-free": {
 			ID:            "inclusionai/ling-3.0-flash-fin-free",
@@ -22011,6 +22902,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inclusionai/ling-3.0-flash-sante": {
 			ID:            "inclusionai/ling-3.0-flash-sante",
@@ -22023,6 +22917,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inclusionai/ling-3.0-flash-sante-free": {
 			ID:            "inclusionai/ling-3.0-flash-sante-free",
@@ -22035,6 +22932,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inclusionai/ling-3.0-flash-vl": {
 			ID:            "inclusionai/ling-3.0-flash-vl",
@@ -22047,6 +22947,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"inclusionai/ling-3.0-flash-vl-free": {
 			ID:            "inclusionai/ling-3.0-flash-vl-free",
@@ -22059,6 +22962,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"interfaze/interfaze-beta": {
 			ID:            "interfaze/interfaze-beta",
@@ -22071,54 +22977,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 3.5, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     32000,
-		},
-		"kwaipilot/kat-coder-air-v2.5": {
-			ID:            "kwaipilot/kat-coder-air-v2.5",
-			Name:          "Kat Coder Air V2.5",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderVercelAIGateway,
-			BaseURL:       "https://ai-gateway.vercel.sh",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.03, CacheWrite: 0}},
-			ContextWindow: 256000,
-			MaxTokens:     80000,
-		},
-		"kwaipilot/kat-coder-pro-v1": {
-			ID:            "kwaipilot/kat-coder-pro-v1",
-			Name:          "KAT-Coder-Pro V1",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderVercelAIGateway,
-			BaseURL:       "https://ai-gateway.vercel.sh",
-			Reasoning:     false,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
-			ContextWindow: 256000,
-			MaxTokens:     32000,
-		},
-		"kwaipilot/kat-coder-pro-v2": {
-			ID:            "kwaipilot/kat-coder-pro-v2",
-			Name:          "Kat Coder Pro V2",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderVercelAIGateway,
-			BaseURL:       "https://ai-gateway.vercel.sh",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
-			ContextWindow: 256000,
-			MaxTokens:     256000,
-		},
-		"kwaipilot/kat-coder-pro-v2.5": {
-			ID:            "kwaipilot/kat-coder-pro-v2.5",
-			Name:          "Kat Coder Pro V2.5",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderVercelAIGateway,
-			BaseURL:       "https://ai-gateway.vercel.sh",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.74, Output: 2.96, CacheRead: 0.15, CacheWrite: 0}},
-			ContextWindow: 256000,
-			MaxTokens:     80000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/llama-3.1-70b": {
 			ID:            "meta/llama-3.1-70b",
@@ -22131,6 +22992,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.72, Output: 0.72, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/llama-3.1-8b": {
 			ID:            "meta/llama-3.1-8b",
@@ -22143,6 +23007,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.22, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/llama-3.3-70b": {
 			ID:            "meta/llama-3.3-70b",
@@ -22155,6 +23022,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.72, Output: 0.72, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/llama-4-maverick": {
 			ID:            "meta/llama-4-maverick",
@@ -22167,6 +23037,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.24, Output: 0.97, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/llama-4-scout": {
 			ID:            "meta/llama-4-scout",
@@ -22179,6 +23052,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.17, Output: 0.66, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/muse-glimmer-30b": {
 			ID:            "meta/muse-glimmer-30b",
@@ -22191,6 +23067,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.35, Output: 1.5, CacheRead: 0.04, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/muse-spark-1.1": {
 			ID:            "meta/muse-spark-1.1",
@@ -22203,6 +23082,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 4.25, CacheRead: 0.15, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     1048576,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/muse-spark-1.2": {
 			ID:            "meta/muse-spark-1.2",
@@ -22215,6 +23097,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 4.25, CacheRead: 0.15, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     1048576,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/muse-spark-1.2-contributor": {
 			ID:            "meta/muse-spark-1.2-contributor",
@@ -22227,6 +23112,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.2, CacheRead: 0.002, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     1048576,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/muse-spark-1.3": {
 			ID:            "meta/muse-spark-1.3",
@@ -22239,6 +23127,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 4.25, CacheRead: 0.15, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     1048576,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"meta/muse-spark-1.3-contributor": {
 			ID:            "meta/muse-spark-1.3-contributor",
@@ -22251,6 +23142,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.2, CacheRead: 0.002, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     1048576,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"minimax/minimax-m2": {
 			ID:            "minimax/minimax-m2",
@@ -22263,6 +23157,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.03, CacheWrite: 0.375}},
 			ContextWindow: 205000,
 			MaxTokens:     205000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"minimax/minimax-m2.1": {
 			ID:            "minimax/minimax-m2.1",
@@ -22275,6 +23172,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.03, CacheWrite: 0.375}},
 			ContextWindow: 204800,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"minimax/minimax-m2.1-lightning": {
 			ID:            "minimax/minimax-m2.1-lightning",
@@ -22287,6 +23187,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2.4, CacheRead: 0.03, CacheWrite: 0.375}},
 			ContextWindow: 204800,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"minimax/minimax-m2.5": {
 			ID:            "minimax/minimax-m2.5",
@@ -22299,6 +23202,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.03, CacheWrite: 0.375}},
 			ContextWindow: 204800,
 			MaxTokens:     131000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"minimax/minimax-m2.5-highspeed": {
 			ID:            "minimax/minimax-m2.5-highspeed",
@@ -22311,6 +23217,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.03, CacheWrite: 0.375}},
 			ContextWindow: 204800,
 			MaxTokens:     131000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"minimax/minimax-m2.7": {
 			ID:            "minimax/minimax-m2.7",
@@ -22323,6 +23232,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0.375}},
 			ContextWindow: 204800,
 			MaxTokens:     131000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"minimax/minimax-m2.7-highspeed": {
 			ID:            "minimax/minimax-m2.7-highspeed",
@@ -22335,6 +23247,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.06, CacheWrite: 0.375}},
 			ContextWindow: 204800,
 			MaxTokens:     131100,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"minimax/minimax-m3": {
 			ID:            "minimax/minimax-m3",
@@ -22347,6 +23262,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
 			ContextWindow: 512000,
 			MaxTokens:     512000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"mistral/codestral": {
 			ID:            "mistral/codestral",
@@ -22359,6 +23277,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 0.9, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     4000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"mistral/ministral-14b": {
 			ID:            "mistral/ministral-14b",
@@ -22371,6 +23292,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.2, CacheRead: 0.02, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"mistral/ministral-3b": {
 			ID:            "mistral/ministral-3b",
@@ -22383,6 +23307,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.1, CacheRead: 0.01, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     4000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"mistral/ministral-8b": {
 			ID:            "mistral/ministral-8b",
@@ -22395,6 +23322,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.15, CacheRead: 0.015, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     4000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"mistral/mistral-large-3": {
 			ID:            "mistral/mistral-large-3",
@@ -22407,6 +23337,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.5, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"mistral/mistral-medium-3.5": {
 			ID:            "mistral/mistral-medium-3.5",
@@ -22419,6 +23352,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 7.5, CacheRead: 0.15, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"mistral/mistral-nemo": {
 			ID:            "mistral/mistral-nemo",
@@ -22431,6 +23367,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.17, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 60288,
 			MaxTokens:     16000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"mistral/mistral-small": {
 			ID:            "mistral/mistral-small",
@@ -22443,6 +23382,24 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.015, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     4000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
+		"mixedbread/toast-1": {
+			ID:            "mixedbread/toast-1",
+			Name:          "Toast 1",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh",
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 0.72, CacheRead: 0.036, CacheWrite: 0}},
+			ContextWindow: 131000,
+			MaxTokens:     4000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"moonshotai/kimi-k2": {
 			ID:            "moonshotai/kimi-k2",
@@ -22455,6 +23412,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.57, Output: 2.3, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"moonshotai/kimi-k2-thinking": {
 			ID:            "moonshotai/kimi-k2-thinking",
@@ -22467,6 +23427,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.47, Output: 2, CacheRead: 0.141, CacheWrite: 0}},
 			ContextWindow: 216144,
 			MaxTokens:     216144,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"moonshotai/kimi-k2.5": {
 			ID:            "moonshotai/kimi-k2.5",
@@ -22476,9 +23439,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://ai-gateway.vercel.sh",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 3, CacheRead: 0.1, CacheWrite: 0}},
-			ContextWindow: 262114,
-			MaxTokens:     262114,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 3, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 256000,
+			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"moonshotai/kimi-k2.6": {
 			ID:            "moonshotai/kimi-k2.6",
@@ -22491,6 +23457,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.16, CacheWrite: 0}},
 			ContextWindow: 262000,
 			MaxTokens:     262000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"moonshotai/kimi-k2.7-code": {
 			ID:            "moonshotai/kimi-k2.7-code",
@@ -22503,6 +23472,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.16, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"moonshotai/kimi-k2.7-code-highspeed": {
 			ID:            "moonshotai/kimi-k2.7-code-highspeed",
@@ -22515,6 +23487,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.9, Output: 8, CacheRead: 0.38, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"moonshotai/kimi-k3": {
 			ID:            "moonshotai/kimi-k3",
@@ -22527,6 +23502,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"moonshotai/kimi-k3-fast": {
 			ID:            "moonshotai/kimi-k3-fast",
@@ -22539,6 +23517,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4.5, Output: 22.5, CacheRead: 0.45, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"nvidia/nemotron-3-nano-30b-a3b": {
 			ID:            "nvidia/nemotron-3-nano-30b-a3b",
@@ -22551,6 +23532,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0.025, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     262144,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"nvidia/nemotron-3-super-120b-a12b": {
 			ID:            "nvidia/nemotron-3-super-120b-a12b",
@@ -22563,6 +23547,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.65, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"nvidia/nemotron-3-ultra-550b-a55b": {
 			ID:            "nvidia/nemotron-3-ultra-550b-a55b",
@@ -22575,6 +23562,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.12, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     65000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"nvidia/nemotron-3.5-lightning": {
 			ID:            "nvidia/nemotron-3.5-lightning",
@@ -22587,6 +23577,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0.01, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"nvidia/nemotron-nano-12b-v2-vl": {
 			ID:            "nvidia/nemotron-nano-12b-v2-vl",
@@ -22599,6 +23592,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"nvidia/nemotron-nano-9b-v2": {
 			ID:            "nvidia/nemotron-nano-9b-v2",
@@ -22611,6 +23607,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.23, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-3.5-turbo": {
 			ID:            "openai/gpt-3.5-turbo",
@@ -22623,6 +23622,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.5, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 16385,
 			MaxTokens:     4096,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4-turbo": {
 			ID:            "openai/gpt-4-turbo",
@@ -22635,6 +23637,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 10, Output: 30, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     4096,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4.1": {
 			ID:            "openai/gpt-4.1",
@@ -22647,6 +23652,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 8, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 1047576,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4.1-fast": {
 			ID:            "openai/gpt-4.1-fast",
@@ -22659,6 +23667,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.5, Output: 14, CacheRead: 0.875, CacheWrite: 0}},
 			ContextWindow: 1047576,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4.1-mini": {
 			ID:            "openai/gpt-4.1-mini",
@@ -22671,6 +23682,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.6, CacheRead: 0.1, CacheWrite: 0}},
 			ContextWindow: 1047576,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4.1-mini-fast": {
 			ID:            "openai/gpt-4.1-mini-fast",
@@ -22683,6 +23697,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.7, Output: 2.8, CacheRead: 0.175, CacheWrite: 0}},
 			ContextWindow: 1047576,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4.1-nano": {
 			ID:            "openai/gpt-4.1-nano",
@@ -22695,6 +23712,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.4, CacheRead: 0.025, CacheWrite: 0}},
 			ContextWindow: 1047576,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4.1-nano-fast": {
 			ID:            "openai/gpt-4.1-nano-fast",
@@ -22707,6 +23727,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.8, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 1047576,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4o": {
 			ID:            "openai/gpt-4o",
@@ -22719,6 +23742,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 10, CacheRead: 1.25, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     16384,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4o-fast": {
 			ID:            "openai/gpt-4o-fast",
@@ -22731,6 +23757,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4.25, Output: 17, CacheRead: 2.125, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     16384,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4o-mini": {
 			ID:            "openai/gpt-4o-mini",
@@ -22743,6 +23772,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.075, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     16384,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-4o-mini-fast": {
 			ID:            "openai/gpt-4o-mini-fast",
@@ -22755,6 +23787,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1, CacheRead: 0.125, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     16384,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5": {
 			ID:            "openai/gpt-5",
@@ -22767,6 +23802,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0.125, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5-codex": {
 			ID:            "openai/gpt-5-codex",
@@ -22779,6 +23817,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0.13, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5-fast": {
 			ID:            "openai/gpt-5-fast",
@@ -22791,6 +23832,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 20, CacheRead: 0.25, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5-mini": {
 			ID:            "openai/gpt-5-mini",
@@ -22803,6 +23847,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 2, CacheRead: 0.025, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5-mini-fast": {
 			ID:            "openai/gpt-5-mini-fast",
@@ -22815,6 +23862,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.45, Output: 3.6, CacheRead: 0.045, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5-nano": {
 			ID:            "openai/gpt-5-nano",
@@ -22827,6 +23877,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.4, CacheRead: 0.005, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5-pro": {
 			ID:            "openai/gpt-5-pro",
@@ -22839,6 +23892,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 15, Output: 120, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     272000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.1-codex": {
 			ID:            "openai/gpt-5.1-codex",
@@ -22851,6 +23907,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0.13, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.1-codex-max": {
 			ID:            "openai/gpt-5.1-codex-max",
@@ -22863,6 +23922,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0.125, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.1-codex-mini": {
 			ID:            "openai/gpt-5.1-codex-mini",
@@ -22875,6 +23937,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 2, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.1-thinking": {
 			ID:            "openai/gpt-5.1-thinking",
@@ -22887,6 +23952,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0.125, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.1-thinking-fast": {
 			ID:            "openai/gpt-5.1-thinking-fast",
@@ -22899,6 +23967,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 20, CacheRead: 0.25, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.2": {
 			ID:        "openai/gpt-5.2",
@@ -22914,6 +23985,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.75, Output: 14, CacheRead: 0.175, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.2-codex": {
 			ID:        "openai/gpt-5.2-codex",
@@ -22929,6 +24003,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.75, Output: 14, CacheRead: 0.175, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.2-fast": {
 			ID:        "openai/gpt-5.2-fast",
@@ -22944,6 +24021,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.5, Output: 28, CacheRead: 0.35, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.2-pro": {
 			ID:        "openai/gpt-5.2-pro",
@@ -22959,6 +24039,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 21, Output: 168, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.3-codex": {
 			ID:        "openai/gpt-5.3-codex",
@@ -22974,6 +24057,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.75, Output: 14, CacheRead: 0.175, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.3-codex-fast": {
 			ID:        "openai/gpt-5.3-codex-fast",
@@ -22989,6 +24075,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.5, Output: 28, CacheRead: 0.35, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.4": {
 			ID:        "openai/gpt-5.4",
@@ -23004,6 +24093,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 0}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.4-fast": {
 			ID:        "openai/gpt-5.4-fast",
@@ -23019,6 +24111,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.4-mini": {
 			ID:        "openai/gpt-5.4-mini",
@@ -23034,6 +24129,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.75, Output: 4.5, CacheRead: 0.075, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.4-mini-fast": {
 			ID:        "openai/gpt-5.4-mini-fast",
@@ -23049,6 +24147,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 9, CacheRead: 0.15, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.4-nano": {
 			ID:        "openai/gpt-5.4-nano",
@@ -23064,6 +24165,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.25, CacheRead: 0.02, CacheWrite: 0}},
 			ContextWindow: 400000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.4-pro": {
 			ID:        "openai/gpt-5.4-pro",
@@ -23079,6 +24183,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 30, Output: 180, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.5": {
 			ID:        "openai/gpt-5.5",
@@ -23094,6 +24201,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.5-fast": {
 			ID:        "openai/gpt-5.5-fast",
@@ -23109,6 +24219,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 12.5, Output: 75, CacheRead: 1.25, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.5-pro": {
 			ID:        "openai/gpt-5.5-pro",
@@ -23127,6 +24240,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 30, Output: 180, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.6-luna": {
 			ID:        "openai/gpt-5.6-luna",
@@ -23142,6 +24258,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.6-luna-fast": {
 			ID:        "openai/gpt-5.6-luna-fast",
@@ -23157,6 +24276,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 2.4, CacheRead: 0.04, CacheWrite: 0.5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.6-sol": {
 			ID:        "openai/gpt-5.6-sol",
@@ -23169,9 +24291,12 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.6-sol-fast": {
 			ID:        "openai/gpt-5.6-sol-fast",
@@ -23184,9 +24309,12 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 8, Output: 40, CacheRead: 0.8, CacheWrite: 10}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.6-terra": {
 			ID:        "openai/gpt-5.6-terra",
@@ -23202,6 +24330,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 2.5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-5.6-terra-fast": {
 			ID:        "openai/gpt-5.6-terra-fast",
@@ -23217,6 +24348,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 24, CacheRead: 0.4, CacheWrite: 5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-6-astra": {
 			ID:        "openai/gpt-6-astra",
@@ -23232,6 +24366,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-6-astra-fast": {
 			ID:        "openai/gpt-6-astra-fast",
@@ -23247,6 +24384,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 20, Output: 100, CacheRead: 2, CacheWrite: 25}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-oss-120b": {
 			ID:            "openai/gpt-oss-120b",
@@ -23259,6 +24399,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-oss-20b": {
 			ID:            "openai/gpt-oss-20b",
@@ -23268,9 +24411,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			BaseURL:       "https://ai-gateway.vercel.sh",
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.03, Output: 0.14, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     8192,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-oss-safeguard-120b": {
 			ID:            "openai/gpt-oss-safeguard-120b",
@@ -23283,6 +24429,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     16000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/gpt-oss-safeguard-20b": {
 			ID:            "openai/gpt-oss-safeguard-20b",
@@ -23295,6 +24444,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.2, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     16000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/o1": {
 			ID:            "openai/o1",
@@ -23307,6 +24459,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 15, Output: 60, CacheRead: 7.5, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     100000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/o3": {
 			ID:            "openai/o3",
@@ -23319,6 +24474,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 8, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     100000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/o3-fast": {
 			ID:            "openai/o3-fast",
@@ -23331,6 +24489,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.5, Output: 14, CacheRead: 0.875, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     100000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/o3-mini": {
 			ID:            "openai/o3-mini",
@@ -23343,6 +24504,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.1, Output: 4.4, CacheRead: 0.55, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     100000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/o3-pro": {
 			ID:            "openai/o3-pro",
@@ -23355,6 +24519,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 20, Output: 80, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     100000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/o4-mini": {
 			ID:            "openai/o4-mini",
@@ -23367,6 +24534,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.1, Output: 4.4, CacheRead: 0.275, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     100000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"openai/o4-mini-fast": {
 			ID:            "openai/o4-mini-fast",
@@ -23379,6 +24549,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 8, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     100000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"poolside/laguna-s-2.1": {
 			ID:            "poolside/laguna-s-2.1",
@@ -23391,6 +24564,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.2, CacheRead: 0.01, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"poolside/laguna-s-2.1-free": {
 			ID:            "poolside/laguna-s-2.1-free",
@@ -23403,6 +24579,39 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
+		"quiverai/arrow-2": {
+			ID:            "quiverai/arrow-2",
+			Name:          "Arrow 2",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
+			ContextWindow: 131072,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
+		"quiverai/arrow-2-telos": {
+			ID:            "quiverai/arrow-2-telos",
+			Name:          "Arrow 2 Telos",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 6, Output: 30, CacheRead: 0.6, CacheWrite: 7.5}},
+			ContextWindow: 131072,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"sakana/fugu-max": {
 			ID:            "sakana/fugu-max",
@@ -23415,6 +24624,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.25, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"sakana/fugu-ultra": {
 			ID:            "sakana/fugu-ultra",
@@ -23427,6 +24639,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"sakana/fugu-ultra-v2": {
 			ID:            "sakana/fugu-ultra-v2",
@@ -23439,6 +24654,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"sakana/namazu": {
 			ID:            "sakana/namazu",
@@ -23451,6 +24669,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.15, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.1-fast-non-reasoning": {
 			ID:            "spacexai/grok-4.1-fast-non-reasoning",
@@ -23463,6 +24684,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.5, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.1-fast-reasoning": {
 			ID:            "spacexai/grok-4.1-fast-reasoning",
@@ -23475,6 +24699,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.5, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.20-multi-agent": {
 			ID:            "spacexai/grok-4.20-multi-agent",
@@ -23487,6 +24714,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 2.5, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 2000000,
 			MaxTokens:     2000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.20-multi-agent-beta": {
 			ID:            "spacexai/grok-4.20-multi-agent-beta",
@@ -23499,6 +24729,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 2.5, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 2000000,
 			MaxTokens:     2000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.20-non-reasoning": {
 			ID:            "spacexai/grok-4.20-non-reasoning",
@@ -23511,6 +24744,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 2.5, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 2000000,
 			MaxTokens:     2000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.20-non-reasoning-beta": {
 			ID:            "spacexai/grok-4.20-non-reasoning-beta",
@@ -23523,6 +24759,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 2.5, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 2000000,
 			MaxTokens:     2000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.20-reasoning": {
 			ID:            "spacexai/grok-4.20-reasoning",
@@ -23535,6 +24774,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 2.5, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 2000000,
 			MaxTokens:     2000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.20-reasoning-beta": {
 			ID:            "spacexai/grok-4.20-reasoning-beta",
@@ -23547,6 +24789,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 2.5, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 2000000,
 			MaxTokens:     2000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.3": {
 			ID:            "spacexai/grok-4.3",
@@ -23559,6 +24804,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 2.5, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.5": {
 			ID:            "spacexai/grok-4.5",
@@ -23571,6 +24819,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.3, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     500000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-4.6": {
 			ID:            "spacexai/grok-4.6",
@@ -23583,6 +24834,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     500000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"spacexai/grok-build-0.1": {
 			ID:            "spacexai/grok-build-0.1",
@@ -23595,6 +24849,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 2, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"stepfun/step-3.5-flash": {
 			ID:            "stepfun/step-3.5-flash",
@@ -23607,6 +24864,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.09, Output: 0.3, CacheRead: 0.02, CacheWrite: 0}},
 			ContextWindow: 262114,
 			MaxTokens:     262114,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"stepfun/step-3.7-flash": {
 			ID:            "stepfun/step-3.7-flash",
@@ -23619,6 +24879,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.15, CacheRead: 0.04, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"tencent/hy3": {
 			ID:            "tencent/hy3",
@@ -23631,6 +24894,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.58, CacheRead: 0.035, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     262144,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"tencent/hy4-preview": {
 			ID:            "tencent/hy4-preview",
@@ -23643,6 +24909,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.834, Output: 2.501, CacheRead: 0.042, CacheWrite: 0}},
 			ContextWindow: 1024000,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"thinkingmachines/inkling": {
 			ID:            "thinkingmachines/inkling",
@@ -23655,6 +24924,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 4.05, CacheRead: 0.17, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     256000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"thinkingmachines/inkling-small": {
 			ID:            "thinkingmachines/inkling-small",
@@ -23667,6 +24939,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.2, CacheRead: 0.1, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"xiaomi/mimo-v2.5": {
 			ID:            "xiaomi/mimo-v2.5",
@@ -23679,6 +24954,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.28, CacheRead: 0.0028, CacheWrite: 0}},
 			ContextWindow: 1050000,
 			MaxTokens:     131100,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"xiaomi/mimo-v2.5-pro": {
 			ID:            "xiaomi/mimo-v2.5-pro",
@@ -23691,6 +24969,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.435, Output: 0.87, CacheRead: 0.0036, CacheWrite: 0}},
 			ContextWindow: 1050000,
 			MaxTokens:     131000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-4.5": {
 			ID:            "zai/glm-4.5",
@@ -23703,6 +24984,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.11, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     96000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-4.5-air": {
 			ID:            "zai/glm-4.5-air",
@@ -23715,6 +24999,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.1, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 128000,
 			MaxTokens:     96000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-4.5v": {
 			ID:            "zai/glm-4.5v",
@@ -23727,6 +25014,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 1.8, CacheRead: 0.11, CacheWrite: 0}},
 			ContextWindow: 66000,
 			MaxTokens:     16000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-4.6": {
 			ID:            "zai/glm-4.6",
@@ -23739,6 +25029,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.11, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     96000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-4.7": {
 			ID:            "zai/glm-4.7",
@@ -23751,6 +25044,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.12, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     120000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-4.7-flash": {
 			ID:            "zai/glm-4.7-flash",
@@ -23763,6 +25059,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     131000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-4.7-flashx": {
 			ID:            "zai/glm-4.7-flashx",
@@ -23775,6 +25074,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.4, CacheRead: 0.01, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-5": {
 			ID:            "zai/glm-5",
@@ -23787,6 +25089,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 3.2, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 202800,
 			MaxTokens:     131100,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-5-turbo": {
 			ID:            "zai/glm-5-turbo",
@@ -23799,6 +25104,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 4, CacheRead: 0.24, CacheWrite: 0}},
 			ContextWindow: 202800,
 			MaxTokens:     131100,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-5.1": {
 			ID:            "zai/glm-5.1",
@@ -23811,6 +25119,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
 			ContextWindow: 202800,
 			MaxTokens:     64000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-5.2": {
 			ID:            "zai/glm-5.2",
@@ -23823,6 +25134,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.8, Output: 2.55, CacheRead: 0.16, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-5.2-fast": {
 			ID:            "zai/glm-5.2-fast",
@@ -23835,6 +25149,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.1, Output: 6.6, CacheRead: 0.21, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-5.3": {
 			ID:            "zai/glm-5.3",
@@ -23847,6 +25164,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.14, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-5.3-fast": {
 			ID:            "zai/glm-5.3-fast",
@@ -23859,6 +25179,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.1, Output: 6.6, CacheRead: 0.21, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     262144,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-5.3-flash": {
 			ID:            "zai/glm-5.3-flash",
@@ -23871,6 +25194,24 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.5, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     131000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
+		"zai/glm-5.3-flashx": {
+			ID:            "zai/glm-5.3-flashx",
+			Name:          "GLM 5.3 FlashX",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh",
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.37, Output: 1.25, CacheRead: 0.075, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"zai/glm-5v-turbo": {
 			ID:            "zai/glm-5v-turbo",
@@ -23883,6 +25224,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 4, CacheRead: 0.24, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 	},
 	ProviderXAI: {
@@ -23902,13 +25246,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   nil,
 				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 1.25, Output: 2.5, CacheRead: 0.2, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 2.5, Output: 5, CacheRead: 0.4, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 2.5, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     30000,
 			Compat: &OpenAIResponsesCompat{
@@ -23931,13 +25270,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   nil,
 				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.3, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 12, CacheRead: 0.6, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.3, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     500000,
 			Compat: &OpenAIResponsesCompat{
@@ -23960,13 +25294,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     nil,
 			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 4, Output: 12, CacheRead: 1, CacheWrite: 0}, InputTokensAbove: 200000},
-				},
-			},
+			Input:         []ModelInput{ModelInputText, ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     500000,
 			Compat: &OpenAIResponsesCompat{
@@ -24271,7 +25600,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.25, CacheRead: 0.015, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.5, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -24334,124 +25663,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				ZaiToolStream:           lo.ToPtr(true),
 			},
 		},
-		"glm-4.7": {
-			ID:            "glm-4.7",
-			Name:          "GLM-4.7",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderZaiCodingCN,
-			BaseURL:       "https://open.bigmodel.cn/api/coding/paas/v4",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.11, CacheWrite: 0}},
-			ContextWindow: 204800,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:           lo.ToPtr(false),
-				SupportsDeveloperRole:   lo.ToPtr(false),
-				SupportsReasoningEffort: lo.ToPtr(false),
-				MaxTokensField:          lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:          lo.ToPtr(ThinkingFormatZai),
-				ZaiToolStream:           lo.ToPtr(true),
-			},
-		},
-		"glm-5-turbo": {
-			ID:            "glm-5-turbo",
-			Name:          "GLM-5-Turbo",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderZaiCodingCN,
-			BaseURL:       "https://open.bigmodel.cn/api/coding/paas/v4",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 4, CacheRead: 0.24, CacheWrite: 0}},
-			ContextWindow: 200000,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:           lo.ToPtr(false),
-				SupportsDeveloperRole:   lo.ToPtr(false),
-				SupportsReasoningEffort: lo.ToPtr(false),
-				MaxTokensField:          lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:          lo.ToPtr(ThinkingFormatZai),
-				ZaiToolStream:           lo.ToPtr(true),
-			},
-		},
-		"glm-5.1": {
-			ID:            "glm-5.1",
-			Name:          "GLM-5.1",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderZaiCodingCN,
-			BaseURL:       "https://open.bigmodel.cn/api/coding/paas/v4",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
-			ContextWindow: 200000,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:           lo.ToPtr(false),
-				SupportsDeveloperRole:   lo.ToPtr(false),
-				SupportsReasoningEffort: lo.ToPtr(false),
-				MaxTokensField:          lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:          lo.ToPtr(ThinkingFormatZai),
-				ZaiToolStream:           lo.ToPtr(true),
-			},
-		},
-		"glm-5.2": {
-			ID:        "glm-5.2",
-			Name:      "GLM-5.2",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderZaiCodingCN,
-			BaseURL:   "https://open.bigmodel.cn/api/coding/paas/v4",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:           lo.ToPtr(false),
-				SupportsDeveloperRole:   lo.ToPtr(false),
-				SupportsReasoningEffort: lo.ToPtr(true),
-				MaxTokensField:          lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:          lo.ToPtr(ThinkingFormatZai),
-				ZaiToolStream:           lo.ToPtr(true),
-			},
-		},
-		"glm-5.2-highspeed": {
-			ID:        "glm-5.2-highspeed",
-			Name:      "GLM-5.2 Highspeed",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderZaiCodingCN,
-			BaseURL:   "https://open.bigmodel.cn/api/coding/paas/v4",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:           lo.ToPtr(false),
-				SupportsDeveloperRole:   lo.ToPtr(false),
-				SupportsReasoningEffort: lo.ToPtr(true),
-				MaxTokensField:          lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:          lo.ToPtr(ThinkingFormatZai),
-				ZaiToolStream:           lo.ToPtr(true),
-			},
-		},
 		"glm-5.3": {
 			ID:        "glm-5.3",
 			Name:      "GLM-5.3",
@@ -24498,7 +25709,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.25, CacheRead: 0.015, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.5, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -24539,30 +25750,10 @@ var MODELS = map[ProviderID]map[string]Model{
 				ZaiToolStream:           lo.ToPtr(true),
 			},
 		},
-		"glm-5v-turbo": {
-			ID:            "glm-5v-turbo",
-			Name:          "GLM-5V-Turbo",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderZaiCodingCN,
-			BaseURL:       "https://open.bigmodel.cn/api/coding/paas/v4",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText, ModelInputImage},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 4, CacheRead: 0.24, CacheWrite: 0}},
-			ContextWindow: 200000,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:           lo.ToPtr(false),
-				SupportsDeveloperRole:   lo.ToPtr(false),
-				SupportsReasoningEffort: lo.ToPtr(false),
-				MaxTokensField:          lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:          lo.ToPtr(ThinkingFormatZai),
-				ZaiToolStream:           lo.ToPtr(true),
-			},
-		},
 	},
 }
 
 // MODELSGeneratedAt is the generation timestamp shared by all built-in
 // provider catalogs, Unix milliseconds (pi: providers/data/.manifest.json
 // generatedAt). 0 means unknown; pi models the unknown case as undefined.
-var MODELSGeneratedAt int64 = 1789491386866
+var MODELSGeneratedAt int64 = 1789887071538

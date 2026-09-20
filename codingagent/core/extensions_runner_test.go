@@ -8,9 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
-	"github.com/ZoroSpace/pig/codingagent/core/tools"
 )
 
 func newTestRunner(t *testing.T) *ExtensionRunner {
@@ -267,65 +265,6 @@ func TestEmitReportsHandlerPanicsAsExtensionErrors(t *testing.T) {
 	}
 	if len(received) != 1 || received[0].Event != "agent_start" || received[0].ExtensionPath != "<ext>" {
 		t.Fatalf("unexpected errors: %v", received)
-	}
-}
-
-func TestWrapRegisteredToolReportsAddedToolNames(t *testing.T) {
-	activeTools := []string{}
-	definition := &tools.ToolDefinition{
-		Name:        "dynamic",
-		Description: "registers a follow-up tool",
-		Execute: func(_ context.Context, _ string, _ any, _ agent.AgentToolUpdateCallback, _ tools.ToolExecuteContext) (agent.AgentToolResult, error) {
-			activeTools = append(activeTools, "followup")
-			return agent.AgentToolResult{Content: []types.Content{types.NewTextContent("ok")}}, nil
-		},
-	}
-	runner := newTestRunner(t)
-	runner.BindCore(&ExtensionActions{
-		GetActiveTools: func() []string { return activeTools },
-	}, fullTestContextActions(), nil)
-
-	wrapped := WrapRegisteredTool(RegisteredTool{Definition: definition, SourceInfo: CreateSyntheticSourceInfo("<ext:dynamic>", SyntheticSourceInfoOptions{Source: "extension"})}, runner)
-
-	result, err := wrapped.Execute(context.Background(), "tc1", map[string]any{}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.AddedToolNames) != 1 || result.AddedToolNames[0] != "followup" {
-		t.Fatalf("expected addedToolNames [followup], got %v", result.AddedToolNames)
-	}
-
-	// A second run sees no newly added tools.
-	result, err = wrapped.Execute(context.Background(), "tc2", map[string]any{}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.AddedToolNames) != 0 {
-		t.Fatalf("expected no addedToolNames, got %v", result.AddedToolNames)
-	}
-}
-
-func TestWrapRegisteredToolPassesThroughWhenAToolWasRemoved(t *testing.T) {
-	activeTools := []string{"existing"}
-	definition := &tools.ToolDefinition{
-		Name: "remover",
-		Execute: func(_ context.Context, _ string, _ any, _ agent.AgentToolUpdateCallback, _ tools.ToolExecuteContext) (agent.AgentToolResult, error) {
-			activeTools = []string{} // removed the existing tool
-			return agent.AgentToolResult{Content: []types.Content{types.NewTextContent("ok")}, AddedToolNames: []string{"kept"}}, nil
-		},
-	}
-	runner := newTestRunner(t)
-	runner.BindCore(&ExtensionActions{
-		GetActiveTools: func() []string { return activeTools },
-	}, fullTestContextActions(), nil)
-
-	wrapped := WrapRegisteredTool(RegisteredTool{Definition: definition}, runner)
-	result, err := wrapped.Execute(context.Background(), "tc1", map[string]any{}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.AddedToolNames) != 1 || result.AddedToolNames[0] != "kept" {
-		t.Fatalf("expected result unchanged, got %v", result.AddedToolNames)
 	}
 }
 

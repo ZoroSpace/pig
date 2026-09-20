@@ -89,15 +89,18 @@ func (e *CannotContinueError) Error() string { return e.Reason }
 // RunAgentLoop is the prompt-entry variant of the loop without the EventStream
 // wrapper; events go to emit (pi: runAgentLoop).
 func RunAgentLoop(ctx context.Context, prompts []AgentMessage, agentContext AgentContext, config AgentLoopConfig, emit AgentEventSink, streamFn StreamFn) []AgentMessage {
-	newMessages := append([]AgentMessage(nil), prompts...)
+	// pi v0.86.0: the tool loadout delta against the transcript becomes a
+	// leading system declaration before the first request.
+	initialMessages := declareToolChanges(&agentContext, prompts)
+	newMessages := append([]AgentMessage(nil), initialMessages...)
 	currentContext := agentContext
-	currentContext.Messages = append(append([]AgentMessage(nil), agentContext.Messages...), prompts...)
+	currentContext.Messages = append(append([]AgentMessage(nil), agentContext.Messages...), initialMessages...)
 
 	emit(AgentEvent{Type: AgentEventAgentStart})
 	emit(AgentEvent{Type: AgentEventTurnStart})
-	for _, prompt := range prompts {
-		emit(AgentEvent{Type: AgentEventMessageStart, Message: prompt})
-		emit(AgentEvent{Type: AgentEventMessageEnd, Message: prompt})
+	for _, message := range initialMessages {
+		emit(AgentEvent{Type: AgentEventMessageStart, Message: message})
+		emit(AgentEvent{Type: AgentEventMessageEnd, Message: message})
 	}
 
 	newMessages = runLoop(ctx, &currentContext, newMessages, config, emit, streamFn)
@@ -924,9 +927,12 @@ func declareToolChanges(agentContext *AgentContext, pendingMessages []AgentMessa
 }
 
 // withToolChanges copies a system message with its tool fields replaced by
-// changes; empty lists omit the field (pi: withToolChanges).
-func withToolChanges(message *types.SystemMessage, changes utils.ToolStateChanges) *types.SystemMessage {
+// changes; empty lists omit the field (pi: withToolChanges). Returns the
+// value form: these messages enter the transcript list, and pig's canonical
+// message shape is value types (adapter message switches match values).
+func withToolChanges(message *types.SystemMessage, changes utils.ToolStateChanges) types.SystemMessage {
 	out := *message
+	out.Role = types.RoleSystem
 	out.ToolsAdded = nil
 	out.ToolsRemoved = nil
 	if len(changes.ToolsAdded) > 0 {
@@ -935,7 +941,7 @@ func withToolChanges(message *types.SystemMessage, changes utils.ToolStateChange
 	if len(changes.ToolsRemoved) > 0 {
 		out.ToolsRemoved = changes.ToolsRemoved
 	}
-	return &out
+	return out
 }
 
 // toToolDeclarations flattens AgentTool into declaration-shaped types.Tool

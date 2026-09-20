@@ -21,9 +21,9 @@ import (
 // a Fetch override, without touching the network.
 func TestDeepSeekProviderEndToEnd(t *testing.T) {
 	sse := "" +
-		"data: {\"id\":\"chatcmpl-e2e\",\"model\":\"deepseek-v4-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"42\"},\"finish_reason\":null}]}\n\n" +
-		"data: {\"id\":\"chatcmpl-e2e\",\"model\":\"deepseek-v4-flash\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" is the answer\"},\"finish_reason\":\"stop\"}]}\n\n" +
-		"data: {\"id\":\"chatcmpl-e2e\",\"model\":\"deepseek-v4-flash\",\"choices\":[],\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":3,\"prompt_cache_hit_tokens\":2}}\n\n" +
+		"data: {\"id\":\"chatcmpl-e2e\",\"model\":\"deepseek-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"42\"},\"finish_reason\":null}]}\n\n" +
+		"data: {\"id\":\"chatcmpl-e2e\",\"model\":\"deepseek-flash\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" is the answer\"},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: {\"id\":\"chatcmpl-e2e\",\"model\":\"deepseek-flash\",\"choices\":[],\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":3,\"prompt_cache_hit_tokens\":2}}\n\n" +
 		"data: [DONE]\n\n"
 
 	var lastPath string
@@ -36,9 +36,9 @@ func TestDeepSeekProviderEndToEnd(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := DeepSeekProvider()
-	model, ok := GetBuiltinModel(ai.ProviderDeepSeek, "deepseek-v4-flash")
+	model, ok := GetBuiltinModel(ai.ProviderDeepSeek, "deepseek-flash")
 	if !ok {
-		t.Fatal("deepseek-v4-flash not in catalog")
+		t.Fatal("deepseek-flash not in catalog")
 	}
 	fetch := func(req *http.Request) (*http.Response, error) {
 		rewritten := req.Clone(req.Context())
@@ -69,7 +69,7 @@ func TestDeepSeekProviderEndToEnd(t *testing.T) {
 	if got := result.Text(); got != "42 is the answer" {
 		t.Fatalf("text = %q", got)
 	}
-	if result.Provider != ai.ProviderDeepSeek || result.Model != "deepseek-v4-flash" {
+	if result.Provider != ai.ProviderDeepSeek || result.Model != "deepseek-flash" {
 		t.Fatalf("message identity = %s/%s", result.Provider, result.Model)
 	}
 	if lastPath != "/chat/completions" {
@@ -92,9 +92,9 @@ func TestDeepSeekRealAPI(t *testing.T) {
 		t.Skip("DEEPSEEK_API_KEY not set (or still the 'xxx' placeholder); skipping real-API test")
 	}
 
-	model, ok := GetBuiltinModel(ai.ProviderDeepSeek, "deepseek-v4-flash")
+	model, ok := GetBuiltinModel(ai.ProviderDeepSeek, "deepseek-flash")
 	if !ok {
-		t.Fatal("deepseek-v4-flash not in catalog")
+		t.Fatal("deepseek-flash not in catalog")
 	}
 
 	opts := types.SimpleStreamOptions{}

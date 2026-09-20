@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/agent"
-	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
 )
 

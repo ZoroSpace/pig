@@ -671,7 +671,7 @@ func buildGoogleParams(model *types.Model, normalizedContext *types.TranscriptCo
 		}
 		config.ThinkingConfig = thinkingConfig
 	} else if model.Reasoning && options.Thinking != nil && !options.Thinking.Enabled {
-		config.ThinkingConfig = getDisabledGoogleThinkingConfig(model)
+		config.ThinkingConfig = GetDisabledGoogleThinkingConfig(model)
 	}
 
 	return &googleGenerateContentParams{
@@ -696,24 +696,6 @@ func isGemini3FlashModel(modelID string) bool {
 		return true
 	}
 	return id == "gemini-flash-latest" || id == "gemini-flash-lite-latest"
-}
-
-// getDisabledGoogleThinkingConfig mirrors pi's getDisabledThinkingConfig:
-// Gemini 3.1 Pro cannot disable thinking, and Gemini 3 Flash / Flash-Lite do
-// not support full thinking-off either — use the lowest supported
-// thinkingLevel without includeThoughts so hidden thinking remains invisible.
-// Gemini 2.x disables via thinkingBudget = 0.
-func getDisabledGoogleThinkingConfig(model *types.Model) *googleThinkingConfig {
-	if isGemini3ProModel(model.ID) {
-		return &googleThinkingConfig{ThinkingLevel: GoogleThinkingLevelLow}
-	}
-	if isGemini3FlashModel(model.ID) {
-		return &googleThinkingConfig{ThinkingLevel: GoogleThinkingLevelMinimal}
-	}
-	if isGemma4Model(model.ID) {
-		return &googleThinkingConfig{ThinkingLevel: GoogleThinkingLevelMinimal}
-	}
-	return &googleThinkingConfig{ThinkingBudget: lo.ToPtr(int64(0))}
 }
 
 // getGoogleThinkingLevel maps the resolved level to Google's ThinkingLevel

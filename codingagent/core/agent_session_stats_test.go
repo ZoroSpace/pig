@@ -9,7 +9,6 @@ import (
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/samber/lo"
 
-	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
 )
 

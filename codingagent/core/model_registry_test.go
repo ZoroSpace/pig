@@ -1402,7 +1402,7 @@ func assertRegistryNotOverridden(t *testing.T) {
 			}
 		}
 	}()
-	streams.StreamSimple(context.Background(), &ai.Model{API: ai.ApiOpenAICompletions}, &ai.Context{}, &ai.SimpleStreamOptions{})
+	streams.StreamSimple(context.Background(), &ai.Model{API: ai.ApiOpenAICompletions}, &types.TranscriptContext{Messages: []types.Message{}}, &ai.SimpleStreamOptions{})
 }
 
 // registryProviderWithAPIKey is the providerWithApiKey helper (pi).

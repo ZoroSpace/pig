@@ -86,11 +86,12 @@ func createUserMessage(text string) types.UserMessage {
 }
 
 // identityConverter passes through standard messages (test helper).
+// v0.86.0: system messages ride the transcript.
 func identityConverter(messages []AgentMessage) []types.Message {
 	var out []types.Message
 	for _, message := range messages {
 		switch message.MessageRole() {
-		case types.RoleUser, types.RoleAssistant, types.RoleToolResult:
+		case types.RoleSystem, types.RoleUser, types.RoleAssistant, types.RoleToolResult:
 			out = append(out, message)
 		}
 	}
@@ -1086,7 +1087,9 @@ func TestAgentLoopStopsAfterTurnWhenShouldStopAfterTurnReturnsTrue(t *testing.T)
 	if len(callbackToolResultIDs) != 1 || callbackToolResultIDs[0] != "tool-1" {
 		t.Errorf("callbackToolResultIDs = %v, want [tool-1]", callbackToolResultIDs)
 	}
-	wantRoles := []types.Role{types.RoleUser, types.RoleAssistant, types.RoleToolResult}
+	// v0.86.0: the transcript declares no tools, so the loop announces the
+	// loadout with a leading system message.
+	wantRoles := []types.Role{types.RoleSystem, types.RoleUser, types.RoleAssistant, types.RoleToolResult}
 	if len(callbackContextRoles) != len(wantRoles) {
 		t.Fatalf("callbackContextRoles = %v, want %v", callbackContextRoles, wantRoles)
 	}
@@ -1095,13 +1098,15 @@ func TestAgentLoopStopsAfterTurnWhenShouldStopAfterTurnReturnsTrue(t *testing.T)
 			t.Fatalf("callbackContextRoles = %v, want %v", callbackContextRoles, wantRoles)
 		}
 	}
-	if len(messages) != 3 {
-		t.Fatalf("messages = %d, want 3", len(messages))
+	if len(messages) != 4 {
+		t.Fatalf("messages = %d, want 4", len(messages))
 	}
 
 	wantEvents := []AgentEventType{
 		AgentEventAgentStart,
 		AgentEventTurnStart,
+		AgentEventMessageStart,
+		AgentEventMessageEnd,
 		AgentEventMessageStart,
 		AgentEventMessageEnd,
 		AgentEventMessageStart,
@@ -1156,8 +1161,13 @@ func TestAgentLoopStopsAfterToolBatchWhenEveryResultTerminates(t *testing.T) {
 	if llmCalls != 1 {
 		t.Errorf("llmCalls = %d, want 1", llmCalls)
 	}
-	if len(messages) != 3 {
-		t.Fatalf("messages = %d, want 3", len(messages))
+	// v0.86.0: the loop announces the tool loadout with a leading system
+	// message.
+	if len(messages) != 4 {
+		t.Fatalf("messages = %d, want 4", len(messages))
+	}
+	if messages[0].MessageRole() != types.RoleSystem {
+		t.Fatalf("messages[0] = %v, want system", messages[0].MessageRole())
 	}
 	turnEnds := 0
 	for _, event := range events {
@@ -1331,7 +1341,8 @@ func TestAgentLoopContinuesAfterParallelToolCallsWhenNotAllTerminate(t *testing.
 	if callIndex != 2 {
 		t.Errorf("callIndex = %d, want 2", callIndex)
 	}
-	wantRoles := []types.Role{types.RoleUser, types.RoleAssistant, types.RoleToolResult, types.RoleToolResult, types.RoleAssistant}
+	// v0.86.0: leading tool-loadout system message.
+	wantRoles := []types.Role{types.RoleSystem, types.RoleUser, types.RoleAssistant, types.RoleToolResult, types.RoleToolResult, types.RoleAssistant}
 	if len(messages) != len(wantRoles) {
 		t.Fatalf("messages = %d, want %d", len(messages), len(wantRoles))
 	}
@@ -1385,9 +1396,7 @@ func TestAgentLoopAllowsAfterToolCallToMarkBatchAsTerminating(t *testing.T) {
 // ---- agentLoopContinue with AgentMessage ----
 
 func TestAgentLoopContinueThrowsWhenContextHasNoMessages(t *testing.T) {
-	agentContext := AgentContext{Messages: []AgentMessage{types.SystemMessage{
-		Role: types.RoleSystem, Content: types.SystemContent{String: "You are helpful."}, Timestamp: 1,
-	}}, Tools: []*AgentTool{}}
+	agentContext := AgentContext{Messages: []AgentMessage{}, Tools: []*AgentTool{}}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
 	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {

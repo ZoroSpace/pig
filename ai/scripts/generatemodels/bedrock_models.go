@@ -62,7 +62,7 @@ func processBedrockModels(data ModelsDevCatalog) []*ai.Model {
 			BaseURL:       getBedrockBaseUrl(modelID),
 			Reasoning:     boolVal(m.Reasoning),
 			Input:         input,
-			Cost:          modelsDevCostOf(m.Cost),
+			Cost:          modelsDevFlatCostOf(m.Cost),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		}

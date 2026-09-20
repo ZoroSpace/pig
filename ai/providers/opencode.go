@@ -18,11 +18,13 @@ func OpenCodeProvider() ai.Provider {
 			APIKey: auth.EnvAPIKeyAuth("OpenCode API key", []string{"OPENCODE_API_KEY"}),
 		},
 		Models: GetBuiltinModels(types.ProviderOpenCode),
+		// v0.86.0: every entry rides the OpenCode session-header wrapper
+		// (pi: withOpenCodeSessionHeader, regression #9326).
 		APIByAPI: map[string]ai.ProviderStreams{
-			string(types.ApiAnthropicMessages):  api.AnthropicMessages{},
-			string(types.ApiGoogleGenerativeAI): api.GoogleGenerativeAI{},
-			string(types.ApiOpenAICompletions):  api.OpenAICompletions{},
-			string(types.ApiOpenAIResponses):    api.OpenAIResponses{},
+			string(types.ApiAnthropicMessages):  WithOpenCodeSessionHeader(api.AnthropicMessages{}),
+			string(types.ApiGoogleGenerativeAI): WithOpenCodeSessionHeader(api.GoogleGenerativeAI{}),
+			string(types.ApiOpenAICompletions):  WithOpenCodeSessionHeader(api.OpenAICompletions{}),
+			string(types.ApiOpenAIResponses):    WithOpenCodeSessionHeader(api.OpenAIResponses{}),
 		},
 	})
 }

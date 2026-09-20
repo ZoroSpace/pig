@@ -65,9 +65,9 @@ func captureGooglePayload(t *testing.T, model *types.Model, reasoning types.Thin
 }
 
 func TestGoogleThinkingLevelResolveExhaustive(t *testing.T) {
-	// pi: off→high and identity mappings for the supported levels.
+	// pi v0.86.0: identity mappings for the supported levels; "off" no
+	// longer resolves here (callers disable thinking explicitly instead).
 	defaults := map[types.ModelThinkingLevel]types.ModelThinkingLevel{
-		types.ModelThinkingOff:     types.ModelThinkingHigh,
 		types.ModelThinkingMinimal: types.ModelThinkingMinimal,
 		types.ModelThinkingLow:     types.ModelThinkingLow,
 		types.ModelThinkingMedium:  types.ModelThinkingMedium,
@@ -224,5 +224,99 @@ func TestGoogleThinkingLevelUsesMappedVertexLevelsForBudgets(t *testing.T) {
 	if payload.Config.ThinkingConfig == nil || payload.Config.ThinkingConfig.ThinkingBudget == nil ||
 		*payload.Config.ThinkingConfig.ThinkingBudget != 1234 {
 		t.Errorf("thinkingConfig = %+v, want thinkingBudget 1234", payload.Config.ThinkingConfig)
+	}
+}
+
+// --- pi v0.86.0 increments (adapter-parameterized) ---
+
+func TestGoogleThinkingLevelMapUsesLowestSupportedLevelWhenReasoningOmitted(t *testing.T) {
+	// Regression for pi #9455: with off/minimal mapped to null, the lowest
+	// supported level is "low". Applies to both google adapters.
+	levelMap := types.ThinkingLevelMap{
+		types.ModelThinkingOff:     nil,
+		types.ModelThinkingMinimal: nil,
+		types.ModelThinkingLow:     lo.ToPtr("low"),
+		types.ModelThinkingMedium:  lo.ToPtr("medium"),
+		types.ModelThinkingHigh:    lo.ToPtr("high"),
+		types.ModelThinkingXHigh:   nil,
+		types.ModelThinkingMax:     nil,
+	}
+	for _, tc := range []struct {
+		name    string
+		capture func() *googleGenerateContentParams
+	}{
+		{"google", func() *googleGenerateContentParams {
+			return captureGooglePayload(t, googleTLMModel("gemini-3.8-flash", levelMap), "", nil)
+		}},
+		{"vertex", func() *googleGenerateContentParams {
+			return captureVertexPayload(t, vertexTLMModel("gemini-3.8-flash", levelMap), "", nil)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := tc.capture()
+			if payload.Config == nil || payload.Config.ThinkingConfig == nil {
+				t.Fatalf("config = %+v", payload.Config)
+			}
+			if payload.Config.ThinkingConfig.ThinkingLevel != "LOW" || payload.Config.ThinkingConfig.IncludeThoughts {
+				t.Fatalf("thinkingConfig = %+v", payload.Config.ThinkingConfig)
+			}
+		})
+	}
+}
+
+func TestGoogleThinkingLevelMapPreservesNativeMediumEffortForGemini31Pro(t *testing.T) {
+	levelMap := types.ThinkingLevelMap{
+		types.ModelThinkingOff:     nil,
+		types.ModelThinkingMinimal: nil,
+		types.ModelThinkingLow:     lo.ToPtr("low"),
+		types.ModelThinkingMedium:  lo.ToPtr("medium"),
+		types.ModelThinkingHigh:    lo.ToPtr("high"),
+		types.ModelThinkingXHigh:   nil,
+		types.ModelThinkingMax:     nil,
+	}
+	for _, tc := range []struct {
+		name    string
+		capture func() *googleGenerateContentParams
+	}{
+		{"google", func() *googleGenerateContentParams {
+			return captureGooglePayload(t, googleTLMModel("gemini-3.1-pro-preview", levelMap), types.ThinkingLevel(types.ModelThinkingMedium), nil)
+		}},
+		{"vertex", func() *googleGenerateContentParams {
+			return captureVertexPayload(t, vertexTLMModel("gemini-3.1-pro-preview", levelMap), types.ThinkingLevel(types.ModelThinkingMedium), nil)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := tc.capture()
+			if payload.Config == nil || payload.Config.ThinkingConfig == nil {
+				t.Fatalf("config = %+v", payload.Config)
+			}
+			if payload.Config.ThinkingConfig.ThinkingLevel != "MEDIUM" || !payload.Config.ThinkingConfig.IncludeThoughts {
+				t.Fatalf("thinkingConfig = %+v", payload.Config.ThinkingConfig)
+			}
+		})
+	}
+}
+
+func TestGoogleThinkingLevelMapDisablesGemini25ThinkingWhenReasoningOmitted(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		capture func() *googleGenerateContentParams
+	}{
+		{"google", func() *googleGenerateContentParams {
+			return captureGooglePayload(t, googleTLMModel("gemini-2.5-flash", types.ThinkingLevelMap{}), "", nil)
+		}},
+		{"vertex", func() *googleGenerateContentParams {
+			return captureVertexPayload(t, vertexTLMModel("gemini-2.5-flash", types.ThinkingLevelMap{}), "", nil)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := tc.capture()
+			if payload.Config == nil || payload.Config.ThinkingConfig == nil {
+				t.Fatalf("config = %+v", payload.Config)
+			}
+			if payload.Config.ThinkingConfig.ThinkingBudget == nil || *payload.Config.ThinkingConfig.ThinkingBudget != 0 {
+				t.Fatalf("thinkingConfig = %+v", payload.Config.ThinkingConfig)
+			}
+		})
 	}
 }

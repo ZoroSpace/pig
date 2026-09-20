@@ -1,9 +1,12 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"testing"
+
+	"github.com/samber/lo"
 )
 
 func roundtripMessage(t *testing.T, in Message) Message {
@@ -94,8 +97,70 @@ func TestToolResultMessageRoundtrip(t *testing.T) {
 }
 
 func TestDecodeMessageRejectsUnknownRole(t *testing.T) {
-	if _, err := DecodeMessage([]byte(`{"role":"system"}`)); err == nil {
+	if _, err := DecodeMessage([]byte(`{"role":"bogus"}`)); err == nil {
 		t.Fatal("want error for unknown role")
+	}
+}
+
+// pi v0.86.0 message-types.test.ts, runtime-relevant half: system is a
+// transcript role and round-trips with its content/sections/tool fields.
+// (The compile-time detail-type assertions have no Go equivalent: pig's
+// ToolResultMessage.Details is json.RawMessage.)
+func TestDecodeMessageDispatchesSystemRole(t *testing.T) {
+	m, err := DecodeMessage([]byte(`{"role":"system","content":"hi","timestamp":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm, ok := m.(SystemMessage)
+	if !ok || sm.Content.String != "hi" || sm.Timestamp != 1 {
+		t.Fatalf("%T %+v", m, m)
+	}
+}
+
+func TestSystemMessageJSONRoundtrip(t *testing.T) {
+	in := SystemMessage{
+		Role:         RoleSystem,
+		Content:      SystemContent{String: "base"},
+		Sections:     &SystemSections{Keys: []string{"a", "b"}, Values: map[string]*string{"a": lo.ToPtr("<a>1</a>"), "b": nil}},
+		ToolsAdded:   []Tool{{Name: "t", Description: "d", Parameters: json.RawMessage(`{"type":"object"}`)}},
+		ToolsRemoved: []ToolReference{{Name: "old"}},
+		Timestamp:    7,
+	}
+	data, err := json.Marshal(&in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := DecodeMessage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm, ok := out.(SystemMessage)
+	if !ok {
+		t.Fatalf("%T", out)
+	}
+	if sm.Content.String != "base" || sm.Timestamp != 7 {
+		t.Fatalf("%+v", sm)
+	}
+	if sm.Sections == nil || len(sm.Sections.Keys) != 2 || sm.Sections.Keys[0] != "a" || sm.Sections.Keys[1] != "b" {
+		t.Fatalf("sections = %+v", sm.Sections)
+	}
+	if *sm.Sections.Values["a"] != "<a>1</a>" || sm.Sections.Values["b"] != nil {
+		t.Fatalf("section values = %+v", sm.Sections.Values)
+	}
+	if len(sm.ToolsAdded) != 1 || sm.ToolsAdded[0].Name != "t" {
+		t.Fatalf("toolsAdded = %+v", sm.ToolsAdded)
+	}
+	if len(sm.ToolsRemoved) != 1 || sm.ToolsRemoved[0].Name != "old" {
+		t.Fatalf("toolsRemoved = %+v", sm.ToolsRemoved)
+	}
+
+	// Key order survives the marshal/unmarshal cycle (prompt cache
+	// invariant; see SystemSections).
+	re, _ := json.Marshal(&sm)
+	first := bytes.Index(re, []byte(`"a"`))
+	second := bytes.Index(re, []byte(`"b"`))
+	if first == -1 || second == -1 || first > second {
+		t.Fatalf("section key order lost: %s", re)
 	}
 }
 

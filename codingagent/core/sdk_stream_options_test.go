@@ -18,6 +18,7 @@ import (
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/auth"
 	"github.com/ZoroSpace/pig/ai/types"
+	aiutils "github.com/ZoroSpace/pig/ai/utils"
 	"github.com/samber/lo"
 )
 
@@ -134,7 +135,7 @@ func sdkCaptureStreamOptionsWithModel(t *testing.T, model *types.Model, settings
 		t.Fatal(err)
 	}
 
-	stream := result.Session.Agent.StreamFunction(context.Background(), model, &types.Context{Messages: []types.Message{}}, requestOptions)
+	stream := result.Session.Agent.StreamFunction(context.Background(), model, aiutils.NormalizeContext(&types.Context{Messages: []types.Message{}}), requestOptions)
 	finalMessage := stream.Result()
 	_ = finalMessage
 
