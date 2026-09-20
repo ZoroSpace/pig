@@ -75,11 +75,13 @@ func createInteractiveTui(options createInteractiveTuiOptions) tui.TUI {
 			OpenUrl:           utils.OpenBrowser,
 			OnRightClickPaste: options.onRightClickPaste,
 			CopyOnSelect:      &copyOnSelect,
-			CopySelection: func(text string) bool {
+			CopySelection: func(text string) tui.CopySelectionResult {
+				// pi v0.86.0: copy failures surface the error message in the
+				// flash (#9618).
 				if err := interactiveCopyToClipboard(text); err != nil {
-					return false
+					return tui.CopySelectionResult{Ok: false, FailureMessage: err.Error()}
 				}
-				return true
+				return tui.CopySelectionResult{Ok: true}
 			},
 		})
 	}

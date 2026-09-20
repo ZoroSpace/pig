@@ -1093,9 +1093,9 @@ func TestTuiAltScreenUsesAnInjectedCopySelectionHandlerInsteadOfOsc52AndReportsS
 	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(20, 4)}
 	var copied []string
 	tui := NewTuiAltScreen(terminal, nil, "", &TuiAltScreenOptions{
-		CopySelection: func(text string) bool {
+		CopySelection: func(text string) CopySelectionResult {
 			copied = append(copied, text)
-			return true
+			return CopySelectionResult{Ok: true}
 		},
 	})
 	tui.AddChild(NewText("alpha\nbeta\ngamma\ndelta", 0, 0))
@@ -1123,7 +1123,7 @@ func TestTuiAltScreenUsesAnInjectedCopySelectionHandlerInsteadOfOsc52AndReportsS
 func TestTuiAltScreenFlashesAnErrorWhenTheInjectedCopySelectionHandlerFails(t *testing.T) {
 	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(20, 4)}
 	tui := NewTuiAltScreen(terminal, nil, "", &TuiAltScreenOptions{
-		CopySelection: func(text string) bool { return false },
+		CopySelection: func(text string) CopySelectionResult { return CopySelectionResult{} },
 	})
 	tui.AddChild(NewText("alpha\nbeta\ngamma\ndelta", 0, 0))
 	tui.Start()
@@ -1139,6 +1139,53 @@ func TestTuiAltScreenFlashesAnErrorWhenTheInjectedCopySelectionHandlerFails(t *t
 	}
 	if strings.Contains(terminal.eventsJoined(), "\x1b]52;c;") {
 		t.Fatal("must not emit OSC 52 when a copySelection handler is provided")
+	}
+
+	tui.Stop(nil)
+}
+
+// pi v0.86.0 #9618: "flashes a specific error returned by the injected
+// copySelection handler" — the string branch surfaces its message with the
+// 5s error duration instead of the generic "Copy failed".
+func TestTuiAltScreenFlashesASpecificErrorReturnedByTheInjectedCopySelectionHandler(t *testing.T) {
+	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(80, 4)}
+	tui := NewTuiAltScreen(terminal, nil, "", &TuiAltScreenOptions{
+		CopyOnSelect: lo.ToPtr(false),
+		CopySelection: func(text string) CopySelectionResult {
+			return CopySelectionResult{Ok: false, FailureMessage: "Clipboard unavailable: install wl-clipboard"}
+		},
+	})
+	tui.AddChild(NewText("alpha\nbeta\ngamma\ndelta", 0, 0))
+	tui.Start()
+	terminal.WaitForRender()
+
+	terminal.SendInput("\x1b[<0;1;1M")
+	terminal.SendInput("\x1b[<32;4;2M")
+	terminal.SendInput("\x1b[<0;4;2m")
+	terminal.WaitForRender()
+	if tui.CopyActiveSelectionToClipboard() {
+		t.Fatal("copyActiveSelectionToClipboard = true, want false")
+	}
+	terminal.WaitForRender()
+
+	if !altViewportSome(terminal, func(line string) bool {
+		return strings.Contains(line, "Clipboard unavailable: install wl-clipboard")
+	}) {
+		t.Fatal("missing specific failure message flash")
+	}
+	if altViewportSome(terminal, func(line string) bool { return strings.Contains(line, "Copy failed") }) {
+		t.Fatal("generic Copy failed flash must be replaced by the specific message")
+	}
+	// pi: flashDuration === 5000 — pig reads the flash entry's recorded
+	// duration (pi spies on this.flash; the entry note in alt_screen_flash.go).
+	tui.flashes.mu.Lock()
+	flashDuration := 0
+	if entries := tui.flashes.entries; len(entries) > 0 {
+		flashDuration = entries[len(entries)-1].durationMs
+	}
+	tui.flashes.mu.Unlock()
+	if flashDuration != copyErrorFlashDurationMs {
+		t.Fatalf("flash duration = %d, want %d", flashDuration, copyErrorFlashDurationMs)
 	}
 
 	tui.Stop(nil)

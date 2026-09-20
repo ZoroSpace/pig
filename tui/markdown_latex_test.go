@@ -10,10 +10,11 @@ import (
 )
 
 func TestMarkdownRendersInlineDollarAndParenthesisDelimiters(t *testing.T) {
-	markdown := NewMarkdown(`A map $\mathbb{C}^3 \to \mathbb{C}^3$, $xy$, $x-y$, $-x$, $\frac{1}{2}$, and \(s \to \infty\).`, 0, 0, defaultMarkdownTheme, nil, nil)
+	// pi v0.86.0 adds $\rightarrow$ to the input.
+	markdown := NewMarkdown(`A map $\mathbb{C}^3 \to \mathbb{C}^3$, $xy$, $x-y$, $-x$, $\frac{1}{2}$, $\rightarrow$, and \(s \to \infty\).`, 0, 0, defaultMarkdownTheme, nil, nil)
 
 	lines := mapStripTrim(markdown.Render(80))
-	assertDeepLines(t, lines, []string{"A map ℂ³ → ℂ³, xy, x-y, -x, 1/2, and s → ∞."}, "inline dollar/paren")
+	assertDeepLines(t, lines, []string{"A map ℂ³ → ℂ³, xy, x-y, -x, 1/2, →, and s → ∞."}, "inline dollar/paren")
 }
 
 func TestMarkdownRendersDisplayDollarWithoutEscapeCorruption(t *testing.T) {

@@ -91,9 +91,9 @@ func TestTuiAltScreenLeavesSelectionsVisibleWithoutCopyingWhenCopyOnSelectIsDisa
 	var copied []string
 	tui := NewTuiAltScreen(terminal, nil, "", &TuiAltScreenOptions{
 		CopyOnSelect: lo.ToPtr(false),
-		CopySelection: func(text string) bool {
+		CopySelection: func(text string) CopySelectionResult {
 			copied = append(copied, text)
-			return true
+			return CopySelectionResult{Ok: true}
 		},
 	})
 	tui.AddChild(NewText("alpha\nbeta\ngamma\ndelta", 0, 0))
@@ -127,9 +127,9 @@ func TestTuiAltScreenCopiesAnActiveSelectionProgrammatically(t *testing.T) {
 	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(20, 4)}
 	var copied []string
 	tui := NewTuiAltScreen(terminal, nil, "", &TuiAltScreenOptions{
-		CopySelection: func(text string) bool {
+		CopySelection: func(text string) CopySelectionResult {
 			copied = append(copied, text)
-			return true
+			return CopySelectionResult{Ok: true}
 		},
 	})
 	tui.AddChild(NewText("alpha\nbeta\ngamma\ndelta", 0, 0))
@@ -176,9 +176,9 @@ func TestTuiAltScreenCoalescesSlashAndHyphenSeparatedSegmentsForDoubleClickWordS
 	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(20, 4)}
 	var copied []string
 	tui := NewTuiAltScreen(terminal, nil, "", &TuiAltScreenOptions{
-		CopySelection: func(text string) bool {
+		CopySelection: func(text string) CopySelectionResult {
 			copied = append(copied, text)
-			return true
+			return CopySelectionResult{Ok: true}
 		},
 	})
 	tui.AddChild(NewText("go to /usr/local/bin now\nsecond line here", 0, 0))

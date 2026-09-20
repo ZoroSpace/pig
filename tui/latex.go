@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/samber/lo"
 )
@@ -151,6 +152,12 @@ var latexNegativeSpacingCommands = latexStringSet(
 	"!", "negmedspace", "negthickspace", "negthinspace",
 )
 
+// pi v0.86.0 FONT_SWITCH_COMMANDS: font switches are dropped (consuming
+// following whitespace) instead of failing as unknown commands.
+var latexFontSwitchCommands = latexStringSet(
+	"bf", "cal", "it", "rm", "sf", "sl", "tt",
+)
+
 const latexNegativeSpace = "\x00"
 
 var latexIgnoredCommands = latexStringSet(
@@ -206,6 +213,13 @@ type latexOperatorNode struct {
 
 func (latexOperatorNode) latexLayoutNode() {}
 
+type latexScriptNode struct {
+	lower *string
+	upper *string
+}
+
+func (latexScriptNode) latexLayoutNode() {}
+
 type latexMatrixNode struct {
 	lines    []string
 	baseline int
@@ -228,15 +242,17 @@ const (
 )
 
 var (
-	latexLayoutMarkerPattern        = regexp.MustCompile(`\x{F0000}([0-9]+)\x{F0001}`)
-	latexTrailingLayoutMarkerParse  = regexp.MustCompile(`\x{F0000}([0-9]+)\x{F0001}$`)
-	latexSpacesTabsPattern          = regexp.MustCompile(`[ \t]+`)
-	latexScriptEqualsPlusMinus      = regexp.MustCompile(`\s*([=+-])\s*`)
-	latexSimpleNumeratorPattern     = regexp.MustCompile(`^[\p{L}\p{N}.]+$`)
-	latexSimpleDenominatorPattern   = regexp.MustCompile(`^[\p{N}.]+$`)
-	latexWordSubscriptPattern       = regexp.MustCompile(`^[A-Za-z]+$`)
-	latexLeadingGroupPattern        = regexp.MustCompile(`^\s*\{[^}]*\}`)
-	latexTrailingCommaPattern       = regexp.MustCompile(`,\s*$`)
+	latexLayoutMarkerPattern       = regexp.MustCompile(`\x{F0000}([0-9]+)\x{F0001}`)
+	latexTrailingLayoutMarkerParse = regexp.MustCompile(`\x{F0000}([0-9]+)\x{F0001}$`)
+	latexSpacesTabsPattern         = regexp.MustCompile(`[ \t]+`)
+	latexScriptEqualsPlusMinus     = regexp.MustCompile(`\s*([=+-])\s*`)
+	latexSimpleNumeratorPattern    = regexp.MustCompile(`^[\p{L}\p{N}.]+$`)
+	latexSimpleDenominatorPattern  = regexp.MustCompile(`^[\p{N}.]+$`)
+	latexWordSubscriptPattern      = regexp.MustCompile(`^[A-Za-z]+$`)
+	latexLeadingGroupPattern       = regexp.MustCompile(`^\s*\{[^}]*\}`)
+	latexTrailingCommaPattern      = regexp.MustCompile(`,\s*$`)
+	// pi v0.86.0 parseScripts' /[A-Z*∗]/ membership check.
+	latexScriptUppercasePattern     = regexp.MustCompile(`[A-Z*∗]`)
 	latexCasesConditionPrefixParse  = regexp.MustCompile(`(?i)^(?:if|when|for|otherwise)(?:$|[^A-Za-z0-9_])`)
 	latexEnvironmentRowSplitPattern = regexp.MustCompile(`\\\\(?:\[[^\]\n]*\])?`)
 	latexLimitsModifierPattern      = func() *regexp.Regexp {
@@ -316,15 +332,29 @@ func latexReplaceCharacters(value string, replacements map[rune]string) (string,
 	return b.String(), true
 }
 
-func latexFormatScript(value string, kind string) string {
-	value = strings.TrimSpace(value)
+// latexNormalizeScriptValue normalizes a script argument (pi v0.86.0
+// normalizeScriptValue): trim, then collapse spaces around = + -.
+func latexNormalizeScriptValue(value string) string {
+	return latexScriptEqualsPlusMinus.ReplaceAllString(strings.TrimSpace(value), "$1")
+}
+
+// latexFormatUnicodeScript maps a script argument to Unicode sub/superscripts
+// when fully representable (pi v0.86.0 formatUnicodeScript). ok is false when
+// any code point has no replacement (pi: undefined).
+func latexFormatUnicodeScript(value string, kind string) (string, bool) {
 	replacements := latexSuperscripts
 	if kind == "sub" {
 		replacements = latexSubscripts
 	}
-	collapsed := latexScriptEqualsPlusMinus.ReplaceAllString(value, "$1")
-	if unicode, ok := latexReplaceCharacters(collapsed, replacements); ok {
-		return unicode
+	return latexReplaceCharacters(latexNormalizeScriptValue(value), replacements)
+}
+
+func latexFormatScript(value string, kind string) string {
+	// pi v0.86.0: the collapsed form feeds the fallback too (v0.85.1 only
+	// collapsed for the Unicode mapping).
+	value = latexNormalizeScriptValue(value)
+	if unicodeForm, ok := latexFormatUnicodeScript(value, kind); ok {
+		return unicodeForm
 	}
 	prefix := "^"
 	if kind == "sub" {
@@ -511,6 +541,40 @@ func latexRenderLayout(source string, nodes []latexLayoutNode) *latexLayout {
 					baseline = 1
 				}
 				layouts = append(layouts, &latexLayout{lines: lines, width: contentWidth + 1, baseline: baseline})
+			case latexScriptNode:
+				// pi v0.86.0 ScriptNode: stacked upper/lower scripts around a
+				// blank middle row (padLayoutLine default centered=false).
+				var upper, lower *latexLayout
+				if n.upper != nil {
+					upper = latexRenderLayout(*n.upper, nodes)
+				}
+				if n.lower != nil {
+					lower = latexRenderLayout(*n.lower, nodes)
+				}
+				width := 0
+				if upper != nil {
+					width = max(width, upper.width)
+				}
+				if lower != nil {
+					width = max(width, lower.width)
+				}
+				var lines []string
+				if upper != nil {
+					for _, line := range upper.lines {
+						lines = append(lines, latexPadLayoutLine(line, width, false))
+					}
+				}
+				lines = append(lines, strings.Repeat(" ", width))
+				if lower != nil {
+					for _, line := range lower.lines {
+						lines = append(lines, latexPadLayoutLine(line, width, false))
+					}
+				}
+				baseline := 0
+				if upper != nil {
+					baseline = len(upper.lines)
+				}
+				layouts = append(layouts, &latexLayout{lines: lines, width: width, baseline: baseline})
 			default:
 				matrix := n.(latexMatrixNode)
 				width := 0
@@ -562,6 +626,7 @@ type latexParser struct {
 	position       int
 	supported      bool
 	stackFractions bool
+	scriptDepth    int
 }
 
 func newLatexParser(source string, layoutNodes *[]latexLayoutNode, display bool) *latexParser {
@@ -626,12 +691,8 @@ func (p *latexParser) parseSequence(endCharacter rune) string {
 
 		if character == '^' || character == '_' {
 			p.position++
-			kind := "sup"
-			if character == '_' {
-				kind = "sub"
-			}
 			result = strings.TrimRightFunc(result, unicode.IsSpace)
-			script := latexFormatScript(p.parseRequiredArgument(false), kind)
+			script := p.parseScripts(character)
 			if strings.HasSuffix(result, string(latexNamedOperatorEnd)) {
 				result = result[:len(result)-len(string(latexNamedOperatorEnd))] + script + string(latexNamedOperatorEnd)
 			} else {
@@ -688,6 +749,98 @@ func (p *latexParser) parseSequence(endCharacter rune) string {
 	return result
 }
 
+// parseScripts parses one or two consecutive sub/superscripts (pi v0.86.0
+// parseScripts): the initial marker's argument, then — after optional
+// whitespace — the opposite marker's argument when present. Display mode
+// stacks unrepresentable or nested scripts via a script layout node; other
+// cases fall back to linear Unicode/fallback forms in marker order.
+func (p *latexParser) parseScripts(initialMarker rune) string {
+	var sub, sup *string
+	order := make([]string, 0, 2)
+	parse := func(marker rune) {
+		p.scriptDepth++
+		value := p.parseRequiredArgument(false)
+		p.scriptDepth--
+		if marker == '_' {
+			sub = lo.ToPtr(value)
+			order = append(order, "sub")
+		} else {
+			sup = lo.ToPtr(value)
+			order = append(order, "sup")
+		}
+	}
+
+	parse(initialMarker)
+	nextPosition := p.position
+	for nextPosition < len(p.source) && unicode.IsSpace(p.source[nextPosition]) {
+		nextPosition++
+	}
+	if nextPosition < len(p.source) {
+		nextMarker := p.source[nextPosition]
+		if (nextMarker == '^' || nextMarker == '_') && nextMarker != initialMarker {
+			p.position = nextPosition + 1
+			parse(nextMarker)
+		}
+	}
+
+	var subUnicode, supUnicode *string
+	if sub != nil {
+		if unicodeForm, ok := latexFormatUnicodeScript(*sub, "sub"); ok {
+			subUnicode = lo.ToPtr(unicodeForm)
+		}
+	}
+	if sup != nil {
+		if unicodeForm, ok := latexFormatUnicodeScript(*sup, "sup"); ok {
+			supUnicode = lo.ToPtr(unicodeForm)
+		}
+	}
+	canUseLayout := true
+	for _, value := range []*string{sub, sup} {
+		if value == nil {
+			continue
+		}
+		if strings.Contains(*value, "/") ||
+			(!strings.ContainsRune(*value, latexLayoutMarkerStart) &&
+				utf8.RuneCountInString(*value) > 1 &&
+				!latexScriptUppercasePattern.MatchString(*value)) {
+			canUseLayout = false
+			break
+		}
+	}
+	needsLayout := p.display && canUseLayout &&
+		(p.scriptDepth > 0 ||
+			(sub != nil && subUnicode == nil) ||
+			(sup != nil && supUnicode == nil))
+	if !needsLayout {
+		var b strings.Builder
+		for _, kind := range order {
+			if kind == "sub" {
+				if subUnicode != nil {
+					b.WriteString(*subUnicode)
+				} else {
+					b.WriteString(latexFormatScript(*sub, kind))
+				}
+			} else {
+				if supUnicode != nil {
+					b.WriteString(*supUnicode)
+				} else {
+					b.WriteString(latexFormatScript(*sup, kind))
+				}
+			}
+		}
+		return b.String()
+	}
+
+	node := latexScriptNode{}
+	if sub != nil {
+		node.lower = lo.ToPtr(latexNormalizeOutput(*sub))
+	}
+	if sup != nil {
+		node.upper = lo.ToPtr(latexNormalizeOutput(*sup))
+	}
+	return p.marker(p.addNode(node))
+}
+
 func (p *latexParser) parseWhitespace() string {
 	for p.position < len(p.source) && unicode.IsSpace(p.source[p.position]) {
 		p.position++
@@ -734,6 +887,12 @@ func (p *latexParser) parseCommand() string {
 	}
 	if latexNegativeSpacingCommands[command] {
 		return latexNegativeSpace
+	}
+	if latexFontSwitchCommands[command] {
+		for p.position < len(p.source) && unicode.IsSpace(p.source[p.position]) {
+			p.position++
+		}
+		return ""
 	}
 	if latexIgnoredCommands[command] {
 		return ""
@@ -1092,50 +1251,7 @@ func (p *latexParser) parseEnvironment() string {
 	}
 
 	if environment == "cases" || environment == "cases*" {
-		rows := p.splitEnvironmentRows(body)
-		kept := make([][][]rune, 0, len(rows))
-		for _, row := range rows {
-			cells := strings.Split(row, "&")
-			rendered := make([][]rune, len(cells))
-			hasContent := false
-			for i, cell := range cells {
-				rendered[i] = []rune(strings.TrimSpace(p.renderNested(cell, false)))
-				if len(rendered[i]) > 0 {
-					hasContent = true
-				}
-			}
-			if hasContent {
-				kept = append(kept, rendered)
-			}
-		}
-		lines := make([]string, 0, len(kept))
-		for index, row := range kept {
-			first := ""
-			if len(row) > 0 {
-				first = string(row[0])
-			}
-			value := latexTrailingCommaPattern.ReplaceAllString(first, "")
-			condition := ""
-			if len(row) > 1 {
-				condition = string(row[1])
-			}
-			delimiter := "⎨"
-			if index == 0 {
-				delimiter = "⎧"
-			} else if index == len(kept)-1 {
-				delimiter = "⎩"
-			}
-			conditionPrefix := " if "
-			if latexCasesConditionPrefixParse.MatchString(condition) {
-				conditionPrefix = " "
-			}
-			line := delimiter + " " + value
-			if condition != "" {
-				line += conditionPrefix + condition
-			}
-			lines = append(lines, line)
-		}
-		return strings.Join(lines, "\n")
+		return p.renderCases(body)
 	}
 
 	switch environment {
@@ -1150,6 +1266,89 @@ func (p *latexParser) parseEnvironment() string {
 
 	p.supported = false
 	return body
+}
+
+// renderCases renders the cases environment (pi v0.86.0 renderCases):
+// values are aligned with protected spaces, conditions attach with natural
+// prefixes, and two or more rows become a matrix layout node centered on the
+// middle brace (an undefined row separates even row counts).
+func (p *latexParser) renderCases(body string) string {
+	rows := make([][]string, 0)
+	for _, row := range p.splitEnvironmentRows(body) {
+		cells := strings.Split(row, "&")
+		rendered := make([]string, len(cells))
+		hasContent := false
+		for i, cell := range cells {
+			rendered[i] = strings.TrimSpace(p.renderNested(cell, false))
+			if rendered[i] != "" {
+				hasContent = true
+			}
+		}
+		if hasContent {
+			rows = append(rows, rendered)
+		}
+	}
+	valueWidth := 0
+	for _, row := range rows {
+		value := ""
+		if len(row) > 0 {
+			value = latexTrailingCommaPattern.ReplaceAllString(row[0], "")
+		}
+		valueWidth = max(valueWidth, VisibleWidth(value))
+	}
+	contents := make([]string, 0, len(rows))
+	for _, row := range rows {
+		value := ""
+		if len(row) > 0 {
+			value = latexTrailingCommaPattern.ReplaceAllString(row[0], "")
+		}
+		condition := ""
+		if len(row) > 1 {
+			condition = row[1]
+		}
+		if condition == "" {
+			contents = append(contents, value)
+			continue
+		}
+		conditionPrefix := " if "
+		if latexCasesConditionPrefixParse.MatchString(condition) {
+			conditionPrefix = " "
+		}
+		contents = append(contents, value+strings.Repeat(string(latexProtectedSpace), valueWidth-VisibleWidth(value))+conditionPrefix+condition)
+	}
+	if len(contents) <= 1 {
+		if len(contents) == 0 {
+			return ""
+		}
+		return "⎧ " + contents[0]
+	}
+
+	middle := len(contents) / 2
+	visualRows := make([]*string, 0, len(contents)+1)
+	for i := range contents {
+		visualRows = append(visualRows, lo.ToPtr(contents[i]))
+	}
+	if len(contents)%2 == 0 {
+		visualRows = append(visualRows, nil)
+		copy(visualRows[middle+1:], visualRows[middle:])
+		visualRows[middle] = nil
+	}
+	lines := make([]string, 0, len(visualRows))
+	for index, content := range visualRows {
+		delimiter := "⎨"
+		if index == 0 {
+			delimiter = "⎧"
+		} else if index == len(visualRows)-1 {
+			delimiter = "⎩"
+		}
+		if content == nil {
+			lines = append(lines, delimiter)
+			continue
+		}
+		lines = append(lines, delimiter+" "+*content)
+	}
+	index := p.addNode(latexMatrixNode{lines: lines, baseline: middle})
+	return p.marker(index)
 }
 
 func (p *latexParser) renderMatrix(environment string, body string) string {

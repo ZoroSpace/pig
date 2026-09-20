@@ -1,18 +1,19 @@
 // tui/native_modifiers.go (pi: packages/tui/src/native-modifiers.ts) —
 // native modifier-key probing helper.
 //
-// Declared deviation: pi loads a platform .node native module
-// (darwin-modifiers / win32-console-mode) to detect physically held modifiers.
-// Go has no equivalent native module in this port — IsNativeModifierPressed
-// always returns false until a CGO/platform-specific implementation is
-// justified (see README §4 Phase 6 "可砍/延后"; native-module-path.ts has no
-// Go counterpart either).
+// pi v0.86.0 moved the platform helper loading to native-platform.ts and
+// native-modifiers.ts became a thin delegate over getNativePlatformHelper().
+// pig's stub story lives in native_platform.go (no native modules in Go —
+// see the file header there): IsNativeModifierPressed always returns false,
+// which matches pi's "helper not available" degradation path (Shift+Enter
+// detection falls back to the non-native input normalization).
 package tui
 
-// IsNativeModifierPressed reports whether a native modifier key
-// ("shift" | "command" | "control" | "option") is physically held.
-// Currently a stub returning false (see file header).
-func IsNativeModifierPressed(key string) bool {
+// IsNativeModifierPressed reports whether a native modifier key is
+// physically held (pi: isNativeModifierPressed → helper.isModifierPressed).
+// Always false in pig (see native_platform.go header).
+func IsNativeModifierPressed(key ModifierKey) bool {
+	_ = getNativePlatformHelper()
 	_ = key
 	return false
 }

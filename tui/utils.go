@@ -279,6 +279,69 @@ func isCJKBreak(segment string) bool {
 	return anyRuneIn(segment, []*unicode.RangeTable{tableScxCJK})
 }
 
+// isCJKBreakRune reports whether a single code point matches pi's
+// cjkBreakRegex (Script_Extensions union of the five CJK scripts).
+func isCJKBreakRune(r rune) bool {
+	return unicode.Is(tableScxCJK, r)
+}
+
+// isJsSpaceRune matches ECMAScript \s (White_Space plus U+FEFF).
+func isJsSpaceRune(r rune) bool {
+	return unicode.IsSpace(r) || r == 0xFEFF
+}
+
+// cjkFullwidthPunctuation is pi's explicit list in cjkPunctuationRegex
+// ([，．：；！？（）［］｛｝“”‘’…—] — Common-script fullwidth forms that are not
+// part of the CJK Script_Extensions union).
+var cjkFullwidthPunctuation = map[rune]bool{
+	'，': true, '．': true, '：': true, '；': true, '！': true, '？': true,
+	'（': true, '）': true, '［': true, '］': true, '｛': true, '｝': true,
+	'“': true, '”': true, '‘': true, '’': true, '…': true, '—': true,
+}
+
+// autocompleteSeparatorRune reports whether the code point r is a token
+// separator per pi's autocompleteSeparatorRegex (`(?:\s|cjkPunctuationRegex)`).
+// pi's cjkPunctuationRegex =
+// `(?:(?=\p{Punctuation})cjkBreak|[fullwidth list])` — RE2 has no lookahead
+// and no class intersection, so the two alternatives are tested separately:
+// a code point that is BOTH punctuation and CJK-script (。、「」… and ・), or
+// one of the explicit fullwidth forms. The lookahead is same-position, so the
+// whole regex is a single-code-point class (verified against the JS source).
+func autocompleteSeparatorRune(r rune) bool {
+	return isJsSpaceRune(r) ||
+		(unicode.IsPunct(r) && isCJKBreakRune(r)) ||
+		cjkFullwidthPunctuation[r]
+}
+
+// isAutocompleteSeparatorAtEnd reports whether text ends at a token boundary
+// (pi: tokenStartRegex = `${autocompleteBoundaryRegex.source}$` — the text is
+// empty (matches ^$) or its last code point is a separator).
+func isAutocompleteSeparatorAtEnd(text string) bool {
+	if text == "" {
+		return true
+	}
+	r, _ := utf8.DecodeLastRuneInString(text)
+	return autocompleteSeparatorRune(r)
+}
+
+// containsAutocompleteSeparator reports whether any code point in the string
+// is a token separator (pi: autocompleteSeparatorRegex.test(path)).
+func containsAutocompleteSeparator(text string) bool {
+	for _, r := range text {
+		if autocompleteSeparatorRune(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// isJsLineTerminatorRune matches the code points JS `.` excludes
+// (\n \r \u2028 \u2029) — relevant to the tempered-dot unquoted-suffix
+// construct in pi's editor trigger/debounce patterns.
+func isJsLineTerminatorRune(r rune) bool {
+	return r == '\n' || r == '\r' || r == 0x2028 || r == 0x2029
+}
+
 // PUNCTUATION_REGEX matches pi's /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/.
 var PUNCTUATION_REGEX = regexp.MustCompile("[(){}\\[\\]<>.,;:'\"!?+\\-=*/\\\\|&%^$#@~\x60]")
 

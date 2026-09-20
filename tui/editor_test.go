@@ -20,6 +20,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -3978,4 +3979,310 @@ func TestEditorAutocomplete(t *testing.T) {
 			t.Errorf("stale argument menu must not survive the cursor move, got %q", afterMove)
 		}
 	})
+}
+
+// pi v0.86.0 editor.test.ts autocomplete CJK-boundary tests (v0.86.0 added
+// whitespace/CJK-punctuation token boundaries to the trigger, debounce and
+// path-extraction patterns — see autocompleteContextPattern in editor.go).
+//
+// pi controls the 20ms attachment debounce with mock timers; pig uses the
+// established sleep(50ms) + flushAutocomplete precedent (pi: tick(20)).
+func TestEditorAutocompleteCJKBoundaries(t *testing.T) {
+	newRecordingEditor := func(t *testing.T, triggerCharacters []string, getSuggestions func(ctx context.Context, lines []string, cursorLine, cursorCol int, options AutocompleteGetSuggestionsOptions) *AutocompleteSuggestions) (*Editor, func() []string) {
+		t.Helper()
+		editor := newTestEditor(80, 24, nil)
+		var mu sync.Mutex
+		var requests []string
+		editor.SetAutocompleteProvider(&mockAutocompleteProvider{
+			triggerCharacters: triggerCharacters,
+			getSuggestions: func(ctx context.Context, lines []string, cursorLine, cursorCol int, options AutocompleteGetSuggestionsOptions) *AutocompleteSuggestions {
+				mu.Lock()
+				requests = append(requests, lines[cursorLine][:cursorCol])
+				mu.Unlock()
+				return getSuggestions(ctx, lines, cursorLine, cursorCol, options)
+			},
+			applyCompletionFn: testApplyCompletion,
+		})
+		return editor, func() []string {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]string(nil), requests...)
+		}
+	}
+
+	t.Run("triggers and debounces symbol completion after CJK punctuation", func(t *testing.T) {
+		befores := []string{"查看，", "\u3000"}
+		for _, r := range "，．：；！？（）［］｛｝“”‘’…—。、「」『』《》【】" {
+			befores = append(befores, string(r))
+		}
+		for _, before := range befores {
+			for _, trigger := range []string{"@", "#", "$", "-"} {
+				editor, requests := newRecordingEditor(t, []string{"$", "-"}, func(ctx context.Context, lines []string, cursorLine, cursorCol int, options AutocompleteGetSuggestionsOptions) *AutocompleteSuggestions {
+					return nil
+				})
+				editor.SetText(before)
+				editor.HandleInput(trigger)
+				flushAutocomplete(t, editor)
+				if got := requests(); len(got) != 0 {
+					t.Fatalf("before %q trigger %q: requests before debounce = %v, want none", before, trigger, got)
+				}
+				time.Sleep(50 * time.Millisecond)
+				flushAutocomplete(t, editor)
+				if got := requests(); len(got) != 1 || got[0] != before+trigger {
+					t.Fatalf("before %q trigger %q: requests = %v, want [%q]", before, trigger, got, before+trigger)
+				}
+
+				editor.HandleInput("r")
+				editor.HandleInput("e")
+				flushAutocomplete(t, editor)
+				if got := requests(); len(got) != 1 {
+					t.Fatalf("before %q trigger %q: requests after retyping = %v, want still 1", before, trigger, got)
+				}
+				time.Sleep(50 * time.Millisecond)
+				flushAutocomplete(t, editor)
+				got := requests()
+				if len(got) != 2 || got[1] != before+trigger+"re" {
+					t.Fatalf("before %q trigger %q: requests = %v, want second %q", before, trigger, got, before+trigger+"re")
+				}
+			}
+		}
+	})
+
+	t.Run("does not auto-trigger after CJK letters or for unprefixed paths", func(t *testing.T) {
+		// pi's list has U+D55C HANGUL SYLLABLE HAN ("한") as the sixth entry
+		// (a CJK-script letter that is not a boundary); verified byte-for-byte
+		// against the source — the git diff rendering hides it.
+		texts := []string{
+			"user@example.com", "张三@example.com", "查看@src", "あ@src", "カ@src",
+			"한@src", "ㄅ@src", "\U00020BB7@src", "か\u3099@src", "禰\U000E0100@src", "々@src", "Ａ@src",
+			"文档@备份", "prefix#123", "问题#123",
+			"查看，/path/", "查看，./文档/", "src/index.ts", "./文档/说明.md", "文档/说明.md", "查看src/index.ts",
+		}
+		editor, requests := newRecordingEditor(t, nil, func(ctx context.Context, lines []string, cursorLine, cursorCol int, options AutocompleteGetSuggestionsOptions) *AutocompleteSuggestions {
+			return nil
+		})
+		for _, text := range texts {
+			editor.SetText("")
+			for _, r := range text {
+				editor.HandleInput(string(r))
+			}
+			time.Sleep(50 * time.Millisecond)
+			flushAutocomplete(t, editor)
+			if got := requests(); len(got) != 0 {
+				t.Fatalf("text %q: requests = %v, want none", text, got)
+			}
+		}
+	})
+
+	t.Run("requests path completion after CJK punctuation only on Tab", func(t *testing.T) {
+		editor := newTestEditor(80, 24, nil)
+		var mu sync.Mutex
+		type request struct {
+			text  string
+			force bool
+		}
+		var requests []request
+		editor.SetAutocompleteProvider(&mockAutocompleteProvider{
+			getSuggestions: func(ctx context.Context, lines []string, cursorLine, cursorCol int, options AutocompleteGetSuggestionsOptions) *AutocompleteSuggestions {
+				mu.Lock()
+				requests = append(requests, request{text: lines[cursorLine][:cursorCol], force: options.Force})
+				mu.Unlock()
+				return nil
+			},
+			applyCompletionFn: testApplyCompletion,
+		})
+		text := "查看，/path/"
+		for _, r := range text {
+			editor.HandleInput(string(r))
+		}
+		time.Sleep(50 * time.Millisecond)
+		flushAutocomplete(t, editor)
+		mu.Lock()
+		got := append([]request(nil), requests...)
+		mu.Unlock()
+		if len(got) != 0 {
+			t.Fatalf("requests while typing = %v, want none", got)
+		}
+		editor.HandleInput("\t")
+		flushAutocomplete(t, editor)
+		mu.Lock()
+		got = append([]request(nil), requests...)
+		mu.Unlock()
+		if len(got) != 1 || got[0].text != text || !got[0].force {
+			t.Fatalf("requests = %v, want [{%q true}]", got, text)
+		}
+	})
+
+	t.Run("completes Chinese path prefixes after whitespace or CJK punctuation with Tab", func(t *testing.T) {
+		baseDir := t.TempDir()
+		setupEditorFolder(t, baseDir)
+		editor := newTestEditor(80, 24, nil)
+		editor.SetAutocompleteProvider(NewCombinedAutocompleteProvider(nil, baseDir, ""))
+		for _, separator := range []string{" ", "\t", "\u3000", "\u00a0", "，", "。"} {
+			editor.SetText("查看" + separator)
+			before := editor.GetText()
+			editor.HandleInput("文")
+			editor.HandleInput("\t")
+			flushAutocomplete(t, editor)
+			if got := editor.GetText(); got != before+"文档/" {
+				t.Fatalf("separator %q: text = %q, want %q", separator, got, before+"文档/")
+			}
+			editor.HandleInput("说")
+			editor.HandleInput("\t")
+			flushAutocomplete(t, editor)
+			if got := editor.GetText(); got != before+"文档/说明.md" {
+				t.Fatalf("separator %q: text = %q, want %q", separator, got, before+"文档/说明.md")
+			}
+			cursor := editor.GetCursor()
+			if cursor.Line != 0 || cursor.Col != len(editor.GetText()) {
+				t.Fatalf("separator %q: cursor = %+v, want end", separator, cursor)
+			}
+		}
+	})
+
+	t.Run("ends unquoted trigger and debounce contexts at whitespace or CJK punctuation", func(t *testing.T) {
+		for _, separator := range []string{" ", "\u3000", "，", "。"} {
+			for _, trigger := range []string{"@", "#", "$"} {
+				prefix := trigger + "src"
+				editor := newTestEditor(80, 24, nil)
+				var mu sync.Mutex
+				var requests []string
+				editor.SetAutocompleteProvider(&mockAutocompleteProvider{
+					triggerCharacters: []string{"$"},
+					getSuggestions: func(ctx context.Context, lines []string, cursorLine, cursorCol int, options AutocompleteGetSuggestionsOptions) *AutocompleteSuggestions {
+						text := lines[cursorLine][:cursorCol]
+						mu.Lock()
+						requests = append(requests, text)
+						mu.Unlock()
+						if text == prefix {
+							return &AutocompleteSuggestions{
+								Prefix: prefix,
+								Items:  []AutocompleteItem{{Value: prefix + "/", Label: "src/"}},
+							}
+						}
+						return nil
+					},
+					applyCompletionFn: testApplyCompletion,
+				})
+				editor.SetText(trigger + "sr")
+				editor.HandleInput("c")
+				time.Sleep(50 * time.Millisecond)
+				flushAutocomplete(t, editor)
+				if !editor.IsShowingAutocomplete() {
+					t.Fatalf("separator %q trigger %q: autocomplete not showing after %q", separator, trigger, prefix)
+				}
+				editor.HandleInput(separator)
+				flushAutocomplete(t, editor)
+				mu.Lock()
+				got := append([]string(nil), requests...)
+				mu.Unlock()
+				if len(got) != 2 || got[1] != prefix+separator {
+					t.Fatalf("separator %q trigger %q: requests = %v, want [%q %q]", separator, trigger, got, prefix, prefix+separator)
+				}
+				if editor.IsShowingAutocomplete() {
+					t.Fatalf("separator %q trigger %q: autocomplete still showing after separator", separator, trigger)
+				}
+				editor.HandleInput("文")
+				time.Sleep(50 * time.Millisecond)
+				flushAutocomplete(t, editor)
+				mu.Lock()
+				got = append([]string(nil), requests...)
+				mu.Unlock()
+				if len(got) != 2 {
+					t.Fatalf("separator %q trigger %q: requests = %v, want still 2 after CJK letter", separator, trigger, got)
+				}
+			}
+		}
+	})
+
+	t.Run("re-triggers CJK path completion after accepting directories and deleting", func(t *testing.T) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		combined := NewCombinedAutocompleteProvider(nil, cwd, "")
+		for _, directory := range []string{"文档", "我的 文档", "资料，归档"} {
+			quoted := directory != "文档"
+			initial := "@文"
+			directoryValue := "@" + directory + "/"
+			fileValue := "@" + directory + "/说明.md"
+			filePrefix := "@" + directory + "/说"
+			if quoted {
+				initial = "@\"" + string([]rune(directory)[:2])
+				directoryValue = "@\"" + directory + "/\""
+				fileValue = "@\"" + directory + "/说明.md\""
+				filePrefix = "@\"" + directory + "/说"
+			}
+			editor := newTestEditor(80, 24, nil)
+			editor.SetAutocompleteProvider(&mockAutocompleteProvider{
+				getSuggestions: func(ctx context.Context, lines []string, cursorLine, cursorCol int, options AutocompleteGetSuggestionsOptions) *AutocompleteSuggestions {
+					before := lines[cursorLine][:cursorCol]
+					idx := strings.Index(before, "@")
+					if idx == -1 {
+						return nil
+					}
+					prefix := before[idx:]
+					if prefix == initial {
+						return &AutocompleteSuggestions{Prefix: prefix, Items: []AutocompleteItem{{Value: directoryValue, Label: directory + "/"}}}
+					}
+					if prefix == filePrefix {
+						return &AutocompleteSuggestions{Prefix: prefix, Items: []AutocompleteItem{{Value: fileValue, Label: "说明.md"}}}
+					}
+					return nil
+				},
+				applyCompletionFn: combined.ApplyCompletion,
+			})
+			editor.SetText("查看：" + initial)
+			editor.HandleInput("\t")
+			flushAutocomplete(t, editor)
+			if got := editor.GetText(); got != "查看："+directoryValue {
+				t.Fatalf("directory %q: text = %q, want %q", directory, got, "查看："+directoryValue)
+			}
+			if editor.IsShowingAutocomplete() {
+				t.Fatalf("directory %q: autocomplete showing after directory accept", directory)
+			}
+
+			editor.HandleInput("说")
+			time.Sleep(50 * time.Millisecond)
+			flushAutocomplete(t, editor)
+			if !editor.IsShowingAutocomplete() {
+				t.Fatalf("directory %q: autocomplete not showing after typing 说", directory)
+			}
+
+			for _, deletion := range []string{"\x7f", "\x1b[3~"} {
+				editor.HandleInput("错")
+				time.Sleep(50 * time.Millisecond)
+				flushAutocomplete(t, editor)
+				if editor.IsShowingAutocomplete() {
+					t.Fatalf("directory %q: autocomplete still showing after typing 错", directory)
+				}
+				if deletion == "\x1b[3~" {
+					editor.HandleInput("\x1b[D")
+				}
+				editor.HandleInput(deletion)
+				time.Sleep(50 * time.Millisecond)
+				flushAutocomplete(t, editor)
+				if !editor.IsShowingAutocomplete() {
+					t.Fatalf("directory %q deletion %q: autocomplete not showing again", directory, deletion)
+				}
+			}
+
+			editor.HandleInput("\t")
+			want := "查看：" + fileValue + " "
+			if got := editor.GetText(); got != want {
+				t.Fatalf("directory %q: text = %q, want %q", directory, got, want)
+			}
+			cursor := editor.GetCursor()
+			if cursor.Line != 0 || cursor.Col != len(editor.GetText()) {
+				t.Fatalf("directory %q: cursor = %+v, want end", directory, cursor)
+			}
+		}
+	})
+}
+
+// setupEditorFolder creates the 文档/说明.md fixture for the Tab-completion
+// tests (pi: mkdirSync + writeFileSync inline).
+func setupEditorFolder(t *testing.T, baseDir string) {
+	t.Helper()
+	setupFolder(t, baseDir, folderStructure{files: map[string]string{"文档/说明.md": "text"}})
 }

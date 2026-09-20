@@ -339,22 +339,101 @@ func escapeCharacterClass(value string) string {
 	})
 }
 
-// buildTriggerPattern builds the natural-trigger pattern (pi:
-// buildTriggerPattern): (?:^|[\s])[chars([^\s]*$.
-func buildTriggerPattern(triggerCharacters []string) *regexp.Regexp {
-	return regexp.MustCompile(`(?:^|[\s])[` + escapeCharacterClass(strings.Join(triggerCharacters, "")) + `][^\s]*$`)
+// autocompleteContextPattern mirrors pi v0.86.0's dynamically-built trigger /
+// debounce RegExp (buildTriggerPattern / buildDebouncePattern):
+//
+//	trigger:  boundary(?:@"[^"]*|[chars]unquotedSuffix)$
+//	debounce: boundary(?:@(?:"[^"]*|unquotedSuffix)|[charsWithoutAt]unquotedSuffix)$
+//
+// pi's constructs use lookahead and tempered-dot classes with no RE2
+// equivalent, so matching is hand-rolled over code points:
+//   - boundary = start of string or a separator code point consumed just
+//     before the trigger character (pi: autocompleteBoundaryRegex);
+//   - unquotedSuffix = code points that are neither separators nor JS line
+//     terminators (pi: (?:(?!autocompleteSeparatorRegex).)* — `.` excludes
+//     \n \r \u2028 \u2029);
+//   - quoted content may contain anything except a closing quote.
+type autocompleteContextPattern struct {
+	// triggerChars are the characters matched through the unquoted-suffix
+	// alternative ("@" included for the trigger pattern; excluded for the
+	// debounce pattern, which gives @ its own branch).
+	triggerChars []rune
+	// unquotedAt enables the bare "@ + unquoted suffix" alternative (debounce
+	// pattern only; the trigger pattern reaches @ through triggerChars).
+	unquotedAt bool
 }
 
-// buildDebouncePattern builds the debounce pattern (pi: buildDebouncePattern):
-// attachment (@) tokens debounce, other triggers do not.
-func buildDebouncePattern(triggerCharacters []string) *regexp.Regexp {
-	var escapedWithoutAt []string
-	for _, character := range triggerCharacters {
-		if character != "@" {
-			escapedWithoutAt = append(escapedWithoutAt, escapeCharacterClass(character))
+func (p *autocompleteContextPattern) matchesTriggerChar(r rune) bool {
+	for _, c := range p.triggerChars {
+		if c == r {
+			return true
 		}
 	}
-	return regexp.MustCompile(`(?:^|[ \t])(?:@(?:"[^"]*|[^\s]*)|[` + strings.Join(escapedWithoutAt, "") + `][^\s]*)$`)
+	return p.unquotedAt && r == '@'
+}
+
+// MatchString reports whether text ends in an active trigger/debounce
+// context (pi: pattern.test(textBeforeCursor)).
+func (p *autocompleteContextPattern) MatchString(text string) bool {
+	for i, r := range text {
+		if r != '@' && !p.matchesTriggerChar(r) {
+			continue
+		}
+		// Boundary before the trigger character (both alternatives sit after
+		// pi's (?:^|autocompleteSeparator) group).
+		if i > 0 {
+			prev, _ := utf8.DecodeLastRuneInString(text[:i])
+			if !autocompleteSeparatorRune(prev) {
+				continue
+			}
+		}
+		// Quoted-@ alternative: @" followed by non-quote characters to the end.
+		if r == '@' {
+			rest := text[i+utf8.RuneLen(r):]
+			if strings.HasPrefix(rest, "\"") && !strings.Contains(rest[1:], "\"") {
+				return true
+			}
+		}
+		if !p.matchesTriggerChar(r) {
+			continue
+		}
+		// Unquoted suffix: non-separator, non-line-terminator code points to
+		// the end.
+		inContext := true
+		for _, suffixRune := range text[i+utf8.RuneLen(r):] {
+			if autocompleteSeparatorRune(suffixRune) || isJsLineTerminatorRune(suffixRune) {
+				inContext = false
+				break
+			}
+		}
+		if inContext {
+			return true
+		}
+	}
+	return false
+}
+
+// buildTriggerPattern builds the natural-trigger pattern (pi v0.86.0
+// buildTriggerPattern).
+func buildTriggerPattern(triggerCharacters []string) *autocompleteContextPattern {
+	chars := make([]rune, 0, len(triggerCharacters))
+	for _, character := range triggerCharacters {
+		chars = append(chars, []rune(character)...)
+	}
+	return &autocompleteContextPattern{triggerChars: chars}
+}
+
+// buildDebouncePattern builds the debounce pattern (pi v0.86.0
+// buildDebouncePattern): attachment (@) tokens debounce, other triggers do
+// not.
+func buildDebouncePattern(triggerCharacters []string) *autocompleteContextPattern {
+	var chars []rune
+	for _, character := range triggerCharacters {
+		if character != "@" {
+			chars = append(chars, []rune(character)...)
+		}
+	}
+	return &autocompleteContextPattern{triggerChars: chars, unquotedAt: true}
 }
 
 // createScrollBorder renders a scroll indicator line (v0.85.1: centered
@@ -443,8 +522,8 @@ type Editor struct {
 	// Autocomplete support (pi: autocompleteProvider family).
 	autocompleteProvider          AutocompleteProvider
 	autocompleteTriggerCharacters []string
-	autocompleteTriggerPattern    *regexp.Regexp
-	autocompleteDebouncePattern   *regexp.Regexp
+	autocompleteTriggerPattern    *autocompleteContextPattern
+	autocompleteDebouncePattern   *autocompleteContextPattern
 	autocompleteList              *SelectList
 	autocompleteState             string // "" | "regular" | "force"
 	autocompletePrefix            string
@@ -1668,18 +1747,16 @@ func (e *Editor) insertCharacter(char string, skipUndoCoalescing bool) {
 			e.tryTriggerAutocomplete(false)
 		} else if e.autocompleteTriggerCharactersContains(char) {
 			// Auto-trigger for symbol-based completion like @, #, or provider
-			// triggers at token boundaries
+			// triggers at token boundaries (pi v0.86.0: the trigger pattern
+			// test replaces the char-before-symbol space/tab check).
 			currentLine := e.state.Lines[e.state.CursorLine]
 			textBeforeCursor := currentLine[:e.state.CursorCol]
-			charBeforeSymbol := ""
-			if len(textBeforeCursor) >= 2 {
-				charBeforeSymbol = textBeforeCursor[len(textBeforeCursor)-2 : len(textBeforeCursor)-1]
-			}
-			if len(textBeforeCursor) == 1 || charBeforeSymbol == " " || charBeforeSymbol == "\t" {
+			if e.autocompleteTriggerPattern.MatchString(textBeforeCursor) {
 				e.tryTriggerAutocomplete(false)
 			}
-		} else if editorAlphaNumDotDashUnderScoreRegex.MatchString(char) {
-			// Also auto-trigger when typing letters in a slash command or symbol
+		} else if editorAlphaNumDotDashUnderScoreRegex.MatchString(char) || isCJKBreak(char) {
+			// Also auto-trigger when typing letters (ASCII or CJK, pi v0.86.0
+			// adds the cjkBreakRegex check) in a slash command or symbol
 			// completion context
 			currentLine := e.state.Lines[e.state.CursorLine]
 			textBeforeCursor := currentLine[:e.state.CursorCol]

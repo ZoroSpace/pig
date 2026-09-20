@@ -53,6 +53,9 @@ const (
 	maxCachedOffscreenKittyTransmissionBytes = 32 * 1024 * 1024
 	maxCachedOffscreenKittyDecodedBytes      = 64 * 1024 * 1024
 	doubleClickIntervalMs                    = 500
+	// pi v0.86.0 COPY_ERROR_FLASH_DURATION_MS: copy failures flash longer
+	// than the default so the user can read them (#9618).
+	copyErrorFlashDurationMs = 5000
 )
 
 // altWheelScrollMultiplier scales wheel scrolling while Alt is held (pi:
@@ -69,6 +72,17 @@ var osc133PromptStartRegex = regexp.MustCompile(`^\x1b\]133;A(?:\x07|\x1b\\)`)
 
 // altScreenPlatform mirrors process.platform (package var = test seam).
 var altScreenPlatform = runtime.GOOS
+
+// screenHasImageLine reports whether any screen row places an image (pi:
+// screen.some(isImageLine)).
+func screenHasImageLine(screen []string) bool {
+	for _, line := range screen {
+		if IsImageLine(line) {
+			return true
+		}
+	}
+	return false
+}
 
 type cachedKittyImage struct {
 	transmissionGeneration int
@@ -193,10 +207,11 @@ type TuiAltScreenOptions struct {
 	// CopyOnSelect automatically copies selected text to the clipboard on
 	// mouse release (default: true) (v0.85.1).
 	CopyOnSelect *bool
-	// CopySelection copies selected text to the system clipboard. Return
-	// true on success; the caller flashes an error otherwise. When nil, the
-	// selection is copied via an OSC 52 write. (pi: Promise<boolean> → sync.)
-	CopySelection func(text string) bool
+	// CopySelection copies selected text to the system clipboard. Return Ok
+	// on success, a FailureMessage string to display on failure, or a bare
+	// false for a generic error. When nil, the selection is copied via an
+	// OSC 52 write. (pi v0.86.0: Promise<boolean | string> → sync callback.)
+	CopySelection func(text string) CopySelectionResult
 }
 
 // altImplicitDocument renders the TuiBase container children (pi:
@@ -274,7 +289,7 @@ type TuiAltScreen struct {
 	openUrl                     func(url string)
 	onRightClickPaste           func()
 	copyOnSelect                bool
-	copySelection               func(text string) bool
+	copySelection               func(text string) CopySelectionResult
 }
 
 // altPoint is a pointer cell coordinate.
@@ -2012,6 +2027,15 @@ func (t *TuiAltScreen) getActiveSelectionText() string {
 	return strings.Join(lines, "\n")
 }
 
+// CopySelectionResult mirrors pi v0.86.0's boolean | string union return of
+// the copySelection callback: Ok=true → success; Ok=false with a non-empty
+// FailureMessage → that message is flashed; Ok=false otherwise → generic
+// "Copy failed".
+type CopySelectionResult struct {
+	Ok             bool
+	FailureMessage string
+}
+
 // copyTextToClipboard copies text via the injected clipboard path or OSC 52
 // and flashes the result (pi: copyTextToClipboard).
 func (t *TuiAltScreen) copyTextToClipboard(text string) bool {
@@ -2020,11 +2044,16 @@ func (t *TuiAltScreen) copyTextToClipboard(text string) bool {
 	// "Copied!" while leaving the system clipboard untouched (e.g. macOS Terminal.app, tmux
 	// without OSC 52 clipboard passthrough), so only report success when it actually copies.
 	if t.copySelection != nil {
-		ok := t.copySelection(text)
+		result := t.copySelection(text)
+		ok := result.Ok
 		if ok {
 			t.flashLocked("Copied!")
 		} else {
-			t.flashLocked("Copy failed")
+			message := result.FailureMessage
+			if message == "" {
+				message = "Copy failed"
+			}
+			t.Flash(message, copyErrorFlashDurationMs)
 		}
 		return ok
 	}
@@ -2449,11 +2478,29 @@ func (t *TuiAltScreen) doRender() error {
 	}
 	buffer.WriteString(evictedImageDeletion)
 
+	// pi v0.86.0: WezTerm erases intersecting Kitty image cells when a later
+	// EL clears a covered row. Only separate clearing from drawing for
+	// WezTerm frames that place images; preserve the existing interleaved
+	// output for text-only frames and every other terminal.
+	clearRowsBeforeKittyImages := redrawImages && imageProtocolKitty && screenHasImageLine(screen) &&
+		(os.Getenv("WEZTERM_PANE") != "" || strings.EqualFold(os.Getenv("TERM_PROGRAM"), "wezterm"))
+	if clearRowsBeforeKittyImages {
+		for row := 0; row < height; row++ {
+			if !fullRedraw && !imagesNeedRedraw && screen[row] == sliceOrEmpty(t.previousScreen, row) {
+				continue
+			}
+			buffer.WriteString("\x1b[" + strconv.Itoa(row+1) + ";1H\x1b[2K")
+		}
+	}
+
 	for row := 0; row < height; row++ {
 		if !fullRedraw && !imagesNeedRedraw && screen[row] == sliceOrEmpty(t.previousScreen, row) {
 			continue
 		}
-		buffer.WriteString("\x1b[" + strconv.Itoa(row+1) + ";1H\x1b[2K")
+		buffer.WriteString("\x1b[" + strconv.Itoa(row+1) + ";1H")
+		if !clearRowsBeforeKittyImages {
+			buffer.WriteString("\x1b[2K")
+		}
 		buffer.WriteString(sliceOrEmpty(preparedScreen, row))
 	}
 

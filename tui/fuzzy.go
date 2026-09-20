@@ -57,33 +57,45 @@ func FuzzyMatchScore(query, text string) FuzzyMatch {
 		// prefix equality. We iterate runes for correctness.
 		runes := []rune(textLower)
 		normalized := []rune(normalizedQuery)
-		for i := 0; i < len(runes) && queryIndex < len(normalized); i++ {
-			if runes[i] == normalized[queryIndex] {
-				isWordBoundary := i == 0 || fuzzyWordBoundary.MatchString(string(runes[i-1]))
-
-				// Reward consecutive matches
-				if lastMatchIndex == i-1 {
-					consecutiveMatches++
-					score -= float64(consecutiveMatches) * 5
-				} else {
-					consecutiveMatches = 0
-					// Penalize gaps
-					if lastMatchIndex >= 0 {
-						score += float64(i-lastMatchIndex-1) * 2
-					}
+		// pi v0.86.0 replaced the full scan with indexOf per query character
+		// (skips non-matching characters in bulk); semantics are identical
+		// greedy leftmost matching, so we mirror the new shape.
+		for queryIndex < len(normalized) {
+			i := -1
+			for j := lastMatchIndex + 1; j < len(runes); j++ {
+				if runes[j] == normalized[queryIndex] {
+					i = j
+					break
 				}
-
-				// Reward word boundary matches
-				if isWordBoundary {
-					score -= 10
-				}
-
-				// Slight penalty for later matches
-				score += float64(i) * 0.1
-
-				lastMatchIndex = i
-				queryIndex++
 			}
+			if i == -1 {
+				break
+			}
+
+			isWordBoundary := i == 0 || fuzzyWordBoundary.MatchString(string(runes[i-1]))
+
+			// Reward consecutive matches
+			if lastMatchIndex == i-1 {
+				consecutiveMatches++
+				score -= float64(consecutiveMatches) * 5
+			} else {
+				consecutiveMatches = 0
+				// Penalize gaps
+				if lastMatchIndex >= 0 {
+					score += float64(i-lastMatchIndex-1) * 2
+				}
+			}
+
+			// Reward word boundary matches
+			if isWordBoundary {
+				score -= 10
+			}
+
+			// Slight penalty for later matches
+			score += float64(i) * 0.1
+
+			lastMatchIndex = i
+			queryIndex++
 		}
 
 		if queryIndex < len(normalized) {

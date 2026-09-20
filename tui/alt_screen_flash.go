@@ -18,6 +18,9 @@ type altScreenFlashEntry struct {
 	id      int
 	message string
 	timer   *time.Timer
+	// durationMs records the requested duration for tests (pig-only; pi's
+	// test spies on this.flash — Go reads the entry instead).
+	durationMs int
 }
 
 // AltScreenFlashContainer is the flash message stack (pi:
@@ -43,7 +46,7 @@ func (f *AltScreenFlashContainer) Flash(message string, durationMs int) {
 	if durationMs < 0 {
 		durationMs = 0
 	}
-	entry := &altScreenFlashEntry{id: id, message: message}
+	entry := &altScreenFlashEntry{id: id, message: message, durationMs: durationMs}
 	entry.timer = time.AfterFunc(time.Duration(durationMs)*time.Millisecond, func() {
 		f.mu.Lock()
 		index := -1

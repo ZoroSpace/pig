@@ -13,7 +13,7 @@
 //   - setEncoding('utf8') → incremental UTF-8 decode in the stdin read loop
 //     (StringDecoder semantics for multibyte sequences split across reads).
 //   - enableWindowsVTInput and the win32-console-mode native helper have no
-//     Go counterpart — no-op (see native_modifiers.go).
+//     Go counterpart — no-op (see native_platform.go).
 //   - drainInput returns Promise<void> → blocking method.
 package tui
 

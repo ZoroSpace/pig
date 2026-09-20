@@ -60,7 +60,7 @@ func TestRenderLatexJacobianDollar(t *testing.T) {
 		{`\ge 2`, "≥ 2", false},
 		{`\ge 3`, "≥ 3", false},
 		{"1", "1", false},
-		{`\mathrm{diag}(-1/2,1,1)`, "diag(-1/2,1,1)", false},
+		{`\mathrm{diag}(-1/2,1,1),\quad F_{\rm intrinsic}(\lambda)`, "diag(-1/2,1,1), F_intrinsic(λ)", false},
 		{"4+3xy", "4+3xy", false},
 	})
 }
@@ -189,7 +189,7 @@ c_n
 \Psi^\ast\Psi, & 0<x<L,\\
 0, & \text{otherwise}.
 \end{cases}`,
-			"Ψ(x,t) = ∑ₙ₌₁^∞ cₙ √(2/L) sin((nπ x)/L)_(spatial eigenmode) exp(-(iℏ n²π²)/(2mL²)t), |Ψ(x,t)|² = ⎧ Ψ^∗Ψ if 0 < x < L,\n⎩ 0 otherwise.", false},
+			"                                                                                                 ⎧ Ψ^∗Ψ if 0 < x < L,\nΨ(x,t) = ∑ₙ₌₁^∞ cₙ √(2/L) sin((nπ x)/L)_(spatial eigenmode) exp(-(iℏ n²π²)/(2mL²)t), |Ψ(x,t)|² = ⎨\n                                                                                                 ⎩ 0    otherwise.", false},
 		{`x=\frac{-b\pm\sqrt{b^2-4ac}}{2a}`, "x = (-b±√(b²-4ac))/(2a)", false},
 		{`\int_0^\infty e^{-x^2}\,dx=\frac{\sqrt{\pi}}{2}`, "∫₀^∞ e^(-x²) dx = (√π)/2", false},
 		{`e^{i\theta}=\cos\theta+i\sin\theta`, "e^(iθ) = cos θ+i sin θ", false},
@@ -314,8 +314,8 @@ func TestRenderLatexIndexedRootsAndAccents(t *testing.T) {
 	if !ok || got != "x́+ỳ+widehat(xyz)+overrightarrow(AB)" {
 		t.Errorf("got %q ok=%v", got, ok)
 	}
-	got, ok = RenderLatex(`\textnormal{hello}+\mbox{world}+\boldsymbol{x}`, false)
-	if !ok || got != "hello+world+x" {
+	got, ok = RenderLatex(`\textnormal{hello}+\mbox{world}+\boldsymbol{x}+{\rm roman}+{\bf bold}+{\it italic}+{\sf sans}+{\tt mono}+{\cal calligraphic}+{\sl slanted}`, false)
+	if !ok || got != "hello+world+x+roman+bold+italic+sans+mono+calligraphic+slanted" {
 		t.Errorf("got %q ok=%v", got, ok)
 	}
 }
@@ -332,8 +332,8 @@ func TestRenderLatexDisplayEnvironments(t *testing.T) {
 }
 
 func TestRenderLatexCasesAndMatrixColumns(t *testing.T) {
-	got, ok := RenderLatex(`\begin{cases}a & x<0 \\ b & \text{if }x=0 \\ c & \text{otherwise}\end{cases}`, false)
-	if !ok || got != "⎧ a if x < 0\n⎨ b if x = 0\n⎩ c otherwise" {
+	got, ok := RenderLatex(`f(x)=\begin{cases}a & x<0 \\ b & \text{if }x=0 \\ c & \text{otherwise}\end{cases}`, false)
+	if !ok || got != "       ⎧ a if x < 0\nf(x) = ⎨ b if x = 0\n       ⎩ c otherwise" {
 		t.Errorf("got %q ok=%v", got, ok)
 	}
 	got, ok = RenderLatex(`\begin{pmatrix}1&200\\3000&4\end{pmatrix}`, false)
@@ -414,9 +414,9 @@ func TestRenderLatexDisplayOperatorLimits(t *testing.T) {
 	runLatexCases(t, cases)
 }
 
-func TestRenderLatexMiddleBraceForIntermediateCaseRows(t *testing.T) {
-	got, ok := RenderLatex(`\begin{cases}a & x<0 \\ b & x=0 \\ c & x>0\end{cases}`, false)
-	if !ok || got != "⎧ a if x < 0\n⎨ b if x = 0\n⎩ c if x > 0" {
+func TestRenderLatexCentersEvenCaseRowsAroundMiddleBrace(t *testing.T) {
+	got, ok := RenderLatex(`f(x) = \begin{cases} x^{2} & x \geq 0 \\ -x & x < 0 \end{cases}`, false)
+	if !ok || got != "       ⎧ x² if x ≥ 0\nf(x) = ⎨\n       ⎩ -x if x < 0" {
 		t.Errorf("got %q ok=%v", got, ok)
 	}
 }
@@ -437,13 +437,15 @@ func TestRenderLatexNestedDisplayFractionsLinear(t *testing.T) {
 	})
 }
 
-func TestRenderLatexFractionsLinearInScripts(t *testing.T) {
-	got, ok := RenderLatex(`e^{\frac{1}{2}}`, true)
-	if !ok || got != "e^(1/2)" {
+func TestRenderLatexLaysOutUnsupportedAndNestedScripts(t *testing.T) {
+	// pi v0.86.0: stacked scripts via layout nodes, script fractions stay
+	// linear (test renamed from "keeps fractions linear in scripts...").
+	got, ok := RenderLatex(`\partial_tU_2(t,0)=Aj_*(1-t)^{-A-1}.\qquad x^{n^2}+x_{i_j}`, true)
+	if !ok || got != "                            2\n                    -A-1   n\n∂ₜU₂(t,0) = Aj (1-t)    . x  +x\n              *                i\n                                j" {
 		t.Errorf("got %q ok=%v", got, ok)
 	}
-	got, ok = RenderLatex(`\tfrac{1}{2}`, true)
-	if !ok || got != "1/2" {
+	got, ok = RenderLatex(`e^{\frac{1}{2}}+\tfrac{1}{2}`, true)
+	if !ok || got != "e^(1/2)+1/2" {
 		t.Errorf("got %q ok=%v", got, ok)
 	}
 }

@@ -18,9 +18,10 @@
 //   - Path math uses the POSIX `path` package for both display strings and FS
 //     access (pi imports the posix `path` module even for FS ops); Windows
 //     backslash separators are display-normalized only, same as pi.
-//   - buildTriggerPattern/buildDebouncePattern use Go RE2 `\s` (narrower than
-//     JS `\s` for exotic Unicode whitespace); pi tests only exercise ASCII
-//     whitespace.
+//   - pi v0.86.0's CJK-aware trigger/debounce/boundary regexes use lookahead
+//     and tempered-dot constructs with no RE2 equivalent → hand-rolled code
+//     point matching (autocompleteContextPattern in editor.go, separator
+//     helpers in utils.go); JS `\s` semantics covered by isJsSpaceRune.
 
 package tui
 
@@ -32,6 +33,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // PATH_DELIMITERS (pi: const Set).
@@ -83,15 +85,30 @@ func buildFdPathQuery(query string) string {
 }
 
 func findLastDelimiter(text string) int {
-	// pi iterates UTF-16 code units against an ASCII delimiter set; byte
-	// iteration is equivalent (multi-byte continuation bytes never collide
-	// with ASCII delimiter bytes).
-	for i := len(text) - 1; i >= 0; i-- {
-		if pathDelimiters[text[i]] {
-			return i
+	// pi v0.86.0 iterates code points and also accepts autocomplete separator
+	// characters (whitespace or CJK punctuation) as delimiters; indices are
+	// UTF-16 code units in TS → BYTE offsets of the delimiter rune here.
+	// Consumers must skip the full rune (see delimiterRuneEnd).
+	lastDelimiter := -1
+	index := 0
+	for _, character := range text {
+		if (character < utf8.RuneSelf && pathDelimiters[byte(character)]) || autocompleteSeparatorRune(character) {
+			lastDelimiter = index
 		}
+		index += utf8.RuneLen(character)
 	}
-	return -1
+	return lastDelimiter
+}
+
+// delimiterRuneEnd returns the byte offset just past the rune starting at
+// index (pi: lastDelimiterIndex + 1 — UTF-16 delimiters are single units;
+// multi-byte runes need the full rune width here).
+func delimiterRuneEnd(text string, index int) int {
+	if index < 0 || index >= len(text) {
+		return index
+	}
+	_, size := utf8.DecodeRuneInString(text[index:])
+	return index + size
 }
 
 func findUnclosedQuoteStart(text string) *int {
@@ -114,7 +131,17 @@ func findUnclosedQuoteStart(text string) *int {
 }
 
 func isTokenStart(text string, index int) bool {
-	return index == 0 || pathDelimiters[text[index-1]]
+	// pi v0.86.0: PATH_DELIMITERS.has(text[index - 1] ?? "") ||
+	// tokenStartRegex.test(text.slice(0, index)) — the second check is true
+	// for an empty prefix (index == 0) or when the code point before the
+	// index is a whitespace/CJK-punctuation separator.
+	if index == 0 {
+		return true
+	}
+	if pathDelimiters[text[index-1]] {
+		return true
+	}
+	return isAutocompleteSeparatorAtEnd(text[:index])
 }
 
 func extractQuotedPrefix(text string) *string {
@@ -169,7 +196,9 @@ type buildCompletionValueOptions struct {
 }
 
 func buildCompletionValue(pathValue string, options buildCompletionValueOptions) string {
-	needsQuotes := options.isQuotedPrefix || strings.Contains(pathValue, " ")
+	// needsQuotes: quoted prefix, or the path contains whitespace or CJK
+	// punctuation (pi v0.86.0: autocompleteSeparatorRegex.test(path)).
+	needsQuotes := options.isQuotedPrefix || containsAutocompleteSeparator(pathValue)
 	prefix := ""
 	if options.isAtPrefix {
 		prefix = "@"
@@ -463,7 +492,14 @@ func (p *CombinedAutocompleteProvider) GetSuggestions(ctx context.Context, lines
 				commandItems = append(commandItems, entry)
 			}
 
-			filtered := FuzzyFilter(commandItems, prefix, func(item AutocompleteItem) string { return item.Value })
+			filtered := FuzzyFilter(commandItems, prefix, func(item AutocompleteItem) string {
+				// pi v0.86.0: skill: commands match on the bare skill name unless
+				// the query explicitly starts with "skill:".
+				if !strings.HasPrefix(prefix, "skill:") && strings.HasPrefix(item.Value, "skill:") {
+					return item.Value[len("skill:"):]
+				}
+				return item.Value
+			})
 			mapped := make([]AutocompleteItem, 0, len(filtered))
 			for _, item := range filtered {
 				mapped = append(mapped, AutocompleteItem{Value: item.Value, Label: item.Label, Description: item.Description})
@@ -630,7 +666,7 @@ func (p *CombinedAutocompleteProvider) extractAtPrefix(text string) *string {
 	lastDelimiterIndex := findLastDelimiter(text)
 	tokenStart := 0
 	if lastDelimiterIndex != -1 {
-		tokenStart = lastDelimiterIndex + 1
+		tokenStart = delimiterRuneEnd(text, lastDelimiterIndex)
 	}
 
 	if tokenStart < len(text) && text[tokenStart] == '@' {
@@ -651,7 +687,7 @@ func (p *CombinedAutocompleteProvider) extractPathPrefix(text string, forceExtra
 	lastDelimiterIndex := findLastDelimiter(text)
 	pathPrefix := text
 	if lastDelimiterIndex != -1 {
-		pathPrefix = text[lastDelimiterIndex+1:]
+		pathPrefix = text[delimiterRuneEnd(text, lastDelimiterIndex):]
 	}
 
 	// For forced extraction (Tab key), always return something
@@ -666,10 +702,10 @@ func (p *CombinedAutocompleteProvider) extractPathPrefix(text string, forceExtra
 		return &pathPrefix
 	}
 
-	// Return empty string only after a space (not for completely empty text)
-	// Empty text should not trigger file suggestions - that's for forced Tab
-	// completion
-	if pathPrefix == "" && strings.HasSuffix(text, " ") {
+	// Return an empty prefix after whitespace or CJK punctuation, but not
+	// for empty text (pi v0.86.0: tokenStartRegex.test(text)). Empty text
+	// should not trigger file suggestions - that's for forced Tab completion
+	if pathPrefix == "" && text != "" && isAutocompleteSeparatorAtEnd(text) {
 		return &pathPrefix
 	}
 
@@ -882,11 +918,13 @@ func (p *CombinedAutocompleteProvider) getFileSuggestions(prefix string) []Autoc
 		suggestions = append(suggestions, AutocompleteItem{Value: value, Label: label})
 	}
 
-	// Sort directories first, then alphabetically (pi: localeCompare → byte
-	// order, see file header).
+	// Sort directories first, then alphabetically (pi v0.86.0: directory
+	// detection moved from value to label — quoted directory values end with
+	// the closing quote, labels end with "/"; localeCompare → byte order,
+	// see file header).
 	sort.SliceStable(suggestions, func(a, b int) bool {
-		aIsDir := strings.HasSuffix(suggestions[a].Value, "/")
-		bIsDir := strings.HasSuffix(suggestions[b].Value, "/")
+		aIsDir := strings.HasSuffix(suggestions[a].Label, "/")
+		bIsDir := strings.HasSuffix(suggestions[b].Label, "/")
 		if aIsDir != bIsDir {
 			return aIsDir
 		}

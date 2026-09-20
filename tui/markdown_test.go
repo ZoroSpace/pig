@@ -641,11 +641,21 @@ func TestMarkdownDoesNotRenderLatexInsideEscapedDelimitersOrCodeFences(t *testin
 }
 
 func TestMarkdownAllowsLatexRenderingToBeDisabled(t *testing.T) {
+	// pi v0.86.0 switches the input to a display block with scripts
+	// (exercises raw passthrough for $$ blocks too).
 	disabled := false
-	markdown := NewMarkdown(`Map $\mathbb{C}^3 \to \mathbb{C}^3$`, 0, 0, defaultMarkdownTheme, nil, nil)
+	markdown := NewMarkdown("$$\n\\widetilde Y_{sf}\n=\n(1-w_{sf})\\mu_{sf}^{\\mathrm{MAR}}\n$$\n\nInline \\(A_{sf}\\)", 0, 0, defaultMarkdownTheme, nil, nil)
 	markdown.options.RenderLatex = &disabled
 
-	assertDeepLines(t, mapStripTrim(markdown.Render(80)), []string{`Map $\mathbb{C}^3 \to \mathbb{C}^3$`}, "disabled")
+	assertDeepLines(t, mapStripTrim(markdown.Render(80)), []string{
+		"$$",
+		`\widetilde Y_{sf}`,
+		"=",
+		`(1-w_{sf})\mu_{sf}^{\mathrm{MAR}}`,
+		"$$",
+		"",
+		`Inline \(A_{sf}\)`,
+	}, "disabled")
 }
 
 // --- Backslash escapes ---

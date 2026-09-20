@@ -297,9 +297,9 @@ func TestMouseSelectsAndCopiesEditorTextOnDragInsteadOfMovingTheCursor(t *testin
 	terminal := NewVirtualTerminal(20, 6)
 	var copied []string
 	tui := NewTuiAltScreen(terminal, nil, "", &TuiAltScreenOptions{
-		CopySelection: func(text string) bool {
+		CopySelection: func(text string) CopySelectionResult {
 			copied = append(copied, text)
-			return true
+			return CopySelectionResult{Ok: true}
 		},
 	})
 	editor := NewEditor(tui, mouseTestEditorTheme, nil)
