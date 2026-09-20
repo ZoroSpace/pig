@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func googleGemini3Model(api, provider, id string) *types.Model {
@@ -32,7 +33,7 @@ func googleGemini3Model(api, provider, id string) *types.Model {
 	}
 }
 
-func googleGemini3Context(model *types.Model, thoughtSignature string) *types.Context {
+func googleGemini3Context(model *types.Model, thoughtSignature string) *types.TranscriptContext {
 	now := time.Now().UnixMilli()
 	assistantContent := []types.Content{
 		types.NewToolCall("call_1", "bash", map[string]any{"command": "echo hi"}),
@@ -44,7 +45,7 @@ func googleGemini3Context(model *types.Model, thoughtSignature string) *types.Co
 			assistantContent[0] = call
 		}
 	}
-	return &types.Context{
+	return utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hi"}, Timestamp: now},
 			types.AssistantMessage{
@@ -71,7 +72,7 @@ func googleGemini3Context(model *types.Model, thoughtSignature string) *types.Co
 				Timestamp:  now,
 			},
 		},
-	}
+	})
 }
 
 // googleFlattenParts returns every part across all contents.

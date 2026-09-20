@@ -81,7 +81,7 @@ func (l *printTestResourceLoader) Reload(*core.ResourceLoaderReloadOptions) erro
 // the given assistant message (pi: createRuntimeHost's fake session).
 func printTestSession(t *testing.T, reply *types.AssistantMessage, capturedPrompts *[]string) *core.AgentSession {
 	t.Helper()
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		if capturedPrompts != nil {
 			for _, message := range llmContext.Messages {
 				user, ok := message.(*types.UserMessage)

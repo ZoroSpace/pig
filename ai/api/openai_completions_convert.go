@@ -71,20 +71,20 @@ func sanitizeToolIDChars(s string) string {
 // convertMessages converts the context into chat completion message params
 // (pi: convertMessages). The params are plain JSON maps so optional fields
 // serialize on demand.
-func convertMessages(model *types.Model, llmContext *types.Context, compat *resolvedOpenAICompletionsCompat, options *ConvertCompletionsMessagesOptions) []map[string]any {
+func convertMessages(model *types.Model, llmContext *types.TranscriptContext, compat *resolvedOpenAICompletionsCompat, options *ConvertCompletionsMessagesOptions) []map[string]any {
 	var params []map[string]any
 
-	normalizedMessages := TransformMessages(llmContext.Messages, model, func(id string, m *types.Model, source *types.AssistantMessage) string {
+	normalizedContext := utils.ResolveTranscript(llmContext, compat.supportsMidConvoSystemMessages)
+	normalizedMessages := TransformMessages(normalizedContext.Messages, model, func(id string, m *types.Model, source *types.AssistantMessage) string {
 		return normalizeToolCallID(id, m)
 	})
-
-	if llmContext.SystemPrompt != "" {
-		useDeveloperRole := model.Reasoning && compat.supportsDeveloperRole
-		role := "system"
-		if useDeveloperRole {
-			role = "developer"
-		}
-		params = append(params, map[string]any{"role": role, "content": utils.SanitizeSurrogates(llmContext.SystemPrompt)})
+	transcriptTools := utils.ResolveTranscriptTools(
+		normalizedContext.Messages,
+		compat.supportsMidConvoSystemMessages && compat.supportsMidConvoToolAdditions,
+	)
+	instructionRole := "system"
+	if model.Reasoning && compat.supportsDeveloperRole {
+		instructionRole = "developer"
 	}
 
 	lastRole := ""
@@ -98,6 +98,27 @@ func convertMessages(model *types.Model, llmContext *types.Context, compat *reso
 		}
 
 		switch m := msg.(type) {
+		case types.SystemMessage:
+			var addedTools []types.Tool
+			if i > 0 && transcriptTools.AnchorsAdditions {
+				addedTools = m.ToolsAdded
+			}
+			if len(addedTools) > 0 {
+				params = append(params, map[string]any{
+					"role":  "system",
+					"tools": convertTools(addedTools, compat),
+				})
+			}
+			text := ""
+			if i == 0 {
+				text = utils.GetSystemMessageText(&m)
+			} else {
+				text = utils.RenderSystemMessageUpdate(&m)
+			}
+			if len(text) > 0 {
+				params = append(params, map[string]any{"role": instructionRole, "content": utils.SanitizeSurrogates(text)})
+			}
+
 		case types.UserMessage:
 			var content any
 			if m.Content.Parts == nil {
@@ -272,7 +293,6 @@ func convertMessages(model *types.Model, llmContext *types.Context, compat *reso
 
 		case types.ToolResultMessage:
 			var imageBlocks []any
-			deferredToolNames := map[string]struct{}{}
 			j := i
 			for ; j < len(normalizedMessages); j++ {
 				toolMsg, ok := normalizedMessages[j].(types.ToolResultMessage)
@@ -307,11 +327,6 @@ func convertMessages(model *types.Model, llmContext *types.Context, compat *reso
 				}
 				params = append(params, toolResultMsg)
 
-				if compat.deferredToolsMode != nil && *compat.deferredToolsMode == types.DeferredToolsKimi {
-					for _, name := range toolMsg.AddedToolNames {
-						deferredToolNames[name] = struct{}{}
-					}
-				}
 				if hasImages && modelSupportsImages(model) {
 					for _, block := range toolMsg.Content {
 						if image, ok := block.(types.ImageContent); ok {
@@ -335,17 +350,6 @@ func convertMessages(model *types.Model, llmContext *types.Context, compat *reso
 				lastRole = "user"
 			} else {
 				lastRole = "toolResult"
-			}
-
-			if len(deferredToolNames) > 0 {
-				deferredTools := getToolsByName(llmContext.Tools, deferredToolNames)
-				if len(deferredTools) > 0 {
-					kimiToolMessage := map[string]any{
-						"role":  "system",
-						"tools": convertTools(deferredTools, compat),
-					}
-					params = append(params, kimiToolMessage)
-				}
 			}
 		}
 	}

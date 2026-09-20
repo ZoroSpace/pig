@@ -271,10 +271,10 @@ func (p *nativeDeferredProvider) GetModels() []ai.Model {
 	model := p.model
 	return []ai.Model{model}
 }
-func (p *nativeDeferredProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
+func (p *nativeDeferredProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
-func (p *nativeDeferredProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+func (p *nativeDeferredProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
 

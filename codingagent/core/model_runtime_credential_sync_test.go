@@ -34,10 +34,10 @@ func (p *syncTestProvider) GetModels() []ai.Model {
 		ContextWindow: 1000, MaxTokens: 100,
 	}}
 }
-func (p *syncTestProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
+func (p *syncTestProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
-func (p *syncTestProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+func (p *syncTestProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
 
@@ -695,10 +695,10 @@ func (p *blockingRestoreProvider) GetModels() []ai.Model {
 		ContextWindow: 1000, MaxTokens: 100,
 	}}
 }
-func (p *blockingRestoreProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
+func (p *blockingRestoreProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
-func (p *blockingRestoreProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+func (p *blockingRestoreProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
 
@@ -741,10 +741,10 @@ func (p *failingRestoreProvider) GetModels() []ai.Model {
 		ContextWindow: 1000, MaxTokens: 100,
 	}}
 }
-func (p *failingRestoreProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
+func (p *failingRestoreProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
-func (p *failingRestoreProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+func (p *failingRestoreProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
 
@@ -790,10 +790,10 @@ func (p *recordingDynamicProvider) GetModels() []ai.Model {
 		ContextWindow: 1000, MaxTokens: 100,
 	}}
 }
-func (p *recordingDynamicProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
+func (p *recordingDynamicProvider) Stream(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
-func (p *recordingDynamicProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+func (p *recordingDynamicProvider) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 	panic("unused")
 }
 

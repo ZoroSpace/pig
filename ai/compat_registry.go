@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	aiutils "github.com/ZoroSpace/pig/ai/utils"
 )
 
 type registeredApiProvider struct {
@@ -159,6 +160,7 @@ func withEnvApiKey(model *Model, options *SimpleStreamOptions) *SimpleStreamOpti
 // withEnvApiKey env-key fill is ported (2026-09-13, triggered by the first
 // live GEMINI_API_KEY probe; docs/fix/2026-09-13-env-api-keys-fill.md).
 func StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *SimpleStreamOptions) *AssistantMessageEventStream {
+	transcript := aiutils.NormalizeContext(llmContext)
 	provider, ok := GetApiProvider(model.API)
 	if !ok {
 		stream := NewAssistantMessageEventStream()
@@ -175,5 +177,5 @@ func StreamSimple(ctx context.Context, model *Model, llmContext *Context, option
 		stream.EndWith(message)
 		return stream
 	}
-	return provider.StreamSimple(ctx, model, llmContext, withEnvApiKey(model, options))
+	return provider.StreamSimple(ctx, model, transcript, withEnvApiKey(model, options))
 }

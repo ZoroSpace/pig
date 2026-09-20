@@ -10,6 +10,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // xiaomiSmokeModel mirrors pi's xiaomi-token-plan-ams smoke model.
@@ -42,9 +43,9 @@ func TestXiaomiTokenPlanAMSSmoke(t *testing.T) {
 	options := &types.SimpleStreamOptions{}
 	options.APIKey = apiKey
 	options.MaxTokens = lo.ToPtr(int64(96))
-	stream := (&AnthropicMessages{}).StreamSimple(gocontext.Background(), model, &types.Context{
+	stream := (&AnthropicMessages{}).StreamSimple(gocontext.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Reply with exactly one word: pong"}, Timestamp: 1}},
-	}, options)
+	}), options)
 	result := stream.Result()
 	if result.StopReason != types.StopReasonStop {
 		t.Fatalf("stopReason = %q (%s)", result.StopReason, result.ErrorMessage)

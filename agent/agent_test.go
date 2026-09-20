@@ -49,7 +49,7 @@ func agentTestToolUseMessage(t *testing.T, content []types.Content) types.Assist
 	}
 }
 
-func unusedStreamFunction(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func unusedStreamFunction(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	panic("Unexpected stream call")
 }
 
@@ -73,7 +73,7 @@ func waitFor[T any](t *testing.T, ch <-chan T) T {
 
 func TestAgentUsesConfiguredDefaultStreamFn(t *testing.T) {
 	calls := 0
-	SetDefaultStreamFn(func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	SetDefaultStreamFn(func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		calls++
 		return mockStreamFn(doneEvent(agentTestAssistantMessage("fallback")))(ctx, model, llmContext, options)
 	})
@@ -188,7 +188,7 @@ func TestAgentSubscribeAndUnsubscribe(t *testing.T) {
 
 func TestAgentEmitsFullLifecycleForThrownRunFailures(t *testing.T) {
 	agent, err := NewAgent(AgentOptions{
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			panic(errors.New("provider exploded"))
 		},
 	})
@@ -341,7 +341,7 @@ func TestAgentWaitForIdleWaitsForSubscribers(t *testing.T) {
 func TestAgentCancelsRunContextAfterRunFinishes(t *testing.T) {
 	runContexts := make(chan context.Context, 1)
 	agent, err := NewAgent(AgentOptions{
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			runContexts <- ctx
 			return mockStreamFn(doneEvent(agentTestAssistantMessage("ok")))(ctx, model, llmContext, options)
 		},
@@ -369,7 +369,7 @@ func TestAgentCancelsRunContextAfterRunFinishes(t *testing.T) {
 func TestAgentPassesActiveRunContextToSubscribers(t *testing.T) {
 	receivedSignal := make(chan context.Context, 1)
 	agent, err := NewAgent(AgentOptions{
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := types.NewAssistantMessageEventStream()
 			go func() {
 				message := agentTestAssistantMessage("")
@@ -669,7 +669,7 @@ func TestAgentRejectsResetWhileProcessing(t *testing.T) {
 	releaseResponse := make(chan struct{})
 	var releaseOnce sync.Once
 	agent, err := NewAgent(AgentOptions{
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := types.NewAssistantMessageEventStream()
 			go func() {
 				started := agentTestAssistantMessage("")
@@ -723,7 +723,7 @@ func TestAgentRejectsResetWhileProcessing(t *testing.T) {
 
 func TestAgentRejectsPromptWhileStreaming(t *testing.T) {
 	agent, err := NewAgent(AgentOptions{
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := types.NewAssistantMessageEventStream()
 			go func() {
 				started := agentTestAssistantMessage("")
@@ -764,7 +764,7 @@ func TestAgentRejectsPromptWhileStreaming(t *testing.T) {
 
 func TestAgentRejectsContinueWhileStreaming(t *testing.T) {
 	agent, err := NewAgent(AgentOptions{
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := types.NewAssistantMessageEventStream()
 			go func() {
 				started := agentTestAssistantMessage("")
@@ -851,7 +851,7 @@ func TestAgentContinueProcessesQueuedFollowUpsAfterAssistantTurn(t *testing.T) {
 
 func TestAgentContinueKeepsOneAtATimeSteeringFromAssistantTail(t *testing.T) {
 	var responseCount atomic.Int64
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		count := responseCount.Add(1)
 		return mockStreamFn(doneEvent(agentTestAssistantMessage("Processed "+strconv.FormatInt(count, 10))))(ctx, model, llmContext, options)
 	}
@@ -919,7 +919,7 @@ func TestAgentLegacyPrepareNextTurnReceivesRunContext(t *testing.T) {
 			sawRunContext.Store(ctx != nil && ctx.Err() == nil)
 			return nil
 		},
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			count := requestCount.Add(1)
 			var message types.AssistantMessage
 			if count == 1 {
@@ -972,7 +972,7 @@ func TestAgentForwardsShouldStopAfterTurn(t *testing.T) {
 			}
 			return true
 		},
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			count := requestCount.Add(1)
 			var message types.AssistantMessage
 			if count == 1 {
@@ -1014,7 +1014,7 @@ func TestAgentForwardsSessionID(t *testing.T) {
 	var receivedSessionID atomic.Pointer[string]
 	agent, err := NewAgent(AgentOptions{
 		SessionID: "session-abc",
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			sessionID := options.SessionID
 			receivedSessionID.Store(&sessionID)
 			return mockStreamFn(doneEvent(agentTestAssistantMessage("ok")))(ctx, model, llmContext, options)

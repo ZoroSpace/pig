@@ -97,7 +97,7 @@ func TestAnthropicAuthTokenPreservesOAuthShapedToken(t *testing.T) {
 }
 
 // runAuthTokenStream drives one stream and captures the wire request.
-func runAuthTokenStream(t *testing.T, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *capturedAuthRequest {
+func runAuthTokenStream(t *testing.T, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *capturedAuthRequest {
 	t.Helper()
 	captured := &capturedAuthRequest{}
 	if options == nil {
@@ -121,10 +121,10 @@ func TestAnthropicAuthTokenUsesAuthorizationWithoutOAuthShaping(t *testing.T) {
 		Provider: types.ProviderAnthropic, BaseURL: "https://api.anthropic.com",
 		Input: []types.ModelInput{types.ModelInputText}, ContextWindow: 100000, MaxTokens: 4096,
 	}
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "System prompt.",
 		Messages:     []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}},
-	}
+	})
 	options := &types.StreamOptions{}
 	options.Headers = types.ProviderHeaders{}
 	bearer := "Bearer gateway-token"
@@ -161,15 +161,15 @@ func TestAnthropicAuthTokenThreadsAuthContextThroughHeaders(t *testing.T) {
 		Provider: types.ProviderAnthropic, BaseURL: "https://api.anthropic.com",
 		Input: []types.ModelInput{types.ModelInputText}, ContextWindow: 100000, MaxTokens: 4096,
 	}
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "System prompt.",
 		Messages:     []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}},
-	}
+	})
 	captured := &capturedAuthRequest{}
 	models := mapAuthContextEnvModel(t, map[string]string{"ANTHROPIC_AUTH_TOKEN": "ctx-token"})
 	options := &ai.ModelsSimpleStreamOptions{}
 	options.Fetch = fakeAuthFetch(t, captured)
-	result := models.StreamSimple(context.Background(), model, llmContext, options).Result()
+	result := models.StreamSimple(context.Background(), model, &ai.Context{Messages: llmContext.Messages}, options).Result()
 	if result.StopReason != types.StopReasonStop {
 		t.Fatalf("stopReason = %q (%s)", result.StopReason, result.ErrorMessage)
 	}
@@ -191,15 +191,15 @@ func TestAnthropicAuthTokenPreservesOAuthShaping(t *testing.T) {
 		Provider: types.ProviderAnthropic, BaseURL: "https://api.anthropic.com",
 		Input: []types.ModelInput{types.ModelInputText}, ContextWindow: 100000, MaxTokens: 4096,
 	}
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "System prompt.",
 		Messages:     []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}},
-	}
+	})
 	captured := &capturedAuthRequest{}
 	models := mapAuthContextEnvModel(t, map[string]string{"ANTHROPIC_OAUTH_TOKEN": "sk-ant-oat-test"})
 	options := &ai.ModelsSimpleStreamOptions{}
 	options.Fetch = fakeAuthFetch(t, captured)
-	result := models.StreamSimple(context.Background(), model, llmContext, options).Result()
+	result := models.StreamSimple(context.Background(), model, &ai.Context{Messages: llmContext.Messages}, options).Result()
 	if result.StopReason != types.StopReasonStop {
 		t.Fatalf("stopReason = %q (%s)", result.StopReason, result.ErrorMessage)
 	}
@@ -218,17 +218,17 @@ func TestAnthropicAuthTokenExplicitHeadersOverrideEnv(t *testing.T) {
 		Provider: types.ProviderAnthropic, BaseURL: "https://api.anthropic.com",
 		Input: []types.ModelInput{types.ModelInputText}, ContextWindow: 100000, MaxTokens: 4096,
 	}
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "System prompt.",
 		Messages:     []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}},
-	}
+	})
 	captured := &capturedAuthRequest{}
 	models := mapAuthContextEnvModel(t, map[string]string{"ANTHROPIC_AUTH_TOKEN": "ctx-token"})
 	options := &ai.ModelsSimpleStreamOptions{}
 	options.Fetch = fakeAuthFetch(t, captured)
 	bearer := "Bearer explicit-token"
 	options.Headers = types.ProviderHeaders{"Authorization": &bearer}
-	result := models.StreamSimple(context.Background(), model, llmContext, options).Result()
+	result := models.StreamSimple(context.Background(), model, &ai.Context{Messages: llmContext.Messages}, options).Result()
 	if result.StopReason != types.StopReasonStop {
 		t.Fatalf("stopReason = %q (%s)", result.StopReason, result.ErrorMessage)
 	}
@@ -248,10 +248,10 @@ func TestAnthropicCompatibleUserAgents(t *testing.T) {
 	kimiModel.Name = "Kimi For Coding"
 	kimiModel.Provider = types.ProviderKimiCoding
 	kimiModel.BaseURL = "https://api.kimi.com/coding"
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "System prompt.",
 		Messages:     []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}},
-	}
+	})
 
 	t.Run("uses pi's User-Agent by default", func(t *testing.T) {
 		captured := runAuthTokenStream(t, model, llmContext, nil)

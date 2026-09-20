@@ -16,7 +16,7 @@ const minMaxTokens = 1
 // ClampMaxTokensToContext caps max tokens to the context window minus the
 // estimated context, keeping at least minMaxTokens (pi:
 // clampMaxTokensToContext).
-func ClampMaxTokensToContext(model *types.Model, context *types.Context, maxTokens int64) int64 {
+func ClampMaxTokensToContext(model *types.Model, context *types.TranscriptContext, maxTokens int64) int64 {
 	if model.ContextWindow <= 0 {
 		return maxInt64(minMaxTokens, maxTokens)
 	}
@@ -27,7 +27,7 @@ func ClampMaxTokensToContext(model *types.Model, context *types.Context, maxToke
 // BuildBaseOptions maps a SimpleStreamOptions into the StreamOptions shared by
 // full streams (pi: buildBaseOptions). signal is intentionally absent (Go
 // cancellation travels as context).
-func BuildBaseOptions(model *types.Model, context *types.Context, options *types.SimpleStreamOptions, apiKey string) types.StreamOptions {
+func BuildBaseOptions(model *types.Model, context *types.TranscriptContext, options *types.SimpleStreamOptions, apiKey string) types.StreamOptions {
 	var samplingParams map[string]any
 	if model.SamplingParams != nil || options.SamplingParams != nil {
 		samplingParams = map[string]any{}

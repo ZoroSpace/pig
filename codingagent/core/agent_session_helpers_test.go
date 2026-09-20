@@ -186,7 +186,7 @@ func createAgentTestSession(t *testing.T, options *createAgentTestSessionOptions
 
 	streamFn := cfg.StreamFn
 	if streamFn == nil {
-		streamFn = ai.StreamSimple
+		streamFn = defaultStreamFn
 	}
 	agentOptions := agent.AgentOptions{
 		StreamFn: streamFn,
@@ -261,7 +261,7 @@ func rawJSON(value string) json.RawMessage { return json.RawMessage(value) }
 
 // aiStreamSimpleForE2E returns the compat-level stream function (pi:
 // streamSimple from pi-ai/compat).
-func aiStreamSimpleForE2E() agent.StreamFn { return ai.StreamSimple }
+func aiStreamSimpleForE2E() agent.StreamFn { return defaultStreamFn }
 
 // splitWords splits text on double spaces for the MONKEY phrase check (test
 // helper; pi uses toContain on the phrase).

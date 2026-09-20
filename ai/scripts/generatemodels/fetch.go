@@ -226,13 +226,16 @@ func fetchAiGatewayModels(ctx context.Context) ([]*ai.Model, error) {
 		cacheWriteCost := roundCost(gatewayNumber(pricing, func(p *AIGatewayPricing) json.Number { return p.InputCacheWrite }) * 1_000_000)
 
 		models = append(models, &ai.Model{
-			ID:            model.ID,
-			Name:          orString(model.Name, model.ID),
-			API:           ai.ApiAnthropicMessages,
-			BaseURL:       aiGatewayBaseURL,
-			Provider:      ai.ProviderVercelAIGateway,
-			Reasoning:     containsString(model.Tags, "reasoning"),
-			Input:         input,
+			ID:        model.ID,
+			Name:      orString(model.Name, model.ID),
+			API:       ai.ApiAnthropicMessages,
+			BaseURL:   aiGatewayBaseURL,
+			Provider:  ai.ProviderVercelAIGateway,
+			Reasoning: containsString(model.Tags, "reasoning"),
+			Input:     input,
+			// v0.86.0 ("preserve Vercel AI Gateway unsigned thinking"): the
+			// gateway strips thinking signatures, so replay accepts empty ones.
+			Compat:        &ai.AnthropicMessagesCompat{AllowEmptySignature: lo.ToPtr(true)},
 			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: inputCost, Output: outputCost, CacheRead: cacheReadCost, CacheWrite: cacheWriteCost}},
 			ContextWindow: int64Or(model.ContextWindow, 4096),
 			MaxTokens:     int64Or(model.MaxTokens, 4096),

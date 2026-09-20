@@ -9,6 +9,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func TestAnthropicThinkingBindingE2E(t *testing.T) {
@@ -19,7 +20,7 @@ func TestAnthropicThinkingBindingE2E(t *testing.T) {
 		ForceAdaptiveThinking:  lo.ToPtr(true),
 		SupportsMidConvoEffort: lo.ToPtr(true),
 	})
-	request := func(t *testing.T, llmContext *types.Context, effort AnthropicEffort) types.AssistantMessage {
+	request := func(t *testing.T, llmContext *types.TranscriptContext, effort AnthropicEffort) types.AssistantMessage {
 		t.Helper()
 		options := &AnthropicOptions{}
 		options.APIKey = anthropicSmokeAPIKey()
@@ -41,15 +42,15 @@ func TestAnthropicThinkingBindingE2E(t *testing.T) {
 		}
 		return streamAnthropicMessages(gocontext.Background(), model, llmContext, options).Result()
 	}
-	first := request(t, &types.Context{Messages: []types.Message{midConvoUser("one", 1)}}, AnthropicEffortLow)
+	first := request(t, utils.NormalizeContext(&types.Context{Messages: []types.Message{midConvoUser("one", 1)}}), AnthropicEffortLow)
 	if first.StopReason != types.StopReasonStop {
 		t.Fatalf("first stopReason = %q (%s)", first.StopReason, first.ErrorMessage)
 	}
-	second := request(t, &types.Context{Messages: []types.Message{
+	second := request(t, utils.NormalizeContext(&types.Context{Messages: []types.Message{
 		midConvoUser("one", 1),
 		midConvoAssistant(t, model, "low"),
 		midConvoUser("two", 2),
-	}}, AnthropicEffortHigh)
+	}}), AnthropicEffortHigh)
 	if second.StopReason != types.StopReasonStop {
 		t.Fatalf("second stopReason = %q (%s)", second.StopReason, second.ErrorMessage)
 	}

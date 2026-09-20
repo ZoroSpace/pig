@@ -12,6 +12,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func mustDeepSeekModel(t *testing.T) *types.Model {
@@ -76,11 +77,11 @@ func TestDeepSeekStreamSimpleText(t *testing.T) {
 	model.BaseURL = srv.URL
 
 	var adapter OpenAICompletions
-	stream := adapter.StreamSimple(context.Background(), model, &types.Context{
+	stream := adapter.StreamSimple(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1},
 		},
-	}, &types.SimpleStreamOptions{
+	}), &types.SimpleStreamOptions{
 		StreamOptions: keyedStreamOptions("test-key"),
 		Reasoning:     types.ThinkingLevelHigh,
 	})
@@ -152,11 +153,11 @@ func TestDeepSeekStreamWithReasoning(t *testing.T) {
 	model.BaseURL = srv.URL
 
 	var adapter OpenAICompletions
-	stream := adapter.StreamSimple(context.Background(), model, &types.Context{
+	stream := adapter.StreamSimple(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "q"}, Timestamp: 1},
 		},
-	}, &types.SimpleStreamOptions{
+	}), &types.SimpleStreamOptions{
 		StreamOptions: keyedStreamOptions("test-key"),
 		Reasoning:     types.ThinkingLevelHigh,
 	})
@@ -193,7 +194,7 @@ func TestDeepSeekStreamToolCalls(t *testing.T) {
 
 	var adapter OpenAICompletions
 	opts := keyedStreamOptions("test-key")
-	stream := adapter.Stream(context.Background(), model, &types.Context{
+	stream := adapter.Stream(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "weather in beijing"}, Timestamp: 1},
 		},
@@ -204,7 +205,7 @@ func TestDeepSeekStreamToolCalls(t *testing.T) {
 				Parameters:  json.RawMessage(`{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`),
 			},
 		},
-	}, &opts)
+	}), &opts)
 	_, result := collectEvents(t, stream)
 
 	if result.StopReason != types.StopReasonToolUse {
@@ -239,11 +240,11 @@ func TestDeepSeekErrorSurfacesInStream(t *testing.T) {
 	model.BaseURL = srv.URL
 
 	var adapter OpenAICompletions
-	stream := adapter.StreamSimple(context.Background(), model, &types.Context{
+	stream := adapter.StreamSimple(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1},
 		},
-	}, &types.SimpleStreamOptions{
+	}), &types.SimpleStreamOptions{
 		StreamOptions: keyedStreamOptions("bad-key"),
 	})
 	_, result := collectEvents(t, stream)
@@ -258,11 +259,11 @@ func TestDeepSeekErrorSurfacesInStream(t *testing.T) {
 func TestDeepSeekMissingAPIKey(t *testing.T) {
 	model := mustDeepSeekModel(t)
 	var adapter OpenAICompletions
-	stream := adapter.StreamSimple(context.Background(), model, &types.Context{
+	stream := adapter.StreamSimple(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1},
 		},
-	}, &types.SimpleStreamOptions{})
+	}), &types.SimpleStreamOptions{})
 	_, result := collectEvents(t, stream)
 	if result.StopReason != types.StopReasonError {
 		t.Fatalf("stop reason = %q, want error", result.StopReason)
@@ -278,11 +279,11 @@ func TestBuildParamsDeepSeekReasoningOff(t *testing.T) {
 	model.BaseURL = srv.URL
 
 	var adapter OpenAICompletions
-	stream := adapter.StreamSimple(context.Background(), model, &types.Context{
+	stream := adapter.StreamSimple(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1},
 		},
-	}, &types.SimpleStreamOptions{
+	}), &types.SimpleStreamOptions{
 		StreamOptions: keyedStreamOptions("test-key"),
 	})
 	_, result := collectEvents(t, stream)
@@ -331,11 +332,11 @@ func TestStreamSimpleAbort(t *testing.T) {
 	}()
 
 	var adapter OpenAICompletions
-	stream := adapter.StreamSimple(ctx, model, &types.Context{
+	stream := adapter.StreamSimple(ctx, model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1},
 		},
-	}, &types.SimpleStreamOptions{
+	}), &types.SimpleStreamOptions{
 		StreamOptions: keyedStreamOptions("test-key"),
 	})
 	events, result := collectEvents(t, stream)

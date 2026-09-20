@@ -38,6 +38,7 @@ import (
 	"github.com/ZoroSpace/pig/ai/auth"
 	"github.com/ZoroSpace/pig/ai/providers"
 	"github.com/ZoroSpace/pig/ai/types"
+	aiutils "github.com/ZoroSpace/pig/ai/utils"
 	"github.com/ZoroSpace/pig/codingagent"
 	"github.com/samber/lo"
 )
@@ -1109,6 +1110,7 @@ func (r *ModelRuntime) applyPrepared(prepared *preparedRequest, requestOptions *
 
 // Stream dispatches one streaming request (pi: stream).
 func (r *ModelRuntime) Stream(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.ModelsStreamOptions) *ai.AssistantMessageEventStream {
+	transcript := aiutils.NormalizeContext(llmContext)
 	return ai.LazyStream(model, func() (*ai.AssistantMessageEventStream, error) {
 		var request *ModelRuntimeRequestOptions
 		var providerOptions *types.ProviderRequestOptions
@@ -1130,7 +1132,7 @@ func (r *ModelRuntime) Stream(ctx context.Context, model *ai.Model, llmContext *
 			streamOptions = &options.StreamOptions
 		}
 		streamOptions.ProviderRequestOptions = *r.applyPrepared(prepared, providerOptions)
-		return prepared.provider.Stream(ctx, prepared.model, llmContext, streamOptions), nil
+		return prepared.provider.Stream(ctx, prepared.model, transcript, streamOptions), nil
 	})
 }
 
@@ -1144,6 +1146,7 @@ func (r *ModelRuntime) Complete(ctx context.Context, model *ai.Model, llmContext
 
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
 func (r *ModelRuntime) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.ModelsSimpleStreamOptions) *ai.AssistantMessageEventStream {
+	transcript := aiutils.NormalizeContext(llmContext)
 	return ai.LazyStream(model, func() (*ai.AssistantMessageEventStream, error) {
 		var request *ModelRuntimeRequestOptions
 		var providerOptions *types.ProviderRequestOptions
@@ -1165,7 +1168,7 @@ func (r *ModelRuntime) StreamSimple(ctx context.Context, model *ai.Model, llmCon
 			simpleOptions = &options.SimpleStreamOptions
 		}
 		simpleOptions.ProviderRequestOptions = *r.applyPrepared(prepared, providerOptions)
-		return prepared.provider.StreamSimple(ctx, prepared.model, llmContext, simpleOptions), nil
+		return prepared.provider.StreamSimple(ctx, prepared.model, transcript, simpleOptions), nil
 	})
 }
 

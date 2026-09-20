@@ -10,6 +10,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func TestOpenAIResponsesCacheAffinityE2E(t *testing.T) {
@@ -26,10 +27,10 @@ func TestOpenAIResponsesCacheAffinityE2E(t *testing.T) {
 		model := &base
 		sessionID := "0195d6e4-4cf9-7f44-a2d8-f8f7f49ee9d3"
 
-		llmContext := &types.Context{
+		llmContext := utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a helpful assistant. Reply exactly as requested.",
 			Messages:     []types.Message{responsesUserMessage("Reply with exactly: openai cache affinity e2e success")},
-		}
+		})
 		options := &types.StreamOptions{}
 		options.APIKey = apiKey
 		options.SessionID = sessionID

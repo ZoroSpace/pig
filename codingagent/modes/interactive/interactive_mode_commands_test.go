@@ -144,7 +144,7 @@ func TestDebugCommandWritesDebugLog(t *testing.T) {
 // which no abort can unblock — pig's event iteration is a plain range).
 func createStreamingTestSession(t *testing.T, release chan struct{}) *core.AgentSession {
 	agentInstance, err := agent.NewAgent(agent.AgentOptions{
-		StreamFn: func(_ context.Context, _ *types.Model, _ *types.Context, _ *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(_ context.Context, _ *types.Model, _ *types.TranscriptContext, _ *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			<-release
 			stream := types.NewAssistantMessageEventStream()
 			message := types.AssistantMessage{

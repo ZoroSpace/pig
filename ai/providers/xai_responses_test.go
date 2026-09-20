@@ -41,7 +41,7 @@ type capturedXaiRequest struct {
 
 // captureXaiRequest streams one provider-dispatched request (pi:
 // captureRequest via xaiProvider().stream).
-func captureXaiRequest(t *testing.T, model *types.Model, llmContext *types.Context, options *types.StreamOptions) capturedXaiRequest {
+func captureXaiRequest(t *testing.T, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) capturedXaiRequest {
 	t.Helper()
 	var captured capturedXaiRequest
 	options.Fetch = func(req *http.Request) (*http.Response, error) {
@@ -141,10 +141,10 @@ func TestXaiResponsesRequestShape(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(responsesCompletedBody)),
 			}, nil
 		}
-		result := XaiProvider().StreamSimple(context.Background(), &grok45, &types.Context{
+		result := XaiProvider().StreamSimple(context.Background(), &grok45, utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a careful coding assistant.",
 			Messages:     []types.Message{userMessageAt("hello", 1)},
-		}, options).Result()
+		}), options).Result()
 		if result.StopReason != types.StopReasonStop {
 			t.Fatalf("stopReason = %v (%s), want stop", result.StopReason, result.ErrorMessage)
 		}
@@ -194,9 +194,9 @@ func TestXaiResponsesRequestShape(t *testing.T) {
 	})
 
 	t.Run("requests encrypted reasoning without an effort override", func(t *testing.T) {
-		captured := captureXaiRequest(t, &grok45, &types.Context{
+		captured := captureXaiRequest(t, &grok45, utils.NormalizeContext(&types.Context{
 			Messages: []types.Message{userMessageAt("hello", 1)},
-		}, streamOptionsWithKey("xai-test-token", "", ""))
+		}), streamOptionsWithKey("xai-test-token", "", ""))
 
 		if captured.body["model"] != "grok-4.5" || captured.body["store"] != false {
 			t.Fatalf("body base fields = %v", captured.body)
@@ -230,10 +230,10 @@ func TestXaiResponsesRequestShape(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(responsesCompletedBody)),
 			}, nil
 		}
-		result := XaiProvider().StreamSimple(context.Background(), &grok46, &types.Context{
+		result := XaiProvider().StreamSimple(context.Background(), &grok46, utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a careful coding assistant.",
 			Messages:     []types.Message{userMessageAt("hello", 1)},
-		}, options).Result()
+		}), options).Result()
 		if result.StopReason != types.StopReasonStop {
 			t.Fatalf("stopReason = %v (%s)", result.StopReason, result.ErrorMessage)
 		}
@@ -270,9 +270,9 @@ func TestXaiResponsesRequestShape(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(responsesCompletedBody)),
 			}, nil
 		}
-		result := XaiProvider().StreamSimple(context.Background(), &grok43, &types.Context{
+		result := XaiProvider().StreamSimple(context.Background(), &grok43, utils.NormalizeContext(&types.Context{
 			Messages: []types.Message{userMessageAt("hello", 1)},
-		}, options).Result()
+		}), options).Result()
 		if result.StopReason != types.StopReasonStop {
 			t.Fatalf("stopReason = %v (%s)", result.StopReason, result.ErrorMessage)
 		}
@@ -312,9 +312,9 @@ func TestXaiResponsesUserAgent(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(responsesCompletedBody)),
 			}, nil
 		}
-		result := api.OpenAIResponses{}.Stream(context.Background(), &model, &types.Context{
+		result := api.OpenAIResponses{}.Stream(context.Background(), &model, utils.NormalizeContext(&types.Context{
 			Messages: []types.Message{userMessageAt("hello", 1)},
-		}, options).Result()
+		}), options).Result()
 		if result.StopReason != types.StopReasonStop {
 			t.Fatalf("stopReason = %v (%s)", result.StopReason, result.ErrorMessage)
 		}
@@ -324,9 +324,9 @@ func TestXaiResponsesUserAgent(t *testing.T) {
 	})
 
 	t.Run("lets explicit headers override the default Responses User-Agent", func(t *testing.T) {
-		captured := captureXaiRequest(t, &grok45, &types.Context{
+		captured := captureXaiRequest(t, &grok45, utils.NormalizeContext(&types.Context{
 			Messages: []types.Message{userMessageAt("hello", 1)},
-		}, func() *types.StreamOptions {
+		}), func() *types.StreamOptions {
 			opts := streamOptionsWithKey("xai-test-token", "", "")
 			custom := "custom-agent"
 			opts.Headers = types.ProviderHeaders{"User-Agent": &custom}
@@ -363,9 +363,9 @@ func TestXaiCompletionsUserAgent(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(chunks)),
 			}, nil
 		}
-		result := api.OpenAICompletions{}.Stream(context.Background(), customModel, &types.Context{
+		result := api.OpenAICompletions{}.Stream(context.Background(), customModel, utils.NormalizeContext(&types.Context{
 			Messages: []types.Message{userMessageAt("hello", 1)},
-		}, &options.StreamOptions).Result()
+		}), &options.StreamOptions).Result()
 		if result.StopReason != types.StopReasonStop {
 			t.Fatalf("stopReason = %v (%s)", result.StopReason, result.ErrorMessage)
 		}

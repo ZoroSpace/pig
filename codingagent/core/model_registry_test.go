@@ -1282,7 +1282,7 @@ func TestModelRegistryFailedRegisterProviderDoesNotPersistInvalidStreamSimpleCon
 			}
 		}()
 		return registry.RegisterProvider("broken-provider", &ProviderConfigInput{
-			StreamSimple: func(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+			StreamSimple: func(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 				panic("should not run")
 			},
 		})
@@ -1377,7 +1377,7 @@ func TestModelRegistryStreamSimpleOverlaysDoNotMutateTheGlobalCompatAPIRegistry(
 
 	if err := registry.RegisterProvider("stream-override-provider", &ProviderConfigInput{
 		API: ai.ApiOpenAICompletions,
-		StreamSimple: func(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+		StreamSimple: func(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 			panic("custom streamSimple override")
 		},
 	}); err != nil {

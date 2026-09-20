@@ -271,6 +271,39 @@ var UUIDv7 = utils.UUIDv7
 // Text extraction (pi: utils/text.ts, star-exported by index.ts).
 var ContentText = utils.ContentText
 
+// System prompt rendering (pi: utils/text.ts v0.86.0 exports).
+var (
+	GetSystemMessageText      = utils.GetSystemMessageText
+	RenderSystemMessageUpdate = utils.RenderSystemMessageUpdate
+)
+
+// Transcript helpers (pi: utils/transcript.ts, star-exported by index.ts,
+// v0.86.0).
+var (
+	NormalizeContext            = utils.NormalizeContext
+	CreateInitialSystemMessage  = utils.CreateInitialSystemMessage
+	GetInitialSystemMessage     = utils.GetInitialSystemMessage
+	WithoutInitialSystemMessage = utils.WithoutInitialSystemMessage
+	GetCurrentTools             = utils.GetCurrentTools
+	GetCurrentSystemMessage     = utils.GetCurrentSystemMessage
+	GetCurrentSystemPrompt      = utils.GetCurrentSystemPrompt
+	CollapseSystemMessages      = utils.CollapseSystemMessages
+	ResolveTranscript           = utils.ResolveTranscript
+	ToToolDeclaration           = utils.ToToolDeclaration
+	DeclarationsEqual           = utils.DeclarationsEqual
+	GetToolStateChanges         = utils.GetToolStateChanges
+	GetDeclaredTools            = utils.GetDeclaredTools
+	HasToolRedefinitions        = utils.HasToolRedefinitions
+	HasNonAdditiveToolChanges   = utils.HasNonAdditiveToolChanges
+	ResolveTranscriptTools      = utils.ResolveTranscriptTools
+)
+
+// Transcript helper result types (pi: ToolStateChanges / TranscriptTools).
+type (
+	ToolStateChanges = utils.ToolStateChanges
+	TranscriptTools  = utils.TranscriptTools
+)
+
 // Assistant-call retry (pi: utils/retry.ts, star-exported by index.ts).
 type (
 	RetryPolicy    = utils.RetryPolicy
@@ -280,7 +313,12 @@ type (
 var (
 	RetryAssistantCall        = utils.RetryAssistantCall
 	IsRetryableAssistantError = utils.IsRetryableAssistantError
+	RetryDelayMs              = utils.RetryDelayMs
 )
+
+// DefaultMaxAgentRetryDelayMs is the agent retry delay cap default (pi:
+// DEFAULT_MAX_AGENT_RETRY_DELAY_MS).
+var DefaultMaxAgentRetryDelayMs = utils.DefaultMaxAgentRetryDelayMs
 
 // Tools, context, and stream events.
 type (
@@ -289,15 +327,21 @@ type (
 	ConstrainedSamplingConfig     = types.ConstrainedSamplingConfig
 	Tool                          = types.Tool
 	Context                       = types.Context
+	TranscriptContext             = types.TranscriptContext
+	SystemMessage                 = types.SystemMessage
+	SystemContent                 = types.SystemContent
+	SystemSections                = types.SystemSections
+	ToolReference                 = types.ToolReference
+	ModelPromptCache              = types.ModelPromptCache
 	AssistantMessageEventType     = types.AssistantMessageEventType
 	AssistantMessageEvent         = types.AssistantMessageEvent
 	ThinkingFormat                = types.ThinkingFormat
 	MaxTokensField                = types.MaxTokensField
 	CacheControlFormat            = types.CacheControlFormat
-	DeferredToolsMode             = types.DeferredToolsMode
 	OpenAICompletionsCompat       = types.OpenAICompletionsCompat
 	OpenAIResponsesCompat         = types.OpenAIResponsesCompat
 	AnthropicMessagesCompat       = types.AnthropicMessagesCompat
+	MistralConversationsCompat    = types.MistralConversationsCompat
 	BedrockCompat                 = types.BedrockCompat
 	AnthropicAllowedFallbackModel = types.AnthropicAllowedFallbackModel
 	ModelCompat                   = types.ModelCompat
@@ -353,7 +397,6 @@ const (
 
 const (
 	CacheControlAnthropic = types.CacheControlAnthropic
-	DeferredToolsKimi     = types.DeferredToolsKimi
 )
 
 const (

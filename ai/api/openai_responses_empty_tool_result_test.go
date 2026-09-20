@@ -6,6 +6,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func TestOpenAIResponsesEmptyToolResult(t *testing.T) {
@@ -30,13 +31,13 @@ func TestOpenAIResponsesEmptyToolResult(t *testing.T) {
 			Role: types.RoleToolResult, ToolCallID: "tool-1", ToolName: "bash",
 			Content: []types.Content{types.NewTextContent("")}, IsError: false, Timestamp: 1,
 		}
-		llmContext := &types.Context{
+		llmContext := utils.NormalizeContext(&types.Context{
 			Messages: []types.Message{
 				responsesUserMessage("Run the command"),
 				assistant,
 				toolResult,
 			},
-		}
+		})
 
 		input := ConvertResponsesMessages(model, llmContext, map[string]struct{}{
 			"openai": {}, "openai-codex": {}, "opencode": {},

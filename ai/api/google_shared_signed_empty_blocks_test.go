@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // Gemini can attach thoughtSignature to a response part whose visible text is
@@ -34,9 +35,9 @@ func googleSignedModel(id string) *types.Model {
 
 const googleValidSignature = "AAAAAAAAAAAAAAAAAAAAAA=="
 
-func googleSignedContext(model *types.Model, content []types.Content) *types.Context {
+func googleSignedContext(model *types.Model, content []types.Content) *types.TranscriptContext {
 	now := time.Now().UnixMilli()
-	return &types.Context{
+	return utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hi"}, Timestamp: now},
 			types.AssistantMessage{
@@ -49,7 +50,7 @@ func googleSignedContext(model *types.Model, content []types.Content) *types.Con
 				Timestamp:  now,
 			},
 		},
-	}
+	})
 }
 
 // signedParts collects the model-turn parts carrying the valid signature.

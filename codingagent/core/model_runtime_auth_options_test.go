@@ -425,7 +425,7 @@ func TestModelRuntimeLetsAnExplicitAuthorizationHeaderOverrideAuthHeaderCaseInse
 		APIKey:     "generated-key",
 		AuthHeader: lo.ToPtr(true),
 		API:        ai.ApiOpenAICompletions,
-		StreamSimple: func(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+		StreamSimple: func(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 			capturedHeaders = options.Headers
 			return errorStream("captured")
 		},
@@ -471,7 +471,7 @@ func TestModelRuntimeTransformsFullyAssembledHeadersOnceWithoutForwardingTheTran
 		AuthHeader: lo.ToPtr(true),
 		Headers:    map[string]string{"x-provider": "provider"},
 		API:        ai.ApiOpenAICompletions,
-		StreamSimple: func(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+		StreamSimple: func(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 			capturedHeaders = options.Headers
 			return errorStream("captured")
 		},

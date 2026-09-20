@@ -79,7 +79,7 @@ func sdkCaptureStreamOptionsWithModel(t *testing.T, model *types.Model, settings
 	if err := modelRuntime.RegisterProvider(string(model.Provider), &ProviderConfigInput{
 		API:     model.API,
 		Headers: providerHeaders,
-		StreamSimple: func(ctx context.Context, streamModel *types.Model, llmContext *types.Context, providerOptions *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamSimple: func(ctx context.Context, streamModel *types.Model, llmContext *types.TranscriptContext, providerOptions *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			capture.options = providerOptions
 			stream := ai.NewAssistantMessageEventStream()
 			message := &types.AssistantMessage{

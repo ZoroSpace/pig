@@ -48,11 +48,11 @@ type cloudflareStreams struct {
 	inner types.ProviderStreams
 }
 
-func (s *cloudflareStreams) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (s *cloudflareStreams) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	return s.inner.Stream(ctx, ResolveCloudflareModel(model, envOfStream(options)), llmContext, options)
 }
 
-func (s *cloudflareStreams) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (s *cloudflareStreams) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	return s.inner.StreamSimple(ctx, ResolveCloudflareModel(model, envOfSimple(options)), llmContext, options)
 }
 

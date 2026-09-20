@@ -246,7 +246,7 @@ func init() {
 // Stream dispatches one streaming request (pi: stream). ctx carries the
 // caller's cancellation (pi: options.signal into the SDK request and the
 // retry helper).
-func (GoogleGenerativeAI) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (GoogleGenerativeAI) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	opts := &GoogleOptions{}
 	if options != nil {
 		opts.StreamOptions = *options
@@ -255,7 +255,7 @@ func (GoogleGenerativeAI) Stream(ctx context.Context, model *types.Model, llmCon
 }
 
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
-func (GoogleGenerativeAI) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (GoogleGenerativeAI) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	if options.APIKey == "" {
 		return immediateErrorStream(model, fmt.Errorf("No API key for provider: %s", model.Provider))
 	}
@@ -267,15 +267,19 @@ func (GoogleGenerativeAI) StreamSimple(ctx context.Context, model *types.Model, 
 	}
 
 	clampedReasoning := ai.ClampThinkingLevel(model, types.ModelThinkingLevel(options.Reasoning))
+	if clampedReasoning == types.ModelThinkingOff {
+		opts.Thinking = &GoogleThinkingOptions{Enabled: false}
+		return streamGoogleGenerativeAI(ctx, model, llmContext, opts)
+	}
 	resolvedLevel, err := ResolveGoogleThinkingLevel(model, clampedReasoning)
 	if err != nil {
 		return immediateErrorStream(model, err)
 	}
 
-	if isGemini3ProModel(model.ID) || isGemini3FlashModel(model.ID) || isGemma4Model(model.ID) {
+	if UsesGoogleThinkingLevel(model) {
 		opts.Thinking = &GoogleThinkingOptions{
 			Enabled: true,
-			Level:   getGoogleThinkingLevel(resolvedLevel, model),
+			Level:   ToGoogleThinkingLevel(resolvedLevel),
 		}
 		return streamGoogleGenerativeAI(ctx, model, llmContext, opts)
 	}
@@ -289,8 +293,9 @@ func (GoogleGenerativeAI) StreamSimple(ctx context.Context, model *types.Model, 
 
 // streamGoogleGenerativeAI is the adapter's core stream implementation (pi:
 // stream).
-func streamGoogleGenerativeAI(ctx context.Context, model *types.Model, llmContext *types.Context, options *GoogleOptions) *types.AssistantMessageEventStream {
+func streamGoogleGenerativeAI(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *GoogleOptions) *types.AssistantMessageEventStream {
 	stream := types.NewAssistantMessageEventStream()
+	normalizedContext := utils.CollapseSystemMessages(llmContext)
 	output := &types.AssistantMessage{
 		Content:  []types.Content{},
 		API:      ai.ApiGoogleGenerativeAI,
@@ -324,7 +329,7 @@ func streamGoogleGenerativeAI(ctx context.Context, model *types.Model, llmContex
 			}
 		}()
 
-		if err := runGoogleGenerativeAIStream(ctx, model, llmContext, options, output, push); err != nil {
+		if err := runGoogleGenerativeAIStream(ctx, model, normalizedContext, options, output, push); err != nil {
 			failGoogleStream(ctx, output, stream, err)
 		}
 	}()
@@ -345,7 +350,7 @@ func failGoogleStream(ctx context.Context, output *types.AssistantMessage, strea
 }
 
 // runGoogleGenerativeAIStream is pi's try block (the streaming loop).
-func runGoogleGenerativeAIStream(ctx context.Context, model *types.Model, llmContext *types.Context, options *GoogleOptions, output *types.AssistantMessage, push func(types.AssistantMessageEvent)) error {
+func runGoogleGenerativeAIStream(ctx context.Context, model *types.Model, normalizedContext *types.TranscriptContext, options *GoogleOptions, output *types.AssistantMessage, push func(types.AssistantMessageEvent)) error {
 	if options.Fetch != nil {
 		return errors.New("Custom fetch is not supported by the Google Generative AI adapter")
 	}
@@ -354,7 +359,7 @@ func runGoogleGenerativeAIStream(ctx context.Context, model *types.Model, llmCon
 		return fmt.Errorf("No API key for provider: %s", model.Provider)
 	}
 	client := createGoogleClient(model, apiKey, options.Headers)
-	params := buildGoogleParams(model, llmContext, options)
+	params := buildGoogleParams(model, normalizedContext, options)
 	if options.OnPayload != nil {
 		if next := options.OnPayload(params, model); next != nil {
 			if nextParams, ok := next.(*googleGenerateContentParams); ok {
@@ -614,8 +619,8 @@ func createGoogleClient(model *types.Model, apiKey string, optionsHeaders types.
 }
 
 // buildGoogleParams builds the request the SDK receives (pi: buildParams).
-func buildGoogleParams(model *types.Model, llmContext *types.Context, options *GoogleOptions) *googleGenerateContentParams {
-	contents := ConvertGoogleMessages(model, llmContext)
+func buildGoogleParams(model *types.Model, normalizedContext *types.TranscriptContext, options *GoogleOptions) *googleGenerateContentParams {
+	contents := ConvertGoogleMessages(model, normalizedContext)
 
 	config := &googleGenerateContentConfig{}
 	if options.Temperature != nil {
@@ -626,21 +631,26 @@ func buildGoogleParams(model *types.Model, llmContext *types.Context, options *G
 	}
 
 	supportsStrictMode := SupportsGoogleStrictToolSampling(model.ID)
+	currentTools := utils.GetCurrentTools(normalizedContext.Messages)
 	var functionCallingMode string
-	if len(llmContext.Tools) > 0 {
-		mode, err := ResolveGoogleFunctionCallingMode(llmContext.Tools, options.ToolChoice, supportsStrictMode)
+	if len(currentTools) > 0 {
+		mode, err := ResolveGoogleFunctionCallingMode(currentTools, options.ToolChoice, supportsStrictMode)
 		if err != nil {
 			panic(err)
 		}
 		functionCallingMode = mode
 	}
-	if llmContext.SystemPrompt != "" {
-		config.SystemInstruction = &googleContent{
-			Parts: []googlePart{{Text: lo.ToPtr(utils.SanitizeSurrogates(llmContext.SystemPrompt))}},
+	initialSystemMessage := utils.GetInitialSystemMessage(normalizedContext.Messages)
+	if initialSystemMessage != nil {
+		systemInstruction := utils.GetSystemMessageText(initialSystemMessage)
+		if systemInstruction != "" {
+			config.SystemInstruction = &googleContent{
+				Parts: []googlePart{{Text: lo.ToPtr(utils.SanitizeSurrogates(systemInstruction))}},
+			}
 		}
 	}
-	if len(llmContext.Tools) > 0 {
-		tools, err := ConvertGoogleTools(llmContext.Tools, false, supportsStrictMode)
+	if len(currentTools) > 0 {
+		tools, err := ConvertGoogleTools(currentTools, false, supportsStrictMode)
 		if err != nil {
 			panic(err)
 		}

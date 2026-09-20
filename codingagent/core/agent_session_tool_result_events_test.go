@@ -82,7 +82,7 @@ func TestAgentSessionToolExecutionEventsCarryContent(t *testing.T) {
 	session, _, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey:         true,
 		BaseToolsOverride: map[string]agent.AgentTool{"echo": echoTool},
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			callCount++
 			stream := newMockAssistantStream()
 			if callCount == 1 {

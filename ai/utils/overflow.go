@@ -38,7 +38,6 @@ var overflowPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)context[_ ]length[_ ]exceeded`),                                                             // Generic fallback
 	regexp.MustCompile(`(?i)too many tokens`),                                                                           // Generic fallback
 	regexp.MustCompile(`(?i)token limit exceeded`),                                                                      // Generic fallback
-	regexp.MustCompile(`(?i)^4(?:00|13)\s*(?:status code)?\s*\(no body\)`),                                              // Cerebras: 400/413 with no body
 	// pig-only additions (not in pi's OVERFLOW_PATTERNS):
 	regexp.MustCompile(`(?i)OutofContextError`),         // Volcengine ark (Coding Plan) — pi-provider-volcengine-codingplan extension normalized these via a message_end hook; pig detects them here instead
 	regexp.MustCompile(`(?i)exceed max message tokens`), // Volcengine ark (Coding Plan)
@@ -53,6 +52,12 @@ var nonOverflowPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)rate limit`),                               // Generic rate limiting
 	regexp.MustCompile(`(?i)too many requests`),                        // Generic HTTP 429 style
 }
+
+// cerebrasBodylessOverflowPattern is scoped to the Cerebras provider
+// upstream (pi: CEREBRAS_BODYLESS_OVERFLOW_PATTERN; the generic-pattern
+// entry became provider-scoped in v0.86.0 — "scope bodyless overflow errors
+// to Cerebras").
+var cerebrasBodylessOverflowPattern = regexp.MustCompile(`(?i)^4(?:00|13)\s*(?:status code)?\s*\(no body\)`)
 
 // IsContextOverflow reports whether an assistant message represents a
 // context-overflow error (pi: isContextOverflow). Three cases:
@@ -81,6 +86,9 @@ func IsContextOverflow(message *types.AssistantMessage, contextWindow int64) boo
 				if pattern.MatchString(message.ErrorMessage) {
 					return true
 				}
+			}
+			if message.Provider == "cerebras" && cerebrasBodylessOverflowPattern.MatchString(message.ErrorMessage) {
+				return true
 			}
 		}
 	}

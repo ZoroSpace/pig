@@ -23,7 +23,7 @@ import (
 // (several paragraphs of markdown-ish text plus usage), similar in shape to a
 // real streaming turn.
 func memProbeStream(replyBytes int) agent.StreamFn {
-	return func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	return func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		stream := types.NewAssistantMessageEventStream()
 		go func() {
 			stream.Push(types.AssistantMessageEvent{Type: types.EventStart})

@@ -7,6 +7,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 type bedrockThinkingPayload struct {
@@ -306,12 +307,12 @@ func captureBedrockThinkingPayloadNoReasoning(t *testing.T, model *types.Model) 
 		captured = payload.(*bedrockConverseInput)
 		return payload
 	}
-	s := streamBedrockConverse(alreadyCancelledContext(), model, &types.Context{
+	s := streamBedrockConverse(alreadyCancelledContext(), model, utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are helpful.",
 		Messages: []types.Message{types.UserMessage{
 			Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1,
 		}},
-	}, &BedrockOptions{StreamOptions: streamOptions})
+	}), &BedrockOptions{StreamOptions: streamOptions})
 	for event := range s.Events() {
 		if event.Type == types.EventError {
 			break

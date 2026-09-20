@@ -102,7 +102,7 @@ func doneEvent(message types.AssistantMessage) types.AssistantMessageEvent {
 }
 
 func mockStreamFn(events ...types.AssistantMessageEvent) StreamFn {
-	return func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	return func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		stream := types.NewAssistantMessageEventStream()
 		for _, event := range events {
 			stream.Push(event)
@@ -133,14 +133,14 @@ func eventTypes(events []AgentEvent) []AgentEventType {
 
 func TestDefaultStreamFnCompatibility(t *testing.T) {
 	calls := 0
-	SetDefaultStreamFn(func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	SetDefaultStreamFn(func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		calls++
 		message := createAssistantMessage([]types.Content{types.NewTextContent("fallback")}, "")
 		return mockStreamFn(doneEvent(message))(ctx, model, llmContext, options)
 	})
 	defer SetDefaultStreamFn(nil)
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{}}
+	agentContext := AgentContext{Tools: []*AgentTool{}}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 	stream := AgentLoop(context.Background(), []AgentMessage{createUserMessage("Hello")}, agentContext, config, nil)
 	_, _ = collectEvents(t, stream)
@@ -152,7 +152,9 @@ func TestDefaultStreamFnCompatibility(t *testing.T) {
 // ---- agentLoop with AgentMessage ----
 
 func TestAgentLoopEmitsEventsWithAgentMessageTypes(t *testing.T) {
-	agentContext := AgentContext{SystemPrompt: "You are helpful.", Tools: []*AgentTool{}}
+	agentContext := AgentContext{Messages: []AgentMessage{types.SystemMessage{
+		Role: types.RoleSystem, Content: types.SystemContent{String: "You are helpful."}, Timestamp: 1,
+	}}, Tools: []*AgentTool{}}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
 	message := createAssistantMessage([]types.Content{types.NewTextContent("Hi there!")}, "")
@@ -183,9 +185,8 @@ func TestAgentLoopHandlesCustomMessageTypesViaConvertToLlm(t *testing.T) {
 	notification := customMessage{Role: "notification", Text: "This is a notification", Timestamp: time.Now().UnixMilli()}
 
 	agentContext := AgentContext{
-		SystemPrompt: "You are helpful.",
-		Messages:     []AgentMessage{notification},
-		Tools:        []*AgentTool{},
+		Messages: []AgentMessage{notification},
+		Tools:    []*AgentTool{},
 	}
 
 	var convertedMessages []types.Message
@@ -221,7 +222,6 @@ func TestAgentLoopHandlesCustomMessageTypesViaConvertToLlm(t *testing.T) {
 
 func TestAgentLoopAppliesTransformContextBeforeConvertToLlm(t *testing.T) {
 	agentContext := AgentContext{
-		SystemPrompt: "You are helpful.",
 		Messages: []AgentMessage{
 			createUserMessage("old message 1"),
 			createAssistantMessage([]types.Content{types.NewTextContent("old response 1")}, ""),
@@ -284,7 +284,7 @@ func TestAgentLoopHandlesToolCallsAndResults(t *testing.T) {
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{
 		Model:        createModel(),
 		ConvertToLlm: identityConverter,
@@ -295,7 +295,7 @@ func TestAgentLoopHandlesToolCallsAndResults(t *testing.T) {
 	}
 
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		var message types.AssistantMessage
 		if callIndex == 0 {
 			message = createAssistantMessage([]types.Content{
@@ -359,11 +359,11 @@ func TestAgentLoopDoesNotExecuteToolCallsFromLengthTruncatedMessage(t *testing.T
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		var message types.AssistantMessage
 		if callIndex == 0 {
 			// Output hit the token limit mid tool call. The salvage parser can
@@ -439,7 +439,7 @@ func TestAgentLoopExecutesMutatedBeforeToolCallArgsWithoutRevalidation(t *testin
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{
 		Model:        createModel(),
 		ConvertToLlm: identityConverter,
@@ -450,7 +450,7 @@ func TestAgentLoopExecutesMutatedBeforeToolCallArgsWithoutRevalidation(t *testin
 	}
 
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		var message types.AssistantMessage
 		if callIndex == 0 {
 			message = createAssistantMessage([]types.Content{
@@ -530,11 +530,11 @@ func TestAgentLoopPreparesToolArgumentsForValidation(t *testing.T) {
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		var message types.AssistantMessage
 		if callIndex == 0 {
 			message = createAssistantMessage([]types.Content{
@@ -579,7 +579,7 @@ func TestAgentLoopParallelEmitsToolExecutionEndInCompletionOrder(t *testing.T) {
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{
 		Model:         createModel(),
 		ConvertToLlm:  identityConverter,
@@ -587,7 +587,7 @@ func TestAgentLoopParallelEmitsToolExecutionEndInCompletionOrder(t *testing.T) {
 	}
 
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		var message types.AssistantMessage
 		if callIndex == 0 {
 			message = createAssistantMessage([]types.Content{
@@ -653,7 +653,7 @@ func TestAgentLoopInjectsQueuedMessagesAfterAllToolCallsComplete(t *testing.T) {
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 
 	queuedDelivered := false
 	queuedUserMessage := createUserMessage("interrupt")
@@ -674,7 +674,7 @@ func TestAgentLoopInjectsQueuedMessagesAfterAllToolCallsComplete(t *testing.T) {
 
 	sawInterruptInContext := false
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		// Check if interrupt message is in context on second call
 		if callIndex == 1 {
 			for _, message := range llmContext.Messages {
@@ -778,12 +778,12 @@ func TestAgentLoopForcesSequentialExecutionWithSequentialToolMode(t *testing.T) 
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{slowTool}}
+	agentContext := AgentContext{Tools: []*AgentTool{slowTool}}
 	// config is parallel (default), but tool forces sequential
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		var message types.AssistantMessage
 		if callIndex == 0 {
 			message = createAssistantMessage([]types.Content{
@@ -852,11 +852,11 @@ func TestAgentLoopForcesSequentialWhenOneOfMultipleToolsIsSequential(t *testing.
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{slowTool, fastTool}}
+	agentContext := AgentContext{Tools: []*AgentTool{slowTool, fastTool}}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		var message types.AssistantMessage
 		if callIndex == 0 {
 			message = createAssistantMessage([]types.Content{
@@ -907,11 +907,11 @@ func TestAgentLoopAllowsParallelWhenAllToolsAreParallel(t *testing.T) {
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		var message types.AssistantMessage
 		if callIndex == 0 {
 			message = createAssistantMessage([]types.Content{
@@ -946,7 +946,7 @@ func TestAgentLoopUsesPrepareNextTurnSnapshotBeforeContinuing(t *testing.T) {
 			}, nil
 		},
 	}
-	agentContext := AgentContext{SystemPrompt: "first prompt", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 
 	prepared := false
 	prepareCalls := 0
@@ -961,21 +961,28 @@ func TestAgentLoopUsesPrepareNextTurnSnapshotBeforeContinuing(t *testing.T) {
 			prepared = true
 			return &AgentLoopTurnUpdate{
 				Context: &AgentContext{
-					SystemPrompt: "second prompt",
-					Messages:     append([]AgentMessage{}, context.Context.Messages...),
-					Tools:        context.Context.Tools,
+					Messages: append([]AgentMessage{}, context.Context.Messages...),
+					Tools:    context.Context.Tools,
 				},
+				// v0.86.0: prompt changes flow as appended system messages.
+				Messages: []AgentMessage{types.SystemMessage{
+					Role: types.RoleSystem, Content: types.SystemContent{String: "updated guidance"}, Timestamp: 1,
+				}},
 			}
 		},
 	}
 
 	llmCalls := 0
-	convertedSecondTurnSystemPrompt := ""
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	convertedSecondTurnHasUpdate := false
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		llmCalls++
 		var assistant types.AssistantMessage
 		if llmCalls == 2 {
-			convertedSecondTurnSystemPrompt = llmContext.SystemPrompt
+			for _, m := range llmContext.Messages {
+				if sys, ok := m.(types.SystemMessage); ok && sys.Content.String == "updated guidance" {
+					convertedSecondTurnHasUpdate = true
+				}
+			}
 			assistant = createAssistantMessage([]types.Content{types.NewTextContent("done")}, "")
 		} else {
 			assistant = createAssistantMessage([]types.Content{
@@ -994,8 +1001,8 @@ func TestAgentLoopUsesPrepareNextTurnSnapshotBeforeContinuing(t *testing.T) {
 	if prepareCalls != 1 {
 		t.Fatalf("prepareCalls = %d, want 1", prepareCalls)
 	}
-	if convertedSecondTurnSystemPrompt != "second prompt" {
-		t.Fatalf("second turn system prompt = %q, want %q", convertedSecondTurnSystemPrompt, "second prompt")
+	if !convertedSecondTurnHasUpdate {
+		t.Fatalf("second turn transcript missing the appended system message")
 	}
 }
 
@@ -1014,7 +1021,7 @@ func TestAgentLoopStopsAfterTurnWhenShouldStopAfterTurnReturnsTrue(t *testing.T)
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 
 	steeringPolls := 0
 	followUpPolls := 0
@@ -1048,7 +1055,7 @@ func TestAgentLoopStopsAfterTurnWhenShouldStopAfterTurnReturnsTrue(t *testing.T)
 	}
 
 	llmCalls := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		llmCalls++
 		var assistant types.AssistantMessage
 		if llmCalls == 1 {
@@ -1131,11 +1138,11 @@ func TestAgentLoopStopsAfterToolBatchWhenEveryResultTerminates(t *testing.T) {
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
 	llmCalls := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		llmCalls++
 		assistant := createAssistantMessage([]types.Content{
 			types.NewToolCall("tool-1", "echo", map[string]any{"value": "hello"}),
@@ -1176,7 +1183,7 @@ func TestAgentLoopStopsAfterBlockedToolCallWhenBeforeToolCallTerminates(t *testi
 			}, nil
 		},
 	}
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{
 		Model:        createModel(),
 		ConvertToLlm: identityConverter,
@@ -1186,7 +1193,7 @@ func TestAgentLoopStopsAfterBlockedToolCallWhenBeforeToolCallTerminates(t *testi
 	}
 
 	llmCalls := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		llmCalls++
 		var assistant types.AssistantMessage
 		if llmCalls == 1 {
@@ -1242,7 +1249,7 @@ func TestAgentLoopContinuesAfterMixedBatchWithOneTerminatingBlockedCall(t *testi
 			}, nil
 		},
 	}
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{
 		Model:         createModel(),
 		ConvertToLlm:  identityConverter,
@@ -1257,7 +1264,7 @@ func TestAgentLoopContinuesAfterMixedBatchWithOneTerminatingBlockedCall(t *testi
 	}
 
 	llmCalls := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		llmCalls++
 		var assistant types.AssistantMessage
 		if llmCalls == 1 {
@@ -1296,7 +1303,7 @@ func TestAgentLoopContinuesAfterParallelToolCallsWhenNotAllTerminate(t *testing.
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	config := AgentLoopConfig{
 		Model:         createModel(),
 		ConvertToLlm:  identityConverter,
@@ -1304,7 +1311,7 @@ func TestAgentLoopContinuesAfterParallelToolCallsWhenNotAllTerminate(t *testing.
 	}
 
 	callIndex := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		var assistant types.AssistantMessage
 		if callIndex == 0 {
 			assistant = createAssistantMessage([]types.Content{
@@ -1348,7 +1355,7 @@ func TestAgentLoopAllowsAfterToolCallToMarkBatchAsTerminating(t *testing.T) {
 		},
 	}
 
-	agentContext := AgentContext{SystemPrompt: "", Tools: []*AgentTool{tool}}
+	agentContext := AgentContext{Tools: []*AgentTool{tool}}
 	terminate := true
 	config := AgentLoopConfig{
 		Model:        createModel(),
@@ -1359,7 +1366,7 @@ func TestAgentLoopAllowsAfterToolCallToMarkBatchAsTerminating(t *testing.T) {
 	}
 
 	llmCalls := 0
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		llmCalls++
 		assistant := createAssistantMessage([]types.Content{
 			types.NewToolCall("tool-1", "echo", map[string]any{"value": "hello"}),
@@ -1378,10 +1385,12 @@ func TestAgentLoopAllowsAfterToolCallToMarkBatchAsTerminating(t *testing.T) {
 // ---- agentLoopContinue with AgentMessage ----
 
 func TestAgentLoopContinueThrowsWhenContextHasNoMessages(t *testing.T) {
-	agentContext := AgentContext{SystemPrompt: "You are helpful.", Tools: []*AgentTool{}}
+	agentContext := AgentContext{Messages: []AgentMessage{types.SystemMessage{
+		Role: types.RoleSystem, Content: types.SystemContent{String: "You are helpful."}, Timestamp: 1,
+	}}, Tools: []*AgentTool{}}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		t.Error("stream called unexpectedly")
 		return types.NewAssistantMessageEventStream()
 	}
@@ -1394,9 +1403,8 @@ func TestAgentLoopContinueThrowsWhenContextHasNoMessages(t *testing.T) {
 
 func TestAgentLoopContinueFromExistingContext(t *testing.T) {
 	agentContext := AgentContext{
-		SystemPrompt: "You are helpful.",
-		Messages:     []AgentMessage{createUserMessage("Hello")},
-		Tools:        []*AgentTool{},
+		Messages: []AgentMessage{createUserMessage("Hello")},
+		Tools:    []*AgentTool{},
 	}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 
@@ -1433,9 +1441,8 @@ func TestAgentLoopContinueAllowsCustomMessageTypesAsLastMessage(t *testing.T) {
 	custom := customMessage{Role: "custom", Text: "Hook content", Timestamp: time.Now().UnixMilli()}
 
 	agentContext := AgentContext{
-		SystemPrompt: "You are helpful.",
-		Messages:     []AgentMessage{custom},
-		Tools:        []*AgentTool{},
+		Messages: []AgentMessage{custom},
+		Tools:    []*AgentTool{},
 	}
 
 	config := AgentLoopConfig{
@@ -1470,9 +1477,8 @@ func TestAgentLoopContinueAllowsCustomMessageTypesAsLastMessage(t *testing.T) {
 
 func TestAgentLoopContinueRejectsAssistantLastMessage(t *testing.T) {
 	agentContext := AgentContext{
-		SystemPrompt: "You are helpful.",
-		Messages:     []AgentMessage{createAssistantMessage([]types.Content{types.NewTextContent("hi")}, "")},
-		Tools:        []*AgentTool{},
+		Messages: []AgentMessage{createAssistantMessage([]types.Content{types.NewTextContent("hi")}, "")},
+		Tools:    []*AgentTool{},
 	}
 	config := AgentLoopConfig{Model: createModel(), ConvertToLlm: identityConverter}
 

@@ -23,6 +23,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // AgentEventSink consumes agent events. pi's Promise<void> | void collapses
@@ -155,6 +156,7 @@ func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []Ag
 	var lastCompletedTurn *ShouldStopAfterTurnContext
 	// Check for steering messages at start (user may have typed while waiting)
 	var pendingMessages []AgentMessage
+	var preparedMessages []AgentMessage
 	if config.GetSteeringMessages != nil {
 		pendingMessages = config.GetSteeringMessages()
 	}
@@ -183,6 +185,9 @@ func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []Ag
 						if nextTurnSnapshot.Context != nil {
 							currentContext = nextTurnSnapshot.Context
 						}
+						// pi v0.86.0: messages appended before the next provider
+						// request, with normal lifecycle events.
+						preparedMessages = nextTurnSnapshot.Messages
 						if nextTurnSnapshot.Model != nil {
 							config.Model = nextTurnSnapshot.Model
 						}
@@ -205,16 +210,17 @@ func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []Ag
 				emit(AgentEvent{Type: AgentEventTurnStart})
 			}
 
-			// Process pending messages (inject before next assistant response)
-			if len(pendingMessages) > 0 {
-				for _, message := range pendingMessages {
-					emit(AgentEvent{Type: AgentEventMessageStart, Message: message})
-					emit(AgentEvent{Type: AgentEventMessageEnd, Message: message})
-					currentContext.Messages = append(currentContext.Messages, message)
-					newMessages = append(newMessages, message)
-				}
-				pendingMessages = nil
+			// Process prepared and queued messages before the next assistant
+			// response. Tool loadout deltas against the committed transcript
+			// become system-message declarations here (pi: declareToolChanges).
+			for _, message := range declareToolChanges(currentContext, append(append([]AgentMessage(nil), preparedMessages...), pendingMessages...)) {
+				emit(AgentEvent{Type: AgentEventMessageStart, Message: message})
+				emit(AgentEvent{Type: AgentEventMessageEnd, Message: message})
+				currentContext.Messages = append(currentContext.Messages, message)
+				newMessages = append(newMessages, message)
 			}
+			preparedMessages = nil
+			pendingMessages = nil
 
 			// Stream assistant response
 			message := streamAssistantResponse(ctx, currentContext, config, emit, streamFunction)
@@ -308,21 +314,10 @@ func streamAssistantResponse(ctx context.Context, agentContext *AgentContext, co
 	// Convert to LLM-compatible messages (AgentMessage[] → Message[])
 	llmMessages := config.ConvertToLlm(messages)
 
-	// Build LLM context. AgentTool embeds types.Tool; pi passes the
-	// AgentTool[] array where Tool[] is expected via structural typing, so pig
-	// flattens the wrapper (no logic change).
-	var llmTools []types.Tool
-	if agentContext.Tools != nil {
-		llmTools = make([]types.Tool, len(agentContext.Tools))
-		for index, tool := range agentContext.Tools {
-			llmTools[index] = tool.Tool
-		}
-	}
-	llmContext := &types.Context{
-		SystemPrompt: agentContext.SystemPrompt,
-		Messages:     llmMessages,
-		Tools:        llmTools,
-	}
+	// Build the normalized transcript: the prompt and tool declarations are
+	// carried by the transcript's system messages, never by context fields
+	// (pi: normalizeContext({ messages: llmMessages })).
+	llmContext := utils.NormalizeContext(&types.Context{Messages: llmMessages})
 
 	// Resolve API key (important for expiring tokens)
 	resolvedApiKey := config.APIKey
@@ -840,13 +835,116 @@ func createToolResultMessage(finalized *finalizedToolCallOutcome) types.ToolResu
 		IsError:    finalized.isError,
 		Timestamp:  time.Now().UnixMilli(),
 	}
-	if len(finalized.result.AddedToolNames) > 0 {
-		toolResultMessage.AddedToolNames = finalized.result.AddedToolNames
-	}
 	return toolResultMessage
 }
 
 func emitToolResultMessage(toolResultMessage *types.ToolResultMessage, emit AgentEventSink) {
 	emit(AgentEvent{Type: AgentEventMessageStart, Message: *toolResultMessage})
 	emit(AgentEvent{Type: AgentEventMessageEnd, Message: *toolResultMessage})
+}
+
+// noToolChanges is the empty delta used to strip a pending system message's
+// tool fields before diffing (pi: NO_CHANGES).
+var noToolChanges = utils.ToolStateChanges{
+	ToolsAdded:   []types.Tool{},
+	ToolsRemoved: []types.ToolReference{},
+}
+
+// declareToolChanges declares tool loadout changes to the model.
+//
+// context.Tools is what the runtime can execute; the transcript's system
+// messages declare what the model may call. Before each request the
+// difference becomes toolsAdded and toolsRemoved on a system message. When a
+// pending system message exists, its tool fields are treated as intent and
+// replaced with the delta between the committed transcript and the
+// executable set, so replay always yields exactly context.Tools. Otherwise a
+// new system message is inserted before the first non-system pending message
+// (pi: declareToolChanges).
+func declareToolChanges(agentContext *AgentContext, pendingMessages []AgentMessage) []AgentMessage {
+	systemIndex := -1
+	for i := len(pendingMessages) - 1; i >= 0; i-- {
+		if pendingMessages[i].MessageRole() == types.RoleSystem {
+			systemIndex = i
+			break
+		}
+	}
+	var pending *types.SystemMessage
+	if systemIndex >= 0 {
+		if m, ok := pendingMessages[systemIndex].(types.SystemMessage); ok {
+			pending = &m
+		} else if m, ok := pendingMessages[systemIndex].(*types.SystemMessage); ok {
+			pending = m
+		}
+	}
+	baseline := pendingMessages
+	if pending != nil {
+		baseline = make([]AgentMessage, len(pendingMessages))
+		copy(baseline, pendingMessages)
+		baseline[systemIndex] = withToolChanges(pending, noToolChanges)
+	}
+	changes := utils.GetToolStateChanges(
+		utils.GetCurrentTools(append(append([]AgentMessage(nil), agentContext.Messages...), baseline...)),
+		toToolDeclarations(agentContext.Tools),
+	)
+	unchanged := len(changes.ToolsAdded) == 0 && len(changes.ToolsRemoved) == 0
+
+	if pending != nil {
+		// Keep the caller's message object when it already declares no tool
+		// changes.
+		if unchanged && len(pending.ToolsAdded) == 0 && len(pending.ToolsRemoved) == 0 {
+			return pendingMessages
+		}
+		out := make([]AgentMessage, len(baseline))
+		copy(out, baseline)
+		out[systemIndex] = withToolChanges(pending, changes)
+		return out
+	}
+	if unchanged {
+		return pendingMessages
+	}
+	update := withToolChanges(&types.SystemMessage{
+		Role:      types.RoleSystem,
+		Timestamp: time.Now().UnixMilli(),
+	}, changes)
+	insertIndex := -1
+	for i, message := range pendingMessages {
+		if message.MessageRole() != types.RoleSystem {
+			insertIndex = i
+			break
+		}
+	}
+	if insertIndex == -1 {
+		insertIndex = len(pendingMessages)
+	}
+	out := make([]AgentMessage, 0, len(pendingMessages)+1)
+	out = append(out, pendingMessages[:insertIndex]...)
+	out = append(out, update)
+	out = append(out, pendingMessages[insertIndex:]...)
+	return out
+}
+
+// withToolChanges copies a system message with its tool fields replaced by
+// changes; empty lists omit the field (pi: withToolChanges).
+func withToolChanges(message *types.SystemMessage, changes utils.ToolStateChanges) *types.SystemMessage {
+	out := *message
+	out.ToolsAdded = nil
+	out.ToolsRemoved = nil
+	if len(changes.ToolsAdded) > 0 {
+		out.ToolsAdded = changes.ToolsAdded
+	}
+	if len(changes.ToolsRemoved) > 0 {
+		out.ToolsRemoved = changes.ToolsRemoved
+	}
+	return &out
+}
+
+// toToolDeclarations flattens AgentTool into declaration-shaped types.Tool
+// values (AgentTool embeds types.Tool; pi maps tools through
+// toToolDeclaration before comparison).
+func toToolDeclarations(tools []*AgentTool) []types.Tool {
+	out := make([]types.Tool, 0, len(tools))
+	for _, tool := range tools {
+		out = append(out, utils.ToToolDeclaration(tool.Tool))
+	}
+	return out
 }

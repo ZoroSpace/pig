@@ -232,7 +232,10 @@ func generateModels(ctx context.Context) error {
 		applyStrictToolCompatMetadata(model)
 		applyOpenAIGrammarToolCompatMetadata(model)
 		applyOpenAIToolSearchMetadata(model)
+		applyOpenAICompletionsTranscriptMetadata(model)
+		applyOpenAIResponsesTranscriptMetadata(model)
 		applyOpenAIExplicitPromptCacheMetadata(model)
+		applyPromptCacheMetadata(model)
 	}
 	applyAnthropicAllowedFallbackModelMetadata(filterAnthropicFallback(allModels))
 
@@ -283,21 +286,25 @@ func deepseekCompat() *ai.OpenAICompletionsCompat {
 	}
 }
 
-// deepseekV4Models is pi's hardcoded DeepSeek V4 Flash / Pro catalog.
+// deepseekV4Models is pi's hardcoded DeepSeek V4.1 Flash / V4 Pro catalog
+// (renamed from DeepSeek V4 Flash in v0.86.0: "update DeepSeek Flash
+// catalog"; DeepSeek also offers time-based off-peak rates, which the cost
+// schema cannot represent yet).
 func deepseekV4Models() []*ai.Model {
 	return []*ai.Model{
 		{
-			ID:            "deepseek-v4-flash",
-			Name:          "DeepSeek V4 Flash",
-			API:           ai.ApiOpenAICompletions,
-			BaseURL:       "https://api.deepseek.com",
-			Provider:      ai.ProviderDeepSeek,
-			Reasoning:     true,
-			Input:         []ai.ModelInput{ai.ModelInputText},
-			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 0.14, Output: 0.28, CacheRead: 0.0028, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     384000,
-			Compat:        deepseekCompat(),
+			ID:               "deepseek-flash",
+			Name:             "DeepSeek V4.1 Flash",
+			API:              ai.ApiOpenAICompletions,
+			BaseURL:          "https://api.deepseek.com",
+			Provider:         ai.ProviderDeepSeek,
+			Reasoning:        true,
+			ThinkingLevelMap: func() ai.ThinkingLevelMap { m := cloneThinkingLevelMap(deepseekV4FlashThinkingLevelMap); return m }(),
+			Input:            []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:             ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
+			ContextWindow:    1000000,
+			MaxTokens:        384000,
+			Compat:           deepseekCompat(),
 		},
 		{
 			ID:            "deepseek-v4-pro",
@@ -307,7 +314,7 @@ func deepseekV4Models() []*ai.Model {
 			Provider:      ai.ProviderDeepSeek,
 			Reasoning:     true,
 			Input:         []ai.ModelInput{ai.ModelInputText},
-			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 0.435, Output: 0.87, CacheRead: 0.003625, CacheWrite: 0}},
+			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 1.32, Output: 3.96, CacheRead: 0.044, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     384000,
 			Compat:        deepseekCompat(),

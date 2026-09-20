@@ -15,6 +15,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // codexE2EAccessToken resolves the stored openai-codex OAuth access token
@@ -65,10 +66,10 @@ func TestOpenAICodexCacheAffinityE2E(t *testing.T) {
 		model := &base
 		sessionID := "0195d6e4-4cf9-7f44-a2d8-f8f7f49ee9d3"
 
-		llmContext := &types.Context{
+		llmContext := utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a helpful assistant. Reply exactly as requested.",
 			Messages:     []types.Message{responsesUserMessage("Reply with exactly: cache affinity e2e success")},
-		}
+		})
 		options := &OpenAICodexResponsesOptions{}
 		options.APIKey = codexToken
 		options.SessionID = sessionID

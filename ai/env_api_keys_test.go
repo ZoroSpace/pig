@@ -171,11 +171,11 @@ type envKeyCaptureStreams struct {
 	captured *SimpleStreamOptions
 }
 
-func (s *envKeyCaptureStreams) Stream(ctx context.Context, model *Model, llmContext *Context, options *StreamOptions) *AssistantMessageEventStream {
+func (s *envKeyCaptureStreams) Stream(ctx context.Context, model *Model, llmContext *TranscriptContext, options *StreamOptions) *AssistantMessageEventStream {
 	return NewAssistantMessageEventStream()
 }
 
-func (s *envKeyCaptureStreams) StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *SimpleStreamOptions) *AssistantMessageEventStream {
+func (s *envKeyCaptureStreams) StreamSimple(ctx context.Context, model *Model, llmContext *TranscriptContext, options *SimpleStreamOptions) *AssistantMessageEventStream {
 	s.mu.Lock()
 	s.captured = options
 	s.mu.Unlock()

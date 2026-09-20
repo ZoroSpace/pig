@@ -16,6 +16,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 type anthropicTestEvent struct {
@@ -151,7 +152,7 @@ func anthropicTestModel(id string, provider types.ProviderID, compat *types.Anth
 
 // runAnthropicStream drives a stream to completion and returns the final
 // message (pi: stream(...).result()).
-func runAnthropicStream(t *testing.T, model *types.Model, llmContext *types.Context, options *AnthropicOptions) types.AssistantMessage {
+func runAnthropicStream(t *testing.T, model *types.Model, llmContext *types.TranscriptContext, options *AnthropicOptions) types.AssistantMessage {
 	t.Helper()
 	stream := streamAnthropicMessages(context.Background(), model, llmContext, options)
 	result := stream.Result()
@@ -170,7 +171,7 @@ func containsGoroutinePanic(message string) bool {
 // request then fails against the unreachable base URL (pi: the PayloadCaptured
 // throw in onPayload — pig's OnPayload cannot throw, so the unreachable
 // 127.0.0.1:9 base URL fails the request after capture instead).
-func captureAnthropicPayload(t *testing.T, model *types.Model, llmContext *types.Context, options *AnthropicOptions, mutate func(options *AnthropicOptions)) map[string]any {
+func captureAnthropicPayload(t *testing.T, model *types.Model, llmContext *types.TranscriptContext, options *AnthropicOptions, mutate func(options *AnthropicOptions)) map[string]any {
 	t.Helper()
 	var captured map[string]any
 	options.APIKey = "fake-key"
@@ -236,7 +237,7 @@ func TestAnthropicSSEParsingFallbackAfterOutput(t *testing.T) {
 	}
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(events, &captured)
-	result := runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}, options)
+	result := runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}), options)
 
 	if result.StopReason != types.StopReasonError {
 		t.Errorf("stopReason = %q, want error", result.StopReason)
@@ -264,7 +265,7 @@ func TestAnthropicSSEParsingForcesStreamingAfterOnPayloadReplacement(t *testing.
 		}
 		return nil
 	}
-	runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}, options)
+	runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}), options)
 
 	streaming, _ := captured.body["stream"].(bool)
 	if !streaming {
@@ -279,7 +280,7 @@ func TestAnthropicSSEParsingOmitsInterleavedThinkingBetaWhenDisabled(t *testing.
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(minimalAnthropicEvents, &captured)
 	options.ThinkingEnabled = lo.ToPtr(false)
-	runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}, options)
+	runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}), options)
 
 	betas := betasFromBody(captured.body)
 	for _, beta := range betas {
@@ -296,7 +297,7 @@ func TestAnthropicSSEParsingPassesManagedBetaFeatures(t *testing.T) {
 	})
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(minimalAnthropicEvents, &captured)
-	result := runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}, options)
+	result := runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}), options)
 
 	if result.StopReason != types.StopReasonStop {
 		t.Errorf("stopReason = %q, want stop", result.StopReason)
@@ -359,7 +360,7 @@ func TestAnthropicSSEParsingInputTransformationsFromFinalEvent(t *testing.T) {
 
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(events, &captured)
-	result := runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}, options)
+	result := runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}}}), options)
 
 	if len(result.Diagnostics) != 1 {
 		t.Fatalf("diagnostics = %#v, want exactly one entry", result.Diagnostics)
@@ -424,7 +425,7 @@ func TestAnthropicSSEParsingRepairsMalformedJSON(t *testing.T) {
 		{event: "message_stop", data: mustJSON(map[string]any{"type": "message_stop"})},
 	}
 
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Use the edit tool."}, Timestamp: 1}},
 		Tools: []types.Tool{
 			{
@@ -433,7 +434,7 @@ func TestAnthropicSSEParsingRepairsMalformedJSON(t *testing.T) {
 				Parameters:  json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"},"text":{"type":"string"}},"required":["path","text"]}`),
 			},
 		},
-	}
+	})
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(events, &captured)
 	result := runAnthropicStream(t, model, llmContext, options)
@@ -540,7 +541,7 @@ func TestAnthropicSSEParsingPreservesContentBlockStartContent(t *testing.T) {
 
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(events, &captured)
-	result := runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Say hello."}, Timestamp: 1}}}, options)
+	result := runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Say hello."}, Timestamp: 1}}}), options)
 
 	if len(result.Content) != 2 {
 		t.Fatalf("content = %#v, want 2 blocks", result.Content)
@@ -595,7 +596,7 @@ func TestAnthropicSSEParsingRefusalStopDetails(t *testing.T) {
 
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(events, &captured)
-	result := runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "blocked request"}, Timestamp: 1}}}, options)
+	result := runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "blocked request"}, Timestamp: 1}}}), options)
 
 	if result.StopReason != types.StopReasonError {
 		t.Errorf("stopReason = %q, want error", result.StopReason)
@@ -644,7 +645,7 @@ func TestAnthropicSSEParsingSensitiveStopReason(t *testing.T) {
 
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(events, &captured)
-	result := runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "blocked request"}, Timestamp: 1}}}, options)
+	result := runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "blocked request"}, Timestamp: 1}}}), options)
 
 	if result.StopReason != types.StopReasonError {
 		t.Errorf("stopReason = %q, want error", result.StopReason)
@@ -673,7 +674,7 @@ func TestAnthropicSSEParsingMessageDeltaWithoutUsage(t *testing.T) {
 
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(events, &captured)
-	result := runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Say hello."}, Timestamp: 1}}}, options)
+	result := runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Say hello."}, Timestamp: 1}}}), options)
 
 	if result.StopReason != types.StopReasonStop {
 		t.Errorf("stopReason = %q, want stop", result.StopReason)
@@ -704,7 +705,7 @@ func TestAnthropicSSEParsingIgnoresUnknownEventsAfterMessageStop(t *testing.T) {
 
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(events, &captured)
-	result := runAnthropicStream(t, model, &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Say hello."}, Timestamp: 1}}}, options)
+	result := runAnthropicStream(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Say hello."}, Timestamp: 1}}}), options)
 
 	if result.StopReason != types.StopReasonStop {
 		t.Errorf("stopReason = %q, want stop", result.StopReason)

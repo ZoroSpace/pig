@@ -735,7 +735,7 @@ func TestPersistedDefaultModelScoping(t *testing.T) {
 			t.Fatal(err)
 		}
 		agentInstance, err := agent.NewAgent(agent.AgentOptions{
-			StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 				stream := types.NewAssistantMessageEventStream()
 				stream.End()
 				return stream

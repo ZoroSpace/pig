@@ -25,7 +25,7 @@ func createAutoCompactionQueueSession(t *testing.T) (*AgentSession, *SessionMana
 	t.Helper()
 	session, sessionManager, settingsManager := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey: true,
-		StreamFn:  ai.StreamSimple,
+		StreamFn:  defaultStreamFn,
 	})
 	return session, sessionManager, settingsManager
 }
@@ -64,7 +64,7 @@ func TestAutoCompactionQueueResumesAfterThresholdCompactionWithAgentQueuedMessag
 		t.Fatal(err)
 	}
 	session.Agent.SetMessages(sessionManager.BuildSessionContext().Messages)
-	session.Agent.StreamFunction = func(ctx context.Context, summaryModel *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	session.Agent.StreamFunction = func(ctx context.Context, summaryModel *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		return compactingStream(summaryModel)
 	}
 

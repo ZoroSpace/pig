@@ -42,7 +42,8 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/ai/types"
-	"github.com/ZoroSpace/pig/utils"
+	"github.com/ZoroSpace/pig/ai/utils"
+	pigutils "github.com/ZoroSpace/pig/utils"
 )
 
 // defaultConvertToLlm is the default convertToLlm: pass standard messages
@@ -255,6 +256,18 @@ func NewAgent(options AgentOptions) (*Agent, error) {
 		agent.state.Tools = append([]AgentTool(nil), initial.Tools...)
 		agent.state.Messages = append([]AgentMessage(nil), initial.Messages...)
 	}
+	// v0.86.0: systemPrompt and tools become the leading system message
+	// unless messages already starts with one; the state prompt replays from
+	// the transcript.
+	var initialTools []types.Tool
+	for i := range agent.state.Tools {
+		initialTools = append(initialTools, utils.ToToolDeclaration(agent.state.Tools[i].Tool))
+	}
+	if initialMessage := utils.CreateInitialSystemMessage(agent.state.SystemPrompt, initialTools); initialMessage != nil &&
+		(len(agent.state.Messages) == 0 || agent.state.Messages[0].MessageRole() != types.RoleSystem) {
+		agent.state.Messages = append([]AgentMessage{initialMessage}, agent.state.Messages...)
+	}
+	agent.state.SystemPrompt = utils.GetCurrentSystemPrompt(agent.state.Messages)
 
 	agent.ConvertToLlm = options.ConvertToLlm
 	if agent.ConvertToLlm == nil {
@@ -319,8 +332,8 @@ func (a *Agent) Subscribe(listener func(ctx context.Context, event AgentEvent)) 
 		defer a.mu.Unlock()
 		for index, registered := range a.listeners {
 			// pi: Set.delete on the listener function; Go funcs aren't
-			// comparable, so identity goes through utils.SameFuncValue.
-			if utils.SameFuncValue(registered, listener) {
+			// comparable, so identity goes through pigutils.SameFuncValue.
+			if pigutils.SameFuncValue(registered, listener) {
 				a.listeners = append(a.listeners[:index], a.listeners[index+1:]...)
 				break
 			}
@@ -455,7 +468,14 @@ func (a *Agent) Reset() error {
 		return errors.New("Agent is already processing. Wait for completion before resetting.")
 	}
 
-	a.state.Messages = []AgentMessage{}
+	// v0.86.0: clear conversation state while retaining the replayed
+	// prompt/tool baseline.
+	if baseline := utils.GetCurrentSystemMessage(a.state.Messages); baseline != nil {
+		a.state.Messages = []AgentMessage{baseline}
+	} else {
+		a.state.Messages = []AgentMessage{}
+	}
+	a.state.SystemPrompt = utils.GetCurrentSystemPrompt(a.state.Messages)
 	a.state.IsStreaming = false
 	a.state.StreamingMessage = nil
 	a.state.PendingToolCalls = map[string]bool{}
@@ -506,7 +526,9 @@ func (a *Agent) Continue(ctx context.Context) error {
 	a.mu.Unlock()
 	lastMessage := a.lastMessage()
 
-	if lastMessage == nil {
+	// v0.86.0: a transcript consisting only of system messages (the
+	// prompt/tool baseline) has nothing to continue from.
+	if lastMessage == nil || a.messagesAllSystem() {
 		return errors.New("No messages to continue from")
 	}
 
@@ -536,6 +558,20 @@ func (a *Agent) lastMessage() AgentMessage {
 		return nil
 	}
 	return a.state.Messages[len(a.state.Messages)-1]
+}
+
+// messagesAllSystem reports whether every transcript message is a system
+// message (pi: messages.every((message) => message.role === "system"), the
+// v0.86.0 continue guard).
+func (a *Agent) messagesAllSystem() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, message := range a.state.Messages {
+		if message.MessageRole() != types.RoleSystem {
+			return false
+		}
+	}
+	return len(a.state.Messages) > 0
 }
 
 func (a *Agent) normalizePromptInput(input string, images []types.ImageContent) ([]AgentMessage, error) {
@@ -587,9 +623,8 @@ func (a *Agent) createContextSnapshot() AgentContext {
 		tools[index] = &a.state.Tools[index]
 	}
 	return AgentContext{
-		SystemPrompt: a.state.SystemPrompt,
-		Messages:     append([]AgentMessage(nil), a.state.Messages...),
-		Tools:        tools,
+		Messages: append([]AgentMessage(nil), a.state.Messages...),
+		Tools:    tools,
 	}
 }
 

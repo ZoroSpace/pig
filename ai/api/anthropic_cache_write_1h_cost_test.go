@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // cacheWrite1hEvents builds a stream whose usage carries a cache_creation
@@ -38,7 +39,7 @@ func TestAnthropicCacheWrite1hCost(t *testing.T) {
 	// claude-opus-4-8: input 5, cacheWrite (5m) 6.25 per Mtok. 1h write =
 	// 2x input = 10.
 	model := catalogAnthropicModel(t, types.ProviderAnthropic, "claude-opus-4-8")
-	llmContext := &types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1}}}
+	llmContext := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1}}})
 
 	t.Run("prices the 1h portion at 2x input and the rest at the 5m rate", func(t *testing.T) {
 		options := anthropicTestOptions(cacheWrite1hEvents(map[string]any{"ephemeral_5m_input_tokens": 600000, "ephemeral_1h_input_tokens": 400000}), nil)

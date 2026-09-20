@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/ai/utils"
 	"github.com/samber/lo"
@@ -58,17 +59,16 @@ const (
 	googleFinishReasonLanguage               = "LANGUAGE"
 	googleFinishReasonMalformedFunctionCall  = "MALFORMED_FUNCTION_CALL"
 	googleFinishReasonUnexpectedToolCall     = "UNEXPECTED_TOOL_CALL"
+	googleFinishReasonTooManyToolCalls       = "TOO_MANY_TOOL_CALLS"
 	googleFinishReasonNoImage                = "NO_IMAGE"
 )
 
 // ResolveGoogleThinkingLevel resolves a supported pi level or model-specific
 // Google mapping to a standard Google level (pi: resolveGoogleThinkingLevel).
-// The returned level is one of minimal/low/medium/high.
+// The returned level is one of minimal/low/medium/high. The "off" level is
+// handled by the callers (v0.86.0: they disable thinking explicitly instead
+// of silently mapping off → high).
 func ResolveGoogleThinkingLevel(model *types.Model, level types.ModelThinkingLevel) (types.ModelThinkingLevel, error) {
-	if level == types.ModelThinkingOff {
-		return types.ModelThinkingHigh, nil
-	}
-
 	mapped := ""
 	if model.ThinkingLevelMap != nil {
 		if value, ok := model.ThinkingLevelMap[level]; ok && value != nil {
@@ -328,12 +328,70 @@ func googleNormalizeToolCallID(model *types.Model) NormalizeToolCallIDFn {
 
 var googleToolCallIDSanitizer = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
 
+// UsesGoogleThinkingLevel reports whether this model uses Gemini's discrete
+// thinkingLevel control instead of the token-based thinkingBudget control.
+// Supported levels come from the model's thinkingLevelMap; this only selects
+// the Google wire format (pi: usesGoogleThinkingLevel).
+func UsesGoogleThinkingLevel(model *types.Model) bool {
+	id := strings.ToLower(model.ID)
+	// Match Gemini 3 Pro/Flash IDs with or without a minor version, such as
+	// gemini-3-flash-preview, gemini-3.1-pro-preview, and gemini-3.8-flash.
+	if regexp.MustCompile(`gemini-3(?:\.\d+)?-(?:pro|flash)`).MatchString(id) {
+		return true
+	}
+	if id == "gemini-flash-latest" || id == "gemini-flash-lite-latest" {
+		return true
+	}
+	// Match both hosted Gemma 4 naming forms: gemma-4-* and gemma4-*.
+	return regexp.MustCompile(`gemma-?4`).MatchString(id)
+}
+
+// ToGoogleThinkingLevel maps a resolved pi level to the Google API level
+// (pi: toGoogleThinkingLevel).
+func ToGoogleThinkingLevel(level types.ModelThinkingLevel) GoogleApiThinkingLevel {
+	switch level {
+	case types.ModelThinkingMinimal:
+		return GoogleThinkingLevelMinimal
+	case types.ModelThinkingLow:
+		return GoogleThinkingLevelLow
+	case types.ModelThinkingMedium:
+		return GoogleThinkingLevelMedium
+	case types.ModelThinkingHigh:
+		return GoogleThinkingLevelHigh
+	}
+	panic(fmt.Sprintf("unhandled resolved Google thinking level: %s", level))
+}
+
+// GetDisabledGoogleThinkingConfig builds the thinking config used when
+// thinking is disabled: level-based models fall back to the lowest supported
+// level from their thinkingLevelMap; budget-based models disable via
+// thinkingBudget 0 (pi: getDisabledGoogleThinkingConfig, v0.86.0 —
+// "avoid unsupported Gemini thinking levels").
+func GetDisabledGoogleThinkingConfig(model *types.Model) *googleThinkingConfig {
+	if !UsesGoogleThinkingLevel(model) {
+		return &googleThinkingConfig{ThinkingBudget: lo.ToPtr(int64(0))}
+	}
+	fallback := ai.ClampThinkingLevel(model, types.ModelThinkingOff)
+	if fallback == types.ModelThinkingOff {
+		return &googleThinkingConfig{ThinkingBudget: lo.ToPtr(int64(0))}
+	}
+	resolvedLevel, err := ResolveGoogleThinkingLevel(model, fallback)
+	if err != nil {
+		return &googleThinkingConfig{ThinkingBudget: lo.ToPtr(int64(0))}
+	}
+	apiLevel := ToGoogleThinkingLevel(resolvedLevel)
+	return &googleThinkingConfig{ThinkingLevel: apiLevel}
+}
+
 // ConvertGoogleMessages converts internal messages to Gemini Content[] format
 // (pi: convertMessages).
-func ConvertGoogleMessages(model *types.Model, llmContext *types.Context) []googleContent {
+func ConvertGoogleMessages(model *types.Model, llmContext *types.TranscriptContext) []googleContent {
 	var contents []googleContent
 
-	transformedMessages := TransformMessages(llmContext.Messages, model, googleNormalizeToolCallID(model))
+	// Gemini has no mid-conversation system messages; the leading prompt is
+	// sent as systemInstruction.
+	conversation := utils.WithoutInitialSystemMessage(utils.CollapseSystemMessages(llmContext).Messages)
+	transformedMessages := TransformMessages(conversation, model, googleNormalizeToolCallID(model))
 
 	for _, msg := range transformedMessages {
 		switch message := msg.(type) {
@@ -671,6 +729,7 @@ func MapGoogleStopReason(reason string) (types.StopReason, error) {
 		googleFinishReasonLanguage,
 		googleFinishReasonMalformedFunctionCall,
 		googleFinishReasonUnexpectedToolCall,
+		googleFinishReasonTooManyToolCalls,
 		googleFinishReasonNoImage:
 		return types.StopReasonError, nil
 	default:

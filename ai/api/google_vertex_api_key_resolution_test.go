@@ -59,11 +59,11 @@ func vertexOKChunks() []*googleGenerateContentResponse {
 // streamGoogleVertex call) and drains it to the result.
 func runVertexStream(t *testing.T, model *types.Model, options *GoogleVertexOptions) types.AssistantMessage {
 	t.Helper()
-	stream := streamGoogleVertex(context.Background(), model, &types.Context{
+	stream := streamGoogleVertex(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hello"}, Timestamp: time.Now().UnixMilli()},
 		},
-	}, options)
+	}), options)
 	_, result := collectResponsesEvents(t, stream)
 	return result
 }

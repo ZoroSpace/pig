@@ -51,6 +51,7 @@ var nonRetryableProviderLimitErrorPattern = buildProviderErrorPattern([]string{
 var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	// Generic provider load, HTTP status, and server-side transient failures.
 	"overloaded",
+	"currently experiencing high demand",
 	"rate.?limit",
 	"too many requests",
 	"429",
@@ -58,6 +59,7 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	"502",
 	"503",
 	"504",
+	"520",
 	"524",
 	"service.?unavailable",
 	"server.?error",
@@ -115,10 +117,11 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 })
 
 // RetryPolicy is a retry policy: bounded attempts with exponential backoff
-// (`baseDelayMs * 2^(attempt-1)`). Matches `settings.retry` (`enabled`,
-// `maxRetries`, `baseDelayMs`) in coding-agent; kept here so the classifier
-// and the policy-driven retry loop live together and stay reusable by the SDK
-// and other callers (pi: interface RetryPolicy).
+// (`baseDelayMs * 2^(attempt-1)`). MaxAgentDelayMs caps each computed delay
+// and defaults to 60 seconds. Matches `settings.retry` (`enabled`,
+// `maxRetries`, `baseDelayMs`, `maxAgentDelayMs`) in coding-agent; kept here
+// so the classifier and the policy-driven retry loop live together and stay
+// reusable by the SDK and other callers (pi: interface RetryPolicy).
 type RetryPolicy struct {
 	Enabled bool
 	// MaxRetries is the max retry attempts (0 = no retries). The initial call
@@ -127,6 +130,36 @@ type RetryPolicy struct {
 	// BaseDelayMs is the base delay in ms. Per-attempt delay is
 	// `baseDelayMs * 2^(attempt-1)` before jitter.
 	BaseDelayMs int64
+	// MaxAgentDelayMs is an optional cap for agent-level retry delays in ms.
+	// Defaults to 60 seconds (pi: maxAgentDelayMs).
+	MaxAgentDelayMs *int64
+}
+
+// DefaultMaxAgentRetryDelayMs is the default cap for agent-level retry
+// delays (pi: DEFAULT_MAX_AGENT_RETRY_DELAY_MS).
+var DefaultMaxAgentRetryDelayMs int64 = 60_000
+
+// RetryDelayMs computes the per-attempt delay with the agent-level cap (pi:
+// retryDelayMs).
+func RetryDelayMs(policy *RetryPolicy, attempt int) int64 {
+	delay := policy.BaseDelayMs
+	for i := 1; i < attempt; i++ {
+		// Number.isSafeInteger overflow guard: clamp instead of wrapping.
+		next := delay * 2
+		if next < delay || next > (1<<62) {
+			delay = 1 << 62
+			break
+		}
+		delay = next
+	}
+	capMs := policy.MaxAgentDelayMs
+	if capMs == nil {
+		capMs = &DefaultMaxAgentRetryDelayMs
+	}
+	if delay > *capMs {
+		return *capMs
+	}
+	return delay
 }
 
 // RetryCallbacks are optional callbacks emitted by RetryAssistantCall around
@@ -217,7 +250,7 @@ func RetryAssistantCall(ctx context.Context, produce func() (*types.AssistantMes
 			lastRetry.errorMessage = "Unknown error"
 		}
 		lastRetry.exists = true
-		delayMs := policy.BaseDelayMs * int64(1<<uint(attempt-1))
+		delayMs := RetryDelayMs(policy, attempt)
 		if callbacks != nil && callbacks.OnRetryScheduled != nil {
 			callbacks.OnRetryScheduled(attempt, maxAttempts, delayMs, lastRetry.errorMessage)
 		}

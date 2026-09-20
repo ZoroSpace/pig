@@ -8,6 +8,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func temperatureTestModel(compat *types.AnthropicMessagesCompat) *types.Model {
@@ -88,10 +89,10 @@ func TestAnthropicTemperatureOmittedForCustomModelsWithCompatDisabled(t *testing
 	}
 }
 
-func temperatureTestContext() *types.Context {
-	return &types.Context{
+func temperatureTestContext() *types.TranscriptContext {
+	return utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}},
-	}
+	})
 }
 
 // temperatureOptions builds simple-stream options with a temperature (the

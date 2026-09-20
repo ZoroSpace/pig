@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/samber/lo"
 	"io"
 	"net/http"
 	"strings"
@@ -76,7 +77,7 @@ func init() {
 // Stream dispatches one streaming request (pi: stream). ctx carries the
 // caller's cancellation; pi passes options.signal into the SDK request
 // options and the retry helper (pig: AbortSignal → context rule).
-func (OpenAIResponses) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (OpenAIResponses) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	opts := &OpenAIResponsesOptions{}
 	if options != nil {
 		opts.StreamOptions = *options
@@ -85,7 +86,7 @@ func (OpenAIResponses) Stream(ctx context.Context, model *types.Model, llmContex
 }
 
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
-func (OpenAIResponses) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (OpenAIResponses) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	if _, err := getClientAPIKey(string(model.Provider), options.APIKey, options.Headers); err != nil {
 		return immediateErrorStream(model, err)
 	}
@@ -118,6 +119,7 @@ func detectSessionAffinityFormat(model *types.Model) types.SessionAffinityFormat
 // (pi: getCompat's Required<...> return).
 type resolvedOpenAIResponsesCompat struct {
 	supportsDeveloperRole           bool
+	supportsMidConvoSystemMessages  bool
 	sessionAffinityFormat           types.SessionAffinityFormat
 	supportsLongCacheRetention      bool
 	supportsStrictMode              bool
@@ -148,6 +150,9 @@ func getResponsesCompat(model *types.Model) resolvedOpenAIResponsesCompat {
 	}
 	if compat.SupportsDeveloperRole != nil {
 		resolved.supportsDeveloperRole = *compat.SupportsDeveloperRole
+	}
+	if compat.SupportsMidConvoSystemMessages != nil {
+		resolved.supportsMidConvoSystemMessages = *compat.SupportsMidConvoSystemMessages
 	}
 	if compat.SessionAffinityFormat != nil {
 		resolved.sessionAffinityFormat = *compat.SessionAffinityFormat
@@ -200,18 +205,24 @@ func getResponsesPromptCacheOptions(compat resolvedOpenAIResponsesCompat, cacheR
 	return nil
 }
 
-// formatOpenAIResponsesError renders a provider failure (pi:
-// formatOpenAIResponsesError).
-func formatOpenAIResponsesError(err error) string {
-	return utils.FormatProviderError(utils.NormalizeProviderError(err), "OpenAI API error")
+// formatOpenAIResponsesError renders a provider failure, scoped to the
+// resolved provider id (pi v0.86.0: `${model.provider === "openai" ? "OpenAI"
+// : model.provider} API error` — "identify Responses error providers").
+func formatOpenAIResponsesError(err error, model *types.Model) string {
+	providerLabel := string(model.Provider)
+	if model.Provider == "openai" {
+		providerLabel = "OpenAI"
+	}
+	return utils.FormatProviderError(utils.NormalizeProviderError(err), providerLabel+" API error")
 }
 
 // streamOpenAIResponses is the adapter's core stream implementation (pi: the
 // stream StreamFunction body). ctx carries the caller's cancellation (pi:
 // options.signal — the SDK request options signal, the post-stream
 // signal.aborted check, and the catch path's aborted-vs-error decision).
-func streamOpenAIResponses(ctx context.Context, model *types.Model, llmContext *types.Context, options *OpenAIResponsesOptions) *types.AssistantMessageEventStream {
+func streamOpenAIResponses(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *OpenAIResponsesOptions) *types.AssistantMessageEventStream {
 	stream := types.NewAssistantMessageEventStream()
+	normalizedContext := utils.ResolveTranscript(llmContext, getResponsesCompat(model).supportsMidConvoSystemMessages)
 
 	go func() {
 		output := &types.AssistantMessage{
@@ -249,7 +260,7 @@ func streamOpenAIResponses(ctx context.Context, model *types.Model, llmContext *
 			} else {
 				output.StopReason = types.StopReasonError
 			}
-			output.ErrorMessage = formatOpenAIResponsesError(err)
+			output.ErrorMessage = formatOpenAIResponsesError(err, model)
 			stream.Push(types.AssistantMessageEvent{Type: types.EventError, Reason: output.StopReason, Message: output})
 			stream.EndWith(*output)
 		}
@@ -276,9 +287,9 @@ func streamOpenAIResponses(ctx context.Context, model *types.Model, llmContext *
 				cacheSessionID = options.SessionID
 			}
 			compat := getResponsesCompat(model)
-			grammarToolInputProperties := CreateGrammarToolInputProperties(llmContext.Tools, compat.supportsOpenAIGrammarTools)
-			client := createResponsesClient(model, llmContext, apiKey, options.Headers, options.Fetch, cacheSessionID, compat)
-			params := buildResponsesParams(model, llmContext, options, compat, grammarToolInputProperties)
+			grammarToolInputProperties := CreateGrammarToolInputProperties(utils.GetDeclaredTools(normalizedContext.Messages), compat.supportsOpenAIGrammarTools)
+			client := createResponsesClient(model, normalizedContext, apiKey, options.Headers, options.Fetch, cacheSessionID, compat)
+			params := buildResponsesParams(model, normalizedContext, options, compat, grammarToolInputProperties)
 			if options.OnPayload != nil {
 				if next := options.OnPayload(params, model); next != nil {
 					if nextParams, ok := next.(map[string]any); ok {
@@ -400,7 +411,7 @@ type openAIResponsesClient struct {
 }
 
 // createResponsesClient builds the client (pi: createClient).
-func createResponsesClient(model *types.Model, llmContext *types.Context, apiKey string, optionsHeaders types.ProviderHeaders, fetch types.FetchFunction, sessionID string, compat resolvedOpenAIResponsesCompat) *openAIResponsesClient {
+func createResponsesClient(model *types.Model, llmContext *types.TranscriptContext, apiKey string, optionsHeaders types.ProviderHeaders, fetch types.FetchFunction, sessionID string, compat resolvedOpenAIResponsesCompat) *openAIResponsesClient {
 	headers := map[string]string{"User-Agent": utils.GetPiUserAgent()}
 	for name, value := range model.Headers {
 		headers[name] = value
@@ -496,19 +507,16 @@ func (c *openAIResponsesClient) createResponse(ctx context.Context, params map[s
 }
 
 // buildResponsesParams builds the Responses request body (pi: buildParams).
-func buildResponsesParams(model *types.Model, llmContext *types.Context, options *OpenAIResponsesOptions, compat resolvedOpenAIResponsesCompat, grammarToolInputProperties map[string]string) map[string]any {
-	deferredToolsMode := ""
-	if compat.supportsAdditionalTools {
-		deferredToolsMode = "additional-tools"
-	} else if compat.supportsToolSearch {
-		deferredToolsMode = "tool-search"
-	}
-	toolPlacement := utils.SplitDeferredTools(llmContext, deferredToolsMode != "", nil)
+func buildResponsesParams(model *types.Model, llmContext *types.TranscriptContext, options *OpenAIResponsesOptions, compat resolvedOpenAIResponsesCompat, grammarToolInputProperties map[string]string) map[string]any {
+	transcriptTools := utils.ResolveTranscriptTools(
+		llmContext.Messages,
+		compat.supportsAdditionalTools || compat.supportsToolSearch,
+	)
 	messages := ConvertResponsesMessages(model, llmContext, openAIResponsesToolCallProviders, &ConvertResponsesMessagesOptions{
-		GrammarToolInputProperties: grammarToolInputProperties,
-		DeferredTools:              toolPlacement.Deferred,
-		DeferredToolNames:          toolPlacement.DeferredNames,
-		DeferredToolsMode:          deferredToolsMode,
+		GrammarToolInputProperties:     grammarToolInputProperties,
+		SupportsMidConvoSystemMessages: lo.ToPtr(compat.supportsMidConvoSystemMessages),
+		SupportsAdditionalTools:        lo.ToPtr(compat.supportsAdditionalTools),
+		SupportsToolSearch:             lo.ToPtr(compat.supportsToolSearch),
 		ToolOptions: &ConvertResponsesToolsOptions{
 			SupportsStrictMode:         &compat.supportsStrictMode,
 			SupportsOpenAIGrammarTools: &compat.supportsOpenAIGrammarTools,
@@ -544,8 +552,8 @@ func buildResponsesParams(model *types.Model, llmContext *types.Context, options
 		params["service_tier"] = options.ServiceTier
 	}
 
-	if len(toolPlacement.Immediate) > 0 {
-		params["tools"] = ConvertResponsesTools(toolPlacement.Immediate, &ConvertResponsesToolsOptions{
+	if len(transcriptTools.RequestTools) > 0 {
+		params["tools"] = ConvertResponsesTools(transcriptTools.RequestTools, &ConvertResponsesToolsOptions{
 			SupportsStrictMode:         &compat.supportsStrictMode,
 			SupportsOpenAIGrammarTools: &compat.supportsOpenAIGrammarTools,
 		})

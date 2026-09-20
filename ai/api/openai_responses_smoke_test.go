@@ -17,6 +17,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func deepseekResponsesSmokeModel(t *testing.T) *types.Model {
@@ -43,10 +44,10 @@ func TestResponsesDeepSeekSmokeText(t *testing.T) {
 	options := &OpenAIResponsesOptions{}
 	options.APIKey = os.Getenv("DEEPSEEK_API_KEY")
 	options.MaxTokens = lo.ToPtr(int64(256))
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant. Reply exactly as requested.",
 		Messages:     []types.Message{responsesUserMessage("Reply with exactly: responses smoke ok")},
-	}
+	})
 	stream := streamOpenAIResponses(context.Background(), model, llmContext, options)
 	_, result := collectResponsesEvents(t, stream)
 	if result.StopReason != types.StopReasonStop {
@@ -64,10 +65,10 @@ func TestResponsesDeepSeekSmokeReasoning(t *testing.T) {
 	options.APIKey = os.Getenv("DEEPSEEK_API_KEY")
 	options.MaxTokens = lo.ToPtr(int64(512))
 	options.ReasoningEffort = "low"
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant. Think briefly, then answer.",
 		Messages:     []types.Message{responsesUserMessage("What is 2+2? Answer with the number only.")},
-	}
+	})
 	stream := streamOpenAIResponses(context.Background(), model, llmContext, options)
 	_, result := collectResponsesEvents(t, stream)
 	if result.StopReason != types.StopReasonStop {
@@ -91,7 +92,7 @@ func TestResponsesDeepSeekSmokeToolCall(t *testing.T) {
 	options.APIKey = os.Getenv("DEEPSEEK_API_KEY")
 	options.MaxTokens = lo.ToPtr(int64(256))
 	options.ToolChoice = "auto"
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant. Always use the provided tool.",
 		Messages:     []types.Message{responsesUserMessage("Use the double_number tool on 21.")},
 		Tools: []types.Tool{
@@ -101,7 +102,7 @@ func TestResponsesDeepSeekSmokeToolCall(t *testing.T) {
 				Parameters:  mustJSONRaw(`{"type":"object","properties":{"value":{"type":"number","description":"A number to double"}},"required":["value"]}`),
 			},
 		},
-	}
+	})
 	stream := streamOpenAIResponses(context.Background(), model, llmContext, options)
 	_, result := collectResponsesEvents(t, stream)
 	if result.StopReason != types.StopReasonToolUse {
@@ -128,7 +129,7 @@ func TestResponsesDeepSeekSmokeToolResultImages(t *testing.T) {
 	options.APIKey = os.Getenv("DEEPSEEK_API_KEY")
 	options.MaxTokens = lo.ToPtr(int64(256))
 	toolText := "A red circle with a diameter of 100 pixels."
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant that always uses the provided tool when asked.",
 		Messages: []types.Message{
 			responsesUserMessage("Call get_circle, then describe the tool text and the image. Mention the color."),
@@ -140,7 +141,7 @@ func TestResponsesDeepSeekSmokeToolResultImages(t *testing.T) {
 				Parameters:  mustJSONRaw(`{"type":"object","properties":{},"required":[]}`),
 			},
 		},
-	}
+	})
 	first := streamOpenAIResponses(context.Background(), model, llmContext, options)
 	firstResult := first.Result()
 	if firstResult.StopReason != types.StopReasonToolUse {

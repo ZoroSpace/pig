@@ -14,6 +14,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 type anthropicE2ECase struct {
@@ -112,7 +113,7 @@ func expectAnthropicToolRequestAccepted(t *testing.T, model *types.Model, apiKey
 	options.APIKey = apiKey
 	options.CacheRetention = cacheRetention
 	options.MaxTokens = loToPtrInt64(128)
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a concise assistant. Use tools when useful.",
 		Messages: []types.Message{types.UserMessage{
 			Role:      types.RoleUser,
@@ -124,7 +125,7 @@ func expectAnthropicToolRequestAccepted(t *testing.T, model *types.Model, apiKey
 			Description: "Echo a string value",
 			Parameters:  jsonRawMessage(`{"type":"object","properties":{"value":{"type":"string","description":"The value to echo"}},"required":["value"]}`),
 		}},
-	}
+	})
 	stream := (&AnthropicMessages{}).Stream(context.Background(), model, llmContext, options)
 	result := stream.Result()
 	if result.ErrorMessage != "" {

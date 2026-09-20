@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // capturedResponsesHeaders extracts the captured request's affinity headers
@@ -43,10 +44,10 @@ func captureOpenAIResponsesHeaders(
 	options.APIKey = "test-key"
 	options.Fetch = fakeResponsesFetch(captured, "[DONE]")
 
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "sys",
 		Messages:     []types.Message{responsesUserMessage("hi")},
-	}
+	})
 	stream := OpenAIResponses{}.Stream(context.Background(), model, llmContext, options)
 	collectResponsesEvents(t, stream)
 
@@ -60,7 +61,7 @@ func captureOpenAIResponsesHeaders(
 // expectPayload runs one capture and returns the request body (pi: onPayload
 // capture + break on done/error). options and llmContext may be nil for the
 // plain defaults.
-func expectPayload(t *testing.T, model *types.Model, options *types.StreamOptions, llmContext *types.Context) map[string]any {
+func expectPayload(t *testing.T, model *types.Model, options *types.StreamOptions, llmContext *types.TranscriptContext) map[string]any {
 	t.Helper()
 	captured := &capturedResponsesRequest{}
 	if options == nil {
@@ -69,10 +70,10 @@ func expectPayload(t *testing.T, model *types.Model, options *types.StreamOption
 	options.APIKey = "test-key"
 	options.Fetch = fakeResponsesFetch(captured, "[DONE]")
 	if llmContext == nil {
-		llmContext = &types.Context{
+		llmContext = utils.NormalizeContext(&types.Context{
 			SystemPrompt: "sys",
 			Messages:     []types.Message{responsesUserMessage("hi")},
-		}
+		})
 	}
 	stream := streamOpenAIResponses(context.Background(), model, llmContext, &OpenAIResponsesOptions{StreamOptions: *options})
 	collectResponsesEvents(t, stream)
@@ -99,7 +100,7 @@ func TestOpenAIResponsesProviderDefaults(t *testing.T) {
 		opts.APIKey = "test-key"
 		opts.ToolChoice = "required"
 		opts.Fetch = fakeResponsesFetch(captured, "[DONE]")
-		llmContext := &types.Context{
+		llmContext := utils.NormalizeContext(&types.Context{
 			Messages: []types.Message{responsesUserMessage("Do not call ping. Respond with text instead.")},
 			Tools: []types.Tool{
 				{
@@ -108,7 +109,7 @@ func TestOpenAIResponsesProviderDefaults(t *testing.T) {
 					Parameters:  json.RawMessage(`{"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}`),
 				},
 			},
-		}
+		})
 		stream := streamOpenAIResponses(context.Background(), model, llmContext, opts)
 		collectResponsesEvents(t, stream)
 		payload = captured.body
@@ -128,7 +129,7 @@ func TestOpenAIResponsesProviderDefaults(t *testing.T) {
 
 	t.Run("sets strict mode explicitly for Cloudflare OpenAI Responses tools", func(t *testing.T) {
 		model := responsesTestModel(t, "cloudflare-ai-gateway", "gpt-5.6-sol")
-		toolsContext := &types.Context{
+		toolsContext := utils.NormalizeContext(&types.Context{
 			Messages: []types.Message{responsesUserMessage("Use a tool.")},
 			Tools: []types.Tool{
 				{
@@ -145,7 +146,7 @@ func TestOpenAIResponsesProviderDefaults(t *testing.T) {
 					},
 				},
 			},
-		}
+		})
 		payload := expectPayload(t, model, nil, toolsContext)
 
 		if compat, ok := model.Compat.(*types.OpenAIResponsesCompat); !ok || compat.SupportsStrictMode == nil || !*compat.SupportsStrictMode {
@@ -216,7 +217,7 @@ func TestOpenAIResponsesProviderDefaults(t *testing.T) {
 		opts.APIKey = "test-key"
 		opts.SessionID = sessionID
 		opts.Fetch = fakeResponsesFetch(captured, "[DONE]")
-		llmContext := &types.Context{SystemPrompt: "sys", Messages: []types.Message{responsesUserMessage("hi")}}
+		llmContext := utils.NormalizeContext(&types.Context{SystemPrompt: "sys", Messages: []types.Message{responsesUserMessage("hi")}})
 		stream := OpenAIResponses{}.Stream(context.Background(), model, llmContext, opts)
 		collectResponsesEvents(t, stream)
 
@@ -412,7 +413,7 @@ func TestOpenAIResponsesProviderDefaults(t *testing.T) {
 			opts.APIKey = "test-key"
 			opts.ServiceTier = tc.tier
 			opts.Fetch = fakeResponsesFetch(captured, completed)
-			llmContext := &types.Context{SystemPrompt: "sys", Messages: []types.Message{responsesUserMessage("hi")}}
+			llmContext := utils.NormalizeContext(&types.Context{SystemPrompt: "sys", Messages: []types.Message{responsesUserMessage("hi")}})
 			stream := streamOpenAIResponses(context.Background(), model, llmContext, opts)
 			events, result := collectResponsesEvents(t, stream)
 			if result.StopReason != types.StopReasonStop {
@@ -444,7 +445,7 @@ func TestOpenAIResponsesMaxOutputTokensCompat(t *testing.T) {
 		maxTokens := int64(1024)
 		opts.MaxTokens = &maxTokens
 		opts.Fetch = fakeResponsesFetch(captured, "[DONE]")
-		llmContext := &types.Context{SystemPrompt: "sys", Messages: []types.Message{responsesUserMessage("hi")}}
+		llmContext := utils.NormalizeContext(&types.Context{SystemPrompt: "sys", Messages: []types.Message{responsesUserMessage("hi")}})
 		stream := OpenAIResponses{}.Stream(context.Background(), model, llmContext, opts)
 		collectResponsesEvents(t, stream)
 
@@ -463,7 +464,7 @@ func TestOpenAIResponsesMaxOutputTokensCompat(t *testing.T) {
 		maxTokens := int64(1024)
 		opts.MaxTokens = &maxTokens
 		opts.Fetch = fakeResponsesFetch(captured, "[DONE]")
-		llmContext := &types.Context{SystemPrompt: "sys", Messages: []types.Message{responsesUserMessage("hi")}}
+		llmContext := utils.NormalizeContext(&types.Context{SystemPrompt: "sys", Messages: []types.Message{responsesUserMessage("hi")}})
 		stream := OpenAIResponses{}.Stream(context.Background(), model, llmContext, opts)
 		collectResponsesEvents(t, stream)
 

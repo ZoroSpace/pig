@@ -134,7 +134,7 @@ func alreadyCancelledContext() context.Context {
 // captureBedrockPayload drives a stream whose onPayload captures the command
 // input, with the request pre-aborted so nothing reaches the wire (pi:
 // capturePayload with signal: AbortSignal.abort()).
-func captureBedrockPayload(t cleanupT, context *types.Context, model *types.Model) *bedrockConverseInput {
+func captureBedrockPayload(t cleanupT, context *types.TranscriptContext, model *types.Model) *bedrockConverseInput {
 	var captured *bedrockConverseInput
 	streamOptions := types.StreamOptions{CacheRetention: types.CacheRetentionNone}
 	streamOptions.OnPayload = func(payload any, _ *types.Model) any {

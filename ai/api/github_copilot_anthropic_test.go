@@ -12,6 +12,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func githubCopilotTestModel(t *testing.T) *types.Model {
@@ -25,10 +26,10 @@ func githubCopilotTestModel(t *testing.T) *types.Model {
 
 func TestGitHubCopilotAnthropicRequestShaping(t *testing.T) {
 	model := githubCopilotTestModel(t)
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}},
-	}
+	})
 	var captured capturedAnthropicRequest
 	options := &AnthropicOptions{}
 	options.APIKey = "copilot-token"
@@ -57,12 +58,12 @@ func TestGitHubCopilotAnthropicRequestShaping(t *testing.T) {
 func TestGitHubCopilotAnthropicAgentInitiator(t *testing.T) {
 	// A trailing assistant message marks an agent-initiated follow-up.
 	model := githubCopilotTestModel(t)
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1},
 			types.AssistantMessage{Role: types.RoleAssistant, Content: []types.Content{types.NewTextContent("Hi")}, Timestamp: 2},
 		},
-	}
+	})
 	var captured capturedAnthropicRequest
 	options := anthropicTestOptions(minimalAnthropicEvents, &captured)
 	result := streamAnthropicMessages(gocontext.Background(), model, llmContext, options).Result()

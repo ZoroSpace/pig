@@ -5,67 +5,18 @@
 package core
 
 import (
-	"context"
-
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 )
 
 // WrapRegisteredTool wraps a RegisteredTool into an AgentTool (pi:
-// wrapRegisteredTool). The wrapped execute snapshots the active tool set
-// around execution and reports newly added tool names on the result.
+// wrapRegisteredTool). v0.86.0 removed the addedToolNames reporting wrapper:
+// tool introductions move to transcript system messages.
 func WrapRegisteredTool(registeredTool RegisteredTool, runner *ExtensionRunner) agent.AgentTool {
-	tool := tools.WrapToolDefinition(registeredTool.Definition, func() tools.ToolExecuteContext {
+	return tools.WrapToolDefinition(registeredTool.Definition, func() tools.ToolExecuteContext {
 		ctx := runner.CreateContext()
 		return &ctx
-	})
-	execute := tool.Execute
-	tool.Execute = func(ctx context.Context, toolCallID string, params any, onUpdate agent.AgentToolUpdateCallback) (agent.AgentToolResult, error) {
-		activeBefore := runner.GetActiveTools()
-		result, err := execute(ctx, toolCallID, params, onUpdate)
-		if err != nil {
-			return result, err
-		}
-		activeAfter := runner.GetActiveTools()
-		for _, name := range activeBefore {
-			stillActive := false
-			for _, after := range activeAfter {
-				if after == name {
-					stillActive = true
-					break
-				}
-			}
-			if !stillActive {
-				// A tool was removed: report the result unchanged.
-				return result, nil
-			}
-		}
-		beforeNames := map[string]bool{}
-		for _, name := range activeBefore {
-			beforeNames[name] = true
-		}
-		var addedToolNames []string
-		for _, name := range activeAfter {
-			if !beforeNames[name] {
-				addedToolNames = append(addedToolNames, name)
-			}
-		}
-		if len(addedToolNames) == 0 {
-			return result, nil
-		}
-		seen := map[string]bool{}
-		for _, name := range result.AddedToolNames {
-			seen[name] = true
-		}
-		for _, name := range addedToolNames {
-			if !seen[name] {
-				result.AddedToolNames = append(result.AddedToolNames, name)
-				seen[name] = true
-			}
-		}
-		return result, nil
-	}
-	return tool.AgentTool
+	}).AgentTool
 }
 
 // WrapRegisteredTools wraps all registered tools into AgentTools (pi:

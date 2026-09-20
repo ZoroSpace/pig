@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func googleRoutingModel(id string) *types.Model {
@@ -23,9 +24,9 @@ func googleRoutingModel(id string) *types.Model {
 	}
 }
 
-func googleRoutingContext(model *types.Model) *types.Context {
+func googleRoutingContext(model *types.Model) *types.TranscriptContext {
 	now := time.Now().UnixMilli()
-	return &types.Context{
+	return utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "read the files"}, Timestamp: now},
 			types.AssistantMessage{
@@ -63,7 +64,7 @@ func googleRoutingContext(model *types.Model) *types.Context {
 				Timestamp:  now,
 			},
 		},
-	}
+	})
 }
 
 func TestGoogleImageToolResultRoutingSeparateTurnForGemini2x(t *testing.T) {

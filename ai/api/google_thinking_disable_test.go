@@ -15,6 +15,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 type googleDisableRun struct {
@@ -25,8 +26,8 @@ type googleDisableRun struct {
 	contentTypes       []string
 }
 
-func googleDisableContext() *types.Context {
-	return &types.Context{
+func googleDisableContext() *types.TranscriptContext {
+	return utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a precise assistant. Follow the requested output format exactly.",
 		Messages: []types.Message{
 			types.UserMessage{
@@ -36,7 +37,7 @@ func googleDisableContext() *types.Context {
 				Timestamp: time.Now().UnixMilli(),
 			},
 		},
-	}
+	})
 }
 
 func googleCountPongs(text string) int {
@@ -53,7 +54,7 @@ func googleRunWithoutReasoning(t *testing.T, model *types.Model, maxTokens int64
 		extra(options)
 	}
 
-	s := ai.StreamSimple(context.Background(), model, googleDisableContext(), options)
+	s := ai.StreamSimple(context.Background(), model, &ai.Context{Messages: googleDisableContext().Messages}, options)
 
 	var run googleDisableRun
 	for event := range s.Events() {

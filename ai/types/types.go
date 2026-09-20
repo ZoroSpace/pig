@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -45,6 +46,12 @@ const (
 	// aiplatform.googleapis.com with ADC credentials or Vertex express API
 	// keys.
 	ApiGoogleVertex Api = "google-vertex"
+	// ApiMistralConversations is Mistral's chat API surface (pi:
+	// "mistral-conversations"). pig has no adapter for it (Phase 2
+	// declared: deferred on demand); the constant exists so pi custom
+	// models with that API decode instead of falling into the
+	// openai-completions compat shape.
+	ApiMistralConversations Api = "mistral-conversations"
 )
 
 // ImagesApi identifies an image-generation wire protocol.
@@ -222,6 +229,11 @@ const (
 	CacheRetentionLong  CacheRetention = "long"
 )
 
+// ModelPromptCache is a best-effort prompt cache lifetime in seconds for each
+// retention tier a request can ask for. A missing tier means the lifetime is
+// unknown; pig does not warm such caches (pi: ModelPromptCache).
+type ModelPromptCache map[CacheRetention]int64
+
 // Transport selects how a provider request is carried where multiple
 // transports exist.
 type Transport string
@@ -367,8 +379,8 @@ type DeferredCancelOptions = ProviderRequestOptions
 type ProviderStreams interface {
 	// ctx carries the caller's cancellation (pi: options.signal, dropped from
 	// StreamOptions per the AbortSignal → context rule).
-	Stream(ctx context.Context, model *Model, llmContext *Context, options *StreamOptions) *AssistantMessageEventStream
-	StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *SimpleStreamOptions) *AssistantMessageEventStream
+	Stream(ctx context.Context, model *Model, llmContext *TranscriptContext, options *StreamOptions) *AssistantMessageEventStream
+	StreamSimple(ctx context.Context, model *Model, llmContext *TranscriptContext, options *SimpleStreamOptions) *AssistantMessageEventStream
 	// pi's optional fetchDeferred/cancelDeferred live on DeferredStreamer:
 	// Go interfaces cannot express optional methods, so deferred-capable
 	// modules implement that extra interface and callers type-assert.
@@ -648,6 +660,7 @@ type DeferredHandle struct {
 type Role string
 
 const (
+	RoleSystem     Role = "system"
 	RoleUser       Role = "user"
 	RoleAssistant  Role = "assistant"
 	RoleToolResult Role = "toolResult"
@@ -677,6 +690,146 @@ func (c *UserContent) UnmarshalJSON(data []byte) error {
 	parts, err := DecodeContentList(data)
 	if err != nil {
 		return fmt.Errorf("ai: user content: %w", err)
+	}
+	if parts == nil {
+		parts = []Content{}
+	}
+	c.String = ""
+	c.Parts = parts
+	return nil
+}
+
+// SystemMessage is system instructions and tool declarations at one point in
+// the transcript.
+//
+// The leading system message is the system prompt. Later system messages
+// change it: Content adds instructions from that point on, Sections replace
+// or remove named prompt sections, and ToolsAdded/ToolsRemoved change the
+// tool set. Replaying every system message in order yields the current prompt
+// and tools. Providers that accept system messages mid-conversation send each
+// one in place; other providers rebuild the leading system message from the
+// replayed state (pi: SystemMessage, #9548).
+type SystemMessage struct {
+	Role Role `json:"role"`
+	// Content is instruction text. On the leading message this is the base
+	// prompt; later, additional instructions.
+	Content SystemContent `json:"content"`
+	// Sections are named, ordered prompt sections rendered verbatim after
+	// Content. The leading message declares them; later messages replace
+	// sections by name, and nil removes one. Keep each section
+	// self-delimiting (a tag, a heading) so the model can relate an update
+	// to the original. Avoid integer-like names; JSON objects reorder those.
+	Sections *SystemSections `json:"sections,omitempty"`
+	// ToolsAdded are complete definitions of tools that become available at
+	// this point.
+	ToolsAdded []Tool `json:"toolsAdded,omitempty"`
+	// ToolsRemoved are tools that stop being available at this point.
+	ToolsRemoved []ToolReference `json:"toolsRemoved,omitempty"`
+	// Timestamp is a Unix timestamp in milliseconds.
+	Timestamp int64 `json:"timestamp"`
+}
+
+// SystemContent is a system message body: pi allows either a plain string or
+// an array of text parts. The original form is preserved on marshal.
+type SystemContent struct {
+	String string
+	Parts  []Content
+}
+
+// SystemSections is a name-keyed section map that preserves JSON key order
+// (Go maps do not; the prompt replay renders sections in declaration order,
+// so losing order would make requests irreproducible and bust prompt
+// caches).
+type SystemSections struct {
+	// Keys are section names in JSON declaration order.
+	Keys []string
+	// Values maps section names to their text; a nil value removes the
+	// section.
+	Values map[string]*string
+}
+
+func (s SystemSections) MarshalJSON() ([]byte, error) {
+	if s.Values == nil {
+		return []byte("{}"), nil
+	}
+	buf := []byte("{")
+	for i, k := range s.Keys {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		key, err := json.Marshal(k)
+		if err != nil {
+			return nil, err
+		}
+		buf = append(buf, key...)
+		buf = append(buf, ':')
+		value, err := json.Marshal(s.Values[k])
+		if err != nil {
+			return nil, err
+		}
+		buf = append(buf, value...)
+	}
+	return append(buf, '}'), nil
+}
+
+func (s *SystemSections) UnmarshalJSON(data []byte) error {
+	// Two-pass decode: capture key order with a token walk, then values via
+	// a plain map unmarshal.
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if delim, ok := tok.(json.Delim); !ok || delim != '{' {
+		return fmt.Errorf("ai: system sections: expected object")
+	}
+	var keys []string
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		keys = append(keys, keyTok.(string))
+		// Skip the value.
+		if err := skipJSONValue(dec); err != nil {
+			return err
+		}
+	}
+	if _, err := dec.Token(); err != nil { // closing '}'
+		return err
+	}
+	var values map[string]*string
+	if err := json.Unmarshal(data, &values); err != nil {
+		return err
+	}
+	s.Keys = keys
+	s.Values = values
+	return nil
+}
+
+func skipJSONValue(dec *json.Decoder) error {
+	var raw json.RawMessage
+	return dec.Decode(&raw)
+}
+
+func (c SystemContent) MarshalJSON() ([]byte, error) {
+	if c.Parts == nil {
+		return json.Marshal(c.String)
+	}
+	return json.Marshal(c.Parts)
+}
+
+func (c *SystemContent) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		c.String = s
+		c.Parts = nil
+		return nil
+	}
+	parts, err := DecodeContentList(data)
+	if err != nil {
+		return fmt.Errorf("ai: system content: %w", err)
 	}
 	if parts == nil {
 		parts = []Content{}
@@ -754,13 +907,8 @@ type ToolResultMessage struct {
 	Details any       `json:"details,omitempty"`
 	// Usage, when available, comes from the tool execution itself; it is not
 	// part of main LLM context accounting.
-	Usage *Usage `json:"usage,omitempty"`
-	// AddedToolNames lists names from Context.Tools that became available
-	// after this result. Providers with native deferred tool loading use
-	// this as the load point; other providers ignore it and use Context.Tools
-	// normally.
-	AddedToolNames []string `json:"addedToolNames,omitempty"`
-	IsError        bool     `json:"isError"`
+	Usage   *Usage `json:"usage,omitempty"`
+	IsError bool   `json:"isError"`
 	// Timestamp is a Unix timestamp in milliseconds.
 	Timestamp int64 `json:"timestamp"`
 }
@@ -772,6 +920,7 @@ type Message interface {
 }
 
 func (m UserMessage) MessageRole() Role       { return m.Role }
+func (m SystemMessage) MessageRole() Role     { return m.Role }
 func (m AssistantMessage) MessageRole() Role  { return m.Role }
 func (m ToolResultMessage) MessageRole() Role { return m.Role }
 
@@ -835,6 +984,9 @@ func DecodeMessage(data json.RawMessage) (Message, error) {
 		return nil, err
 	}
 	switch probe.Role {
+	case RoleSystem:
+		var m SystemMessage
+		return m, json.Unmarshal(data, &m)
 	case RoleUser:
 		var m UserMessage
 		return m, json.Unmarshal(data, &m)
@@ -970,13 +1122,32 @@ type Tool struct {
 	ConstrainedSampling any             `json:"constrainedSampling,omitempty"`
 }
 
+// ToolReference names a tool previously declared in the transcript (pi:
+// ToolReference; used by SystemMessage.ToolsRemoved).
+type ToolReference struct {
+	Name string `json:"name"`
+}
+
 // Context is one LLM request body: system prompt, history, and tools (pi:
 // Context). Parameter names spell it llmContext, never ctx, so it is not
 // confused with Go's context.Context.
+//
+// SystemPrompt and Tools are shorthand for a leading system message;
+// NormalizeContext (ai/utils/transcript.go) folds them into one before the
+// request reaches a provider.
 type Context struct {
 	SystemPrompt string    `json:"systemPrompt,omitempty"`
 	Messages     []Message `json:"messages"`
 	Tools        []Tool    `json:"tools,omitempty"`
+}
+
+// TranscriptContext is the normalized request context passed to providers and
+// API implementations. The prompt and tool declarations are carried by the
+// transcript's system messages. Only NormalizeContext produces this type, so
+// a raw Context cannot reach provider code by accident (pi: TranscriptContext
+// with a unique-symbol brand; Go has no brand types, the convention stands).
+type TranscriptContext struct {
+	Messages []Message `json:"messages"`
 }
 
 // AssistantMessageEventType enumerates the normalized stream events. The
@@ -1098,9 +1269,8 @@ type CacheControlFormat string
 
 const CacheControlAnthropic CacheControlFormat = "anthropic"
 
-type DeferredToolsMode string
-
-const DeferredToolsKimi DeferredToolsMode = "kimi"
+// pi removed DeferredToolsMode ("kimi") with #9548 mid-conversation system
+// messages; deferred tool placement moved to transcript system messages.
 
 // OpenAICompletionsCompat overrides URL-based auto-detection of endpoint
 // quirks (pi: OpenAICompletionsCompat). Pointer fields distinguish "unset"
@@ -1176,6 +1346,17 @@ type OpenAICompletionsCompat struct {
 	// grammar-constrained tools fall back to normal function tools.
 	// Default: false.
 	SupportsOpenAIGrammarTools *bool `json:"supportsOpenAIGrammarTools,omitempty"`
+	// SupportsMidConvoSystemMessages: whether the exact model accepts system
+	// or developer messages after the conversation has started. When false,
+	// later system messages are folded into the leading system message.
+	// Default: false; the generated model catalog enables it for verified
+	// models.
+	SupportsMidConvoSystemMessages *bool `json:"supportsMidConvoSystemMessages,omitempty"`
+	// SupportsMidConvoToolAdditions: whether system messages can introduce
+	// additional tools mid-conversation. Requires
+	// SupportsMidConvoSystemMessages. Default: false; the generated model
+	// catalog enables it for capable models.
+	SupportsMidConvoToolAdditions *bool `json:"supportsMidConvoToolAdditions,omitempty"`
 	// SupportsStrictMode: whether the provider supports the strict field in
 	// tool definitions. Default: true.
 	SupportsStrictMode *bool `json:"supportsStrictMode,omitempty"`
@@ -1185,11 +1366,9 @@ type OpenAICompletionsCompat struct {
 	// tool-result text content.
 	CacheControlFormat *CacheControlFormat `json:"cacheControlFormat,omitempty"`
 	// SendSessionAffinityHeaders: whether to send session-affinity data from
-	// options SessionID. Default: false.
+	// options SessionID. Default: true for OpenRouter endpoints, false
+	// otherwise.
 	SendSessionAffinityHeaders *bool `json:"sendSessionAffinityHeaders,omitempty"`
-	// DeferredToolsMode selects the provider-specific deferred tool
-	// serialization mode.
-	DeferredToolsMode *DeferredToolsMode `json:"deferredToolsMode,omitempty"`
 	// SessionAffinityFormat overrides URL-based auto-detection of the
 	// session-affinity header set.
 	SessionAffinityFormat *SessionAffinityFormat `json:"sessionAffinityFormat,omitempty"`
@@ -1213,6 +1392,12 @@ type OpenAIResponsesCompat struct {
 	// SupportsDeveloperRole: whether the provider supports the "developer"
 	// role (vs "system"). Default: true.
 	SupportsDeveloperRole *bool `json:"supportsDeveloperRole,omitempty"`
+	// SupportsMidConvoSystemMessages: whether the exact model accepts
+	// developer or system messages after the conversation has started. When
+	// false, later system messages are folded into the leading system
+	// message. Default: false; the generated model catalog enables it for
+	// verified models.
+	SupportsMidConvoSystemMessages *bool `json:"supportsMidConvoSystemMessages,omitempty"`
 	// SessionAffinityFormat: "openai" sends session_id and
 	// x-client-request-id; "openai-nosession" sends x-client-request-id;
 	// "openrouter" sends x-session-id. Does not affect the prompt_cache_key
@@ -1236,7 +1421,7 @@ type OpenAIResponsesCompat struct {
 	// additional_tools input items. Default: false.
 	SupportsAdditionalTools *bool `json:"supportsAdditionalTools,omitempty"`
 	// SupportsToolSearch: whether the model supports client-executed tool
-	// search for deferred tools. Default: false.
+	// search for transcript-anchored additions. Default: false.
 	SupportsToolSearch *bool `json:"supportsToolSearch,omitempty"`
 	// SupportsExplicitPromptCacheMode: whether the model accepts
 	// prompt_cache_options (OpenAI GPT-5.6+ prompt caching). Older OpenAI
@@ -1259,10 +1444,14 @@ type AnthropicMessagesCompat struct {
 	// SupportsLongCacheRetention: whether cache_control.ttl "1h" is accepted.
 	// Default: true.
 	SupportsLongCacheRetention *bool `json:"supportsLongCacheRetention,omitempty"`
-	// SendSessionAffinityHeaders: send x-session-affinity from options
+	// SendSessionAffinityHeaders: send session-affinity headers from options
 	// SessionID when caching is enabled; required by providers that route
-	// prompt-cache hits by session affinity (e.g. Fireworks). Default: false.
+	// prompt-cache hits by session affinity (e.g. Fireworks). Default: true
+	// for OpenRouter endpoints, false otherwise.
 	SendSessionAffinityHeaders *bool `json:"sendSessionAffinityHeaders,omitempty"`
+	// SessionAffinityFormat: "openrouter" sends x-session-id; when unset,
+	// sends x-session-affinity.
+	SessionAffinityFormat *string `json:"sessionAffinityFormat,omitempty"`
 	// SupportsCacheControlOnTools: whether cache_control markers are accepted
 	// on tool definitions; some Anthropic-compatible providers reject them.
 	// Default: true.
@@ -1282,13 +1471,18 @@ type AnthropicMessagesCompat struct {
 	// effort-only system messages and thinking binding controls. Default:
 	// false.
 	SupportsMidConvoEffort *bool `json:"supportsMidConvoEffort,omitempty"`
+	// SupportsMidConvoSystemMessages: whether the exact model accepts
+	// system-role messages inside the conversation. When false, later
+	// system messages are folded into the top-level system prompt. Default:
+	// false.
+	SupportsMidConvoSystemMessages *bool `json:"supportsMidConvoSystemMessages,omitempty"`
+	// SupportsMidConvoToolChanges: whether the exact model accepts
+	// mid-conversation tool_addition and tool_removal blocks. Requires
+	// SupportsMidConvoSystemMessages. Default: false.
+	SupportsMidConvoToolChanges *bool `json:"supportsMidConvoToolChanges,omitempty"`
 	// AllowedFallbackModels: models Anthropic may fall back to on
 	// server-side refusal; empty means the fallbacks field must be omitted.
 	AllowedFallbackModels []AnthropicAllowedFallbackModel `json:"allowedFallbackModels,omitempty"`
-	// SupportsToolReferences: deferred tools loaded via tool_reference blocks
-	// in tool results. Default: true for first-party Anthropic models except
-	// Haiku and pre-4.5; false elsewhere.
-	SupportsToolReferences *bool `json:"supportsToolReferences,omitempty"`
 }
 
 // BedrockCompat carries compatibility settings for Amazon Bedrock models (pi:
@@ -1312,6 +1506,20 @@ func (c *OpenAICompletionsCompat) modelCompat() {}
 func (c *OpenAIResponsesCompat) modelCompat()   {}
 func (c *AnthropicMessagesCompat) modelCompat() {}
 func (c *BedrockCompat) modelCompat()           {}
+
+// MistralConversationsCompat is the compatibility settings for the Mistral
+// chat API (pi: MistralConversationsCompat). pig has no mistral-conversations
+// adapter/provider yet (Phase 2 declared: deferred on demand); the type is
+// declared so pi models.json compat payloads survive decoding round-trips.
+func (c *MistralConversationsCompat) modelCompat() {}
+
+// MistralConversationsCompat: see modelCompat above.
+type MistralConversationsCompat struct {
+	// SupportsMidConvoSystemMessages: whether the exact model accepts system
+	// messages after the conversation has started. When false, later system
+	// messages are folded into the leading system message. Default: false.
+	SupportsMidConvoSystemMessages *bool `json:"supportsMidConvoSystemMessages,omitempty"`
+}
 
 // OpenRouterRouting carries OpenRouter provider routing preferences (sent as
 // the "provider" request field). Sort, PreferredMinThroughput, and
@@ -1395,8 +1603,12 @@ type Model struct {
 	ThinkingLevelMap ThinkingLevelMap `json:"thinkingLevelMap,omitempty"`
 	Input            []ModelInput     `json:"input"`
 	Cost             ModelCost        `json:"cost"`
-	ContextWindow    int64            `json:"contextWindow"`
-	MaxTokens        int64            `json:"maxTokens"`
+	// PromptCache holds prompt cache lifetimes per retention tier. Unset
+	// when the provider's cache behavior is unknown (pi: Model.promptCache;
+	// consumed by coding-agent prompt cache warming).
+	PromptCache   ModelPromptCache `json:"promptCache,omitempty"`
+	ContextWindow int64            `json:"contextWindow"`
+	MaxTokens     int64            `json:"maxTokens"`
 	// SamplingParams are the model's default sampling parameters; per-request
 	// keys in StreamOptions.SamplingParams override them.
 	SamplingParams map[string]any    `json:"samplingParams,omitempty"`
@@ -1426,6 +1638,10 @@ func (m *Model) UnmarshalJSON(data []byte) error {
 		compat = new(BedrockCompat)
 	case ApiOpenAIResponses, ApiAzureOpenAIResponses, ApiOpenAICodexResponses:
 		compat = new(OpenAIResponsesCompat)
+	case ApiMistralConversations:
+		// pig has no mistral-conversations adapter (Phase 2 declared); the
+		// compat shape exists so pi custom models round-trip.
+		compat = new(MistralConversationsCompat)
 	default:
 		// openai-completions and untyped custom APIs use the openai shape.
 		compat = new(OpenAICompletionsCompat)

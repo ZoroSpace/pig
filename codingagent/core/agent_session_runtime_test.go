@@ -35,7 +35,7 @@ func runtimeEventsModel() *types.Model {
 }
 
 func runtimeEventsStreamFn(reply string) agent.StreamFn {
-	return func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	return func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		message := &types.AssistantMessage{
 			Role:       types.RoleAssistant,
 			Content:    []types.Content{types.NewTextContent(reply)},

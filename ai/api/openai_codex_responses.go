@@ -353,7 +353,7 @@ func init() {
 
 // Stream dispatches one streaming request (pi: stream). ctx carries the
 // caller's cancellation (pi: options.signal).
-func (OpenAICodexResponses) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (OpenAICodexResponses) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	opts := &OpenAICodexResponsesOptions{}
 	if options != nil {
 		opts.StreamOptions = *options
@@ -362,7 +362,7 @@ func (OpenAICodexResponses) Stream(ctx context.Context, model *types.Model, llmC
 }
 
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
-func (OpenAICodexResponses) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (OpenAICodexResponses) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	if options.APIKey == "" {
 		// pi throws synchronously; pig returns the failure in the stream
 		// (see types.StreamFunction contract).
@@ -389,7 +389,7 @@ func formatCodexError(err error) string {
 
 // streamOpenAICodexResponses is the adapter's core stream implementation
 // (pi: the stream StreamFunction body).
-func streamOpenAICodexResponses(ctx context.Context, model *types.Model, llmContext *types.Context, options *OpenAICodexResponsesOptions) *types.AssistantMessageEventStream {
+func streamOpenAICodexResponses(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *OpenAICodexResponsesOptions) *types.AssistantMessageEventStream {
 	stream := types.NewAssistantMessageEventStream()
 
 	go func() {
@@ -761,39 +761,46 @@ func processCodexStream(ctx context.Context, resp *http.Response, output *types.
 // Request Building (pi: Request Building)
 // ============================================================================
 
-func buildCodexRequestBody(model *types.Model, llmContext *types.Context, options *OpenAICodexResponsesOptions, cacheSessionID string, grammarToolInputProperties map[string]string) codexRequestBody {
+func buildCodexRequestBody(model *types.Model, llmContext *types.TranscriptContext, options *OpenAICodexResponsesOptions, cacheSessionID string, grammarToolInputProperties map[string]string) codexRequestBody {
 	supportsStrictMode := true
 	supportsOpenAIGrammarTools := false
-	if compat, ok := model.Compat.(*types.OpenAIResponsesCompat); ok {
-		if compat != nil {
-			if compat.SupportsStrictMode != nil {
-				supportsStrictMode = *compat.SupportsStrictMode
-			}
-			if compat.SupportsOpenAIGrammarTools != nil {
-				supportsOpenAIGrammarTools = *compat.SupportsOpenAIGrammarTools
-			}
-		}
-	}
-	deferredToolsMode := ""
 	supportsAdditionalTools := false
 	supportsToolSearch := false
+	var supportsMidConvoSystemMessages bool
 	if compat, ok := model.Compat.(*types.OpenAIResponsesCompat); ok && compat != nil {
+		if compat.SupportsStrictMode != nil {
+			supportsStrictMode = *compat.SupportsStrictMode
+		}
+		if compat.SupportsOpenAIGrammarTools != nil {
+			supportsOpenAIGrammarTools = *compat.SupportsOpenAIGrammarTools
+		}
 		if compat.SupportsAdditionalTools != nil {
 			supportsAdditionalTools = *compat.SupportsAdditionalTools
 		}
 		if compat.SupportsToolSearch != nil {
 			supportsToolSearch = *compat.SupportsToolSearch
 		}
+		supportsMidConvoSystemMessages = compat.SupportsMidConvoSystemMessages != nil && *compat.SupportsMidConvoSystemMessages
 	}
-	if supportsAdditionalTools {
-		deferredToolsMode = "additional-tools"
-	} else if supportsToolSearch {
-		deferredToolsMode = "tool-search"
-	}
-	toolPlacement := utils.SplitDeferredTools(llmContext, deferredToolsMode != "", nil)
-	instructions := llmContext.SystemPrompt
-	if instructions == "" {
-		instructions = "You are a helpful assistant."
+	transcriptTools := utils.ResolveTranscriptTools(llmContext.Messages, supportsAdditionalTools || supportsToolSearch)
+	messages := ConvertResponsesMessages(model, llmContext, codexToolCallProviders, &ConvertResponsesMessagesOptions{
+		IncludeSystemPrompt:            lo.ToPtr(false),
+		GrammarToolInputProperties:     grammarToolInputProperties,
+		SupportsMidConvoSystemMessages: lo.ToPtr(supportsMidConvoSystemMessages),
+		SupportsAdditionalTools:        lo.ToPtr(supportsAdditionalTools),
+		SupportsToolSearch:             lo.ToPtr(supportsToolSearch),
+		ToolOptions: &ConvertResponsesToolsOptions{
+			// pi: strict: null — Codex rejects implicit strict defaults.
+			StrictNull:                 true,
+			SupportsStrictMode:         &supportsStrictMode,
+			SupportsOpenAIGrammarTools: &supportsOpenAIGrammarTools,
+		},
+	})
+
+	initialSystemMessage := utils.GetInitialSystemMessage(llmContext.Messages)
+	instructions := ""
+	if initialSystemMessage != nil {
+		instructions = utils.GetSystemMessageText(initialSystemMessage)
 	}
 	textVerbosity := options.TextVerbosity
 	if textVerbosity == "" {
@@ -803,30 +810,22 @@ func buildCodexRequestBody(model *types.Model, llmContext *types.Context, option
 	if toolChoice == "" {
 		toolChoice = "auto"
 	}
-	messages := ConvertResponsesMessages(model, llmContext, codexToolCallProviders, &ConvertResponsesMessagesOptions{
-		IncludeSystemPrompt:        lo.ToPtr(false),
-		GrammarToolInputProperties: grammarToolInputProperties,
-		DeferredTools:              toolPlacement.Deferred,
-		DeferredToolNames:          toolPlacement.DeferredNames,
-		DeferredToolsMode:          deferredToolsMode,
-		ToolOptions: &ConvertResponsesToolsOptions{
-			// pi: strict: null — Codex rejects implicit strict defaults.
-			StrictNull:                 true,
-			SupportsStrictMode:         &supportsStrictMode,
-			SupportsOpenAIGrammarTools: &supportsOpenAIGrammarTools,
-		},
-	})
 
 	body := codexRequestBody{
 		"model":               model.ID,
 		"store":               false,
 		"stream":              true,
-		"instructions":        instructions,
 		"input":               messages,
 		"text":                map[string]any{"verbosity": textVerbosity},
 		"include":             []any{"reasoning.encrypted_content"},
 		"tool_choice":         toolChoice,
 		"parallel_tool_calls": true,
+	}
+	// pi: instructions: instructions || "You are a helpful assistant."
+	if instructions != "" {
+		body["instructions"] = instructions
+	} else {
+		body["instructions"] = "You are a helpful assistant."
 	}
 	// pi: prompt_cache_key: cacheSessionId — omitted (undefined) when no
 	// session cache is requested.
@@ -842,8 +841,8 @@ func buildCodexRequestBody(model *types.Model, llmContext *types.Context, option
 		body["service_tier"] = options.ServiceTier
 	}
 
-	if len(toolPlacement.Immediate) > 0 {
-		body["tools"] = ConvertResponsesTools(toolPlacement.Immediate, &ConvertResponsesToolsOptions{
+	if len(transcriptTools.RequestTools) > 0 {
+		body["tools"] = ConvertResponsesTools(transcriptTools.RequestTools, &ConvertResponsesToolsOptions{
 			StrictNull:                 true,
 			SupportsStrictMode:         &supportsStrictMode,
 			SupportsOpenAIGrammarTools: &supportsOpenAIGrammarTools,
@@ -851,14 +850,18 @@ func buildCodexRequestBody(model *types.Model, llmContext *types.Context, option
 	}
 
 	if options.ReasoningEffort != "" {
-		// pi: effort = reasoningEffort === "none"
-		//   ? (thinkingLevelMap?.off ?? "none")
+		// pi v0.86.0 ("send Codex Off reasoning effort"):
+		// effort = reasoningEffort === "none"
+		//   ? (thinkingLevelMap?.off === undefined ? "none" : thinkingLevelMap.off)
 		//   : (thinkingLevelMap?.[effort] ?? effort);
 		// A null map entry (including off: null) suppresses the reasoning block.
 		var effort any
 		if options.ReasoningEffort == "none" {
-			if mapped, ok := model.ThinkingLevelMap[types.ModelThinkingOff]; ok && mapped != nil {
-				effort = *mapped
+			if mapped, ok := model.ThinkingLevelMap[types.ModelThinkingOff]; ok {
+				if mapped != nil {
+					effort = *mapped
+				}
+				// mapped == nil → effort stays nil → gated below
 			} else {
 				effort = "none"
 			}
@@ -877,6 +880,17 @@ func buildCodexRequestBody(model *types.Model, llmContext *types.Context, option
 			}
 			body["reasoning"] = map[string]any{"effort": effort, "summary": summary}
 		}
+	} else if model.Reasoning {
+		// pi v0.86.0: unset reasoningEffort sends the model's declared off
+		// effort when it has one (off: null suppresses the block entirely).
+		mapped, hasOff := model.ThinkingLevelMap[types.ModelThinkingOff]
+		if !hasOff || mapped != nil {
+			effort := any("none")
+			if mapped != nil {
+				effort = *mapped
+			}
+			body["reasoning"] = map[string]any{"effort": effort}
+		}
 	}
 
 	return body
@@ -885,12 +899,12 @@ func buildCodexRequestBody(model *types.Model, llmContext *types.Context, option
 // createCodexGrammarToolInputProperties resolves the grammar-tool input
 // property map (pi: createGrammarToolInputProperties(context.tools,
 // model.compat?.supportsOpenAIGrammarTools ?? false)).
-func createCodexGrammarToolInputProperties(model *types.Model, llmContext *types.Context) map[string]string {
+func createCodexGrammarToolInputProperties(model *types.Model, llmContext *types.TranscriptContext) map[string]string {
 	supportsOpenAIGrammarTools := false
 	if compat, ok := model.Compat.(*types.OpenAIResponsesCompat); ok && compat != nil && compat.SupportsOpenAIGrammarTools != nil {
 		supportsOpenAIGrammarTools = *compat.SupportsOpenAIGrammarTools
 	}
-	return CreateGrammarToolInputProperties(llmContext.Tools, supportsOpenAIGrammarTools)
+	return CreateGrammarToolInputProperties(utils.GetDeclaredTools(llmContext.Messages), supportsOpenAIGrammarTools)
 }
 
 // ============================================================================
@@ -1865,7 +1879,7 @@ func processCodexWebsocketStream(ctx context.Context, requestURL string, body co
 		} else if useCachedContext && entry != nil && output.ResponseID != "" {
 			// pi converts the live output object; the converter dispatches on value
 			// message types, so dereference (pi: { messages: [output] }).
-			responseItems := ConvertResponsesMessages(model, &types.Context{Messages: []types.Message{*output}}, codexToolCallProviders, &ConvertResponsesMessagesOptions{
+			responseItems := ConvertResponsesMessages(model, &types.TranscriptContext{Messages: []types.Message{*output}}, codexToolCallProviders, &ConvertResponsesMessagesOptions{
 				IncludeSystemPrompt:        lo.ToPtr(false),
 				GrammarToolInputProperties: grammarToolInputProperties,
 			})

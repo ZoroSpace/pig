@@ -123,16 +123,16 @@ type OpenAIResponsesStreamOptions struct {
 }
 
 // ConvertResponsesMessagesOptions are the message-conversion options (pi:
-// ConvertResponsesMessagesOptions). DeferredTools is an ordered list with
-// DeferredToolNames as its set (pi's Map preserves insertion order; Go maps
-// have none — see ai/utils/deferred_tools.go).
+// ConvertResponsesMessagesOptions).
 type ConvertResponsesMessagesOptions struct {
 	IncludeSystemPrompt        *bool
 	GrammarToolInputProperties map[string]string
-	DeferredTools              []types.Tool
-	DeferredToolNames          map[string]struct{}
-	DeferredToolsMode          string // "" | "additional-tools" | "tool-search"
-	ToolOptions                *ConvertResponsesToolsOptions
+	// SupportsMidConvoSystemMessages: whether later system messages are sent
+	// in place; otherwise they are folded into the leading prompt.
+	SupportsMidConvoSystemMessages *bool
+	SupportsAdditionalTools        *bool
+	SupportsToolSearch             *bool
+	ToolOptions                    *ConvertResponsesToolsOptions
 }
 
 // ConvertResponsesToolsOptions are the tool-conversion options (pi:
@@ -148,7 +148,7 @@ type ConvertResponsesToolsOptions struct {
 	StrictNull                 bool
 	SupportsStrictMode         *bool
 	SupportsOpenAIGrammarTools *bool
-	DeferLoading               bool
+	ToolSearchResult           bool
 }
 
 // =============================================================================
@@ -158,9 +158,8 @@ type ConvertResponsesToolsOptions struct {
 // ConvertResponsesMessages converts the LLM context into Responses API input
 // items (pi: convertResponsesMessages). AllowedToolCallProviders carries the
 // provider ids whose tool-call ids keep their call_id|item_id pair shape.
-func ConvertResponsesMessages(model *types.Model, llmContext *types.Context, allowedToolCallProviders map[string]struct{}, options *ConvertResponsesMessagesOptions) []any {
+func ConvertResponsesMessages(model *types.Model, llmContext *types.TranscriptContext, allowedToolCallProviders map[string]struct{}, options *ConvertResponsesMessagesOptions) []any {
 	messages := []any{}
-	loadedToolNames := map[string]struct{}{}
 
 	normalizeIDPart := func(part string) string {
 		var b strings.Builder
@@ -212,258 +211,275 @@ func ConvertResponsesMessages(model *types.Model, llmContext *types.Context, all
 		return normalizedCallID + "|" + normalizedItemID
 	}
 
-	transformedMessages := TransformMessages(llmContext.Messages, model, normalizeToolCallID)
-
-	includeSystemPrompt := true
-	if options != nil && options.IncludeSystemPrompt != nil {
-		includeSystemPrompt = *options.IncludeSystemPrompt
+	normalizedContext := llmContext
+	supportsMidConvo := false
+	if options != nil && options.SupportsMidConvoSystemMessages != nil {
+		supportsMidConvo = *options.SupportsMidConvoSystemMessages
 	}
-	if includeSystemPrompt && llmContext.SystemPrompt != "" {
-		role := "system"
-		supportsDeveloperRole := true
-		if compat, ok := model.Compat.(*types.OpenAIResponsesCompat); ok && compat != nil &&
-			compat.SupportsDeveloperRole != nil {
-			supportsDeveloperRole = *compat.SupportsDeveloperRole
+	normalizedContext = utils.ResolveTranscript(llmContext, supportsMidConvo)
+	transformedMessages := TransformMessages(normalizedContext.Messages, model, normalizeToolCallID)
+	transcriptTools := utils.ResolveTranscriptTools(
+		normalizedContext.Messages,
+		(options != nil && ((options.SupportsAdditionalTools != nil && *options.SupportsAdditionalTools) || (options.SupportsToolSearch != nil && *options.SupportsToolSearch))),
+	)
+	appendSystemToolAdditions := func(message *types.SystemMessage, seed string) {
+		tools := []types.Tool{}
+		if transcriptTools.AnchorsAdditions {
+			tools = message.ToolsAdded
 		}
-		if model.Reasoning && supportsDeveloperRole {
-			role = "developer"
+		if len(tools) == 0 {
+			return
 		}
+		if options != nil && options.SupportsAdditionalTools != nil && *options.SupportsAdditionalTools {
+			messages = append(messages, map[string]any{
+				"type":  "additional_tools",
+				"role":  "developer",
+				"tools": ConvertResponsesTools(tools, options.ToolOptions),
+			})
+			return
+		}
+		if options == nil || options.SupportsToolSearch == nil || !*options.SupportsToolSearch {
+			return
+		}
+		names := make([]string, 0, len(tools))
+		for _, tool := range tools {
+			names = append(names, tool.Name)
+		}
+		callID := "pi_tool_load_" + utils.ShortHash(fmt.Sprintf("%s:%s", seed, strings.Join(names, ",")))
 		messages = append(messages, map[string]any{
-			"role":    role,
-			"content": utils.SanitizeSurrogates(llmContext.SystemPrompt),
+			"type":      "tool_search_call",
+			"call_id":   callID,
+			"execution": "client",
+			"status":    "completed",
+			"arguments": map[string]any{"query": strings.Join(names, " "), "limit": len(names)},
 		})
+		searchOptions := ConvertResponsesToolsOptions{}
+		if options.ToolOptions != nil {
+			searchOptions = *options.ToolOptions
+		}
+		searchOptions.ToolSearchResult = true
+		messages = append(messages, map[string]any{
+			"type":      "tool_search_output",
+			"call_id":   callID,
+			"execution": "client",
+			"status":    "completed",
+			"tools":     ConvertResponsesTools(tools, &searchOptions),
+		})
+	}
+	includeInitialSystemMessage := true
+	if options != nil && options.IncludeSystemPrompt != nil {
+		includeInitialSystemMessage = *options.IncludeSystemPrompt
+	}
+	instructionRole := "system"
+	supportsDeveloperRole := true
+	if compat, ok := model.Compat.(*types.OpenAIResponsesCompat); ok && compat != nil &&
+		compat.SupportsDeveloperRole != nil {
+		supportsDeveloperRole = *compat.SupportsDeveloperRole
+	}
+	if model.Reasoning && supportsDeveloperRole {
+		instructionRole = "developer"
 	}
 
 	msgIndex := 0
+	sourceIndex := 0
 	for _, msg := range transformedMessages {
-		switch m := msg.(type) {
-		case types.UserMessage:
-			if m.Content.Parts == nil {
-				messages = append(messages, map[string]any{
-					"role": "user",
-					"content": []any{
-						map[string]any{"type": "input_text", "text": utils.SanitizeSurrogates(m.Content.String)},
-					},
-				})
-			} else {
-				content := make([]any, 0, len(m.Content.Parts))
-				for _, item := range m.Content.Parts {
-					if text, ok := item.(types.TextContent); ok {
-						content = append(content, map[string]any{
-							"type": "input_text",
-							"text": utils.SanitizeSurrogates(text.Text),
-						})
-						continue
-					}
-					image := item.(types.ImageContent)
-					content = append(content, map[string]any{
-						"type":      "input_image",
-						"detail":    "auto",
-						"image_url": fmt.Sprintf("data:%s;base64,%s", image.MimeType, image.Data),
+		isLeadingSystemMessage := sourceIndex == 0 && msg.MessageRole() == types.RoleSystem
+		sourceIndex++
+		if system, ok := msg.(types.SystemMessage); ok {
+			if !isLeadingSystemMessage {
+				appendSystemToolAdditions(&system, fmt.Sprintf("system:%d", msgIndex))
+			}
+			if !isLeadingSystemMessage || includeInitialSystemMessage {
+				text := ""
+				if isLeadingSystemMessage {
+					text = utils.GetSystemMessageText(&system)
+				} else {
+					text = utils.RenderSystemMessageUpdate(&system)
+				}
+				if len(text) > 0 {
+					messages = append(messages, map[string]any{
+						"role":    instructionRole,
+						"content": utils.SanitizeSurrogates(text),
 					})
 				}
-				if len(content) == 0 {
+			}
+		} else {
+			switch m := msg.(type) {
+			case types.UserMessage:
+				if m.Content.Parts == nil {
+					messages = append(messages, map[string]any{
+						"role": "user",
+						"content": []any{
+							map[string]any{"type": "input_text", "text": utils.SanitizeSurrogates(m.Content.String)},
+						},
+					})
+				} else {
+					content := make([]any, 0, len(m.Content.Parts))
+					for _, item := range m.Content.Parts {
+						if text, ok := item.(types.TextContent); ok {
+							content = append(content, map[string]any{
+								"type": "input_text",
+								"text": utils.SanitizeSurrogates(text.Text),
+							})
+							continue
+						}
+						image := item.(types.ImageContent)
+						content = append(content, map[string]any{
+							"type":      "input_image",
+							"detail":    "auto",
+							"image_url": fmt.Sprintf("data:%s;base64,%s", image.MimeType, image.Data),
+						})
+					}
+					if len(content) == 0 {
+						continue
+					}
+					messages = append(messages, map[string]any{"role": "user", "content": content})
+				}
+			case types.AssistantMessage:
+				var output []any
+				isSameProviderAndAPI := m.Provider == model.Provider && m.API == model.API
+				isSameModel := isSameProviderAndAPI && m.Model == model.ID
+				isDifferentModel := isSameProviderAndAPI && m.Model != model.ID
+				textBlockIndex := 0
+
+				for _, block := range m.Content {
+					switch b := block.(type) {
+					case types.ThinkingContent:
+						if b.ThinkingSignature != "" {
+							var reasoningItem any
+							if err := json.Unmarshal([]byte(b.ThinkingSignature), &reasoningItem); err == nil {
+								output = append(output, reasoningItem)
+							}
+						}
+					case types.TextContent:
+						sigID, sigPhase, hasSig := parseTextSignature(b.TextSignature)
+						fallbackMessageID := fmt.Sprintf("msg_pi_%d", msgIndex)
+						if textBlockIndex > 0 {
+							fallbackMessageID = fmt.Sprintf("msg_pi_%d_%d", msgIndex, textBlockIndex)
+						}
+						textBlockIndex++
+						// OpenAI requires id to be max 64 characters
+						msgID := fallbackMessageID
+						if hasSig && sigID != "" {
+							msgID = sigID
+						}
+						if len(msgID) > 64 {
+							msgID = "msg_" + utils.ShortHash(msgID)
+						}
+						messageItem := map[string]any{
+							"type":    "message",
+							"role":    "assistant",
+							"content": []any{map[string]any{"type": "output_text", "text": utils.SanitizeSurrogates(b.Text), "annotations": []any{}}},
+							"status":  "completed",
+							"id":      msgID,
+						}
+						if hasSig && sigPhase != "" {
+							messageItem["phase"] = sigPhase
+						}
+						output = append(output, messageItem)
+					case types.ToolCall:
+						toolCall := b
+						parts := strings.SplitN(toolCall.ID, "|", 2)
+						callID := parts[0]
+						itemID := ""
+						hasItemID := len(parts) > 1
+						if hasItemID {
+							itemID = parts[1]
+						}
+						var customInputProperty string
+						hasCustomInputProperty := false
+						if options != nil && options.GrammarToolInputProperties != nil {
+							customInputProperty, hasCustomInputProperty = options.GrammarToolInputProperties[toolCall.Name]
+						}
+
+						// For different-model messages, set id to undefined to avoid pairing validation.
+						// OpenAI tracks which fc_xxx IDs were paired with rs_xxx reasoning items.
+						// By omitting the id, we avoid triggering that validation (like cross-provider does).
+						// When replaying custom-tool calls as a function_call, also drop non-fc_* ids such as
+						// ctc_* custom-tool ids because function_call item ids must be fc_*.
+						itemIDIsFC := hasItemID && strings.HasPrefix(itemID, "fc_")
+						if (isDifferentModel && itemIDIsFC) || (!hasCustomInputProperty && !itemIDIsFC) {
+							hasItemID = false
+							itemID = ""
+						}
+
+						// pi v0.86.0: namespace replay no longer keys off the
+						// deferred-tools map; only same-model calls keep it.
+						canReplayNamespace := isSameModel
+
+						if hasCustomInputProperty {
+							input, err := GetGrammarToolInput(toolCall.Name, toolCall.Arguments, customInputProperty)
+							if err != nil {
+								panic(err)
+							}
+							item := map[string]any{
+								"type":    "custom_tool_call",
+								"call_id": callID,
+								"name":    toolCall.Name,
+								"input":   utils.SanitizeSurrogates(input),
+							}
+							if hasItemID {
+								item["id"] = itemID
+							}
+							if canReplayNamespace && toolCall.Namespace != "" {
+								item["namespace"] = toolCall.Namespace
+							}
+							output = append(output, item)
+						} else {
+							item := map[string]any{
+								"type":      "function_call",
+								"call_id":   callID,
+								"name":      toolCall.Name,
+								"arguments": marshalToolCallArguments(toolCall.Arguments),
+							}
+							if hasItemID {
+								item["id"] = itemID
+							}
+							if canReplayNamespace && toolCall.Namespace != "" {
+								item["namespace"] = toolCall.Namespace
+							}
+							output = append(output, item)
+						}
+					}
+				}
+				if len(output) == 0 {
 					continue
 				}
-				messages = append(messages, map[string]any{"role": "user", "content": content})
-			}
-		case types.AssistantMessage:
-			var output []any
-			isSameProviderAndAPI := m.Provider == model.Provider && m.API == model.API
-			isSameModel := isSameProviderAndAPI && m.Model == model.ID
-			isDifferentModel := isSameProviderAndAPI && m.Model != model.ID
-			textBlockIndex := 0
+				messages = append(messages, output...)
+			case types.ToolResultMessage:
+				parts := strings.SplitN(m.ToolCallID, "|", 2)
+				callID := parts[0]
+				output := convertResponsesToolResultOutput(model, m.Content)
 
-			for _, block := range m.Content {
-				switch b := block.(type) {
-				case types.ThinkingContent:
-					if b.ThinkingSignature != "" {
-						var reasoningItem any
-						if err := json.Unmarshal([]byte(b.ThinkingSignature), &reasoningItem); err == nil {
-							output = append(output, reasoningItem)
-						}
-					}
-				case types.TextContent:
-					sigID, sigPhase, hasSig := parseTextSignature(b.TextSignature)
-					fallbackMessageID := fmt.Sprintf("msg_pi_%d", msgIndex)
-					if textBlockIndex > 0 {
-						fallbackMessageID = fmt.Sprintf("msg_pi_%d_%d", msgIndex, textBlockIndex)
-					}
-					textBlockIndex++
-					// OpenAI requires id to be max 64 characters
-					msgID := fallbackMessageID
-					if hasSig && sigID != "" {
-						msgID = sigID
-					}
-					if len(msgID) > 64 {
-						msgID = "msg_" + utils.ShortHash(msgID)
-					}
-					messageItem := map[string]any{
-						"type":    "message",
-						"role":    "assistant",
-						"content": []any{map[string]any{"type": "output_text", "text": utils.SanitizeSurrogates(b.Text), "annotations": []any{}}},
-						"status":  "completed",
-						"id":      msgID,
-					}
-					if hasSig && sigPhase != "" {
-						messageItem["phase"] = sigPhase
-					}
-					output = append(output, messageItem)
-				case types.ToolCall:
-					toolCall := b
-					parts := strings.SplitN(toolCall.ID, "|", 2)
-					callID := parts[0]
-					itemID := ""
-					hasItemID := len(parts) > 1
-					if hasItemID {
-						itemID = parts[1]
-					}
-					var customInputProperty string
-					hasCustomInputProperty := false
-					if options != nil && options.GrammarToolInputProperties != nil {
-						customInputProperty, hasCustomInputProperty = options.GrammarToolInputProperties[toolCall.Name]
-					}
-
-					// For different-model messages, set id to undefined to avoid pairing validation.
-					// OpenAI tracks which fc_xxx IDs were paired with rs_xxx reasoning items.
-					// By omitting the id, we avoid triggering that validation (like cross-provider does).
-					// When replaying custom-tool calls as a function_call, also drop non-fc_* ids such as
-					// ctc_* custom-tool ids because function_call item ids must be fc_*.
-					itemIDIsFC := hasItemID && strings.HasPrefix(itemID, "fc_")
-					if (isDifferentModel && itemIDIsFC) || (!hasCustomInputProperty && !itemIDIsFC) {
-						hasItemID = false
-						itemID = ""
-					}
-
-					canReplayNamespace := isSameModel
-					if !canReplayNamespace && options != nil && options.DeferredToolNames != nil {
-						_, canReplayNamespace = options.DeferredToolNames[toolCall.Name]
-					}
-
-					if hasCustomInputProperty {
-						input, err := GetGrammarToolInput(toolCall.Name, toolCall.Arguments, customInputProperty)
-						if err != nil {
-							panic(err)
-						}
-						item := map[string]any{
-							"type":    "custom_tool_call",
-							"call_id": callID,
-							"name":    toolCall.Name,
-							"input":   utils.SanitizeSurrogates(input),
-						}
-						if hasItemID {
-							item["id"] = itemID
-						}
-						if canReplayNamespace && toolCall.Namespace != "" {
-							item["namespace"] = toolCall.Namespace
-						}
-						output = append(output, item)
-					} else {
-						item := map[string]any{
-							"type":      "function_call",
-							"call_id":   callID,
-							"name":      toolCall.Name,
-							"arguments": marshalToolCallArguments(toolCall.Arguments),
-						}
-						if hasItemID {
-							item["id"] = itemID
-						}
-						if canReplayNamespace && toolCall.Namespace != "" {
-							item["namespace"] = toolCall.Namespace
-						}
-						output = append(output, item)
-					}
+				isGrammarTool := false
+				if options != nil && options.GrammarToolInputProperties != nil {
+					_, isGrammarTool = options.GrammarToolInputProperties[m.ToolName]
+				}
+				if isGrammarTool {
+					messages = append(messages, map[string]any{
+						"type":    "custom_tool_call_output",
+						"call_id": callID,
+						"output":  output,
+					})
+				} else {
+					messages = append(messages, map[string]any{
+						"type":    "function_call_output",
+						"call_id": callID,
+						"output":  output,
+					})
 				}
 			}
-			if len(output) == 0 {
-				continue
-			}
-			messages = append(messages, output...)
-		case types.ToolResultMessage:
-			parts := strings.SplitN(m.ToolCallID, "|", 2)
-			callID := parts[0]
-			output := convertResponsesToolResultOutput(model, m.Content)
-
-			isGrammarTool := false
-			if options != nil && options.GrammarToolInputProperties != nil {
-				_, isGrammarTool = options.GrammarToolInputProperties[m.ToolName]
-			}
-			if isGrammarTool {
-				messages = append(messages, map[string]any{
-					"type":    "custom_tool_call_output",
-					"call_id": callID,
-					"output":  output,
-				})
-			} else {
-				messages = append(messages, map[string]any{
-					"type":    "function_call_output",
-					"call_id": callID,
-					"output":  output,
-				})
-			}
-
-			var deferredTools []types.Tool
-			if options != nil {
-				for _, name := range m.AddedToolNames {
-					if _, loaded := loadedToolNames[name]; loaded {
-						continue
-					}
-					tool := toolByName(options.DeferredTools, name)
-					if tool == nil {
-						continue
-					}
-					loadedToolNames[name] = struct{}{}
-					deferredTools = append(deferredTools, *tool)
-				}
-			}
-			if len(deferredTools) > 0 && options.DeferredToolsMode == "additional-tools" {
-				messages = append(messages, map[string]any{
-					"type":  "additional_tools",
-					"role":  "developer",
-					"tools": ConvertResponsesTools(deferredTools, options.ToolOptions),
-				})
-			} else if len(deferredTools) > 0 && options.DeferredToolsMode == "tool-search" {
-				names := make([]string, 0, len(deferredTools))
-				for _, tool := range deferredTools {
-					names = append(names, tool.Name)
-				}
-				searchCallID := "pi_tool_load_" + utils.ShortHash(fmt.Sprintf("%s:%s", m.ToolCallID, strings.Join(names, ",")))
-				messages = append(messages, map[string]any{
-					"type":      "tool_search_call",
-					"call_id":   searchCallID,
-					"execution": "client",
-					"status":    "completed",
-					"arguments": map[string]any{"query": strings.Join(names, " "), "limit": len(names)},
-				})
-				searchOptions := ConvertResponsesToolsOptions{}
-				if options.ToolOptions != nil {
-					searchOptions = *options.ToolOptions
-				}
-				searchOptions.DeferLoading = true
-				messages = append(messages, map[string]any{
-					"type":      "tool_search_output",
-					"call_id":   searchCallID,
-					"execution": "client",
-					"status":    "completed",
-					"tools":     ConvertResponsesTools(deferredTools, &searchOptions),
-				})
+			if !isLeadingSystemMessage {
+				msgIndex++
 			}
 		}
-		msgIndex++
 	}
 
 	return messages
 }
 
-// toolByName finds a tool by name (pi's options.deferredTools Map.get).
-func toolByName(tools []types.Tool, name string) *types.Tool {
-	for i := range tools {
-		if tools[i].Name == name {
-			return &tools[i]
-		}
-	}
-	return nil
-}
+// toolByName found a tool by name for the removed deferred-load path; it has
+// no callers since #9548.
 
 // marshalToolCallArguments serializes tool arguments (pi:
 // JSON.stringify(toolCall.arguments)); a nil map serializes as {}.
@@ -522,7 +538,7 @@ func ConvertResponsesTools(tools []types.Tool, options *ConvertResponsesToolsOpt
 					"definition": grammar.Definition,
 				},
 			}
-			if options != nil && options.DeferLoading {
+			if options != nil && options.ToolSearchResult {
 				item["defer_loading"] = true
 			}
 			out = append(out, item)
@@ -549,7 +565,7 @@ func ConvertResponsesTools(tools []types.Tool, options *ConvertResponsesToolsOpt
 			"description": tool.Description,
 			"parameters":  json.RawMessage(parameters),
 		}
-		if options != nil && options.DeferLoading {
+		if options != nil && options.ToolSearchResult {
 			functionTool["defer_loading"] = true
 		}
 		if supportsStrictMode {

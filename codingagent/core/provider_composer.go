@@ -71,7 +71,7 @@ type ProviderConfigInput struct {
 	APIKey  string
 	API     ai.Api
 	// StreamSimple is the custom stream implementation (pi: streamSimple).
-	StreamSimple func(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream
+	StreamSimple func(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream
 	Headers      map[string]string
 	// AuthHeader distinguishes "unset" (nil) from explicit false so the
 	// models.json layer can still supply it (pi: authHeader?: boolean).
@@ -1206,7 +1206,7 @@ func (p *composedProviderState) supportsBaseAPI(model ai.Model) bool {
 // registry (pi: streamWith). pi casts one options object between
 // StreamOptions and SimpleStreamOptions; pig carries both so each callee
 // receives its own shape.
-func (p *composedProviderState) streamWith(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.StreamOptions, simple bool, simpleOptions *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+func (p *composedProviderState) streamWith(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.StreamOptions, simple bool, simpleOptions *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 	return ai.LazyStream(model, func() (*ai.AssistantMessageEventStream, error) {
 		extension := p.currentExtension()
 		if extension != nil && extension.StreamSimple != nil && model.API == extension.API {
@@ -1238,11 +1238,11 @@ func (p *composedProviderState) streamWith(ctx context.Context, model *ai.Model,
 	})
 }
 
-func (p *composedProviderState) Stream(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
+func (p *composedProviderState) Stream(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
 	return p.streamWith(ctx, model, llmContext, options, false, nil)
 }
 
-func (p *composedProviderState) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+func (p *composedProviderState) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 	streamOptions := &ai.StreamOptions{}
 	if options != nil {
 		streamOptions = &options.StreamOptions

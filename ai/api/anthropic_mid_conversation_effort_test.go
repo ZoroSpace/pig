@@ -9,6 +9,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // managedModel mirrors pi's managedModel (claude-fable-5-1 with
@@ -53,7 +54,7 @@ func midConvoAssistant(t *testing.T, model *types.Model, level string) types.Ass
 }
 
 // captureMidConvo runs stream() with an OnPayload capture (pi: capture).
-func captureMidConvo(t *testing.T, model *types.Model, llmContext *types.Context, effort AnthropicEffort) (map[string]any, types.AssistantMessage) {
+func captureMidConvo(t *testing.T, model *types.Model, llmContext *types.TranscriptContext, effort AnthropicEffort) (map[string]any, types.AssistantMessage) {
 	t.Helper()
 	options := &AnthropicOptions{}
 	options.APIKey = "test-key"
@@ -100,7 +101,7 @@ func mapOf(t *testing.T, value any) map[string]any {
 
 func TestAnthropicMidConversationEffortMarkerPrefix(t *testing.T) {
 	model := managedModel(t)
-	firstPayload, firstMessage := captureMidConvo(t, model, &types.Context{Messages: []types.Message{midConvoUser("one", 1)}}, AnthropicEffortLow)
+	firstPayload, firstMessage := captureMidConvo(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{midConvoUser("one", 1)}}), AnthropicEffortLow)
 
 	markers := effortMarkers(t, firstPayload)
 	if len(markers) != 1 || !stringMapEqual(markers[0], map[string]any{"role": "system", "content": []any{}, "output_config": map[string]any{"effort": "low"}}) {
@@ -110,11 +111,11 @@ func TestAnthropicMidConversationEffortMarkerPrefix(t *testing.T) {
 		t.Errorf("providerThinkingLevel = %q, want low", firstMessage.ProviderThinkingLevel)
 	}
 
-	secondContext := &types.Context{Messages: []types.Message{
+	secondContext := utils.NormalizeContext(&types.Context{Messages: []types.Message{
 		midConvoUser("one", 1),
 		midConvoAssistant(t, model, "low"),
 		midConvoUser("two", 2),
-	}}
+	}})
 	secondPayload, secondMessage := captureMidConvo(t, model, secondContext, AnthropicEffortHigh)
 
 	secondMarkers := effortMarkers(t, secondPayload)
@@ -143,7 +144,7 @@ func TestAnthropicMidConversationEffortNativeLevels(t *testing.T) {
 	for _, effort := range []AnthropicEffort{"low", "medium", "high", "xhigh", "max"} {
 		t.Run(string(effort), func(t *testing.T) {
 			model := managedModel(t)
-			payload, message := captureMidConvo(t, model, &types.Context{Messages: []types.Message{midConvoUser("one", 1)}}, effort)
+			payload, message := captureMidConvo(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{midConvoUser("one", 1)}}), effort)
 			markers := effortMarkers(t, payload)
 			if len(markers) != 1 || !stringMapEqual(markers[0], map[string]any{"role": "system", "content": []any{}, "output_config": map[string]any{"effort": string(effort)}}) {
 				t.Fatalf("markers = %#v", markers)
@@ -157,7 +158,7 @@ func TestAnthropicMidConversationEffortNativeLevels(t *testing.T) {
 
 func TestAnthropicMidConversationEffortDefaultsToHigh(t *testing.T) {
 	model := managedModel(t)
-	payload, message := captureMidConvo(t, model, &types.Context{Messages: []types.Message{midConvoUser("one", 1)}}, "")
+	payload, message := captureMidConvo(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{midConvoUser("one", 1)}}), "")
 	markers := effortMarkers(t, payload)
 	if len(markers) != 1 || !stringMapEqual(markers[0], map[string]any{"role": "system", "content": []any{}, "output_config": map[string]any{"effort": "high"}}) {
 		t.Fatalf("markers = %#v", markers)
@@ -176,9 +177,9 @@ func TestAnthropicMidConversationEffortSkipsLegacyAndForeignAssistants(t *testin
 	legacy := midConvoAssistant(t, model, "") // no providerThinkingLevel
 	otherProvider := midConvoAssistant(t, model, "low")
 	otherProvider.Provider = types.ProviderID("other-provider")
-	payload, _ := captureMidConvo(t, model, &types.Context{Messages: []types.Message{
+	payload, _ := captureMidConvo(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{
 		midConvoUser("one", 1), legacy, midConvoUser("two", 2), otherProvider, midConvoUser("three", 3),
-	}}, AnthropicEffortMedium)
+	}}), AnthropicEffortMedium)
 	markers := effortMarkers(t, payload)
 	if len(markers) != 1 {
 		t.Fatalf("markers = %#v, want only the active one", markers)
@@ -191,7 +192,7 @@ func TestAnthropicMidConversationEffortSkipsLegacyAndForeignAssistants(t *testin
 func TestAnthropicMidConversationEffortUnsupportedModelsUseTopLevelEffort(t *testing.T) {
 	model := managedModel(t)
 	model.Compat = &types.AnthropicMessagesCompat{ForceAdaptiveThinking: lo.ToPtr(true)}
-	payload, message := captureMidConvo(t, model, &types.Context{Messages: []types.Message{midConvoUser("one", 1)}}, AnthropicEffortLow)
+	payload, message := captureMidConvo(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{midConvoUser("one", 1)}}), AnthropicEffortLow)
 	for _, message := range normalizeAny(payload["messages"]) {
 		if m := message.(map[string]any); m["role"] == "system" {
 			t.Errorf("unexpected system marker: %#v", m)
@@ -217,7 +218,7 @@ func TestAnthropicMidConversationEffortBetaHeaders(t *testing.T) {
 	options.APIKey = "test-key"
 	options.CacheRetention = types.CacheRetentionNone
 	options.Fetch = fakeAnthropicFetch(minimalAnthropicEvents, &captured)
-	result := streamAnthropicMessages(gocontext.Background(), model, &types.Context{Messages: []types.Message{midConvoUser("one", 1)}}, options).Result()
+	result := streamAnthropicMessages(gocontext.Background(), model, utils.NormalizeContext(&types.Context{Messages: []types.Message{midConvoUser("one", 1)}}), options).Result()
 	if result.StopReason != types.StopReasonStop {
 		t.Fatalf("stopReason = %q (%s)", result.StopReason, result.ErrorMessage)
 	}

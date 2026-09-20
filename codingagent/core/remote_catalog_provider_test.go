@@ -21,11 +21,11 @@ import (
 
 type notUsedStreams struct{}
 
-func (notUsedStreams) Stream(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
+func (notUsedStreams) Stream(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.StreamOptions) *ai.AssistantMessageEventStream {
 	panic("not used")
 }
 
-func (notUsedStreams) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.Context, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+func (notUsedStreams) StreamSimple(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 	panic("not used")
 }
 

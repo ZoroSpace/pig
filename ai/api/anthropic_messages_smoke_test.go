@@ -18,6 +18,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func deepseekAnthropicSmokeModel(t *testing.T) *types.Model {
@@ -49,11 +50,11 @@ func deepseekSmokeOptions(apiKey string, maxTokens int64) *types.StreamOptions {
 func TestAnthropicDeepSeekSmokeText(t *testing.T) {
 	model := deepseekAnthropicSmokeModel(t)
 	options := deepseekSmokeOptions(os.Getenv("DEEPSEEK_API_KEY"), 64)
-	stream := (&AnthropicMessages{}).Stream(context.Background(), model, &types.Context{
+	stream := (&AnthropicMessages{}).Stream(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{types.UserMessage{
 			Role: types.RoleUser, Content: types.UserContent{String: "Reply with exactly one word: pong"}, Timestamp: 1,
 		}},
-	}, options)
+	}), options)
 	result := stream.Result()
 	t.Logf("stopReason=%s usage=%+v err=%s", result.StopReason, result.Usage, result.ErrorMessage)
 	if result.StopReason != types.StopReasonStop {
@@ -76,11 +77,11 @@ func TestAnthropicDeepSeekSmokeThinking(t *testing.T) {
 	simple.APIKey = os.Getenv("DEEPSEEK_API_KEY")
 	simple.MaxTokens = lo.ToPtr(int64(384))
 	simple.Reasoning = types.ThinkingLevelLow
-	stream := (&AnthropicMessages{}).StreamSimple(context.Background(), model, &types.Context{
+	stream := (&AnthropicMessages{}).StreamSimple(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{types.UserMessage{
 			Role: types.RoleUser, Content: types.UserContent{String: "What is 13*17? Think briefly, then answer with just the number."}, Timestamp: 1,
 		}},
-	}, simple)
+	}), simple)
 	sawThinking := false
 	for event := range stream.Events() {
 		if event.Type == types.EventThinkingStart || event.Type == types.EventThinkingDelta {
@@ -102,7 +103,7 @@ func TestAnthropicDeepSeekSmokeThinking(t *testing.T) {
 
 func TestAnthropicDeepSeekSmokeToolCall(t *testing.T) {
 	model := deepseekAnthropicSmokeModel(t)
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{types.UserMessage{
 			Role: types.RoleUser, Content: types.UserContent{String: "Call echo_value with value set to hello."}, Timestamp: 1,
 		}},
@@ -111,7 +112,7 @@ func TestAnthropicDeepSeekSmokeToolCall(t *testing.T) {
 			Description: "Echo a string value",
 			Parameters:  mustJSONRaw(`{"type":"object","properties":{"value":{"type":"string","description":"The value to echo"}},"required":["value"]}`),
 		}},
-	}
+	})
 	options := deepseekSmokeOptions(os.Getenv("DEEPSEEK_API_KEY"), 256)
 	stream := (&AnthropicMessages{}).Stream(context.Background(), model, llmContext, options)
 	result := stream.Result()

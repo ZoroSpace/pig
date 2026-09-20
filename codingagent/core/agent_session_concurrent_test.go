@@ -35,7 +35,7 @@ func waitForStreaming(t *testing.T, session *AgentSession) {
 func createConcurrentSession(t *testing.T) *AgentSession {
 	session, _, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey: true,
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := newMockAssistantStream()
 			go func() {
 				partial := testAssistantMessage("")
@@ -143,7 +143,7 @@ func TestAgentSessionConcurrentQueuesExtensionOriginSteeringWhileStreaming(t *te
 	session, _, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey:        true,
 		ExtensionsResult: []*LoadExtensionsResult{extensionsResult},
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := newMockAssistantStream()
 			go func() {
 				for _, message := range llmContext.Messages {
@@ -265,7 +265,7 @@ func TestAgentSessionConcurrentPromptAfterPreviousCompletes(t *testing.T) {
 	// Create session with a stream that completes immediately
 	session, _, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey: true,
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := newMockAssistantStream()
 			done := testAssistantMessage("Done", withModelRef(model))
 			stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: &done})
@@ -322,7 +322,7 @@ func TestAgentSessionConcurrentWaitsForQueuedAgentEventsBeforeEmittingToolCall(t
 	session, sessionManager, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey:         true,
 		BaseToolsOverride: map[string]agent.AgentTool{"dummy": dummyTool()},
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := newMockAssistantStream()
 			go func() {
 				toolResultCount := 0
@@ -397,7 +397,7 @@ func TestAgentSessionConcurrentPersistsMessageEndEventsInOrderWithSlowExtensionH
 	session, sessionManager, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey:         true,
 		BaseToolsOverride: map[string]agent.AgentTool{"dummy": dummyTool()},
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := newMockAssistantStream()
 			go func() {
 				hasToolResult := false

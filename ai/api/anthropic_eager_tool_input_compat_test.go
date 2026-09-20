@@ -52,20 +52,22 @@ var eagerStrictTool = types.Tool{
 	},
 }
 
-func eagerTestContext(tools []types.Tool) *types.Context {
-	ctx := &types.Context{
-		Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Use the tool"}, Timestamp: 1}},
-	}
+func eagerTestContext(tools []types.Tool) *types.TranscriptContext {
+	messages := []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Use the tool"}, Timestamp: 1}}
 	if len(tools) > 0 {
-		ctx.Tools = tools
+		// v0.86.0: tools are declared by the leading system message.
+		messages = append([]types.Message{types.SystemMessage{
+			Role: types.RoleSystem, Content: types.SystemContent{String: ""},
+			ToolsAdded: tools, Timestamp: 1,
+		}}, messages...)
 	}
-	return ctx
+	return &types.TranscriptContext{Messages: messages}
 }
 
 // captureEagerRequest drives one request through the fake fetch and returns
 // the captured request (pi: captureAnthropicRequest against a local HTTP
 // server; the fake transport captures the same wire data in-process).
-func captureEagerRequest(t *testing.T, compat *types.AnthropicMessagesCompat, llmContext *types.Context) *capturedAnthropicRequest {
+func captureEagerRequest(t *testing.T, compat *types.AnthropicMessagesCompat, llmContext *types.TranscriptContext) *capturedAnthropicRequest {
 	t.Helper()
 	model := eagerTestModel(compat)
 	model.BaseURL = "http://127.0.0.1:9"

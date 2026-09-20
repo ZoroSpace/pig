@@ -81,7 +81,7 @@ func init() {
 
 // Stream dispatches one streaming request (pi: stream). ctx carries the
 // caller's cancellation (pi: options.signal).
-func (AzureOpenAIResponses) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (AzureOpenAIResponses) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	opts := &AzureOpenAIResponsesOptions{}
 	if options != nil {
 		opts.StreamOptions = *options
@@ -90,7 +90,7 @@ func (AzureOpenAIResponses) Stream(ctx context.Context, model *types.Model, llmC
 }
 
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
-func (AzureOpenAIResponses) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (AzureOpenAIResponses) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	if options.APIKey == "" {
 		return immediateErrorStream(model, fmt.Errorf("No API key for provider: %s", model.Provider))
 	}
@@ -156,8 +156,9 @@ func formatAzureOpenAIError(err error) string {
 // streamAzureOpenAIResponses is the adapter's core stream implementation
 // (pi: the stream StreamFunction body). ctx carries the caller's
 // cancellation (pi: options.signal).
-func streamAzureOpenAIResponses(ctx context.Context, model *types.Model, llmContext *types.Context, options *AzureOpenAIResponsesOptions) *types.AssistantMessageEventStream {
+func streamAzureOpenAIResponses(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *AzureOpenAIResponsesOptions) *types.AssistantMessageEventStream {
 	stream := types.NewAssistantMessageEventStream()
+	normalizedContext := utils.ResolveTranscript(llmContext, azureSupportsMidConvoSystemMessages(model))
 
 	go func() {
 		deploymentName := resolveDeploymentName(model, options)
@@ -222,8 +223,8 @@ func streamAzureOpenAIResponses(ctx context.Context, model *types.Model, llmCont
 				compat.SupportsOpenAIGrammarTools != nil {
 				supportsOpenAIGrammarTools = *compat.SupportsOpenAIGrammarTools
 			}
-			grammarToolInputProperties := CreateGrammarToolInputProperties(llmContext.Tools, supportsOpenAIGrammarTools)
-			params := buildAzureResponsesParams(model, llmContext, options, deploymentName, grammarToolInputProperties)
+			grammarToolInputProperties := CreateGrammarToolInputProperties(utils.GetDeclaredTools(normalizedContext.Messages), supportsOpenAIGrammarTools)
+			params := buildAzureResponsesParams(model, normalizedContext, options, deploymentName, grammarToolInputProperties)
 			if options.OnPayload != nil {
 				if next := options.OnPayload(params, model); next != nil {
 					if nextParams, ok := next.(map[string]any); ok {
@@ -475,21 +476,38 @@ func (c *azureResponsesClient) createResponse(ctx context.Context, params map[st
 // buildAzureResponsesParams builds the Responses request body (pi:
 // buildParams). The model field carries the deployment name; no session
 // affinity/prompt-cache options beyond prompt_cache_key.
-func buildAzureResponsesParams(model *types.Model, llmContext *types.Context, options *AzureOpenAIResponsesOptions, deploymentName string, grammarToolInputProperties map[string]string) map[string]any {
-	messages := ConvertResponsesMessages(model, llmContext, azureToolCallProviders, &ConvertResponsesMessagesOptions{
-		GrammarToolInputProperties: grammarToolInputProperties,
-	})
-
+func buildAzureResponsesParams(model *types.Model, llmContext *types.TranscriptContext, options *AzureOpenAIResponsesOptions, deploymentName string, grammarToolInputProperties map[string]string) map[string]any {
+	supportsAdditionalTools := false
+	supportsToolSearch := false
 	supportsStrictMode := true
 	supportsOpenAIGrammarTools := false
+	var supportsMidConvoSystemMessages bool
 	if compat, ok := model.Compat.(*types.OpenAIResponsesCompat); ok && compat != nil {
+		if compat.SupportsAdditionalTools != nil {
+			supportsAdditionalTools = *compat.SupportsAdditionalTools
+		}
+		if compat.SupportsToolSearch != nil {
+			supportsToolSearch = *compat.SupportsToolSearch
+		}
 		if compat.SupportsStrictMode != nil {
 			supportsStrictMode = *compat.SupportsStrictMode
 		}
 		if compat.SupportsOpenAIGrammarTools != nil {
 			supportsOpenAIGrammarTools = *compat.SupportsOpenAIGrammarTools
 		}
+		supportsMidConvoSystemMessages = compat.SupportsMidConvoSystemMessages != nil && *compat.SupportsMidConvoSystemMessages
 	}
+	transcriptTools := utils.ResolveTranscriptTools(llmContext.Messages, supportsAdditionalTools || supportsToolSearch)
+	messages := ConvertResponsesMessages(model, llmContext, azureToolCallProviders, &ConvertResponsesMessagesOptions{
+		GrammarToolInputProperties:     grammarToolInputProperties,
+		SupportsMidConvoSystemMessages: lo.ToPtr(supportsMidConvoSystemMessages),
+		SupportsAdditionalTools:        lo.ToPtr(supportsAdditionalTools),
+		SupportsToolSearch:             lo.ToPtr(supportsToolSearch),
+		ToolOptions: &ConvertResponsesToolsOptions{
+			SupportsStrictMode:         lo.ToPtr(supportsStrictMode),
+			SupportsOpenAIGrammarTools: lo.ToPtr(supportsOpenAIGrammarTools),
+		},
+	})
 
 	params := map[string]any{
 		"model":  deploymentName,
@@ -509,8 +527,8 @@ func buildAzureResponsesParams(model *types.Model, llmContext *types.Context, op
 		params["temperature"] = *options.Temperature
 	}
 
-	if len(llmContext.Tools) > 0 {
-		params["tools"] = ConvertResponsesTools(llmContext.Tools, &ConvertResponsesToolsOptions{
+	if len(transcriptTools.RequestTools) > 0 {
+		params["tools"] = ConvertResponsesTools(transcriptTools.RequestTools, &ConvertResponsesToolsOptions{
 			SupportsStrictMode:         lo.ToPtr(supportsStrictMode),
 			SupportsOpenAIGrammarTools: lo.ToPtr(supportsOpenAIGrammarTools),
 		})
@@ -545,4 +563,14 @@ func buildAzureResponsesParams(model *types.Model, llmContext *types.Context, op
 	}
 
 	return params
+}
+
+// azureSupportsMidConvoSystemMessages resolves the Responses compat flag
+// (pi: model.compat?.supportsMidConvoSystemMessages ?? false).
+func azureSupportsMidConvoSystemMessages(model *types.Model) bool {
+	if compat, ok := model.Compat.(*types.OpenAIResponsesCompat); ok && compat != nil &&
+		compat.SupportsMidConvoSystemMessages != nil {
+		return *compat.SupportsMidConvoSystemMessages
+	}
+	return false
 }

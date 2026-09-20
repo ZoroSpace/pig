@@ -13,6 +13,7 @@ import (
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/api"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // bareModel builds a reasoning model without catalog compat overrides, so the
@@ -52,11 +53,11 @@ func captureBody(t *testing.T, model types.Model, reasoning bool) map[string]any
 		opts.Reasoning = types.ThinkingLevelHigh
 	}
 	var adapter api.OpenAICompletions
-	stream := adapter.StreamSimple(context.Background(), &model, &types.Context{
+	stream := adapter.StreamSimple(context.Background(), &model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1},
 		},
-	}, &opts)
+	}), &opts)
 	result := stream.Result()
 	if result.StopReason == types.StopReasonError {
 		t.Fatalf("stream error: %s", result.ErrorMessage)

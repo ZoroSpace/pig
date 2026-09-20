@@ -183,7 +183,7 @@ func init() {
 
 // Stream dispatches one streaming request (pi: stream). ctx carries the
 // caller's cancellation (pi: options.signal into client.send).
-func (BedrockConverseStream) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (BedrockConverseStream) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	opts := &BedrockOptions{}
 	if options != nil {
 		opts.StreamOptions = *options
@@ -192,7 +192,7 @@ func (BedrockConverseStream) Stream(ctx context.Context, model *types.Model, llm
 }
 
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
-func (BedrockConverseStream) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (BedrockConverseStream) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	// pi: { ...buildBaseOptions(model, context, options, undefined), toolChoice } —
 	// the undefined apiKey falls through to options.apiKey.
 	base := BuildBaseOptions(model, llmContext, options, "")
@@ -263,8 +263,11 @@ func setThinkingBudget(budgets *types.ThinkingBudgets, level types.ThinkingLevel
 
 // streamBedrockConverse is the adapter's core stream implementation (pi:
 // stream).
-func streamBedrockConverse(ctx context.Context, model *types.Model, llmContext *types.Context, options *BedrockOptions) *types.AssistantMessageEventStream {
+func streamBedrockConverse(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *BedrockOptions) *types.AssistantMessageEventStream {
 	stream := types.NewAssistantMessageEventStream()
+	// Bedrock has no mid-conversation system messages; fold them into the
+	// leading prompt.
+	normalizedContext := utils.CollapseSystemMessages(llmContext)
 	output := &types.AssistantMessage{
 		Role:       types.RoleAssistant,
 		Content:    []types.Content{},
@@ -302,7 +305,7 @@ func streamBedrockConverse(ctx context.Context, model *types.Model, llmContext *
 			}
 		}()
 
-		if err := runBedrockConverseStream(ctx, model, llmContext, options, output, push, blocks, &responseRequestID); err != nil {
+		if err := runBedrockConverseStream(ctx, model, normalizedContext, options, output, push, blocks, &responseRequestID); err != nil {
 			failBedrockStream(ctx, output, stream, push, err, blocks, &responseRequestID)
 		}
 	}()
@@ -328,7 +331,7 @@ func failBedrockStream(ctx context.Context, output *types.AssistantMessage, stre
 }
 
 // runBedrockConverseStream is pi's try block (request setup + streaming loop).
-func runBedrockConverseStream(ctx context.Context, model *types.Model, llmContext *types.Context, options *BedrockOptions, output *types.AssistantMessage, push func(types.AssistantMessageEvent), blocks map[int32]*bedrockBlock, responseRequestID *string) error {
+func runBedrockConverseStream(ctx context.Context, model *types.Model, normalizedContext *types.TranscriptContext, options *BedrockOptions, output *types.AssistantMessage, push func(types.AssistantMessageEvent), blocks map[int32]*bedrockBlock, responseRequestID *string) error {
 	// A profile explicitly configured through pi's auth flow (the `profile`
 	// option or scoped `AWS_PROFILE` on the stored credential's env) must win
 	// over ambient AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY. The SDK default
@@ -431,14 +434,19 @@ func runBedrockConverseStream(ctx context.Context, model *types.Model, llmContex
 		maxTokens := model.MaxTokens
 		inferenceMaxTokens = &maxTokens
 	}
-	toolConfig, err := convertBedrockToolConfig(llmContext.Tools, options.ToolChoice, supportsStrictMode)
+	toolConfig, err := convertBedrockToolConfig(utils.GetCurrentTools(normalizedContext.Messages), options.ToolChoice, supportsStrictMode)
 	if err != nil {
 		return err
 	}
+	initialSystemMessage := utils.GetInitialSystemMessage(normalizedContext.Messages)
+	initialSystemPrompt := ""
+	if initialSystemMessage != nil {
+		initialSystemPrompt = utils.GetSystemMessageText(initialSystemMessage)
+	}
 	commandInput := &bedrockConverseInput{
 		ModelID:  model.ID,
-		Messages: convertBedrockMessages(llmContext, model, cacheRetention, options.Env),
-		System:   buildBedrockSystemPrompt(llmContext.SystemPrompt, model, cacheRetention, options.Env),
+		Messages: convertBedrockMessages(normalizedContext, model, cacheRetention, options.Env),
+		System:   buildBedrockSystemPrompt(initialSystemPrompt, model, cacheRetention, options.Env),
 		InferenceConfig: &bedrockInferenceConfig{
 			MaxTokens:   inferenceMaxTokens,
 			Temperature: options.Temperature,
@@ -881,6 +889,15 @@ func handleBedrockMetadata(event *brtypes.ConverseStreamMetadataEvent, model *ty
 	output.Usage.Output = int64(lo.FromPtr(usage.OutputTokens))
 	output.Usage.CacheRead = int64(lo.FromPtr(usage.CacheReadInputTokens))
 	output.Usage.CacheWrite = int64(lo.FromPtr(usage.CacheWriteInputTokens))
+	// pi v0.86.0 ("price Bedrock one-hour cache writes"): the 1h subset of
+	// CacheWrite comes from the per-TTL cache details.
+	var cacheWrite1h int64
+	for _, detail := range usage.CacheDetails {
+		if detail.Ttl == brtypes.CacheTTLOneHour {
+			cacheWrite1h += int64(lo.FromPtr(detail.InputTokens))
+		}
+	}
+	output.Usage.CacheWrite1h = lo.ToPtr(cacheWrite1h)
 	total := int64(lo.FromPtr(usage.TotalTokens))
 	if total == 0 {
 		total = output.Usage.Input + output.Usage.Output
@@ -1145,9 +1162,9 @@ func convertBedrockToolResultContent(content []types.Content) []bedrockToolResul
 	return result
 }
 
-func convertBedrockMessages(llmContext *types.Context, model *types.Model, cacheRetention types.CacheRetention, env types.ProviderEnv) []bedrockMessage {
+func convertBedrockMessages(llmContext *types.TranscriptContext, model *types.Model, cacheRetention types.CacheRetention, env types.ProviderEnv) []bedrockMessage {
 	var result []bedrockMessage
-	transformedMessages := TransformMessages(llmContext.Messages, model, func(id string, _ *types.Model, _ *types.AssistantMessage) string {
+	transformedMessages := TransformMessages(utils.WithoutInitialSystemMessage(llmContext.Messages), model, func(id string, _ *types.Model, _ *types.AssistantMessage) string {
 		return normalizeBedrockToolCallID(id)
 	})
 

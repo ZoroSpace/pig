@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // newResponsesNamespaceModel is the namespace test's fixture model (pi:
@@ -102,7 +103,7 @@ func TestOpenAIResponsesToolCallNamespaces(t *testing.T) {
 			t.Fatalf("arguments = %v", toolCall.Arguments)
 		}
 
-		replayed := ConvertResponsesMessages(model, &types.Context{Messages: []types.Message{*output}}, map[string]struct{}{"openai": {}}, nil)
+		replayed := ConvertResponsesMessages(model, utils.NormalizeContext(&types.Context{Messages: []types.Message{*output}}), map[string]struct{}{"openai": {}}, nil)
 		item := findItem(replayed, "function_call")
 		if item == nil {
 			t.Fatal("expected function_call item")
@@ -132,7 +133,7 @@ func TestOpenAIResponsesToolCallNamespaces(t *testing.T) {
 			t.Fatalf("arguments = %v", toolCall.Arguments)
 		}
 
-		replayed := ConvertResponsesMessages(model, &types.Context{Messages: []types.Message{*output}},
+		replayed := ConvertResponsesMessages(model, utils.NormalizeContext(&types.Context{Messages: []types.Message{*output}}),
 			map[string]struct{}{"openai": {}}, &ConvertResponsesMessagesOptions{GrammarToolInputProperties: grammarProps})
 		item := findItem(replayed, "custom_tool_call")
 		if item == nil {
@@ -164,7 +165,7 @@ func TestOpenAIResponsesToolCallNamespaces(t *testing.T) {
 		}
 
 		for _, targetModel := range targetModels {
-			replayed := ConvertResponsesMessages(targetModel, &types.Context{Messages: []types.Message{*output}},
+			replayed := ConvertResponsesMessages(targetModel, utils.NormalizeContext(&types.Context{Messages: []types.Message{*output}}),
 				map[string]struct{}{"openai": {}},
 				&ConvertResponsesMessagesOptions{GrammarToolInputProperties: map[string]string{"query": "input"}})
 			functionCall := findItem(replayed, "function_call")
@@ -192,7 +193,7 @@ func TestOpenAIResponsesToolCallNamespaces(t *testing.T) {
 			Arguments: map[string]any{"value": "hello"},
 		})
 
-		replayed := ConvertResponsesMessages(model, &types.Context{Messages: []types.Message{*output}},
+		replayed := ConvertResponsesMessages(model, utils.NormalizeContext(&types.Context{Messages: []types.Message{*output}}),
 			map[string]struct{}{"openai": {}}, nil)
 		item := findItem(replayed, "function_call")
 		if item == nil {

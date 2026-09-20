@@ -13,6 +13,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // TestDeepSeekProviderEndToEnd drives the full provider path — CreateProvider
@@ -55,11 +56,11 @@ func TestDeepSeekProviderEndToEnd(t *testing.T) {
 	opts.APIKey = "test-key"
 	opts.Fetch = fetch
 
-	stream := provider.StreamSimple(context.Background(), &model, &types.Context{
+	stream := provider.StreamSimple(context.Background(), &model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "what is 6*7"}, Timestamp: 1},
 		},
-	}, &opts)
+	}), &opts)
 
 	result := stream.Result()
 	if result.StopReason != types.StopReasonStop {
@@ -102,7 +103,7 @@ func TestDeepSeekRealAPI(t *testing.T) {
 	opts.Reasoning = types.ThinkingLevelHigh
 	opts.Transport = types.TransportSSE
 
-	stream := DeepSeekProvider().StreamSimple(context.Background(), &model, &types.Context{
+	stream := DeepSeekProvider().StreamSimple(context.Background(), &model, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{
 				Role:      types.RoleUser,
@@ -110,7 +111,7 @@ func TestDeepSeekRealAPI(t *testing.T) {
 				Timestamp: time.Now().UnixMilli(),
 			},
 		},
-	}, &opts)
+	}), &opts)
 
 	start := time.Now()
 	eventCount := 0

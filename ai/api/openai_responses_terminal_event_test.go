@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // responsesEventSeq adapts a slice of events into the reducer's iterator (pi:
@@ -80,9 +81,9 @@ func TestOpenAIResponsesTerminalEventHandling(t *testing.T) {
 
 	t.Run("emits an error final result when the wrapper stream ends before a terminal response event", func(t *testing.T) {
 		model := newResponsesTerminalModel()
-		llmContext := &types.Context{
+		llmContext := utils.NormalizeContext(&types.Context{
 			Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{Parts: []types.Content{types.NewTextContent("hi")}}, Timestamp: 0}},
-		}
+		})
 		captured := &capturedResponsesRequest{}
 		options := &OpenAIResponsesOptions{}
 		options.APIKey = "test"

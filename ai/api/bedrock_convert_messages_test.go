@@ -9,6 +9,7 @@ import (
 	brtypes "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func TestBedrockConstrainedSamplingGatesStrictToolUse(t *testing.T) {
@@ -23,14 +24,17 @@ func TestBedrockConstrainedSamplingGatesStrictToolUse(t *testing.T) {
 			"strict": "require",
 		},
 	}
-	context := &types.Context{
-		Messages: []types.Message{types.UserMessage{
-			Role:      types.RoleUser,
-			Content:   types.UserContent{String: "Use the tool"},
-			Timestamp: 1,
-		}},
-		Tools: []types.Tool{tool},
-	}
+	// v0.86.0: tools are declared by the leading system message.
+	context := utils.NormalizeContext(&types.Context{
+		Messages: []types.Message{
+			types.SystemMessage{Role: types.RoleSystem, Content: types.SystemContent{String: ""}, ToolsAdded: []types.Tool{tool}, Timestamp: 1},
+			types.UserMessage{
+				Role:      types.RoleUser,
+				Content:   types.UserContent{String: "Use the tool"},
+				Timestamp: 1,
+			},
+		},
+	})
 
 	payload := captureBedrockPayload(t, context, bedrockBaseModel)
 	if payload.ToolConfig == nil || len(payload.ToolConfig.Tools) != 1 || payload.ToolConfig.Tools[0].ToolSpec == nil {
@@ -40,7 +44,7 @@ func TestBedrockConstrainedSamplingGatesStrictToolUse(t *testing.T) {
 		t.Fatalf("expected strict=true for a require tool on a strict-capable model")
 	}
 
-	context.Tools[0].ConstrainedSampling = map[string]any{
+	context.Messages[0].(types.SystemMessage).ToolsAdded[0].ConstrainedSampling = map[string]any{
 		"type":   "json_schema",
 		"strict": "prefer",
 	}
@@ -72,13 +76,13 @@ func TestBedrockPreservesEmptyPropertyNamesInStreamedToolArguments(t *testing.T)
 		&brtypes.ConverseStreamOutputMemberMessageStop{Value: brtypes.MessageStopEvent{StopReason: brtypes.StopReasonToolUse}},
 	}
 
-	s := streamBedrockConverse(context.Background(), bedrockBaseModel, &types.Context{
+	s := streamBedrockConverse(context.Background(), bedrockBaseModel, utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{types.UserMessage{
 			Role:      types.RoleUser,
 			Content:   types.UserContent{String: "Use the tool"},
 			Timestamp: 1,
 		}},
-	}, &BedrockOptions{StreamOptions: types.StreamOptions{CacheRetention: types.CacheRetentionNone}})
+	}), &BedrockOptions{StreamOptions: types.StreamOptions{CacheRetention: types.CacheRetentionNone}})
 	message := s.Result()
 
 	call, ok := message.Content[0].(types.ToolCall)
@@ -102,13 +106,13 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 	mock.install(t)
 
 	t.Run("skips unknown user content blocks instead of throwing", func(t *testing.T) {
-		context := &types.Context{Messages: []types.Message{types.UserMessage{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{
 			Role: types.RoleUser,
 			Content: types.UserContent{Parts: []types.Content{
 				types.NewTextContent("hello"),
 			}},
 			Timestamp: 1,
-		}}}
+		}}})
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		if len(payload.Messages) != 1 {
 			t.Fatalf("expected 1 message, got %d", len(payload.Messages))
@@ -123,7 +127,7 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 		// has no unknown member, so the closest shape is text plus a block the
 		// converter skips (image content on a text-only path is still
 		// converted — use a nil part instead).
-		context := &types.Context{Messages: []types.Message{types.AssistantMessage{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.AssistantMessage{
 			Role:       types.RoleAssistant,
 			Content:    []types.Content{types.NewTextContent("hello")},
 			API:        "bedrock-converse-stream",
@@ -132,7 +136,7 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 			Usage:      emptyUsage(),
 			StopReason: types.StopReasonStop,
 			Timestamp:  1,
-		}}}
+		}}})
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		if len(payload.Messages) != 1 {
 			t.Fatalf("expected 1 message, got %d", len(payload.Messages))
@@ -145,11 +149,11 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 	t.Run("replaces user messages with only unknown content blocks with a placeholder", func(t *testing.T) {
 		// pig's UserContent has no unknown member; an empty parts slice takes
 		// the same placeholder branch.
-		context := &types.Context{Messages: []types.Message{types.UserMessage{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{
 			Role:      types.RoleUser,
 			Content:   types.UserContent{Parts: []types.Content{}},
 			Timestamp: 1,
-		}}}
+		}}})
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		if len(payload.Messages) != 1 {
 			t.Fatalf("expected 1 message, got %d", len(payload.Messages))
@@ -158,39 +162,39 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 	})
 
 	t.Run("replaces blank user string content with a placeholder", func(t *testing.T) {
-		context := &types.Context{Messages: []types.Message{types.UserMessage{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{
 			Role:      types.RoleUser,
 			Content:   types.UserContent{String: "   "},
 			Timestamp: 1,
-		}}}
+		}}})
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		assertSingleTextContent(t, payload.Messages[0].Content, "<empty>")
 	})
 
 	t.Run("filters blank user text blocks when other content remains", func(t *testing.T) {
-		context := &types.Context{Messages: []types.Message{types.UserMessage{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{
 			Role: types.RoleUser,
 			Content: types.UserContent{Parts: []types.Content{
 				types.NewTextContent(""),
 				types.NewTextContent("hello"),
 			}},
 			Timestamp: 1,
-		}}}
+		}}})
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		assertSingleTextContent(t, payload.Messages[0].Content, "hello")
 	})
 
 	t.Run("replaces user content emptied by surrogate sanitization with a placeholder", func(t *testing.T) {
-		context := &types.Context{Messages: []types.Message{types.UserMessage{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{
 			Role:    types.RoleUser,
 			Content: types.UserContent{String: "\xed\xa0\xbd"},
-		}}}
+		}}})
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		assertSingleTextContent(t, payload.Messages[0].Content, "<empty>")
 	})
 
 	t.Run("skips assistant text blocks emptied by surrogate sanitization", func(t *testing.T) {
-		context := &types.Context{Messages: []types.Message{types.AssistantMessage{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.AssistantMessage{
 			Role:       types.RoleAssistant,
 			Content:    []types.Content{types.NewTextContent("\xed\xa0\xbd")},
 			API:        "bedrock-converse-stream",
@@ -199,7 +203,7 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 			Usage:      emptyUsage(),
 			StopReason: types.StopReasonStop,
 			Timestamp:  1,
-		}}}
+		}}})
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		if len(payload.Messages) != 0 {
 			t.Fatalf("expected 0 messages, got %d", len(payload.Messages))
@@ -207,13 +211,13 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 	})
 
 	t.Run("replaces blank tool result content with a placeholder", func(t *testing.T) {
-		context := &types.Context{Messages: []types.Message{types.ToolResultMessage{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.ToolResultMessage{
 			Role:       types.RoleToolResult,
 			ToolCallID: "tool-1",
 			ToolName:   "tool",
 			Content:    []types.Content{types.NewTextContent("")},
 			Timestamp:  1,
-		}}}
+		}}})
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		if len(payload.Messages) != 1 || len(payload.Messages[0].Content) != 1 || payload.Messages[0].Content[0].ToolResult == nil {
 			t.Fatalf("unexpected messages: %+v", payload.Messages)
@@ -225,7 +229,7 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 	})
 
 	t.Run("skips assistant messages with only unknown content blocks", func(t *testing.T) {
-		context := &types.Context{Messages: []types.Message{types.AssistantMessage{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.AssistantMessage{
 			Role:       types.RoleAssistant,
 			Content:    []types.Content{},
 			API:        "bedrock-converse-stream",
@@ -234,7 +238,7 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 			Usage:      emptyUsage(),
 			StopReason: types.StopReasonStop,
 			Timestamp:  1,
-		}}}
+		}}})
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		if len(payload.Messages) != 0 {
 			t.Fatalf("expected 0 messages, got %d", len(payload.Messages))
@@ -249,7 +253,7 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 				map[string]any{"oldText": "second", "newText": "updated second", "": ""},
 			},
 		}
-		context := &types.Context{Messages: []types.Message{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{
 			types.AssistantMessage{
 				Role: types.RoleAssistant,
 				Content: []types.Content{types.ToolCall{
@@ -273,7 +277,7 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 				Timestamp:  1,
 			},
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Continue"}, Timestamp: 1},
-		}}
+		}})
 
 		payload := captureBedrockPayload(t, context, bedrockBaseModel)
 		if len(payload.Messages) != 3 || payload.Messages[0].Content[0].ToolUse == nil {

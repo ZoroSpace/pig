@@ -43,7 +43,7 @@ import (
 //
 // ctx carries the caller's cancellation (pi: signal travels through the
 // options object); per the AbortSignal → context rule it is a parameter here.
-type StreamFn func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream
+type StreamFn func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream
 
 // ToolExecutionMode configures how tool calls from a single assistant message
 // are executed.
@@ -172,6 +172,9 @@ type ShouldStopAfterTurnContext struct {
 type AgentLoopTurnUpdate struct {
 	// Context is the context for the next provider request.
 	Context *AgentContext
+	// Messages are appended before the next provider request, with normal
+	// lifecycle events (pi v0.86.0: messages).
+	Messages []AgentMessage
 	// Model is the model for the next provider request.
 	Model *types.Model
 	// ThinkingLevel is the thinking level for the next provider request.
@@ -194,10 +197,10 @@ type AgentLoopConfig struct {
 	// ConvertToLlm converts AgentMessage[] to LLM-compatible Message[] before
 	// each LLM call.
 	//
-	// Each AgentMessage must be converted to a UserMessage, AssistantMessage,
-	// or ToolResultMessage that the LLM can understand. AgentMessages that
-	// cannot be converted (e.g., UI-only notifications, status messages)
-	// should be filtered out.
+	// Each AgentMessage must be converted to a SystemMessage, UserMessage,
+	// AssistantMessage, or ToolResultMessage that the LLM can understand.
+	// AgentMessages that cannot be converted (e.g., UI-only notifications,
+	// status messages) should be filtered out.
 	//
 	// Contract: must not panic. Return a safe fallback value instead.
 	// Panicking interrupts the low-level agent loop without producing a
@@ -343,17 +346,23 @@ type AgentMessage = types.Message
 // behavior pi gets from setter properties is enforced by the Agent
 // implementation (pi: agent.ts, future agent.go).
 type AgentState struct {
-	// SystemPrompt is the system prompt sent with each model request.
+	// SystemPrompt is the current system prompt, replayed from the
+	// transcript's system messages. Read-only: to change the prompt, append
+	// a system message with Content or Sections. In the initial state this
+	// seeds the leading system message (pi v0.86.0: readonly getter).
 	SystemPrompt string
 	// Model is the active model used for future turns.
 	Model *types.Model
 	// ThinkingLevel is the requested reasoning level for future turns.
 	ThinkingLevel ThinkingLevel
-	// Tools are the available tools. Assigning a new slice copies the
-	// top-level slice.
+	// Tools are the executable tools. Assigning a new slice copies the
+	// top-level slice. Differences from the tools declared in the transcript
+	// are announced to the model with a system message before the next
+	// request.
 	Tools []AgentTool
 	// Messages is the conversation transcript. Assigning a new slice copies
-	// the top-level slice.
+	// the top-level slice. System messages in the transcript carry the
+	// prompt and tool declarations.
 	Messages []AgentMessage
 	// IsStreaming is true while the agent is processing a prompt or
 	// continuation.
@@ -379,9 +388,9 @@ type AgentToolResult struct {
 	// Usage, from the final tool execution itself, if available. Not used for
 	// main LLM context accounting.
 	Usage *types.Usage
-	// AddedToolNames are names of tools introduced by this result and
-	// available from this transcript point onward.
-	AddedToolNames []string
+	// pi v0.86.0 removed AgentToolResult.addedToolNames: tool introductions
+	// moved to transcript system messages.
+	StopAfterTool *bool
 	// Terminate hints that the agent should stop after the current tool
 	// batch. Early termination only happens when every finalized tool result
 	// in the batch sets this to true.
@@ -443,11 +452,9 @@ const (
 
 // AgentContext is the context snapshot passed into the low-level agent loop.
 type AgentContext struct {
-	// SystemPrompt is included with the request.
-	SystemPrompt string
 	// Messages is the transcript visible to the model.
 	Messages []AgentMessage
-	// Tools are available for this run.
+	// Tools are available for execution in this run.
 	Tools []*AgentTool
 }
 

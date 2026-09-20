@@ -54,11 +54,11 @@ func TestResetApiProvidersRestoresAfterOverride(t *testing.T) {
 // stubCodexStreams is a ProviderStreams test double.
 type stubCodexStreams struct{}
 
-func (stubCodexStreams) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (stubCodexStreams) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	return types.NewAssistantMessageEventStream()
 }
 
-func (stubCodexStreams) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (stubCodexStreams) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	return types.NewAssistantMessageEventStream()
 }
 

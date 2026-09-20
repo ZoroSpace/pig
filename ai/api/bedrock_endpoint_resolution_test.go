@@ -10,6 +10,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // resetBedrockEnv clears the AWS env vars pi's beforeEach deletes, restoring
@@ -58,12 +59,12 @@ func captureBedrockClientConfig(t *testing.T, model *types.Model, options *Bedro
 	return mock.lastConfig()
 }
 
-func bedrockTestContext() *types.Context {
-	return &types.Context{Messages: []types.Message{types.UserMessage{
+func bedrockTestContext() *types.TranscriptContext {
+	return utils.NormalizeContext(&types.Context{Messages: []types.Message{types.UserMessage{
 		Role:      types.RoleUser,
 		Content:   types.UserContent{String: "hello"},
 		Timestamp: 1,
-	}}}
+	}}})
 }
 
 func TestBedrockEndpointResolution(t *testing.T) {

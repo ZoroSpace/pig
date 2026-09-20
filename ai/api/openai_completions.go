@@ -56,7 +56,7 @@ func init() {
 // caller's cancellation; pi passes options.signal into the SDK request
 // options and the retry helper (pig: AbortSignal → context rule, README
 // §3.4).
-func (OpenAICompletions) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (OpenAICompletions) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	opts := OpenAICompletionsOptions{}
 	if options != nil {
 		opts.StreamOptions = *options
@@ -65,7 +65,7 @@ func (OpenAICompletions) Stream(ctx context.Context, model *types.Model, llmCont
 }
 
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
-func (OpenAICompletions) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (OpenAICompletions) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	_, err := getClientAPIKey(string(model.Provider), options.APIKey, options.Headers)
 	if err != nil {
 		return immediateErrorStream(model, err)
@@ -153,31 +153,8 @@ func hasToolHistory(messages []types.Message) bool {
 	return false
 }
 
-// getDeferredToolNames collects the tool names added by tool results (pi:
-// getDeferredToolNames).
-func getDeferredToolNames(messages []types.Message) map[string]struct{} {
-	names := map[string]struct{}{}
-	for _, msg := range messages {
-		if tr, ok := msg.(types.ToolResultMessage); ok {
-			for _, name := range tr.AddedToolNames {
-				names[name] = struct{}{}
-			}
-		}
-	}
-	return names
-}
-
-// getToolsByName returns the subset of tools whose names are in names (pi:
-// getToolsByName).
-func getToolsByName(tools []types.Tool, names map[string]struct{}) []types.Tool {
-	var out []types.Tool
-	for _, tool := range tools {
-		if _, ok := names[tool.Name]; ok {
-			out = append(out, tool)
-		}
-	}
-	return out
-}
+// getDeferredToolNames/getToolsByName were removed upstream with #9548:
+// deferred tool placement moved to transcript system messages.
 
 // openAIReasoningDetail models the OpenAI reasoning detail objects carried in
 // reasoning_details (pi: OpenAIReasoningDetailBase and its three variants).
@@ -401,9 +378,10 @@ type resolvedOpenAICompletionsCompat struct {
 	thinkingTokenBudgetField                    *types.ThinkingTokenBudgetField
 	supportsStrictMode                          bool
 	supportsOpenAIGrammarTools                  bool
+	supportsMidConvoSystemMessages              bool
+	supportsMidConvoToolAdditions               bool
 	cacheControlFormat                          *types.CacheControlFormat
 	sendSessionAffinityHeaders                  bool
-	deferredToolsMode                           *types.DeferredToolsMode
 	sessionAffinityFormat                       types.SessionAffinityFormat
 	supportsLongCacheRetention                  bool
 	vllmPriority                                *float64
@@ -478,7 +456,7 @@ type openaiCompletionsClient struct {
 }
 
 // createClient builds the client (pi: createClient).
-func createClient(model *types.Model, llmContext *types.Context, apiKey string, optionsHeaders types.ProviderHeaders, fetch types.FetchFunction, sessionID string, compat *resolvedOpenAICompletionsCompat) *openaiCompletionsClient {
+func createClient(model *types.Model, llmContext *types.TranscriptContext, apiKey string, optionsHeaders types.ProviderHeaders, fetch types.FetchFunction, sessionID string, compat *resolvedOpenAICompletionsCompat) *openaiCompletionsClient {
 	headers := map[string]string{"User-Agent": utils.GetPiUserAgent()}
 	for name, value := range model.Headers {
 		headers[name] = value

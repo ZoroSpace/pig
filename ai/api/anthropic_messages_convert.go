@@ -13,44 +13,15 @@ import (
 )
 
 // convertAnthropicToolResult converts one tool result message (pi:
-// convertToolResult). Tool references from deferred tool loads must not mix
-// with ordinary tool-result content, so the ordinary content is returned as
-// sibling blocks when references exist.
-func convertAnthropicToolResult(msg *types.ToolResultMessage, isOAuthToken bool, deferredToolNames map[string]struct{}, loadedToolNames map[string]struct{}, normalizeToolName func(string) string) (toolResult map[string]any, siblingContent []map[string]any) {
-	var references []map[string]any
-	for _, name := range msg.AddedToolNames {
-		normalizedName := normalizeToolName(name)
-		if _, deferred := deferredToolNames[normalizedName]; !deferred {
-			continue
-		}
-		if _, loaded := loadedToolNames[normalizedName]; loaded {
-			continue
-		}
-		loadedToolNames[normalizedName] = struct{}{}
-		referenceName := name
-		if isOAuthToken {
-			referenceName = toClaudeCodeName(name)
-		}
-		references = append(references, map[string]any{"type": "tool_reference", "tool_name": referenceName})
-	}
-	convertedContent := convertContentBlocks(msg.Content)
-	result := map[string]any{
+// convertToolResult). v0.86.0 removed the tool_reference deferred-load
+// placement: transcript system messages carry tool declarations instead.
+func convertAnthropicToolResult(msg *types.ToolResultMessage) map[string]any {
+	return map[string]any{
 		"type":        "tool_result",
 		"tool_use_id": msg.ToolCallID,
-		"content":     convertedContent,
+		"content":     convertContentBlocks(msg.Content),
 		"is_error":    msg.IsError,
 	}
-	if len(references) > 0 {
-		// Anthropic rejects tool references mixed with ordinary tool-result
-		// content.
-		result["content"] = references
-		if text, ok := convertedContent.(string); ok {
-			siblingContent = []map[string]any{{"type": "text", "text": text}}
-		} else {
-			siblingContent, _ = convertedContent.([]map[string]any)
-		}
-	}
-	return result, siblingContent
 }
 
 // convertedAnthropicMessages is convertMessages' result (pi:
@@ -63,15 +34,60 @@ type convertedAnthropicMessages struct {
 
 // convertAnthropicMessages converts history into Anthropic message params
 // (pi: convertMessages).
-func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken bool, cacheControl *anthropicCacheControl, allowEmptySignature bool, deferredToolNames map[string]struct{}, normalizeToolName func(string) string, managedProvider string) (convertedAnthropicMessages, error) {
+func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken bool, cacheControl *anthropicCacheControl, allowEmptySignature bool, managedProvider string, nativeToolChanges bool) (convertedAnthropicMessages, error) {
 	var params []map[string]any
 	converted := convertedAnthropicMessages{assistantLevels: map[int]AnthropicEffort{}}
-	loadedToolNames := map[string]struct{}{}
+	// Later system messages are held back and emitted directly before the
+	// next assistant message (or at the end of the transcript). Anthropic
+	// requires tool_result blocks to immediately follow their tool_use, so a
+	// system message between them is rejected; this also mirrors where the
+	// managed-effort system messages are inserted. As a result an update
+	// placed before a user message in the transcript lands after it on the
+	// wire.
+	var pendingSystemMessages []map[string]any
+	flushPendingSystemMessages := func() {
+		params = append(params, pendingSystemMessages...)
+		pendingSystemMessages = nil
+	}
 
 	for i := 0; i < len(transformedMessages); i++ {
 		msg := transformedMessages[i]
 
-		if user, ok := msg.(types.UserMessage); ok {
+		if system, ok := msg.(types.SystemMessage); ok {
+			// Later system messages only reach this point when the model
+			// accepts them natively; otherwise the transcript was collapsed
+			// into the leading message before conversion.
+			text := utils.RenderSystemMessageUpdate(&system)
+			var blocks []map[string]any
+			if len(text) > 0 {
+				blocks = append(blocks, map[string]any{"type": "text", "text": utils.SanitizeSurrogates(text)})
+			}
+			if nativeToolChanges {
+				for _, ref := range system.ToolsRemoved {
+					name := ref.Name
+					if isOAuthToken {
+						name = toClaudeCodeName(ref.Name)
+					}
+					blocks = append(blocks, map[string]any{
+						"type": "tool_removal",
+						"tool": map[string]any{"type": "tool_reference", "name": name},
+					})
+				}
+				for _, tool := range system.ToolsAdded {
+					name := tool.Name
+					if isOAuthToken {
+						name = toClaudeCodeName(tool.Name)
+					}
+					blocks = append(blocks, map[string]any{
+						"type": "tool_addition",
+						"tool": map[string]any{"type": "tool_reference", "name": name},
+					})
+				}
+			}
+			if len(blocks) > 0 {
+				pendingSystemMessages = append(pendingSystemMessages, map[string]any{"role": "system", "content": blocks})
+			}
+		} else if user, ok := msg.(types.UserMessage); ok {
 			if user.Content.Parts == nil {
 				if strings.TrimSpace(user.Content.String) != "" {
 					params = append(params, map[string]any{
@@ -110,6 +126,7 @@ func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken 
 				params = append(params, map[string]any{"role": "user", "content": filteredBlocks})
 			}
 		} else if assistant, ok := msg.(types.AssistantMessage); ok {
+			flushPendingSystemMessages()
 			var blocks []map[string]any
 
 			for _, block := range assistant.Content {
@@ -185,39 +202,36 @@ func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken 
 			// Collect all consecutive toolResult messages, needed for z.ai
 			// Anthropic endpoint.
 			var toolResults []map[string]any
-			var siblingContent []map[string]any
 			j := i
 			for j < len(transformedMessages) {
 				next, ok := transformedMessages[j].(types.ToolResultMessage)
 				if !ok {
 					break
 				}
-				toolResult, sibling := convertAnthropicToolResult(&next, isOAuthToken, deferredToolNames, loadedToolNames, normalizeToolName)
-				toolResults = append(toolResults, toolResult)
-				siblingContent = append(siblingContent, sibling...)
+				toolResults = append(toolResults, convertAnthropicToolResult(&next))
 				j++
 			}
 
 			// Skip the messages we've already processed.
 			i = j - 1
 
-			// Displaced reference-bearing results must follow every
-			// tool_result block.
-			content := append(append([]map[string]any{}, toolResults...), siblingContent...)
-			params = append(params, map[string]any{"role": "user", "content": content})
+			params = append(params, map[string]any{"role": "user", "content": toolResults})
 		}
 	}
 
-	// Add cache_control to the last user message to cache conversation
-	// history.
+	flushPendingSystemMessages()
+
+	// Add cache_control to the last user or system message to cache
+	// conversation history.
 	if cacheControl != nil && len(params) > 0 {
 		lastMessage := params[len(params)-1]
-		if lastMessage["role"] == "user" {
+		if lastMessage["role"] == "user" || lastMessage["role"] == "system" {
 			switch content := lastMessage["content"].(type) {
 			case []map[string]any:
 				if len(content) > 0 {
 					lastBlock := content[len(content)-1]
-					if lastBlock["type"] == "text" || lastBlock["type"] == "image" || lastBlock["type"] == "tool_result" {
+					if lastBlock["type"] == "text" || lastBlock["type"] == "image" || lastBlock["type"] == "tool_result" ||
+						lastBlock["type"] == "tool_addition" || lastBlock["type"] == "tool_removal" {
 						lastBlock["cache_control"] = cacheControl
 					}
 				}
@@ -270,7 +284,7 @@ func insertThinkingLevelMessages(converted convertedAnthropicMessages, activeEff
 
 // convertAnthropicTools converts tools to Anthropic tool params (pi:
 // convertTools).
-func convertAnthropicTools(tools []types.Tool, isOAuthToken bool, supportsEagerToolInputStreaming bool, supportsStrictTools bool, cacheControl *anthropicCacheControl, deferLoading bool) ([]map[string]any, error) {
+func convertAnthropicTools(tools []types.Tool, isOAuthToken bool, supportsEagerToolInputStreaming bool, supportsStrictTools bool, cacheControl *anthropicCacheControl) ([]map[string]any, error) {
 	if tools == nil {
 		return nil, nil
 	}
@@ -330,9 +344,6 @@ func convertAnthropicTools(tools []types.Tool, isOAuthToken bool, supportsEagerT
 		}
 		if strictEnabled {
 			toolParam["strict"] = true
-		}
-		if deferLoading {
-			toolParam["defer_loading"] = true
 		}
 		if cacheControl != nil && index == len(tools)-1 {
 			toolParam["cache_control"] = cacheControl

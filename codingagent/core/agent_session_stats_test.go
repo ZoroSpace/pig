@@ -57,7 +57,7 @@ func createStatsSession(t *testing.T) (*AgentSession, *SessionManager) {
 	t.Helper()
 	session, sessionManager, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey:     true,
-		StreamFn:      ai.StreamSimple,
+		StreamFn:      defaultStreamFn,
 		ThinkingLevel: "high",
 	})
 	return session, sessionManager

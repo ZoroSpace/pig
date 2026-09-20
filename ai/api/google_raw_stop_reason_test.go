@@ -73,12 +73,12 @@ func googleStopReasonChunk(finishReason string, includeFunctionCall bool) *googl
 	return chunk
 }
 
-func googleStopReasonContext() *types.Context {
-	return &types.Context{
+func googleStopReasonContext() *types.TranscriptContext {
+	return utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hello"}, Timestamp: time.Now().UnixMilli()},
 		},
-	}
+	})
 }
 
 func googleCatalogModel(provider ai.ProviderID, id string) *types.Model {

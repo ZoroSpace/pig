@@ -17,12 +17,22 @@ import (
 	"github.com/samber/lo"
 )
 
+// defaultStreamFn adapts ai.StreamSimple to agent.StreamFn (pi:
+// setDefaultStreamFn(streamSimple) at module load — TS structural
+// assignability made streamSimple satisfy StreamFn; Go needs the explicit
+// wrapper, and a package-level var keeps the function-identity comparison in
+// AgentSession meaningful). The transcript's messages pass through;
+// ai.StreamSimple re-normalizes, a no-op on an already-normalized transcript.
+var defaultStreamFn agent.StreamFn = func(ctx context.Context, model *ai.Model, llmContext *ai.TranscriptContext, options *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+	return ai.StreamSimple(ctx, model, &ai.Context{Messages: llmContext.Messages}, options)
+}
+
 func init() {
 	// Preserve the pre-0.81 fallback for extensions that construct Agent
 	// instances or invoke low-level agent loops without supplying streamFn.
 	// Agent core remains provider-agnostic and does not import pi-ai/compat
 	// itself. (pi: setDefaultStreamFn(streamSimple) at module load.)
-	agent.SetDefaultStreamFn(ai.StreamSimple)
+	agent.SetDefaultStreamFn(defaultStreamFn)
 }
 
 // CreateAgentSessionOptions are the createAgentSession inputs (pi:
@@ -433,7 +443,7 @@ func buildSdkAgentOptions(input buildSdkAgentOptionsInput) (*agent.AgentOptions,
 			Tools:         []agent.AgentTool{},
 		},
 		ConvertToLlm: input.convertToLlmWrapper,
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			providerRetrySettings := settingsManager.GetProviderRetrySettings()
 			httpIdleTimeoutMs, _ := settingsManager.GetHTTPIdleTimeoutMs()
 			// SDKs treat timeout=0 as 0ms (immediate timeout), not "no
@@ -478,7 +488,7 @@ func buildSdkAgentOptions(input buildSdkAgentOptionsInput) (*agent.AgentOptions,
 				}
 				return headers, nil
 			}
-			return input.modelRuntime.StreamSimple(ctx, model, llmContext, &ai.ModelsSimpleStreamOptions{
+			return input.modelRuntime.StreamSimple(ctx, model, &ai.Context{Messages: llmContext.Messages}, &ai.ModelsSimpleStreamOptions{
 				SimpleStreamOptions: streamOptions,
 				ModelsRequestTransforms: ai.ModelsRequestTransforms{
 					TransformHeaders: transformHeaders,

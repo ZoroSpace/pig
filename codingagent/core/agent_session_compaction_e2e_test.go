@@ -33,7 +33,7 @@ func createCompactionE2ESession(t *testing.T, inMemory bool) (*AgentSession, *Se
 	// unlocks this suite.
 	session, sessionManager, settingsManager := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey:         true,
-		StreamFn:          ai.StreamSimple,
+		StreamFn:          defaultStreamFn,
 		SettingsOverrides: Settings{"compaction": map[string]any{"keepRecentTokens": float64(1)}},
 	})
 	_ = settingsManager
@@ -273,7 +273,7 @@ func TestCompactDoesNotPersistLengthLimitedSummary(t *testing.T) {
 	// must fail instead of becoming a session checkpoint.
 	session, sessionManager, settingsManager := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey: true,
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := newMockAssistantStream()
 			msg := testAssistantMessage("partial summar", withStopReason(types.StopReasonLength), withModelRef(model))
 			stream.Push(types.AssistantMessageEvent{Type: types.EventStart, Partial: &msg})
@@ -356,7 +356,7 @@ func TestCompactsAfterToolResultBeforeNextAssistantRequest(t *testing.T) {
 			return m
 		}(),
 		SettingsOverrides: Settings{"compaction": map[string]any{"enabled": true, "reserveTokens": float64(400), "keepRecentTokens": float64(1750)}},
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			mu.Lock()
 			requestCount++
 			n := requestCount

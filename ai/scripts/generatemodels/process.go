@@ -393,12 +393,16 @@ func processBasetenModels(provider *ModelsDevProvider) []*ai.Model {
 	}
 	const baseURL = "https://inference.baseten.co/v1"
 	baseCompat := &ai.OpenAICompletionsCompat{
-		SupportsStore:              lo.ToPtr(false),
-		SupportsDeveloperRole:      lo.ToPtr(false),
-		SupportsReasoningEffort:    lo.ToPtr(false),
-		SupportsUsageInStreaming:   lo.ToPtr(true),
-		MaxTokensField:             lo.ToPtr(ai.MaxTokensPlain),
-		SupportsStrictMode:         lo.ToPtr(true),
+		SupportsStore:            lo.ToPtr(false),
+		SupportsDeveloperRole:    lo.ToPtr(false),
+		SupportsReasoningEffort:  lo.ToPtr(false),
+		SupportsUsageInStreaming: lo.ToPtr(true),
+		MaxTokensField:           lo.ToPtr(ai.MaxTokensPlain),
+		SupportsStrictMode:       lo.ToPtr(true),
+		// Baseten automatic prompt caching needs session affinity so related
+		// requests land on the same replica (pi v0.86.0). See:
+		// https://docs.baseten.co/inference/model-apis/pricing-and-limits
+		SendSessionAffinityHeaders: lo.ToPtr(true),
 		SupportsLongCacheRetention: lo.ToPtr(false),
 	}
 	reasoningEffortCompat := withCompat(baseCompat, func(c *ai.OpenAICompletionsCompat) {
@@ -510,6 +514,7 @@ func processFireworksModels(provider *ModelsDevProvider) []*ai.Model {
 		return nil
 	}
 	anthropicCompat := &ai.AnthropicMessagesCompat{
+		AllowEmptySignature:             lo.ToPtr(true),
 		SendSessionAffinityHeaders:      lo.ToPtr(true),
 		SupportsEagerToolInputStreaming: lo.ToPtr(false),
 		SupportsCacheControlOnTools:     lo.ToPtr(false),
@@ -524,7 +529,6 @@ func processFireworksModels(provider *ModelsDevProvider) []*ai.Model {
 	kimiK3Compat := withCompat(openAICompat, func(c *ai.OpenAICompletionsCompat) {
 		c.RequiresReasoningContentOnAssistantMessages = lo.ToPtr(true)
 		c.ThinkingFormat = lo.ToPtr(ai.ThinkingFormatOpenAI)
-		c.DeferredToolsMode = lo.ToPtr(ai.DeferredToolsKimi)
 	})
 
 	var models []*ai.Model
@@ -553,9 +557,23 @@ func processFireworksModels(provider *ModelsDevProvider) []*ai.Model {
 			common.Compat = copyOpenAICompat(kimiK3Compat)
 		default:
 			// Fireworks Anthropic-compatible API — SDK appends /v1/messages.
+			// Use adaptive thinking for cataloged effort controls, with verified
+			// fallbacks where models.dev is incomplete. New models need no
+			// allowlist entry (pi v0.86.0).
 			common.API = ai.ApiAnthropicMessages
 			common.BaseURL = "https://api.fireworks.ai/inference"
-			common.Compat = copyAnthropicCompat(anthropicCompat)
+			adapted := copyAnthropicCompat(anthropicCompat)
+			hasEffortOption := false
+			for _, option := range m.ReasoningOptions {
+				if option.Type == "effort" {
+					hasEffortOption = true
+					break
+				}
+			}
+			if hasEffortOption || fireworksAdaptiveThinkingFallbackModels[modelID] {
+				adapted.ForceAdaptiveThinking = lo.ToPtr(true)
+			}
+			common.Compat = adapted
 		}
 		models = append(models, &common)
 		recordModelsDevReasoningOptions("fireworks", modelID, m)
@@ -698,9 +716,10 @@ func processMinimaxModels(data ModelsDevCatalog) []*ai.Model {
 	return models
 }
 
-// processKimiCodingModels (pi: loadModelsDevData kimi-for-coding block).
+// processKimiCodingModels (pi: loadModelsDevData kimi-code-plan-global block;
+// renamed from "kimi-for-coding" in v0.86.0).
 func processKimiCodingModels(data ModelsDevCatalog) []*ai.Model {
-	provider := data["kimi-for-coding"]
+	provider := data["kimi-code-plan-global"]
 	if provider == nil || provider.Models == nil {
 		return nil
 	}
@@ -804,7 +823,6 @@ func processMoonshotModels(data ModelsDevCatalog) []*ai.Model {
 			compat := copyOpenAICompat(moonshotCompat)
 			if isKimiK3 {
 				compat.RequiresReasoningContentOnAssistantMessages = lo.ToPtr(true)
-				compat.DeferredToolsMode = lo.ToPtr(ai.DeferredToolsKimi)
 				compat.ThinkingFormat = lo.ToPtr(ai.ThinkingFormatOpenAI)
 				compat.SupportsReasoningEffort = lo.ToPtr(true)
 			}
@@ -1271,18 +1289,26 @@ func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
 				compat = openAICompat
 			}
 
+			var thinkingLevelMap *ai.ThinkingLevelMap
+			if apiKind == ai.ApiGoogleGenerativeAI {
+				thinkingLevelMap = getGoogleThinkingLevelMap(modelID, m.ReasoningOptions)
+			} else if variant.provider == ai.ProviderOpenCodeGo && modelID == "deepseek-v4.1-flash" {
+				thinkingLevelMap = getEffortThinkingLevelMap(m.ReasoningOptions)
+			}
+
 			models = append(models, &ai.Model{
-				ID:            modelID,
-				Name:          modelsDevName(m, modelID),
-				API:           apiKind,
-				Provider:      variant.provider,
-				BaseURL:       baseURL,
-				Reasoning:     boolVal(m.Reasoning),
-				Input:         inputOf(m),
-				Cost:          modelsDevCostOf(m.Cost),
-				Compat:        compat,
-				ContextWindow: int64Or(limitContext(m), 4096),
-				MaxTokens:     int64Or(limitOutput(m), 4096),
+				ID:               modelID,
+				Name:             modelsDevName(m, modelID),
+				API:              apiKind,
+				Provider:         variant.provider,
+				BaseURL:          baseURL,
+				Reasoning:        boolVal(m.Reasoning),
+				ThinkingLevelMap: derefThinkingLevelMap(thinkingLevelMap),
+				Input:            inputOf(m),
+				Cost:             modelsDevCostOf(m.Cost),
+				Compat:           compat,
+				ContextWindow:    int64Or(limitContext(m), 4096),
+				MaxTokens:        int64Or(limitOutput(m), 4096),
 			})
 			recordModelsDevReasoningOptions(string(variant.provider), modelID, m)
 		}
@@ -1317,8 +1343,10 @@ func processGitHubCopilotModels(data ModelsDevCatalog) []*ai.Model {
 		}
 
 		isCopilotClaude := githubCopilotClaudeRe.MatchString(modelID)
-		needsResponsesAPI := strings.HasPrefix(modelID, "grok-") ||
-			strings.HasPrefix(modelID, "gpt-5") ||
+		// v0.86.0: all GPT models (not just gpt-5*) route through the Copilot
+		// /responses endpoint.
+		needsResponsesAPI := strings.HasPrefix(modelID, "gpt-") ||
+			strings.HasPrefix(modelID, "grok-") ||
 			strings.HasPrefix(modelID, "oswe") ||
 			strings.HasPrefix(modelID, "mai-")
 

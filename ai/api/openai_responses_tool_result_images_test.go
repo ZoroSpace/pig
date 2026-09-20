@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // responsesToolResultImagesContext builds the two-turn context with the
@@ -49,14 +50,14 @@ func TestResponsesToolResultImagesStayInFunctionCallOutput(t *testing.T) {
 		API: model.API, Provider: model.Provider, Model: model.ID,
 		StopReason: types.StopReasonToolUse, Timestamp: 0,
 	}
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant that always uses the provided tool when asked.",
 		Messages: []types.Message{
 			responsesUserMessage("Call get_circle_with_description, then describe both the tool text and the image."),
 			assistant,
 			toolResult,
 		},
-	}
+	})
 
 	input := ConvertResponsesMessages(model, llmContext, openAIResponsesToolCallProviders, nil)
 	functionCallOutputIndex := -1
@@ -122,7 +123,7 @@ func TestOpenAIResponsesReasoningReplayE2E(t *testing.T) {
 		Description: "Doubles a number and returns the result",
 		Parameters:  json.RawMessage(`{"type":"object","properties":{"value":{"type":"number","description":"A number to double"}},"required":["value"]}`),
 	}
-	complete := func(t *testing.T, model *types.Model, llmContext *types.Context, effort string) *types.AssistantMessage {
+	complete := func(t *testing.T, model *types.Model, llmContext *types.TranscriptContext, effort string) *types.AssistantMessage {
 		t.Helper()
 		opts := &OpenAIResponsesOptions{}
 		opts.APIKey = apiKey
@@ -134,11 +135,11 @@ func TestOpenAIResponsesReasoningReplayE2E(t *testing.T) {
 
 	t.Run("skips reasoning-only history after an aborted turn", func(t *testing.T) {
 		userMessage := responsesUserMessage("Use the double_number tool to double 21.")
-		assistantResponse := complete(t, model, &types.Context{
+		assistantResponse := complete(t, model, utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a helpful assistant. Use the tool.",
 			Messages:     []types.Message{userMessage},
 			Tools:        []types.Tool{testTool},
-		}, "high")
+		}), "high")
 
 		var thinkingBlock *types.ThinkingContent
 		for _, block := range assistantResponse.Content {
@@ -156,11 +157,11 @@ func TestOpenAIResponsesReasoningReplayE2E(t *testing.T) {
 		corruptedAssistant.StopReason = types.StopReasonAborted
 
 		followUp := responsesUserMessage("Say hello to confirm you can continue.")
-		response := complete(t, model, &types.Context{
+		response := complete(t, model, utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a helpful assistant.",
 			Messages:     []types.Message{userMessage, &corruptedAssistant, followUp},
 			Tools:        []types.Tool{testTool},
-		}, "high")
+		}), "high")
 
 		// The key assertion: no 400 error from orphaned reasoning item
 		if response.StopReason == types.StopReasonError {
@@ -177,11 +178,11 @@ func TestOpenAIResponsesReasoningReplayE2E(t *testing.T) {
 	t.Run("handles same-provider different-model handoff with tool calls", func(t *testing.T) {
 		modelB := responsesTestModel(t, "openai", "gpt-5.5")
 		userMessage := responsesUserMessage("Use the double_number tool to double 21.")
-		assistantResponse := complete(t, model, &types.Context{
+		assistantResponse := complete(t, model, utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a helpful assistant. Always use the tool when asked.",
 			Messages:     []types.Message{userMessage},
 			Tools:        []types.Tool{testTool},
-		}, "high")
+		}), "high")
 
 		var toolCallBlock *types.ToolCall
 		for _, block := range assistantResponse.Content {
@@ -200,11 +201,11 @@ func TestOpenAIResponsesReasoningReplayE2E(t *testing.T) {
 		}
 		followUp := responsesUserMessage("What was the result? Answer with just the number.")
 
-		response := complete(t, modelB, &types.Context{
+		response := complete(t, modelB, utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a helpful assistant. Answer concisely.",
 			Messages:     []types.Message{userMessage, assistantResponse, &toolResult, followUp},
 			Tools:        []types.Tool{testTool},
-		}, "high")
+		}), "high")
 
 		if response.StopReason == types.StopReasonError {
 			t.Fatalf("response errored: %s", response.ErrorMessage)

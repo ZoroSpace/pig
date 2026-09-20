@@ -106,7 +106,7 @@ func buildProxyRequestOptions(options *ProxyStreamOptions) ProxySerializableStre
 // bandwidth; we reconstruct the partial message client-side. Use this as the
 // streamFn when creating an Agent that needs to go through a proxy (pi:
 // streamProxy).
-func StreamProxy(ctx context.Context, model *types.Model, llmContext *types.Context, options *ProxyStreamOptions) *types.AssistantMessageEventStream {
+func StreamProxy(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *ProxyStreamOptions) *types.AssistantMessageEventStream {
 	stream := types.NewAssistantMessageEventStream()
 
 	go func() {

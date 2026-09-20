@@ -16,6 +16,7 @@ import (
 	brtypes "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 const bedrockRedactedBase64 = "cnNuXzVaVnJpZjRKMGJYSXFtV2RsZWRqN1FJRmVOaWtSUWJF"
@@ -180,7 +181,7 @@ func TestBedrockRedactedReasoning(t *testing.T) {
 	})
 
 	t.Run("replays redacted reasoning as reasoningContent.redactedContent", func(t *testing.T) {
-		context := &types.Context{Messages: []types.Message{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hello"}, Timestamp: 1},
 			types.AssistantMessage{
 				Role: types.RoleAssistant,
@@ -195,7 +196,7 @@ func TestBedrockRedactedReasoning(t *testing.T) {
 				Timestamp:  1,
 			},
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "continue"}, Timestamp: 1},
-		}}
+		}})
 
 		payload := captureBedrockPayload(t, context, bedrockGPTModel())
 
@@ -225,7 +226,7 @@ func TestBedrockRedactedReasoning(t *testing.T) {
 		// Bedrock rejects a tool continuation whose reasoning block is missing
 		// or reordered, so the opaque payload must land ahead of the matching
 		// toolUse.
-		context := &types.Context{Messages: []types.Message{
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "read the file"}, Timestamp: 1},
 			types.AssistantMessage{
 				Role: types.RoleAssistant,
@@ -246,7 +247,7 @@ func TestBedrockRedactedReasoning(t *testing.T) {
 				Content:    []types.Content{types.NewTextContent("file body")},
 				Timestamp:  1,
 			},
-		}}
+		}})
 
 		payload := captureBedrockPayload(t, context, bedrockGPTModel())
 

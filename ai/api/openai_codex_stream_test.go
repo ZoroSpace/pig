@@ -396,10 +396,10 @@ func TestOpenAICodexStreamStreamsSSEResponses(t *testing.T) {
 	token := codexMockToken("acc_test")
 	var gotHeaders http.Header
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	options := &types.StreamOptions{Transport: types.TransportSSE}
 	options.APIKey = token
 	options.Fetch = func(req *http.Request) (*http.Response, error) {
@@ -465,10 +465,10 @@ func TestOpenAICodexStreamTerminalEventWithoutTrailingBlankLine(t *testing.T) {
 	token := codexMockToken("acc_test")
 	sse := strings.TrimRight(codexHelloSSE(), "\n")
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	options := &types.StreamOptions{Transport: types.TransportSSE}
 	options.APIKey = token
 	options.Fetch = func(req *http.Request) (*http.Response, error) {
@@ -489,10 +489,10 @@ func TestOpenAICodexStreamCompletesWhenSSEBodyStaysOpen(t *testing.T) {
 	token := codexMockToken("acc_test")
 	sse := codexSSEFixture("completed", true, false)
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	done := make(chan types.AssistantMessage, 1)
 	go func() {
 		options := &types.StreamOptions{Transport: types.TransportSSE}
@@ -531,10 +531,10 @@ func TestOpenAICodexStreamMapsIncompleteToLength(t *testing.T) {
 	token := codexMockToken("acc_test")
 	sse := codexSSEFixture("incomplete", true, nil)
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	options := &types.StreamOptions{Transport: types.TransportSSE}
 	options.APIKey = token
 	options.Fetch = func(req *http.Request) (*http.Response, error) {
@@ -555,10 +555,10 @@ func TestOpenAICodexStreamHeadersTimeout(t *testing.T) {
 	token := codexMockToken("acc_test")
 	fetchCalls := 0
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	options := &types.StreamOptions{Transport: types.TransportSSE}
 	options.APIKey = token
 	options.TimeoutMs = 10
@@ -632,10 +632,10 @@ func TestOpenAICodexStreamAbortsSSEBodyReads(t *testing.T) {
 	}()
 
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	var eventNames []string
 	options := &types.StreamOptions{Transport: types.TransportSSE}
 	options.APIKey = token
@@ -681,10 +681,10 @@ func TestOpenAICodexStreamSessionHeadersAndPromptCacheKey(t *testing.T) {
 	token := codexMockToken("acc_test")
 	sessionID := "test-session-123"
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	options := &types.StreamOptions{}
 	options.APIKey = token
 	options.SessionID = sessionID
@@ -713,10 +713,10 @@ func TestOpenAICodexStreamOmitsCacheAffinityWhenRetentionNone(t *testing.T) {
 	token := codexMockToken("acc_test")
 	var sawSessionID, sawClientRequestID, sawPromptCacheKey bool
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	options := &types.StreamOptions{}
 	options.APIKey = token
 	options.CacheRetention = types.CacheRetentionNone
@@ -749,10 +749,10 @@ func TestOpenAICodexStreamClampsPromptCacheKey(t *testing.T) {
 	want := strings.Repeat("x", 64)
 	var gotKey any
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	options := &types.StreamOptions{}
 	options.APIKey = token
 	options.SessionID = sessionID
@@ -775,10 +775,10 @@ func TestOpenAICodexStreamClampsSessionIDHeader(t *testing.T) {
 	sessionID := strings.Repeat("x", 67)
 	want := strings.Repeat("x", 64)
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	options := &types.StreamOptions{}
 	options.APIKey = token
 	options.SessionID = sessionID
@@ -809,10 +809,10 @@ func TestOpenAICodexStreamSimplePreservesXhigh(t *testing.T) {
 	model.ThinkingLevelMap = types.ThinkingLevelMap{
 		types.ModelThinkingXHigh: codexStringPtr("xhigh"),
 	}
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	base := types.StreamOptions{}
 	base.Transport = types.TransportSSE
 	base.APIKey = token
@@ -838,14 +838,14 @@ func TestOpenAICodexStreamToolChoiceRequired(t *testing.T) {
 	model := codexTestModel()
 	model.ID = "gpt-5.5"
 	model.Name = "GPT-5.5"
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{codexUserMessage("Do not call ping. Respond with text instead.", time.Now().UnixMilli())},
 		Tools: []types.Tool{{
 			Name:        "ping",
 			Description: "Ping",
 			Parameters:  json.RawMessage(`{"type":"object","properties":{"value":{"type":"string"}}}`),
 		}},
-	}
+	})
 	base := types.StreamOptions{}
 	base.Transport = types.TransportSSE
 	base.APIKey = token
@@ -870,7 +870,7 @@ func TestOpenAICodexStreamStrictModeAndConstrainedSampling(t *testing.T) {
 	model := codexTestModel()
 	model.ID = "gpt-5.5"
 	model.Name = "GPT-5.5"
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{codexUserMessage("Use a tool", time.Now().UnixMilli())},
 		Tools: []types.Tool{
 			{
@@ -889,7 +889,7 @@ func TestOpenAICodexStreamStrictModeAndConstrainedSampling(t *testing.T) {
 				},
 			},
 		},
-	}
+	})
 	options := &types.StreamOptions{}
 	options.APIKey = token
 	options.Transport = types.TransportSSE
@@ -930,10 +930,10 @@ func TestOpenAICodexStreamClampsMinimalToLow(t *testing.T) {
 			model.ThinkingLevelMap = types.ThinkingLevelMap{
 				types.ModelThinkingMinimal: codexStringPtr("low"),
 			}
-			llmContext := &types.Context{
+			llmContext := utils.NormalizeContext(&types.Context{
 				SystemPrompt: "You are a helpful assistant.",
 				Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-			}
+			})
 			base := types.StreamOptions{}
 			base.Transport = types.TransportSSE
 			base.APIKey = token
@@ -973,10 +973,10 @@ func TestOpenAICodexStreamServiceTierPricing(t *testing.T) {
 			model.ID = tc.modelID
 			model.Name = tc.modelID
 			model.Cost = types.ModelCost{ModelCostRates: types.ModelCostRates{Input: 1, Output: 2, CacheRead: 0, CacheWrite: 0}}
-			llmContext := &types.Context{
+			llmContext := utils.NormalizeContext(&types.Context{
 				SystemPrompt: "You are a helpful assistant.",
 				Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-			}
+			})
 			base := types.StreamOptions{}
 			base.Transport = types.TransportSSE
 			base.APIKey = token
@@ -1022,10 +1022,10 @@ func TestOpenAICodexStreamNoSessionHeadersWithoutSessionID(t *testing.T) {
 	codexResetWSState()
 	token := codexMockToken("acc_test")
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	options := &types.StreamOptions{}
 	options.APIKey = token
 	options.Transport = types.TransportSSE
@@ -1064,10 +1064,10 @@ func TestOpenAICodexStreamSimpleAutoTransportCachedWebsocket(t *testing.T) {
 	})
 
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", 1)},
-	}
+	})
 	base := types.StreamOptions{}
 	base.APIKey = token
 	base.SessionID = "session-auto"
@@ -1130,7 +1130,7 @@ func TestOpenAICodexStreamScopesCachedWebsocketsToAccount(t *testing.T) {
 	})
 
 	model := codexTestModel()
-	llmContext := &types.Context{SystemPrompt: "", Messages: []types.Message{}}
+	llmContext := utils.NormalizeContext(&types.Context{SystemPrompt: "", Messages: []types.Message{}})
 	newOptions := func(apiKey string) *types.StreamOptions {
 		options := &types.StreamOptions{SessionID: "shared-session", Transport: types.TransportWebsocketCached}
 		options.APIKey = apiKey
@@ -1195,10 +1195,10 @@ func TestOpenAICodexStreamClosesOneShotWebsocketsWhenRetentionNone(t *testing.T)
 	})
 
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", 1)},
-	}
+	})
 	newOptions := func() *types.StreamOptions {
 		options := &types.StreamOptions{}
 		options.APIKey = token
@@ -1249,10 +1249,10 @@ func TestOpenAICodexStreamFallsBackToSSEOnConnectTimeout(t *testing.T) {
 	})
 
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", 1)},
-	}
+	})
 	options := &types.StreamOptions{Transport: types.TransportAuto}
 	options.APIKey = token
 	options.SessionID = "ws-connect-timeout"
@@ -1315,7 +1315,7 @@ func TestOpenAICodexStreamReconnectsOnConnectionLimit(t *testing.T) {
 		fetchCalls++
 		return nil, errors.New("fetch should not be called")
 	}
-	result := OpenAICodexResponses{}.Stream(context.Background(), model, &types.Context{SystemPrompt: "", Messages: []types.Message{}}, options).Result()
+	result := OpenAICodexResponses{}.Stream(context.Background(), model, utils.NormalizeContext(&types.Context{SystemPrompt: "", Messages: []types.Message{}}), options).Result()
 
 	if result.StopReason != types.StopReasonStop {
 		t.Fatalf("stopReason = %q (%q)", result.StopReason, result.ErrorMessage)
@@ -1345,10 +1345,10 @@ func TestOpenAICodexStreamFallsBackToSSEWhenIdleBeforeFirstEvent(t *testing.T) {
 	})
 
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", 1)},
-	}
+	})
 	options := &types.StreamOptions{Transport: types.TransportAuto}
 	options.APIKey = token
 	options.SessionID = "ws-idle-before-start"
@@ -1394,10 +1394,10 @@ func TestOpenAICodexStreamErrorsWhenIdleAfterStreamStarted(t *testing.T) {
 	})
 
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", 1)},
-	}
+	})
 	options := &types.StreamOptions{Transport: types.TransportAuto}
 	options.APIKey = token
 	options.TimeoutMs = 50
@@ -1439,10 +1439,10 @@ func TestOpenAICodexStreamFreshCachedWebsocketBeforeAgeLimit(t *testing.T) {
 
 	model := codexTestModel()
 	sessionID := "aged-ws-session"
-	firstContext := &types.Context{
+	firstContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", 1)},
-	}
+	})
 	firstOptions := &types.StreamOptions{}
 	firstOptions.APIKey = token
 	firstOptions.SessionID = sessionID
@@ -1457,10 +1457,10 @@ func TestOpenAICodexStreamFreshCachedWebsocketBeforeAgeLimit(t *testing.T) {
 	}
 	codexWSStateMu.Unlock()
 
-	secondContext := &types.Context{
+	secondContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", 1), first, codexUserMessage("Now finish", 2)},
-	}
+	})
 	secondOptions := &types.StreamOptions{}
 	secondOptions.APIKey = token
 	secondOptions.SessionID = sessionID
@@ -1518,7 +1518,7 @@ func TestOpenAICodexStreamSendsOnlyInputDeltasInCachedMode(t *testing.T) {
 
 	model := codexTestModel()
 	model.Compat = &types.OpenAIResponsesCompat{SupportsOpenAIGrammarTools: codexBoolPtr(true)}
-	firstContext := &types.Context{
+	firstContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Use the tool", 1)},
 		Tools: []types.Tool{{
@@ -1531,15 +1531,16 @@ func TestOpenAICodexStreamSendsOnlyInputDeltasInCachedMode(t *testing.T) {
 				"variants": map[string]any{"openai_lark": "start: /[a-z]+/"},
 			},
 		}},
-	}
+	})
 	firstOptions := &types.StreamOptions{}
 	firstOptions.APIKey = token
 	firstOptions.SessionID = "session-1"
 	firstOptions.Transport = types.TransportWebsocketCached
 	first := OpenAICodexResponses{}.Stream(context.Background(), model, firstContext, firstOptions).Result()
 
-	secondContext := &types.Context{
-		SystemPrompt: firstContext.SystemPrompt,
+	// v0.86.0: replay the same leading system message (prompt + tool
+	// declarations) instead of copying Context fields.
+	secondContext := utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			codexUserMessage("Use the tool", 1),
 			first,
@@ -1553,8 +1554,17 @@ func TestOpenAICodexStreamSendsOnlyInputDeltasInCachedMode(t *testing.T) {
 			},
 			codexUserMessage("Now finish", 3),
 		},
-		Tools: firstContext.Tools,
-	}
+		Tools: []types.Tool{{
+			Name:        "sample_tool",
+			Description: "Sample tool",
+			// TypeBox's Type.Object adds required + additionalProperties:false.
+			Parameters: json.RawMessage(`{"type":"object","properties":{"payload":{"type":"string"}},"required":["payload"],"additionalProperties":false}`),
+			ConstrainedSampling: map[string]any{
+				"type":     "grammar",
+				"variants": map[string]any{"openai_lark": "start: /[a-z]+/"},
+			},
+		}},
+	})
 	secondOptions := &types.StreamOptions{}
 	secondOptions.APIKey = token
 	secondOptions.SessionID = "session-1"
@@ -1684,20 +1694,20 @@ func TestOpenAICodexStreamMissingContinuationRecovery(t *testing.T) {
 			})
 
 			model := codexTestModel()
-			firstContext := &types.Context{
+			firstContext := utils.NormalizeContext(&types.Context{
 				SystemPrompt: "You are a helpful assistant.",
 				Messages:     []types.Message{codexUserMessage("Say hello", 1)},
-			}
+			})
 			firstOptions := &types.StreamOptions{}
 			firstOptions.APIKey = token
 			firstOptions.SessionID = sessionID
 			firstOptions.Transport = types.TransportWebsocketCached
 			first := OpenAICodexResponses{}.Stream(context.Background(), model, firstContext, firstOptions).Result()
 
-			secondContext := &types.Context{
+			secondContext := utils.NormalizeContext(&types.Context{
 				SystemPrompt: "You are a helpful assistant.",
 				Messages:     []types.Message{codexUserMessage("Say hello", 1), first, codexUserMessage("Now finish", 2)},
-			}
+			})
 			var eventTypes []string
 			secondOptions := &types.StreamOptions{}
 			secondOptions.APIKey = token
@@ -1823,10 +1833,10 @@ func TestOpenAICodexStreamRetryAfterVariants(t *testing.T) {
 			delays := stubCodexSleepRecorder(t)
 			var codexRequests int
 			model := codexTestModel()
-			llmContext := &types.Context{
+			llmContext := utils.NormalizeContext(&types.Context{
 				SystemPrompt: "You are a helpful assistant.",
 				Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-			}
+			})
 			base := types.StreamOptions{}
 			base.Transport = types.TransportSSE
 			base.APIKey = token
@@ -1870,10 +1880,10 @@ func TestOpenAICodexStreamRetryDelayExceeded(t *testing.T) {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
 			var fetchCalls int
 			model := codexTestModel()
-			llmContext := &types.Context{
+			llmContext := utils.NormalizeContext(&types.Context{
 				SystemPrompt: "You are a helpful assistant.",
 				Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-			}
+			})
 			base := types.StreamOptions{}
 			base.Transport = types.TransportSSE
 			base.APIKey = token
@@ -1907,10 +1917,10 @@ func TestOpenAICodexStreamExponentialBackoff(t *testing.T) {
 	delays := stubCodexSleepRecorder(t)
 	var codexRequests int
 	model := codexTestModel()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a helpful assistant.",
 		Messages:     []types.Message{codexUserMessage("Say hello", time.Now().UnixMilli())},
-	}
+	})
 	base := types.StreamOptions{}
 	base.Transport = types.TransportSSE
 	base.APIKey = token
@@ -1953,10 +1963,10 @@ func TestOpenAICodexStreamZstdCompressesRequestBodies(t *testing.T) {
 	run := func(userText string) {
 		capturedEncoding = ""
 		capturedBody = nil
-		llmContext := &types.Context{
+		llmContext := utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a helpful assistant.",
 			Messages:     []types.Message{codexUserMessage(userText, 1)},
-		}
+		})
 		options := &types.StreamOptions{}
 		options.APIKey = token
 		options.Transport = types.TransportSSE

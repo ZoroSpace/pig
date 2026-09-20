@@ -32,20 +32,6 @@ func codexModels() []*ai.Model {
 			ContextWindow: codexSparkContext, MaxTokens: codexMaxTokens,
 		},
 		{
-			ID: "gpt-5.4", Name: "GPT-5.4",
-			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
-			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
-			Cost:          withOpenAiLongContextPricing(ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 0}}),
-			ContextWindow: codexContext, MaxTokens: codexMaxTokens,
-		},
-		{
-			ID: "gpt-5.4-mini", Name: "GPT-5.4 mini",
-			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
-			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
-			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 0.75, Output: 4.5, CacheRead: 0.075, CacheWrite: 0}},
-			ContextWindow: codexContext, MaxTokens: codexMaxTokens,
-		},
-		{
 			ID: "gpt-5.5", Name: "GPT-5.5",
 			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
 			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},

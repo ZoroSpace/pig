@@ -11,15 +11,16 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 	"github.com/samber/lo"
 )
 
-func googleTLMContext() *types.Context {
-	return &types.Context{
+func googleTLMContext() *types.TranscriptContext {
+	return utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 0},
 		},
-	}
+	})
 }
 
 func googleTLMModel(id string, thinkingLevelMap types.ThinkingLevelMap) *types.Model {

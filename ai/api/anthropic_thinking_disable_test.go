@@ -12,6 +12,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 type anthropicThinkingPayload struct {
@@ -32,10 +33,10 @@ func captureThinkingPayload(t *testing.T, model *types.Model, options *types.Sim
 	return thinkingPayloadFrom(t, captureSimplePayload(t, model, thinkingDisableContext(), options))
 }
 
-func thinkingDisableContext() *types.Context {
-	return &types.Context{
+func thinkingDisableContext() *types.TranscriptContext {
+	return utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1}},
-	}
+	})
 }
 
 func TestAnthropicThinkingDisablePayload(t *testing.T) {
@@ -149,14 +150,14 @@ func TestAnthropicThinkingDisableE2E(t *testing.T) {
 		t.Skip("ANTHROPIC_API_KEY not set")
 	}
 	model := catalogAnthropicModel(t, types.ProviderAnthropic, "claude-sonnet-4-5")
-	context := &types.Context{
+	context := utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a precise assistant. Follow the requested output format exactly.",
 		Messages: []types.Message{types.UserMessage{
 			Role:      types.RoleUser,
 			Content:   types.UserContent{String: "Before replying, carefully solve 36863 * 5279 internally. Then reply with the word pong repeated exactly 40 times, separated by single spaces. Do not add any other text."},
 			Timestamp: 1,
 		}},
-	}
+	})
 	options := &types.SimpleStreamOptions{}
 	options.Temperature = lo.ToPtr(0.0)
 	options.MaxTokens = lo.ToPtr(int64(160))

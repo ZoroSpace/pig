@@ -85,7 +85,7 @@ func TestStreamProxyPreservesToolCallMetadataFromToolcallEnd(t *testing.T) {
 	)
 	srv := newProxySSEServer(t, body)
 
-	stream := StreamProxy(context.Background(), &proxyTestModel, &types.Context{}, &ProxyStreamOptions{
+	stream := StreamProxy(context.Background(), &proxyTestModel, &types.TranscriptContext{}, &ProxyStreamOptions{
 		AuthToken: "test-token",
 		ProxyURL:  srv.URL,
 	})
@@ -136,7 +136,7 @@ func TestStreamProxyProcessesTerminalMetadataWhenNotNewlineTerminated(t *testing
 	body := start + "data: " + string(donePayload)
 	srv := newProxySSEServer(t, body)
 
-	stream := StreamProxy(context.Background(), &proxyTestModel, &types.Context{}, &ProxyStreamOptions{
+	stream := StreamProxy(context.Background(), &proxyTestModel, &types.TranscriptContext{}, &ProxyStreamOptions{
 		AuthToken: "test-token",
 		ProxyURL:  srv.URL,
 	})
@@ -161,7 +161,7 @@ func TestStreamProxyEmitsErrorWhenStreamEndsWithoutTerminalEvent(t *testing.T) {
 	body := `data: {"type":"start"}` + "\n\n"
 	srv := newProxySSEServer(t, body)
 
-	stream := StreamProxy(context.Background(), &proxyTestModel, &types.Context{}, &ProxyStreamOptions{
+	stream := StreamProxy(context.Background(), &proxyTestModel, &types.TranscriptContext{}, &ProxyStreamOptions{
 		AuthToken: "test-token",
 		ProxyURL:  srv.URL,
 	})

@@ -67,7 +67,11 @@ func thinkingLevelOffValue(model *types.Model) string {
 }
 
 // buildParams builds the chat completion request body (pi: buildParams).
-func buildParams(model *types.Model, llmContext *types.Context, options *OpenAICompletionsOptions, compat *resolvedOpenAICompletionsCompat, cacheRetention types.CacheRetention, grammarToolInputProperties map[string]string) map[string]any {
+func buildParams(model *types.Model, llmContext *types.TranscriptContext, options *OpenAICompletionsOptions, compat *resolvedOpenAICompletionsCompat, cacheRetention types.CacheRetention, grammarToolInputProperties map[string]string) map[string]any {
+	transcriptTools := utils.ResolveTranscriptTools(
+		llmContext.Messages,
+		compat.supportsMidConvoSystemMessages && compat.supportsMidConvoToolAdditions,
+	)
 	messages := convertMessages(model, llmContext, compat, &ConvertCompletionsMessagesOptions{GrammarToolInputProperties: grammarToolInputProperties})
 	cacheControl := getCompatCacheControl(compat, cacheRetention)
 
@@ -101,20 +105,8 @@ func buildParams(model *types.Model, llmContext *types.Context, options *OpenAIC
 		params["temperature"] = *options.Temperature
 	}
 
-	var deferredToolNames map[string]struct{}
-	if compat.deferredToolsMode != nil && *compat.deferredToolsMode == types.DeferredToolsKimi {
-		deferredToolNames = getDeferredToolNames(llmContext.Messages)
-	} else {
-		deferredToolNames = map[string]struct{}{}
-	}
-	var activeTools []types.Tool
-	for _, tool := range llmContext.Tools {
-		if _, deferred := deferredToolNames[tool.Name]; !deferred {
-			activeTools = append(activeTools, tool)
-		}
-	}
-	if len(activeTools) > 0 {
-		params["tools"] = convertTools(activeTools, compat)
+	if len(transcriptTools.RequestTools) > 0 {
+		params["tools"] = convertTools(transcriptTools.RequestTools, compat)
 		if compat.zaiToolStream {
 			params["tool_stream"] = true
 		}
@@ -304,8 +296,9 @@ func buildParams(model *types.Model, llmContext *types.Context, options *OpenAIC
 // the stream StreamFunction body). ctx carries the caller's cancellation
 // (pi: options.signal — the SDK request options signal, the mid-stream
 // signal.aborted checks, and the catch path's aborted-vs-error decision).
-func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext *types.Context, options *OpenAICompletionsOptions) *types.AssistantMessageEventStream {
+func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *OpenAICompletionsOptions) *types.AssistantMessageEventStream {
 	stream := types.NewAssistantMessageEventStream()
+	normalizedContext := utils.ResolveTranscript(llmContext, getCompat(model).supportsMidConvoSystemMessages)
 
 	go func() {
 		output := &types.AssistantMessage{
@@ -448,14 +441,14 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 			return
 		}
 		compat := getCompat(model)
-		grammarToolInputProperties := CreateGrammarToolInputProperties(llmContext.Tools, compat.supportsOpenAIGrammarTools)
+		grammarToolInputProperties := CreateGrammarToolInputProperties(utils.GetDeclaredTools(normalizedContext.Messages), compat.supportsOpenAIGrammarTools)
 		cacheRetention := resolveCacheRetention(options.CacheRetention, options.Env)
 		cacheSessionID := ""
 		if cacheRetention != types.CacheRetentionNone {
 			cacheSessionID = options.SessionID
 		}
-		client := createClient(model, llmContext, apiKey, options.Headers, options.Fetch, cacheSessionID, compat)
-		params := buildParams(model, llmContext, options, compat, cacheRetention, grammarToolInputProperties)
+		client := createClient(model, normalizedContext, apiKey, options.Headers, options.Fetch, cacheSessionID, compat)
+		params := buildParams(model, normalizedContext, options, compat, cacheRetention, grammarToolInputProperties)
 		if options.OnPayload != nil {
 			if next := options.OnPayload(params, model); next != nil {
 				if nextParams, ok := next.(map[string]any); ok {

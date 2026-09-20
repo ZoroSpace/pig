@@ -80,7 +80,7 @@ func createInteractiveTestSession(t *testing.T, loader core.ResourceLoader, conf
 	t.Helper()
 
 	agentInstance, err := agent.NewAgent(agent.AgentOptions{
-		StreamFn: func(context.Context, *types.Model, *types.Context, *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(context.Context, *types.Model, *types.TranscriptContext, *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			return types.NewAssistantMessageEventStream()
 		},
 		InitialState: &agent.AgentState{SystemPrompt: "Test"},

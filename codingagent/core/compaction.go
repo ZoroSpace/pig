@@ -44,6 +44,7 @@ import (
 	compaction "github.com/ZoroSpace/pig/agent/harness/compaction"
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	aiutils "github.com/ZoroSpace/pig/ai/utils"
 )
 
 // ============================================================================
@@ -546,7 +547,7 @@ var completeSimpleFallback = func(ctx context.Context, model *ai.Model, llmConte
 	if !ok {
 		return nil, fmt.Errorf("No API provider registered for api: %s", model.API)
 	}
-	result := streams.StreamSimple(ctx, model, llmContext, options).Result()
+	result := streams.StreamSimple(ctx, model, aiutils.NormalizeContext(llmContext), options).Result()
 	return &result, nil
 }
 
@@ -580,7 +581,7 @@ func CompleteSummarization(
 	// options.
 	produce := func() (*types.AssistantMessage, error) {
 		if streamFn != nil {
-			result := streamFn(ctx, model, llmContext, &requestOptions).Result()
+			result := streamFn(ctx, model, aiutils.NormalizeContext(llmContext), &requestOptions).Result()
 			return &result, nil
 		}
 		return completeSimpleFallback(ctx, model, llmContext, &requestOptions)

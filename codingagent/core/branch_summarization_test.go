@@ -64,7 +64,7 @@ func pushDone(stream *types.AssistantMessageEventStream, reason types.StopReason
 
 func TestDoesNotOverrideToolChoiceForBranchSummaries(t *testing.T) {
 	var requestOptions *ai.SimpleStreamOptions
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		requestOptions = options
 		stream := types.NewAssistantMessageEventStream()
 		return pushDone(stream, types.StopReasonStop, branchResponse([]types.Content{types.NewTextContent("summary")}))
@@ -95,7 +95,7 @@ func TestDoesNotOverrideToolChoiceForBranchSummaries(t *testing.T) {
 
 func TestClampsBranchSummaryOutputCapToModelLimit(t *testing.T) {
 	var requestOptions *ai.SimpleStreamOptions
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		requestOptions = options
 		stream := types.NewAssistantMessageEventStream()
 		return pushDone(stream, types.StopReasonStop, branchResponse([]types.Content{types.NewTextContent("summary")}))
@@ -123,7 +123,7 @@ func TestClampsBranchSummaryOutputCapToModelLimit(t *testing.T) {
 }
 
 func TestRejectsLengthLimitedBranchSummaries(t *testing.T) {
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		stream := types.NewAssistantMessageEventStream()
 		message := branchResponse([]types.Content{types.NewTextContent("partial")})
 		message.StopReason = types.StopReasonLength
@@ -144,7 +144,7 @@ func TestRejectsLengthLimitedBranchSummaries(t *testing.T) {
 }
 
 func TestRejectsToolCallsFromBranchSummaries(t *testing.T) {
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.Context, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		stream := types.NewAssistantMessageEventStream()
 		return pushDone(stream, types.StopReasonToolUse, branchResponse([]types.Content{types.ToolCall{
 			Kind:      types.KindToolCall,

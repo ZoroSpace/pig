@@ -261,16 +261,16 @@ func (p *stubProvider) BaseURL() string          { return "" }
 func (p *stubProvider) Headers() ProviderHeaders { return nil }
 func (p *stubProvider) Auth() auth.ProviderAuth  { return p.auth }
 func (p *stubProvider) GetModels() []Model       { return p.models }
-func (p *stubProvider) Stream(ctx context.Context, model *Model, llmContext *Context, options *StreamOptions) *AssistantMessageEventStream {
+func (p *stubProvider) Stream(ctx context.Context, model *Model, llmContext *TranscriptContext, options *StreamOptions) *AssistantMessageEventStream {
 	return p.streams.Stream(ctx, model, llmContext, options)
 }
-func (p *stubProvider) StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *SimpleStreamOptions) *AssistantMessageEventStream {
+func (p *stubProvider) StreamSimple(ctx context.Context, model *Model, llmContext *TranscriptContext, options *SimpleStreamOptions) *AssistantMessageEventStream {
 	return p.streams.StreamSimple(ctx, model, llmContext, options)
 }
 
 type stubStreams struct{}
 
-func (stubStreams) Stream(ctx context.Context, model *Model, llmContext *Context, options *StreamOptions) *AssistantMessageEventStream {
+func (stubStreams) Stream(ctx context.Context, model *Model, llmContext *TranscriptContext, options *StreamOptions) *AssistantMessageEventStream {
 	s := NewAssistantMessageEventStream()
 	msg := &AssistantMessage{
 		Role: RoleAssistant, Content: []Content{NewTextContent("auth ok: " + options.APIKey)},
@@ -280,7 +280,7 @@ func (stubStreams) Stream(ctx context.Context, model *Model, llmContext *Context
 	s.Push(AssistantMessageEvent{Type: EventDone, Reason: StopReasonStop, Message: msg})
 	return s
 }
-func (stubStreams) StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *SimpleStreamOptions) *AssistantMessageEventStream {
+func (stubStreams) StreamSimple(ctx context.Context, model *Model, llmContext *TranscriptContext, options *SimpleStreamOptions) *AssistantMessageEventStream {
 	return stubStreams{}.Stream(ctx, model, llmContext, &StreamOptions{ProviderRequestOptions: options.ProviderRequestOptions})
 }
 

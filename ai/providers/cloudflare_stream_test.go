@@ -15,12 +15,12 @@ type cloudflareCapturingStreams struct {
 	captured []string
 }
 
-func (s *cloudflareCapturingStreams) Stream(_ context.Context, model *types.Model, _ *types.Context, _ *types.StreamOptions) *types.AssistantMessageEventStream {
+func (s *cloudflareCapturingStreams) Stream(_ context.Context, model *types.Model, _ *types.TranscriptContext, _ *types.StreamOptions) *types.AssistantMessageEventStream {
 	s.captured = append(s.captured, model.BaseURL)
 	return types.NewAssistantMessageEventStream()
 }
 
-func (s *cloudflareCapturingStreams) StreamSimple(_ context.Context, model *types.Model, _ *types.Context, _ *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (s *cloudflareCapturingStreams) StreamSimple(_ context.Context, model *types.Model, _ *types.TranscriptContext, _ *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	s.captured = append(s.captured, model.BaseURL)
 	return types.NewAssistantMessageEventStream()
 }
@@ -49,8 +49,8 @@ func TestCloudflareStreamsMaterializesEndpointBeforeDispatch(t *testing.T) {
 	}
 	model := cloudflareTestModel()
 
-	streams.Stream(context.Background(), model, &types.Context{}, &types.StreamOptions{ProviderRequestOptions: types.ProviderRequestOptions{Env: env}})
-	streams.StreamSimple(context.Background(), model, &types.Context{}, &types.SimpleStreamOptions{StreamOptions: types.StreamOptions{ProviderRequestOptions: types.ProviderRequestOptions{Env: env}}})
+	streams.Stream(context.Background(), model, &types.TranscriptContext{}, &types.StreamOptions{ProviderRequestOptions: types.ProviderRequestOptions{Env: env}})
+	streams.StreamSimple(context.Background(), model, &types.TranscriptContext{}, &types.SimpleStreamOptions{StreamOptions: types.StreamOptions{ProviderRequestOptions: types.ProviderRequestOptions{Env: env}}})
 
 	want := []string{
 		"https://gateway.ai.cloudflare.com/v1/account/gateway/openai",
@@ -66,7 +66,7 @@ func TestCloudflareStreamsKeepsPlaceholdersWithoutEnv(t *testing.T) {
 	streams := CloudflareStreams(captured)
 	model := cloudflareTestModel()
 
-	streams.StreamSimple(context.Background(), model, &types.Context{}, &types.SimpleStreamOptions{})
+	streams.StreamSimple(context.Background(), model, &types.TranscriptContext{}, &types.SimpleStreamOptions{})
 
 	if len(captured.captured) != 1 || captured.captured[0] != cloudflareTestModelBaseURL {
 		t.Errorf("captured = %v, want [%s]", captured.captured, cloudflareTestModelBaseURL)

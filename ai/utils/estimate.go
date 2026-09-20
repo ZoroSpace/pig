@@ -88,6 +88,10 @@ func EstimateTextAndImageContentTokens(content *types.UserContent) int64 {
 func EstimateMessageTokens(message types.Message) int64 {
 	var chars int64
 	switch m := message.(type) {
+	case types.SystemMessage:
+		return EstimateTextTokens(GetSystemMessageText(&m)) +
+			estimateToolsTokens(m.ToolsAdded) +
+			estimateToolsTokens(m.ToolsRemoved)
 	case types.UserMessage:
 		return EstimateTextAndImageContentTokens(&m.Content)
 	case types.ToolResultMessage:
@@ -165,54 +169,25 @@ func estimateMessages(messages []types.Message) ContextUsageEstimate {
 	return ContextUsageEstimate{Tokens: tokens, UsageTokens: 0, TrailingTokens: tokens, LastUsageIndex: -1}
 }
 
-func estimateToolsTokens(tools []types.Tool) int64 {
-	if len(tools) == 0 {
+func estimateToolsTokens(tools any) int64 {
+	if tools == nil {
 		return 0
 	}
 	return EstimateTextTokens(safeJSONStringifyEstimate(tools))
 }
 
-// EstimateContextTokens estimates the tokens of a full context or a bare
-// message list (pi: estimateContextTokens).
-func EstimateContextTokens(context *types.Context) ContextUsageEstimate {
-	estimate := estimateMessages(context.Messages)
-	if estimate.LastUsageIndex != -1 {
-		addedNames := map[string]bool{}
-		for _, message := range context.Messages[estimate.LastUsageIndex+1:] {
-			if tr, isToolResult := message.(types.ToolResultMessage); isToolResult {
-				for _, name := range tr.AddedToolNames {
-					addedNames[name] = true
-				}
-			}
-		}
-		var addedToolTokens int64
-		if len(addedNames) > 0 {
-			var filtered []types.Tool
-			for _, tool := range context.Tools {
-				if addedNames[tool.Name] {
-					filtered = append(filtered, tool)
-				}
-			}
-			addedToolTokens = estimateToolsTokens(filtered)
-		}
-		return ContextUsageEstimate{
-			Tokens:         estimate.Tokens + addedToolTokens,
-			UsageTokens:    estimate.UsageTokens,
-			TrailingTokens: estimate.TrailingTokens + addedToolTokens,
-			LastUsageIndex: estimate.LastUsageIndex,
-		}
-	}
-	var prefixTokens int64
-	if context.SystemPrompt != "" {
-		prefixTokens += EstimateTextTokens(context.SystemPrompt)
-	}
-	prefixTokens += estimateToolsTokens(context.Tools)
-	return ContextUsageEstimate{
-		Tokens:         estimate.Tokens + prefixTokens,
-		UsageTokens:    estimate.UsageTokens,
-		TrailingTokens: estimate.TrailingTokens + prefixTokens,
-		LastUsageIndex: estimate.LastUsageIndex,
-	}
+// EstimateContextTokens estimates the tokens of a normalized transcript (pi:
+// estimateContextTokens; the TS function also accepts a bare message list,
+// split here into EstimateContextTokensOfMessages since Go cannot
+// overload).
+func EstimateContextTokens(context *types.TranscriptContext) ContextUsageEstimate {
+	return EstimateContextTokensOfMessages(context.Messages)
+}
+
+// EstimateContextTokensOfMessages estimates the tokens of a bare message
+// list (pi: estimateContextTokens union arm).
+func EstimateContextTokensOfMessages(messages []types.Message) ContextUsageEstimate {
+	return estimateMessages(messages)
 }
 
 func ceilDiv(a, b int64) int64 {

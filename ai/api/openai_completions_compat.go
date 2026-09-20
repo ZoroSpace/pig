@@ -281,9 +281,10 @@ func detectCompat(model *types.Model) *resolvedOpenAICompletionsCompat {
 		thinkingTokenBudgetField:                    nil,
 		supportsStrictMode:                          !isMoonshot && !isTogether && !isCloudflareAIGateway && !isNvidia,
 		supportsOpenAIGrammarTools:                  false,
+		supportsMidConvoSystemMessages:              false,
+		supportsMidConvoToolAdditions:               false,
 		cacheControlFormat:                          cacheControlFormat,
 		sendSessionAffinityHeaders:                  false,
-		deferredToolsMode:                           nil,
 		sessionAffinityFormat:                       sessionAffinityFormat,
 		supportsLongCacheRetention:                  supportsLongCacheRetention,
 	}
@@ -365,8 +366,11 @@ func getCompat(model *types.Model) *resolvedOpenAICompletionsCompat {
 	if compat.SendSessionAffinityHeaders != nil {
 		resolved.sendSessionAffinityHeaders = *compat.SendSessionAffinityHeaders
 	}
-	if compat.DeferredToolsMode != nil {
-		resolved.deferredToolsMode = compat.DeferredToolsMode
+	if compat.SupportsMidConvoSystemMessages != nil {
+		resolved.supportsMidConvoSystemMessages = *compat.SupportsMidConvoSystemMessages
+	}
+	if compat.SupportsMidConvoToolAdditions != nil {
+		resolved.supportsMidConvoToolAdditions = *compat.SupportsMidConvoToolAdditions
 	}
 	if compat.SessionAffinityFormat != nil {
 		resolved.sessionAffinityFormat = *compat.SessionAffinityFormat

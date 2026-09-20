@@ -28,6 +28,19 @@ var deepseekV4ThinkingLevelMap = ai.ThinkingLevelMap{
 	ai.ModelThinkingMax:     lo.ToPtr("max"),
 }
 
+// fireworksAdaptiveThinkingFallbackModels are verified against Fireworks
+// Messages raw_output on 2026-09-10 (#9323). Fall back to verified support
+// when models.dev omits effort metadata; this is not an allowlist. Any
+// Fireworks Messages model advertising effort uses adaptive thinking (pi:
+// FIREWORKS_ADAPTIVE_THINKING_FALLBACK_MODELS).
+var fireworksAdaptiveThinkingFallbackModels = stringSet(
+	"accounts/fireworks/models/deepseek-v4-flash-0731",
+	"accounts/fireworks/models/deepseek-v4-flash-vision-exp",
+	"accounts/fireworks/models/deepseek-v4-pro-0813",
+	"accounts/fireworks/models/qwen3p8-max",
+	"accounts/fireworks/models/qwen3p8-2p4t-a95b",
+)
+
 var deepseekV4FlashThinkingLevelMap = ai.ThinkingLevelMap{
 	ai.ModelThinkingMinimal: nil,
 	ai.ModelThinkingLow:     lo.ToPtr("low"),
@@ -74,6 +87,34 @@ var anthropicAllowedFallbackModels = map[string][]string{
 // anthropic-messages models that reject per-tool eager_input_streaming. All
 // entries are github-copilot models, so this never matches until that provider
 // is ported; kept verbatim for the port.
+// verifiedAnthropicMidConvoEffortProviders are the providers whose
+// mid-conversation effort transport is verified (pi:
+// VERIFIED_ANTHROPIC_MID_CONVO_EFFORT_PROVIDERS).
+var verifiedAnthropicMidConvoEffortProviders = stringSet("anthropic", "openrouter")
+
+// midConvoEffortUnsupportedAnthropicModels gates the effort transport on
+// models known to reject it (pi: MID_CONVO_EFFORT_UNSUPPORTED_ANTHROPIC_MODELS,
+// v0.86.0 — OpenRouter rejects configuration_update system messages on Opus 5
+// while accepting them on Fable 5.1).
+var midConvoEffortUnsupportedAnthropicModels = stringSet("openrouter:anthropic/claude-opus-5")
+
+// supportsAnthropicMidConvoEffort (pi: supportsAnthropicMidConvoEffort,
+// v0.86.0 — narrowed to the models with a verified effort transport).
+func supportsAnthropicMidConvoEffort(modelID string) bool {
+	id := strings.ToLower(modelID)
+	id = regexp.MustCompile(`^~?anthropic\\/`).ReplaceAllString(id, "")
+	return regexp.MustCompile(`^claude-opus-5(?:-\\d{8})?$`).MatchString(id) ||
+		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\\d{8})?$`).MatchString(id)
+}
+
+// supportsAnthropicMidConvoSystemMessages reports whether the exact model id
+// accepts system messages mid-conversation (pi:
+// supportsAnthropicMidConvoSystemMessages, v0.86.0).
+func supportsAnthropicMidConvoSystemMessages(modelID string) bool {
+	return regexp.MustCompile(`^claude-opus-(?:4[.-]8|5)(?:-\d{8})?$`).MatchString(modelID) ||
+		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)?(?:-\d{8})?$`).MatchString(modelID)
+}
+
 var eagerToolInputStreamingUnsupportedAnthropicModels = stringSet(
 	"github-copilot:claude-haiku-4.5",
 	"github-copilot:claude-sonnet-4",
@@ -440,9 +481,6 @@ func mergeOverrideNonNil(dst, src *ai.OpenAICompletionsCompat) {
 	if src.SendSessionAffinityHeaders != nil {
 		dst.SendSessionAffinityHeaders = src.SendSessionAffinityHeaders
 	}
-	if src.DeferredToolsMode != nil {
-		dst.DeferredToolsMode = src.DeferredToolsMode
-	}
 	if src.SessionAffinityFormat != nil {
 		dst.SessionAffinityFormat = src.SessionAffinityFormat
 	}
@@ -520,9 +558,6 @@ func mergeFillMissing(dst, src *ai.OpenAICompletionsCompat) {
 	if dst.SendSessionAffinityHeaders == nil {
 		dst.SendSessionAffinityHeaders = src.SendSessionAffinityHeaders
 	}
-	if dst.DeferredToolsMode == nil {
-		dst.DeferredToolsMode = src.DeferredToolsMode
-	}
 	if dst.SessionAffinityFormat == nil {
 		dst.SessionAffinityFormat = src.SessionAffinityFormat
 	}
@@ -556,7 +591,6 @@ func openAICompatEmpty(compat *ai.OpenAICompletionsCompat) bool {
 		compat.SupportsStrictMode == nil &&
 		compat.CacheControlFormat == nil &&
 		compat.SendSessionAffinityHeaders == nil &&
-		compat.DeferredToolsMode == nil &&
 		compat.SessionAffinityFormat == nil &&
 		compat.SupportsLongCacheRetention == nil
 }
@@ -613,9 +647,6 @@ func mergeAnthropicOverrideNonNil(dst, src *ai.AnthropicMessagesCompat) {
 	if src.AllowedFallbackModels != nil {
 		dst.AllowedFallbackModels = src.AllowedFallbackModels
 	}
-	if src.SupportsToolReferences != nil {
-		dst.SupportsToolReferences = src.SupportsToolReferences
-	}
 }
 
 // getAnthropicMessagesCompat returns anthropic-messages compat overrides keyed
@@ -625,6 +656,24 @@ func mergeAnthropicOverrideNonNil(dst, src *ai.AnthropicMessagesCompat) {
 func getAnthropicMessagesCompat(provider, modelID string) *ai.AnthropicMessagesCompat {
 	compat := &ai.AnthropicMessagesCompat{}
 	hadField := false
+	if verifiedAnthropicMidConvoEffortProviders[provider] &&
+		supportsAnthropicMidConvoEffort(modelID) &&
+		!midConvoEffortUnsupportedAnthropicModels[provider+":"+modelID] {
+		compat.SupportsMidConvoEffort = lo.ToPtr(true)
+		hadField = true
+	}
+	if provider == "anthropic" && supportsAnthropicMidConvoSystemMessages(modelID) {
+		compat.SupportsMidConvoSystemMessages = lo.ToPtr(true)
+		compat.SupportsMidConvoToolChanges = lo.ToPtr(true)
+		hadField = true
+	}
+	// OpenCode Zen and GitHub Copilot forward mid-conversation system messages
+	// but reject tool_addition/tool_removal blocks, so tool changes stay
+	// top-level there (pi v0.86.0).
+	if (provider == "opencode" || provider == "github-copilot") && supportsAnthropicMidConvoSystemMessages(modelID) {
+		compat.SupportsMidConvoSystemMessages = lo.ToPtr(true)
+		hadField = true
+	}
 	if eagerToolInputStreamingUnsupportedAnthropicModels[provider+":"+modelID] {
 		compat.SupportsEagerToolInputStreaming = lo.ToPtr(false)
 		hadField = true
@@ -786,6 +835,11 @@ var openAIToolSearchModelIDs = stringSet(
 // (same set as the tool-search ids).
 var openAIAdditionalToolsModelIDs = openAIToolSearchModelIDs
 
+// openAIMidConvoSystemMessageModelIDs is pi's
+// OPENAI_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS (same set as the tool-search
+// ids; v0.86.0 mid-conversation system messages).
+var openAIMidConvoSystemMessageModelIDs = openAIToolSearchModelIDs
+
 // openAICodexAdditionalToolsModelIDs is pi's
 // OPENAI_CODEX_ADDITIONAL_TOOLS_MODEL_IDS (the codex branch stays inert
 // until the codex adapter lands).
@@ -807,6 +861,82 @@ func applyOpenAIToolSearchMetadata(model *ai.Model) {
 		compat.SupportsAdditionalTools = lo.ToPtr(true)
 	}
 	mergeOpenAIResponsesCompat(model, compat)
+}
+
+// applyOpenAICompletionsTranscriptMetadata (pi:
+// applyOpenAICompletionsTranscriptMetadata, v0.86.0). Moonshot Kimi K2.6/K2.7
+// accept system text after the conversation starts but reject tool-bearing
+// system messages. Kimi K3 accepts both forms; Fireworks and OpenCode pass
+// its tool-bearing form through. GitHub Copilot forwards K3 text but silently
+// drops its tool-bearing message. DeepSeek V4 Pro and OpenAI models behind
+// OpenRouter also accept plain system text in place.
+func applyOpenAICompletionsTranscriptMetadata(model *ai.Model) {
+	if model.API != ai.ApiOpenAICompletions {
+		return
+	}
+	isKimiK3 := (strings.HasPrefix(string(model.Provider), "moonshot") && model.ID == "kimi-k3") ||
+		(model.Provider == ai.ProviderID("fireworks") && strings.Contains(model.ID, "kimi-k3")) ||
+		((model.Provider == ai.ProviderID("opencode") || model.Provider == ai.ProviderID("opencode-go")) && model.ID == "kimi-k3")
+	isMoonshotKimiK2 := strings.HasPrefix(string(model.Provider), "moonshot") &&
+		(model.ID == "kimi-k2.6" || model.ID == "kimi-k2.7-code" || model.ID == "kimi-k2.7-code-highspeed")
+	isTextOnly := isMoonshotKimiK2 ||
+		(model.Provider == ai.ProviderID("github-copilot") && model.ID == "kimi-k3") ||
+		(model.Provider == ai.ProviderID("deepseek") && model.ID == "deepseek-v4-pro") ||
+		(model.Provider == ai.ProviderOpenRouter &&
+			strings.HasPrefix(model.ID, "openai/") &&
+			openAIMidConvoSystemMessageModelIDs[strings.TrimPrefix(model.ID, "openai/")])
+	if !isKimiK3 && !isTextOnly {
+		return
+	}
+	compat := &ai.OpenAICompletionsCompat{SupportsMidConvoSystemMessages: lo.ToPtr(true)}
+	if isKimiK3 {
+		compat.SupportsMidConvoToolAdditions = lo.ToPtr(true)
+	}
+	mergeOpenAICompletionsCompat(model, compat)
+}
+
+// openAIResponsesProxyProviders are the proxy providers that pass mid-convo
+// developer messages through to OpenAI (pi: OPENAI_RESPONSES_PROXY_PROVIDERS).
+var openAIResponsesProxyProviders = stringSet("opencode", "opencode-go", "github-copilot")
+
+// applyOpenAIResponsesTranscriptMetadata (pi:
+// applyOpenAIResponsesTranscriptMetadata, v0.86.0). Newer OpenAI Responses
+// models accept developer messages after the conversation has started.
+// OpenCode Zen, OpenCode Go, and GitHub Copilot pass both those messages and
+// additional_tools items through to OpenAI unchanged; tool search is not
+// verified through those proxies.
+func applyOpenAIResponsesTranscriptMetadata(model *ai.Model) {
+	isOpenAIResponses := model.Provider == ai.ProviderOpenAI && model.API == ai.ApiOpenAIResponses
+	isOpenAICodex := model.Provider == ai.ProviderID("openai-codex") && model.API == ai.Api("openai-codex-responses")
+	isProxiedResponses := openAIResponsesProxyProviders[string(model.Provider)] && model.API == ai.ApiOpenAIResponses
+	if !(isOpenAIResponses || isOpenAICodex || isProxiedResponses) || !openAIMidConvoSystemMessageModelIDs[model.ID] {
+		return
+	}
+	compat := &ai.OpenAIResponsesCompat{SupportsMidConvoSystemMessages: lo.ToPtr(true)}
+	if isProxiedResponses {
+		compat.SupportsAdditionalTools = lo.ToPtr(true)
+	}
+	mergeOpenAIResponsesCompat(model, compat)
+}
+
+// anthropicPromptCache is the direct-Anthropic prompt cache lifetime table
+// (pi: ANTHROPIC_PROMPT_CACHE). Anthropic ephemeral entries have a hard
+// five-minute lifetime; ttl "1h" extends it to one hour. Only direct
+// Anthropic is annotated so cache warming does not assume equivalent behavior
+// through proxies.
+var anthropicPromptCache = ai.ModelPromptCache{
+	ai.CacheRetentionShort: 300,
+	ai.CacheRetentionLong:  3600,
+}
+
+// applyPromptCacheMetadata (pi: applyPromptCacheMetadata, v0.86.0). Do not
+// add OpenAI lifetimes yet. Before enabling warming for explicit OpenAI
+// caches, re-evaluate it using observed expiry, replay, and billing behavior;
+// a documented TTL alone does not establish full cache loss.
+func applyPromptCacheMetadata(model *ai.Model) {
+	if model.Provider == ai.ProviderAnthropic && model.API == ai.ApiAnthropicMessages {
+		model.PromptCache = anthropicPromptCache
+	}
 }
 
 // applyOpenAIExplicitPromptCacheMetadata (pi:
@@ -955,7 +1085,7 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 			mergeAnthropicMessagesCompat(model, &ai.AnthropicMessagesCompat{SupportsTemperature: lo.ToPtr(false)})
 		}
 	}
-	if model.API == ai.ApiOpenAICompletions && strings.Contains(model.ID, "deepseek-v4") {
+	if model.API == ai.ApiOpenAICompletions && strings.Contains(model.ID, "deepseek-v4") && model.ThinkingLevelMap == nil {
 		switch {
 		case model.Provider == ai.ProviderOpenRouter:
 			mergeThinkingLevelMap(model, ai.ThinkingLevelMap{
@@ -972,21 +1102,6 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 		default:
 			mergeThinkingLevelMap(model, deepseekV4ThinkingLevelMap)
 		}
-	}
-	if isGoogleThinkingApi(model) && isGemini3ProModel(model.ID) {
-		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{
-			ai.ModelThinkingOff: nil, ai.ModelThinkingMinimal: nil, ai.ModelThinkingLow: lo.ToPtr("LOW"),
-			ai.ModelThinkingMedium: nil, ai.ModelThinkingHigh: lo.ToPtr("HIGH"),
-		})
-	}
-	if isGoogleThinkingApi(model) && isGemini3FlashModel(model.ID) {
-		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil})
-	}
-	if isGoogleThinkingApi(model) && isGemma4Model(model.ID) {
-		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{
-			ai.ModelThinkingOff: nil, ai.ModelThinkingMinimal: lo.ToPtr("MINIMAL"), ai.ModelThinkingLow: nil,
-			ai.ModelThinkingMedium: nil, ai.ModelThinkingHigh: lo.ToPtr("HIGH"),
-		})
 	}
 	if model.Provider == ai.ProviderGroq && model.ID == "qwen/qwen3.6-27b" {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingMinimal: nil, ai.ModelThinkingLow: nil, ai.ModelThinkingMedium: nil, ai.ModelThinkingHigh: lo.ToPtr("default")})
@@ -1013,14 +1128,53 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 	if model.Provider == ai.ProviderOpenRouter && model.ID == "z-ai/glm-5.2" {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingXHigh: lo.ToPtr("xhigh")})
 	}
-	if model.Provider == ai.ProviderFireworks && strings.Contains(model.ID, "glm-5p2") {
-		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{
-			ai.ModelThinkingOff:     lo.ToPtr("none"),
-			ai.ModelThinkingMinimal: nil,
-			ai.ModelThinkingLow:     lo.ToPtr("high"),
-			ai.ModelThinkingMedium:  lo.ToPtr("high"),
-			ai.ModelThinkingMax:     lo.ToPtr("max"),
-		})
+	if model.Provider == ai.ProviderFireworks {
+		if model.API == ai.ApiAnthropicMessages && model.Compat != nil {
+			if compat, ok := model.Compat.(*ai.AnthropicMessagesCompat); ok && compat != nil &&
+				compat.ForceAdaptiveThinking != nil && *compat.ForceAdaptiveThinking {
+				// Qwen Max currently advertises only a toggle. Prefer upstream
+				// effort metadata once available instead of replacing it with
+				// this fallback.
+				if model.ID == "accounts/fireworks/models/qwen3p8-max" && model.ThinkingLevelMap == nil {
+					mergeThinkingLevelMap(model, *getEffortThinkingLevelMap([]ModelsDevReasoningOption{
+						{Type: "effort", Values: []*string{lo.ToPtr("low"), lo.ToPtr("medium"), lo.ToPtr("xhigh")}},
+					}))
+				}
+				reasoningOptions := modelsDevReasoningOptions[getModelKey(model)]
+				hasToggle := false
+				for _, option := range reasoningOptions {
+					if option.Type == "toggle" {
+						hasToggle = true
+						break
+					}
+				}
+				if hasToggle ||
+					// The 2.4T alias omits the verified toggle in models.dev.
+					model.ID == "accounts/fireworks/models/qwen3p8-2p4t-a95b" {
+					mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: lo.ToPtr("none")})
+				}
+				if model.ID == "accounts/fireworks/models/deepseek-v4-pro-0813" {
+					mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingLow: lo.ToPtr("low")})
+				}
+			}
+		}
+		if strings.Contains(model.ID, "glm-5p2") {
+			// GLM 5.2 and its fast router support off/high/max. Fireworks maps
+			// low and medium to high, so do not expose those aliases as
+			// distinct levels.
+			mergeThinkingLevelMap(model, ai.ThinkingLevelMap{
+				ai.ModelThinkingOff:     lo.ToPtr("none"),
+				ai.ModelThinkingMinimal: nil,
+				ai.ModelThinkingLow:     nil,
+				ai.ModelThinkingMedium:  nil,
+				ai.ModelThinkingMax:     lo.ToPtr("max"),
+			})
+		}
+		if strings.Contains(model.ID, "kimi-k3") {
+			// Fireworks maps medium to high on both APIs; do not expose it as a
+			// distinct level.
+			mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingMedium: nil})
+		}
 	}
 	if model.Provider == ai.ProviderOpenCodeGo && model.ID == "glm-5.2" {
 		mergeThinkingLevelMap(model, openCodeGoGlm52ThinkingLevelMap)

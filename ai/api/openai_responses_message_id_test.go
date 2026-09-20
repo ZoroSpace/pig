@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func TestOpenAIResponsesMessageIDConversion(t *testing.T) {
@@ -24,10 +25,10 @@ func TestOpenAIResponsesMessageIDConversion(t *testing.T) {
 			API: types.ApiAnthropicMessages, Provider: types.ProviderAnthropic,
 			Model: "claude-opus-4-8", StopReason: types.StopReasonStop, Timestamp: 0,
 		}
-		llmContext := &types.Context{
+		llmContext := utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are concise.",
 			Messages:     []types.Message{responsesUserMessage("hello"), assistant},
-		}
+		})
 
 		input := ConvertResponsesMessages(model, llmContext, map[string]struct{}{
 			"openai": {}, "openai-codex": {}, "opencode": {},

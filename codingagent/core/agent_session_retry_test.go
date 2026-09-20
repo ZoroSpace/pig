@@ -18,7 +18,7 @@ func createRetrySession(t *testing.T, failCount int, maxRetries int64, delayAssi
 
 	session, _, settingsManager := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey: true,
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			callCount++
 			stream := newMockAssistantStream()
 			if callCount <= failCount {
@@ -145,7 +145,7 @@ func TestAgentSessionRetryRetriesProviderNetworkErrorFailures(t *testing.T) {
 	callCount := 0
 	session, _, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey: true,
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			callCount++
 			stream := newMockAssistantStream()
 			if callCount == 1 {
@@ -211,7 +211,7 @@ func TestAgentSessionRetryPromptWaitsForFullAgentLoopWhenRetryProducesToolCalls(
 	session, _, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey:         true,
 		BaseToolsOverride: map[string]agent.AgentTool{"echo": echoTool},
-		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			callCount++
 			stream := newMockAssistantStream()
 			switch callCount {

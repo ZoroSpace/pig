@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/samber/lo"
 )
 
 var (
@@ -39,6 +40,28 @@ func isGemma4Model(modelID string) bool {
 	return googleGemma4Re.MatchString(strings.ToLower(modelID))
 }
 
+// getGoogleThinkingLevelMap derives the thinking level map from models.dev
+// verified effort options, falling back to the Gemma 4 table (pi:
+// getGoogleThinkingLevelMap, v0.86.0 — "derive Google thinking levels from
+// models.dev" and "avoid unsupported Gemini thinking levels"; the hardcoded
+// Gemini 3 Pro/Flash merges were removed in favor of the derived maps).
+func getGoogleThinkingLevelMap(modelID string, reasoningOptions []ModelsDevReasoningOption) *ai.ThinkingLevelMap {
+	if effortMap := getEffortThinkingLevelMap(reasoningOptions); effortMap != nil {
+		return effortMap
+	}
+	if isGemma4Model(modelID) {
+		m := ai.ThinkingLevelMap{
+			ai.ModelThinkingOff:     nil,
+			ai.ModelThinkingMinimal: lo.ToPtr("MINIMAL"),
+			ai.ModelThinkingLow:     nil,
+			ai.ModelThinkingMedium:  nil,
+			ai.ModelThinkingHigh:    lo.ToPtr("HIGH"),
+		}
+		return &m
+	}
+	return nil
+}
+
 // processGoogleModels (pi: loadModelsDevData google block). The
 // gemini-flash-latest / gemini-flash-lite-latest aliases inherit the source
 // model's metadata so their reasoning flags and budgets track the concrete
@@ -64,17 +87,19 @@ func processGoogleModels(data ModelsDevCatalog) []*ai.Model {
 				source = aliased
 			}
 		}
+		thinkingLevelMap := getGoogleThinkingLevelMap(modelID, source.ReasoningOptions)
 		models = append(models, &ai.Model{
-			ID:            modelID,
-			Name:          orString(m.Name, modelID),
-			API:           ai.ApiGoogleGenerativeAI,
-			Provider:      ai.ProviderGoogle,
-			BaseURL:       "https://generativelanguage.googleapis.com/v1beta",
-			Reasoning:     boolVal(source.Reasoning),
-			Input:         inputOf(source),
-			Cost:          modelsDevCostOf(source.Cost),
-			ContextWindow: int64Or(limitContext(source), 4096),
-			MaxTokens:     int64Or(limitOutput(source), 4096),
+			ID:               modelID,
+			Name:             orString(m.Name, modelID),
+			API:              ai.ApiGoogleGenerativeAI,
+			Provider:         ai.ProviderGoogle,
+			BaseURL:          "https://generativelanguage.googleapis.com/v1beta",
+			Reasoning:        boolVal(source.Reasoning),
+			ThinkingLevelMap: derefThinkingLevelMap(thinkingLevelMap),
+			Input:            inputOf(source),
+			Cost:             modelsDevCostOf(source.Cost),
+			ContextWindow:    int64Or(limitContext(source), 4096),
+			MaxTokens:        int64Or(limitOutput(source), 4096),
 		})
 		recordModelsDevReasoningOptions("google", modelID, source)
 	}
@@ -137,19 +162,30 @@ func processGoogleVertexModels(data ModelsDevCatalog) []*ai.Model {
 			}
 		}
 		cost.CacheRead = cacheRead
+		thinkingLevelMap := getGoogleThinkingLevelMap(modelID, source.ReasoningOptions)
 		models = append(models, &ai.Model{
-			ID:            modelID,
-			Name:          orString(m.Name, modelID),
-			API:           ai.ApiGoogleVertex,
-			Provider:      ai.ProviderGoogleVertex,
-			BaseURL:       vertexBaseURL,
-			Reasoning:     boolVal(source.Reasoning),
-			Input:         inputOf(source),
-			Cost:          ai.ModelCost{ModelCostRates: cost},
-			ContextWindow: int64Or(limitContext(source), 4096),
-			MaxTokens:     int64Or(limitOutput(source), 4096),
+			ID:               modelID,
+			Name:             orString(m.Name, modelID),
+			API:              ai.ApiGoogleVertex,
+			Provider:         ai.ProviderGoogleVertex,
+			BaseURL:          vertexBaseURL,
+			Reasoning:        boolVal(source.Reasoning),
+			ThinkingLevelMap: derefThinkingLevelMap(thinkingLevelMap),
+			Input:            inputOf(source),
+			Cost:             ai.ModelCost{ModelCostRates: cost},
+			ContextWindow:    int64Or(limitContext(source), 4096),
+			MaxTokens:        int64Or(limitOutput(source), 4096),
 		})
 		recordModelsDevReasoningOptions("google-vertex", modelID, source)
 	}
 	return models
+}
+
+// derefThinkingLevelMap copies a map pointer into a value Model field (nil
+// stays nil).
+func derefThinkingLevelMap(m *ai.ThinkingLevelMap) ai.ThinkingLevelMap {
+	if m == nil {
+		return nil
+	}
+	return *m
 }

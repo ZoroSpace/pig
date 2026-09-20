@@ -49,7 +49,7 @@ func newPanicAbortTestSession(t *testing.T) *core.AgentSession {
 		Input:         []ai.ModelInput{ai.ModelInputText},
 	}
 	var streamCalls atomic.Int32
-	streamFn := func(ctx context.Context, _ *types.Model, _ *types.Context, _ *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+	streamFn := func(ctx context.Context, _ *types.Model, _ *types.TranscriptContext, _ *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 		stream := types.NewAssistantMessageEventStream()
 		if streamCalls.Add(1) > 1 {
 			// Later prompts complete normally (core:

@@ -8,6 +8,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func emptySignatureTestModel(allowEmptySignature *bool) *types.Model {
@@ -22,7 +23,7 @@ func emptySignatureTestModel(allowEmptySignature *bool) *types.Model {
 	return model
 }
 
-func emptySignatureTestContext(thinkingSignature string, thinking string, provider types.ProviderID, modelID string) *types.Context {
+func emptySignatureTestContext(thinkingSignature string, thinking string, provider types.ProviderID, modelID string) *types.TranscriptContext {
 	assistant := types.AssistantMessage{
 		Role: types.RoleAssistant,
 		Content: []types.Content{
@@ -35,18 +36,18 @@ func emptySignatureTestContext(thinkingSignature string, thinking string, provid
 		StopReason: types.StopReasonStop,
 		Timestamp:  1,
 	}
-	return &types.Context{
+	return utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "first"}, Timestamp: 1},
 			assistant,
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "second"}, Timestamp: 2},
 		},
-	}
+	})
 }
 
 // captureSimplePayload drives the real StreamSimple entry point with OnPayload
 // capture (pi: streamSimple(model, context, { apiKey, onPayload })).
-func captureSimplePayload(t *testing.T, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) map[string]any {
+func captureSimplePayload(t *testing.T, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) map[string]any {
 	t.Helper()
 	var captured map[string]any
 	if options == nil {

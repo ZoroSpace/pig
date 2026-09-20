@@ -372,7 +372,7 @@ func init() {
 // Stream dispatches one streaming request (pi: stream). ctx carries the
 // caller's cancellation (pi: options.signal into the SDK request, buildParams
 // pre-check and the retry helper).
-func (GoogleVertex) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (GoogleVertex) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	opts := &GoogleVertexOptions{}
 	if options != nil {
 		opts.StreamOptions = *options
@@ -383,7 +383,7 @@ func (GoogleVertex) Stream(ctx context.Context, model *types.Model, llmContext *
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
 // Unlike the google-generative-ai adapter there is no "no API key" throw:
 // an absent key selects the ADC client.
-func (GoogleVertex) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (GoogleVertex) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	// pi: { ...buildBaseOptions(model, context, options, undefined), ... } —
 	// the undefined apiKey falls through to options.apiKey.
 	base := BuildBaseOptions(model, llmContext, options, "")
@@ -394,15 +394,19 @@ func (GoogleVertex) StreamSimple(ctx context.Context, model *types.Model, llmCon
 	}
 
 	clampedReasoning := ai.ClampThinkingLevel(model, types.ModelThinkingLevel(options.Reasoning))
+	if clampedReasoning == types.ModelThinkingOff {
+		opts.Thinking = &GoogleThinkingOptions{Enabled: false}
+		return streamGoogleVertex(ctx, model, llmContext, opts)
+	}
 	resolvedLevel, err := ResolveGoogleThinkingLevel(model, clampedReasoning)
 	if err != nil {
 		return immediateErrorStream(model, err)
 	}
 
-	if isGemini3ProModel(model.ID) || isGemini3FlashModel(model.ID) {
+	if UsesGoogleThinkingLevel(model) {
 		opts.Thinking = &GoogleThinkingOptions{
 			Enabled: true,
-			Level:   getVertexGemini3ThinkingLevel(resolvedLevel, model),
+			Level:   ToGoogleThinkingLevel(resolvedLevel),
 		}
 		return streamGoogleVertex(ctx, model, llmContext, opts)
 	}
@@ -415,8 +419,9 @@ func (GoogleVertex) StreamSimple(ctx context.Context, model *types.Model, llmCon
 }
 
 // streamGoogleVertex is the adapter's core stream implementation (pi: stream).
-func streamGoogleVertex(ctx context.Context, model *types.Model, llmContext *types.Context, options *GoogleVertexOptions) *types.AssistantMessageEventStream {
+func streamGoogleVertex(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *GoogleVertexOptions) *types.AssistantMessageEventStream {
 	stream := types.NewAssistantMessageEventStream()
+	normalizedContext := utils.CollapseSystemMessages(llmContext)
 	output := &types.AssistantMessage{
 		Content:  []types.Content{},
 		API:      ai.ApiGoogleVertex,
@@ -450,7 +455,7 @@ func streamGoogleVertex(ctx context.Context, model *types.Model, llmContext *typ
 			}
 		}()
 
-		if err := runGoogleVertexStream(ctx, model, llmContext, options, output, push); err != nil {
+		if err := runGoogleVertexStream(ctx, model, normalizedContext, options, output, push); err != nil {
 			failGoogleVertexStream(ctx, output, stream, err)
 		}
 	}()
@@ -471,7 +476,7 @@ func failGoogleVertexStream(ctx context.Context, output *types.AssistantMessage,
 }
 
 // runGoogleVertexStream is pi's try block (the streaming loop).
-func runGoogleVertexStream(ctx context.Context, model *types.Model, llmContext *types.Context, options *GoogleVertexOptions, output *types.AssistantMessage, push func(types.AssistantMessageEvent)) error {
+func runGoogleVertexStream(ctx context.Context, model *types.Model, normalizedContext *types.TranscriptContext, options *GoogleVertexOptions, output *types.AssistantMessage, push func(types.AssistantMessageEvent)) error {
 	if options.Fetch != nil {
 		return errors.New("Custom fetch is not supported by the Google Vertex adapter")
 	}
@@ -490,7 +495,7 @@ func runGoogleVertexStream(ctx context.Context, model *types.Model, llmContext *
 		}
 		client = createGoogleVertexClient(model, project, location, options.Headers, options.Env)
 	}
-	params, err := buildGoogleVertexParams(ctx, model, llmContext, options)
+	params, err := buildGoogleVertexParams(ctx, model, normalizedContext, options)
 	if err != nil {
 		return err
 	}
@@ -844,12 +849,12 @@ func resolveGoogleVertexLocation(options *GoogleVertexOptions) (string, error) {
 
 // buildGoogleVertexParams builds the request the SDK receives (pi:
 // buildParams).
-func buildGoogleVertexParams(ctx context.Context, model *types.Model, llmContext *types.Context, options *GoogleVertexOptions) (*googleGenerateContentParams, error) {
+func buildGoogleVertexParams(ctx context.Context, model *types.Model, normalizedContext *types.TranscriptContext, options *GoogleVertexOptions) (*googleGenerateContentParams, error) {
 	// pi: config.abortSignal — aborted before the request → "Request aborted".
 	if ctx.Err() != nil {
 		return nil, errors.New("Request aborted")
 	}
-	contents := ConvertGoogleMessages(model, llmContext)
+	contents := ConvertGoogleMessages(model, normalizedContext)
 
 	config := &googleGenerateContentConfig{}
 	if options.Temperature != nil {
@@ -860,21 +865,26 @@ func buildGoogleVertexParams(ctx context.Context, model *types.Model, llmContext
 	}
 
 	supportsStrictMode := SupportsGoogleStrictToolSampling(model.ID)
+	currentTools := utils.GetCurrentTools(normalizedContext.Messages)
 	var functionCallingMode string
-	if len(llmContext.Tools) > 0 {
-		mode, err := ResolveGoogleFunctionCallingMode(llmContext.Tools, options.ToolChoice, supportsStrictMode)
+	if len(currentTools) > 0 {
+		mode, err := ResolveGoogleFunctionCallingMode(currentTools, options.ToolChoice, supportsStrictMode)
 		if err != nil {
 			panic(err)
 		}
 		functionCallingMode = mode
 	}
-	if llmContext.SystemPrompt != "" {
-		config.SystemInstruction = &googleContent{
-			Parts: []googlePart{{Text: lo.ToPtr(utils.SanitizeSurrogates(llmContext.SystemPrompt))}},
+	initialSystemMessage := utils.GetInitialSystemMessage(normalizedContext.Messages)
+	if initialSystemMessage != nil {
+		systemInstruction := utils.GetSystemMessageText(initialSystemMessage)
+		if systemInstruction != "" {
+			config.SystemInstruction = &googleContent{
+				Parts: []googlePart{{Text: lo.ToPtr(utils.SanitizeSurrogates(systemInstruction))}},
+			}
 		}
 	}
-	if len(llmContext.Tools) > 0 {
-		tools, err := ConvertGoogleTools(llmContext.Tools, false, supportsStrictMode)
+	if len(currentTools) > 0 {
+		tools, err := ConvertGoogleTools(currentTools, false, supportsStrictMode)
 		if err != nil {
 			panic(err)
 		}
@@ -897,7 +907,7 @@ func buildGoogleVertexParams(ctx context.Context, model *types.Model, llmContext
 		}
 		config.ThinkingConfig = thinkingConfig
 	} else if model.Reasoning && options.Thinking != nil && !options.Thinking.Enabled {
-		config.ThinkingConfig = getDisabledVertexThinkingConfig(model)
+		config.ThinkingConfig = GetDisabledGoogleThinkingConfig(model)
 	}
 
 	return &googleGenerateContentParams{
@@ -905,46 +915,6 @@ func buildGoogleVertexParams(ctx context.Context, model *types.Model, llmContext
 		Contents: contents,
 		Config:   config,
 	}, nil
-}
-
-// getVertexGemini3ThinkingLevel maps the resolved level to Google's
-// ThinkingLevel enum for level-based models (pi: getGemini3ThinkingLevel —
-// the vertex variant has no gemma branch; vertex serves no Gemma models).
-func getVertexGemini3ThinkingLevel(effort types.ModelThinkingLevel, model *types.Model) GoogleApiThinkingLevel {
-	if isGemini3ProModel(model.ID) {
-		switch effort {
-		case types.ModelThinkingMinimal, types.ModelThinkingLow:
-			return GoogleThinkingLevelLow
-		case types.ModelThinkingMedium, types.ModelThinkingHigh:
-			return GoogleThinkingLevelHigh
-		}
-	}
-	switch effort {
-	case types.ModelThinkingMinimal:
-		return GoogleThinkingLevelMinimal
-	case types.ModelThinkingLow:
-		return GoogleThinkingLevelLow
-	case types.ModelThinkingMedium:
-		return GoogleThinkingLevelMedium
-	case types.ModelThinkingHigh:
-		return GoogleThinkingLevelHigh
-	}
-	return GoogleThinkingLevelUnspecified
-}
-
-// getDisabledVertexThinkingConfig mirrors pi's vertex getDisabledThinkingConfig:
-// Gemini 3.1 Pro cannot disable thinking, and Gemini 3 Flash / Flash-Lite do
-// not support full thinking-off either — use the lowest supported
-// thinkingLevel without includeThoughts so hidden thinking remains invisible.
-// Gemini 2.x disables via thinkingBudget = 0.
-func getDisabledVertexThinkingConfig(model *types.Model) *googleThinkingConfig {
-	if isGemini3ProModel(model.ID) {
-		return &googleThinkingConfig{ThinkingLevel: GoogleThinkingLevelLow}
-	}
-	if isGemini3FlashModel(model.ID) {
-		return &googleThinkingConfig{ThinkingLevel: GoogleThinkingLevelMinimal}
-	}
-	return &googleThinkingConfig{ThinkingBudget: lo.ToPtr(int64(0))}
 }
 
 // getGoogleVertexBudget resolves the thinking budget for token-based models

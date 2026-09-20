@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/ai/auth"
+	aiutils "github.com/ZoroSpace/pig/ai/utils"
 )
 
 // pi: models.ts.
@@ -123,9 +124,9 @@ type Provider interface {
 	GetModels() []Model
 	// Stream dispatches one streaming request for the model's API. ctx carries
 	// the caller's cancellation (pi: options.signal).
-	Stream(ctx context.Context, model *Model, llmContext *Context, options *StreamOptions) *AssistantMessageEventStream
+	Stream(ctx context.Context, model *Model, llmContext *TranscriptContext, options *StreamOptions) *AssistantMessageEventStream
 	// StreamSimple dispatches one simple streaming request.
-	StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *SimpleStreamOptions) *AssistantMessageEventStream
+	StreamSimple(ctx context.Context, model *Model, llmContext *TranscriptContext, options *SimpleStreamOptions) *AssistantMessageEventStream
 }
 
 // ProviderModelFilter is the optional provider policy for
@@ -953,8 +954,11 @@ func applyResolvedToRequestOptions(options *ProviderRequestOptions, resolved *re
 	options.Env = resolved.env
 }
 
-// Stream resolves auth lazily and delegates to the owning provider.
+// Stream resolves auth lazily and delegates to the owning provider. The
+// caller's Context is normalized into a TranscriptContext before dispatch
+// (pi: normalizeContext at the top of stream).
 func (m *modelsImpl) Stream(ctx context.Context, model *Model, llmContext *Context, options *ModelsStreamOptions) *AssistantMessageEventStream {
+	transcript := aiutils.NormalizeContext(llmContext)
 	return LazyStream(model, func() (*AssistantMessageEventStream, error) {
 		provider, err := m.requireProvider(model)
 		if err != nil {
@@ -971,7 +975,7 @@ func (m *modelsImpl) Stream(ctx context.Context, model *Model, llmContext *Conte
 			return nil, err
 		}
 		applyResolvedToRequestOptions(&base.ProviderRequestOptions, resolved)
-		return provider.Stream(ctx, resolved.requestModel, llmContext, &base), nil
+		return provider.Stream(ctx, resolved.requestModel, transcript, &base), nil
 	})
 }
 
@@ -986,6 +990,7 @@ func (m *modelsImpl) Complete(ctx context.Context, model *Model, llmContext *Con
 
 // StreamSimple resolves auth lazily and delegates to the owning provider.
 func (m *modelsImpl) StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *ModelsSimpleStreamOptions) *AssistantMessageEventStream {
+	transcript := aiutils.NormalizeContext(llmContext)
 	return LazyStream(model, func() (*AssistantMessageEventStream, error) {
 		provider, err := m.requireProvider(model)
 		if err != nil {
@@ -1002,7 +1007,7 @@ func (m *modelsImpl) StreamSimple(ctx context.Context, model *Model, llmContext 
 			return nil, err
 		}
 		applyResolvedToRequestOptions(&base.ProviderRequestOptions, resolved)
-		return provider.StreamSimple(ctx, resolved.requestModel, llmContext, &base), nil
+		return provider.StreamSimple(ctx, resolved.requestModel, transcript, &base), nil
 	})
 }
 
@@ -1242,7 +1247,7 @@ func (p *composedProvider) apiFor(model *Model) ProviderStreams {
 	return p.apiByAPI[string(model.API)]
 }
 
-func (p *composedProvider) Stream(ctx context.Context, model *Model, llmContext *Context, options *StreamOptions) *AssistantMessageEventStream {
+func (p *composedProvider) Stream(ctx context.Context, model *Model, llmContext *TranscriptContext, options *StreamOptions) *AssistantMessageEventStream {
 	streams := p.apiFor(model)
 	if streams == nil {
 		return LazyStream(model, func() (*AssistantMessageEventStream, error) {
@@ -1252,7 +1257,7 @@ func (p *composedProvider) Stream(ctx context.Context, model *Model, llmContext 
 	return streams.Stream(ctx, model, llmContext, options)
 }
 
-func (p *composedProvider) StreamSimple(ctx context.Context, model *Model, llmContext *Context, options *SimpleStreamOptions) *AssistantMessageEventStream {
+func (p *composedProvider) StreamSimple(ctx context.Context, model *Model, llmContext *TranscriptContext, options *SimpleStreamOptions) *AssistantMessageEventStream {
 	streams := p.apiFor(model)
 	if streams == nil {
 		return LazyStream(model, func() (*AssistantMessageEventStream, error) {

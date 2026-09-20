@@ -55,10 +55,10 @@ func (f *fakeAuthProvider) Auth() auth.ProviderAuth {
 	return auth.ProviderAuth{APIKey: f.apiKey, OAuth: f.oauth}
 }
 func (f *fakeAuthProvider) GetModels() []ai.Model { return f.models }
-func (f *fakeAuthProvider) Stream(context.Context, *ai.Model, *ai.Context, *ai.StreamOptions) *ai.AssistantMessageEventStream {
+func (f *fakeAuthProvider) Stream(context.Context, *ai.Model, *ai.TranscriptContext, *ai.StreamOptions) *ai.AssistantMessageEventStream {
 	return ai.NewAssistantMessageEventStream()
 }
-func (f *fakeAuthProvider) StreamSimple(context.Context, *ai.Model, *ai.Context, *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
+func (f *fakeAuthProvider) StreamSimple(context.Context, *ai.Model, *ai.TranscriptContext, *ai.SimpleStreamOptions) *ai.AssistantMessageEventStream {
 	return ai.NewAssistantMessageEventStream()
 }
 

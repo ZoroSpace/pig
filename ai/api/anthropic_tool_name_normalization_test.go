@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // resolveAnthropicOAuthToken reads the stored anthropic credential (pi:
@@ -89,7 +90,7 @@ func runOAuthToolNameRoundTrip(t *testing.T, oauthToken string, model *types.Mod
 	}
 	for _, tc := range cases {
 		t.Run(tc.toolName, func(t *testing.T) {
-			llmContext := &types.Context{
+			llmContext := utils.NormalizeContext(&types.Context{
 				SystemPrompt: "You are a helpful assistant. Use the " + tc.toolName + " tool when asked.",
 				Messages: []types.Message{types.UserMessage{
 					Role: types.RoleUser, Content: types.UserContent{String: tc.prompt}, Timestamp: 1,
@@ -99,7 +100,7 @@ func runOAuthToolNameRoundTrip(t *testing.T, oauthToken string, model *types.Mod
 					Description: "Test tool",
 					Parameters:  json.RawMessage(`{"type":"object","properties":{"input":{"type":"string"},"task":{"type":"string"},"path":{"type":"string"},"pattern":{"type":"string"}},"required":["input"]}`),
 				}},
-			}
+			})
 			options := &types.StreamOptions{}
 			options.APIKey = oauthToken
 			stream := (&AnthropicMessages{}).Stream(context.Background(), model, llmContext, options)

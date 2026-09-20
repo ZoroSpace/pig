@@ -9,6 +9,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 func TestAnthropicOpus48Smoke(t *testing.T) {
@@ -27,14 +28,14 @@ func TestAnthropicOpus48Smoke(t *testing.T) {
 		}
 		return nil
 	}
-	stream := (&AnthropicMessages{}).StreamSimple(gocontext.Background(), model, &types.Context{
+	stream := (&AnthropicMessages{}).StreamSimple(gocontext.Background(), model, utils.NormalizeContext(&types.Context{
 		SystemPrompt: "You are a precise assistant. Follow the user's instructions exactly.",
 		Messages: []types.Message{types.UserMessage{
 			Role:      types.RoleUser,
 			Content:   types.UserContent{String: "Compute 48291 * 7317 and 90844 - 17729, add the results, and determine whether the sum is divisible by 11. Reply with exactly this format and nothing else: sum=<sum>; divisibleBy11=<yes|no>"},
 			Timestamp: 1,
 		}},
-	}, options)
+	}), options)
 	sawThinking := false
 	for event := range stream.Events() {
 		if event.Type == types.EventThinkingStart || event.Type == types.EventThinkingDelta || event.Type == types.EventThinkingEnd {

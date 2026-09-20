@@ -69,7 +69,17 @@ const (
 	serverSideFallbackBeta          = "server-side-fallback-2026-07-01"
 	midConversationOutputConfigBeta = "mid-conversation-output-config-2026-07-01"
 	thinkingBindingControlsBeta     = "thinking-binding-controls-2026-08-01"
+	midConversationToolChangesBeta  = "mid-conversation-tool-changes-2026-07-01"
 )
+
+// deferredToolPlaceholderName is the stable deferred tool declared whenever
+// native tool changes are in use. Anthropic adds hidden prompt scaffolding as
+// soon as any tool has defer_loading; declaring this placeholder from the
+// first request keeps that scaffolding in the cached prefix, so the first
+// real late tool does not invalidate the cache (measured: full miss without
+// it). It is never activated and the model cannot see it (pi:
+// DEFERRED_TOOL_PLACEHOLDER).
+const deferredToolPlaceholderName = "__pi_deferred_placeholder__"
 
 // AnthropicOptions are the anthropic-messages request options (pi:
 // AnthropicOptions extends StreamOptions).
@@ -127,7 +137,7 @@ func init() {
 // Stream dispatches one streaming request (pi: stream). ctx carries the
 // caller's cancellation; pi passes options.signal into the SDK request
 // options and the retry helper (pig: AbortSignal → context rule).
-func (AnthropicMessages) Stream(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.StreamOptions) *types.AssistantMessageEventStream {
+func (AnthropicMessages) Stream(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.StreamOptions) *types.AssistantMessageEventStream {
 	opts := &AnthropicOptions{}
 	if options != nil {
 		opts.StreamOptions = *options
@@ -136,7 +146,7 @@ func (AnthropicMessages) Stream(ctx context.Context, model *types.Model, llmCont
 }
 
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
-func (AnthropicMessages) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.Context, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+func (AnthropicMessages) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 	if err := assertAnthropicRequestAuth(string(model.Provider), options.APIKey, options.Headers); err != nil {
 		return immediateErrorStream(model, err)
 	}
@@ -293,26 +303,33 @@ type resolvedAnthropicCompat struct {
 	supportsEagerToolInputStreaming bool
 	supportsLongCacheRetention      bool
 	sendSessionAffinityHeaders      bool
+	sessionAffinityFormat           string
 	supportsCacheControlOnTools     bool
 	supportsTemperature             bool
 	allowEmptySignature             bool
 	supportsStrictTools             bool
-	supportsToolReferences          bool
+	supportsMidConvoSystemMessages  bool
+	supportsMidConvoToolChanges     bool
 }
 
 // getAnthropicCompat resolves the model's anthropic-messages compat with
 // defaults (pi: getAnthropicCompat).
 func getAnthropicCompat(model *types.Model) resolvedAnthropicCompat {
 	compat, _ := model.Compat.(*types.AnthropicMessagesCompat)
+	isOpenRouter := model.Provider == types.ProviderOpenRouter || strings.Contains(model.BaseURL, "openrouter.ai")
 	resolved := resolvedAnthropicCompat{
 		supportsEagerToolInputStreaming: true,
 		supportsLongCacheRetention:      true,
-		sendSessionAffinityHeaders:      false,
+		sendSessionAffinityHeaders:      isOpenRouter,
 		supportsCacheControlOnTools:     true,
 		supportsTemperature:             true,
 		allowEmptySignature:             false,
 		supportsStrictTools:             false,
-		supportsToolReferences:          defaultSupportsToolReferences(model),
+		supportsMidConvoSystemMessages:  false,
+		supportsMidConvoToolChanges:     false,
+	}
+	if isOpenRouter {
+		resolved.sessionAffinityFormat = "openrouter"
 	}
 	if compat == nil {
 		return resolved
@@ -326,6 +343,9 @@ func getAnthropicCompat(model *types.Model) resolvedAnthropicCompat {
 	if compat.SendSessionAffinityHeaders != nil {
 		resolved.sendSessionAffinityHeaders = *compat.SendSessionAffinityHeaders
 	}
+	if compat.SessionAffinityFormat != nil {
+		resolved.sessionAffinityFormat = *compat.SessionAffinityFormat
+	}
 	if compat.SupportsCacheControlOnTools != nil {
 		resolved.supportsCacheControlOnTools = *compat.SupportsCacheControlOnTools
 	}
@@ -338,78 +358,13 @@ func getAnthropicCompat(model *types.Model) resolvedAnthropicCompat {
 	if compat.SupportsStrictTools != nil {
 		resolved.supportsStrictTools = *compat.SupportsStrictTools
 	}
-	if compat.SupportsToolReferences != nil {
-		resolved.supportsToolReferences = *compat.SupportsToolReferences
+	if compat.SupportsMidConvoSystemMessages != nil {
+		resolved.supportsMidConvoSystemMessages = *compat.SupportsMidConvoSystemMessages
+	}
+	if compat.SupportsMidConvoToolChanges != nil {
+		resolved.supportsMidConvoToolChanges = *compat.SupportsMidConvoToolChanges
 	}
 	return resolved
-}
-
-// defaultSupportsToolReferences is the default for supportsToolReferences:
-// first-party Anthropic models except Haiku (rejects client-side
-// tool_reference blocks) and models that predate tool search (Claude 3.x,
-// Opus/Sonnet 4.0, Opus 4.1) (pi: defaultSupportsToolReferences). pi matches
-// /^claude-(?:opus|sonnet|fable)-(\d+)(?:-(\d+))?(?:-|$)/.
-func defaultSupportsToolReferences(model *types.Model) bool {
-	if model.Provider != types.ProviderAnthropic || strings.Contains(model.ID, "haiku") {
-		return false
-	}
-	major, hasMinor, minor, minorDigits, matched := matchAnthropicFamilyVersion(model.ID)
-	if !matched {
-		return false
-	}
-	m := int64(0)
-	if hasMinor && len(minorDigits) < 8 {
-		m = minor
-	}
-	return major > 4 || (major == 4 && m >= 5)
-}
-
-// matchAnthropicFamilyVersion extracts the model family version, reproducing
-// pi's /^claude-(?:opus|sonnet|fable)-(\d+)(?:-(\d+))?(?:-|$)/ semantics:
-// the optional minor run must be followed by "-" or end-of-string (so e.g.
-// "claude-opus-4x" does not match and "claude-opus-4-20250514" reports minor
-// digits of length 8).
-func matchAnthropicFamilyVersion(id string) (major int64, hasMinor bool, minor int64, minorDigits string, matched bool) {
-	prefixes := []string{"claude-opus-", "claude-sonnet-", "claude-fable-"}
-	rest := ""
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(id, prefix) {
-			rest = id[len(prefix):]
-			break
-		}
-	}
-	if rest == "" {
-		return 0, false, 0, "", false
-	}
-	i := 0
-	for i < len(rest) && rest[i] >= '0' && rest[i] <= '9' {
-		i++
-	}
-	if i == 0 {
-		return 0, false, 0, "", false
-	}
-	major = parsePositiveInt(rest[:i])
-	remainder := rest[i:]
-	if strings.HasPrefix(remainder, "-") {
-		j := 1
-		for j < len(remainder) && remainder[j] >= '0' && remainder[j] <= '9' {
-			j++
-		}
-		if j > 1 {
-			after := remainder[j:]
-			// The regex requires the minor run to be followed by "-" or end.
-			if after == "" || after[0] == '-' {
-				return major, true, parsePositiveInt(remainder[1:j]), remainder[1:j], true
-			}
-		}
-		return major, false, 0, "", true
-	}
-	if remainder != "" {
-		// Trailing junk after the major version: the regex tail requires
-		// "-" or end, so no match.
-		return 0, false, 0, "", false
-	}
-	return major, false, 0, "", true
 }
 
 func parsePositiveInt(s string) int64 {
@@ -717,8 +672,10 @@ type anthropicBlock struct {
 // the stream StreamFunction body). ctx carries the caller's cancellation
 // (pi: options.signal — the SDK request options signal, the mid-stream
 // signal.aborted checks, and the catch path's aborted-vs-error decision).
-func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext *types.Context, options *AnthropicOptions) *types.AssistantMessageEventStream {
+func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *AnthropicOptions) *types.AssistantMessageEventStream {
 	stream := types.NewAssistantMessageEventStream()
+	normalizedContext := utils.ResolveTranscript(llmContext, getAnthropicCompat(model).supportsMidConvoSystemMessages)
+	currentTools := utils.GetCurrentTools(normalizedContext.Messages)
 
 	go func() {
 		providerThinkingLevel := ""
@@ -921,7 +878,7 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 						name, _ := contentBlock["name"].(string)
 						toolName := name
 						if created.isOAuthToken {
-							toolName = fromClaudeCodeName(name, llmContext.Tools)
+							toolName = fromClaudeCodeName(name, currentTools)
 						}
 						arguments, _ := contentBlock["input"].(map[string]any)
 						toolCall := types.NewToolCall(id, toolName, arguments)
@@ -1242,9 +1199,14 @@ func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders typ
 	}
 
 	// API key or header-owned auth.
+	compat := getAnthropicCompat(model)
 	sessionAffinityHeaders := types.ProviderHeaders{}
-	if sessionId != "" && getAnthropicCompat(model).sendSessionAffinityHeaders {
-		sessionAffinityHeaders["x-session-affinity"] = lo.ToPtr(sessionId)
+	if sessionId != "" && compat.sendSessionAffinityHeaders {
+		header := "x-session-affinity"
+		if compat.sessionAffinityFormat == "openrouter" {
+			header = "x-session-id"
+		}
+		sessionAffinityHeaders[header] = lo.ToPtr(sessionId)
 	}
 	defaults := types.ProviderHeaders{
 		"accept": lo.ToPtr("application/json"),
@@ -1366,7 +1328,7 @@ func (c *anthropicClient) createMessage(ctx context.Context, params map[string]a
 // getBetaFeatures resolves the beta features list (pi: getBetaFeatures). An
 // anthropic-beta header value of null suppresses all beta features; a value
 // replaces the default feature set.
-func getBetaFeatures(model *types.Model, llmContext *types.Context, isOAuthToken bool, options *AnthropicOptions) []string {
+func getBetaFeatures(model *types.Model, llmContext *types.TranscriptContext, isOAuthToken bool, nativeToolChanges bool, options *AnthropicOptions) []string {
 	configuredFeatures := (*string)(nil)
 	configuredSeen := false
 	for _, headers := range []types.ProviderHeaders{modelHeadersAsProviderHeaders(model), options.Headers} {
@@ -1416,6 +1378,9 @@ func getBetaFeatures(model *types.Model, llmContext *types.Context, isOAuthToken
 	if compat != nil && compat.SupportsMidConvoEffort != nil && *compat.SupportsMidConvoEffort {
 		features = append(features, midConversationOutputConfigBeta, thinkingBindingControlsBeta)
 	}
+	if nativeToolChanges {
+		features = append(features, midConversationToolChangesBeta)
+	}
 	seen := map[string]struct{}{}
 	deduped := make([]string, 0, len(features))
 	for _, feature := range features {
@@ -1438,38 +1403,42 @@ func shouldUseServerSideFallbackBeta(model *types.Model) bool {
 // shouldUseFineGrainedToolStreamingBeta reports whether the legacy
 // fine-grained tool streaming beta applies (pi:
 // shouldUseFineGrainedToolStreamingBeta).
-func shouldUseFineGrainedToolStreamingBeta(model *types.Model, llmContext *types.Context) bool {
-	return len(llmContext.Tools) > 0 && !getAnthropicCompat(model).supportsEagerToolInputStreaming
+func shouldUseFineGrainedToolStreamingBeta(model *types.Model, llmContext *types.TranscriptContext) bool {
+	return len(utils.GetCurrentTools(llmContext.Messages)) > 0 && !getAnthropicCompat(model).supportsEagerToolInputStreaming
 }
 
 // buildAnthropicParams builds the message create request body (pi:
 // buildParams). The params are plain JSON maps so optional fields serialize
 // on demand and OnPayload consumers can inspect the wire shape.
-func buildAnthropicParams(model *types.Model, llmContext *types.Context, isOAuthToken bool, options *AnthropicOptions) (map[string]any, error) {
+func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContext, isOAuthToken bool, options *AnthropicOptions) (map[string]any, error) {
 	_, cacheControl := getCacheControl(model, options.CacheRetention, options.Env)
 	compat := getAnthropicCompat(model)
 	compatModel, _ := model.Compat.(*types.AnthropicMessagesCompat)
 	midConvoEffort := compatModel != nil && compatModel.SupportsMidConvoEffort != nil && *compatModel.SupportsMidConvoEffort
+	initialSystemMessage := utils.GetInitialSystemMessage(llmContext.Messages)
+	initialSystemText := ""
+	if initialSystemMessage != nil {
+		initialSystemText = utils.GetSystemMessageText(initialSystemMessage)
+	}
 	normalizer := func(id string, m *types.Model, source *types.AssistantMessage) string {
 		return normalizeAnthropicToolCallID(id)
 	}
 	transformedMessages := TransformMessages(llmContext.Messages, model, normalizer)
-	normalizeToolName := func(name string) string { return name }
-	if isOAuthToken {
-		normalizeToolName = toClaudeCodeName
+	conversationMessages := transformedMessages
+	if initialSystemMessage != nil {
+		conversationMessages = transformedMessages[1:]
 	}
-	toolPlacement := utils.SplitDeferredTools(&types.Context{Messages: transformedMessages, Tools: llmContext.Tools}, compat.supportsToolReferences, normalizeToolName)
-	immediateTools := toolPlacement.Immediate
-	deferredTools := toolPlacement.Deferred
-	if len(immediateTools) == 0 && len(deferredTools) > 0 {
-		immediateTools = deferredTools
-		deferredTools = nil
+	// Native tool changes reference tools by name, so a redefined name cannot
+	// be expressed, and Anthropic rejects a tool list where every tool is
+	// deferred, so there must be an initial active tool to anchor the deferred
+	// ones. Otherwise the current tool list is sent.
+	var initialTools []types.Tool
+	if initialSystemMessage != nil {
+		initialTools = initialSystemMessage.ToolsAdded
 	}
-	deferredToolNames := map[string]struct{}{}
-	for _, tool := range deferredTools {
-		deferredToolNames[normalizeToolName(tool.Name)] = struct{}{}
-	}
-	converted, err := convertAnthropicMessages(transformedMessages, isOAuthToken, cacheControl, compat.allowEmptySignature, deferredToolNames, normalizeToolName, managedEffortProvider(model))
+	nativeToolChanges := compat.supportsMidConvoSystemMessages && compat.supportsMidConvoToolChanges &&
+		len(initialTools) > 0 && !utils.HasToolRedefinitions(llmContext.Messages)
+	converted, err := convertAnthropicMessages(conversationMessages, isOAuthToken, cacheControl, compat.allowEmptySignature, managedEffortProvider(model), nativeToolChanges)
 	if err != nil {
 		return nil, err
 	}
@@ -1477,7 +1446,7 @@ func buildAnthropicParams(model *types.Model, llmContext *types.Context, isOAuth
 	if activeEffort == "" {
 		activeEffort = AnthropicEffortHigh
 	}
-	betaFeatures := getBetaFeatures(model, llmContext, isOAuthToken, options)
+	betaFeatures := getBetaFeatures(model, llmContext, isOAuthToken, nativeToolChanges, options)
 	params := map[string]any{
 		"model":      model.ID,
 		"messages":   converted.messages,
@@ -1497,17 +1466,17 @@ func buildAnthropicParams(model *types.Model, llmContext *types.Context, isOAuth
 		if cacheControl != nil {
 			system[0]["cache_control"] = cacheControl
 		}
-		if llmContext.SystemPrompt != "" {
-			block := map[string]any{"type": "text", "text": utils.SanitizeSurrogates(llmContext.SystemPrompt)}
+		if initialSystemText != "" {
+			block := map[string]any{"type": "text", "text": utils.SanitizeSurrogates(initialSystemText)}
 			if cacheControl != nil {
 				block["cache_control"] = cacheControl
 			}
 			system = append(system, block)
 		}
 		params["system"] = system
-	} else if llmContext.SystemPrompt != "" {
+	} else if initialSystemText != "" {
 		// Add cache control to system prompt for non-OAuth tokens.
-		block := map[string]any{"type": "text", "text": utils.SanitizeSurrogates(llmContext.SystemPrompt)}
+		block := map[string]any{"type": "text", "text": utils.SanitizeSurrogates(initialSystemText)}
 		if cacheControl != nil {
 			block["cache_control"] = cacheControl
 		}
@@ -1521,16 +1490,61 @@ func buildAnthropicParams(model *types.Model, llmContext *types.Context, isOAuth
 		params["temperature"] = *options.Temperature
 	}
 
-	if len(immediateTools) > 0 || len(deferredTools) > 0 {
-		immediateConverted, err := convertAnthropicTools(immediateTools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, toolsCacheControl(compat.supportsCacheControlOnTools, cacheControl), false)
+	toolCacheControl := (*anthropicCacheControl)(nil)
+	if compat.supportsCacheControlOnTools {
+		toolCacheControl = cacheControl
+	}
+	if nativeToolChanges {
+		// Initial tools stay active with the cache breakpoint on the last one.
+		// Every later declaration is deferred and only surfaced by its
+		// tool_addition block; removed tools stay declared and are withdrawn
+		// by tool_removal. The request-level list therefore only grows,
+		// keeping the cached prefix intact across tool changes.
+		initialNames := map[string]bool{}
+		for _, tool := range initialTools {
+			initialNames[tool.Name] = true
+		}
+		var laterTools []types.Tool
+		for _, tool := range utils.GetDeclaredTools(llmContext.Messages) {
+			if !initialNames[tool.Name] {
+				laterTools = append(laterTools, tool)
+			}
+		}
+		initialConverted, err := convertAnthropicTools(initialTools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, toolCacheControl)
 		if err != nil {
 			return nil, err
 		}
-		deferredConverted, err := convertAnthropicTools(deferredTools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, nil, true)
+		laterConverted, err := convertAnthropicTools(laterTools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, nil)
 		if err != nil {
 			return nil, err
 		}
-		params["tools"] = append(immediateConverted, deferredConverted...)
+		deferredLater := make([]map[string]any, 0, len(laterConverted))
+		for _, toolParam := range laterConverted {
+			toolParam["defer_loading"] = true
+			deferredLater = append(deferredLater, toolParam)
+		}
+		placeholder := map[string]any{
+			"name":        deferredToolPlaceholderName,
+			"description": "Reserved placeholder. Never available. Never call this.",
+			"input_schema": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+				"required":   []any{},
+			},
+			"defer_loading": true,
+		}
+		tools := append(append([]map[string]any{}, initialConverted...), placeholder)
+		tools = append(tools, deferredLater...)
+		params["tools"] = tools
+	} else {
+		tools := utils.GetCurrentTools(llmContext.Messages)
+		if len(tools) > 0 {
+			convertedTools, err := convertAnthropicTools(tools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, toolCacheControl)
+			if err != nil {
+				return nil, err
+			}
+			params["tools"] = convertedTools
+		}
 	}
 
 	// Managed effort models always use adaptive thinking so prefix mismatches
@@ -1610,15 +1624,6 @@ func thinkingDisplayValue(options *AnthropicOptions) string {
 		return string(options.ThinkingDisplay)
 	}
 	return string(AnthropicThinkingDisplaySummarized)
-}
-
-// toolsCacheControl gates the cache_control marker on tool definitions (pi:
-// compat.supportsCacheControlOnTools ? cacheControl : undefined).
-func toolsCacheControl(supported bool, cacheControl *anthropicCacheControl) *anthropicCacheControl {
-	if !supported {
-		return nil
-	}
-	return cacheControl
 }
 
 // managedEffortProvider returns the provider for mid-conversation effort

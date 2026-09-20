@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // mustJSONDetail decodes a reasoning detail literal so numbers unmarshal as
@@ -75,12 +76,12 @@ func runReasoningDetailsStream(t *testing.T, srv *httptest.Server, messages []ty
 	model := reasoningDetailsTestModel(t, srv.URL)
 	var adapter OpenAICompletions
 	opts := types.SimpleStreamOptions{StreamOptions: keyedStreamOptions("test")}
-	_, result := collectEvents(t, adapter.StreamSimple(context.Background(), model, &types.Context{
+	_, result := collectEvents(t, adapter.StreamSimple(context.Background(), model, utils.NormalizeContext(&types.Context{
 		Messages: messages,
 		Tools: []types.Tool{
 			{Name: "read", Description: "Read a file", Parameters: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`)},
 		},
-	}, &opts))
+	}), &opts))
 	return result
 }
 
@@ -287,12 +288,12 @@ func TestVllmPrioritySentAsTopLevelRequestField(t *testing.T) {
 	model.Compat = &types.OpenAICompletionsCompat{VllmPriority: &priority}
 	var adapter OpenAICompletions
 	opts := types.SimpleStreamOptions{StreamOptions: keyedStreamOptions("test-key")}
-	_, _ = collectEvents(t, adapter.StreamSimple(context.Background(), model, &types.Context{
+	_, _ = collectEvents(t, adapter.StreamSimple(context.Background(), model, utils.NormalizeContext(&types.Context{
 		SystemPrompt: "sys",
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1},
 		},
-	}, &opts))
+	}), &opts))
 
 	if len(*captured) != 1 {
 		t.Fatalf("expected 1 request, got %d", len(*captured))
@@ -308,12 +309,12 @@ func TestVllmPriorityOmittedWhenNotSet(t *testing.T) {
 	model := reasoningDetailsTestModel(t, srv.URL)
 	var adapter OpenAICompletions
 	opts := types.SimpleStreamOptions{StreamOptions: keyedStreamOptions("test-key")}
-	_, _ = collectEvents(t, adapter.StreamSimple(context.Background(), model, &types.Context{
+	_, _ = collectEvents(t, adapter.StreamSimple(context.Background(), model, utils.NormalizeContext(&types.Context{
 		SystemPrompt: "sys",
 		Messages: []types.Message{
 			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hi"}, Timestamp: 1},
 		},
-	}, &opts))
+	}), &opts))
 
 	if len(*captured) != 1 {
 		t.Fatalf("expected 1 request, got %d", len(*captured))

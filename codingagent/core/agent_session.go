@@ -654,7 +654,7 @@ func (s *AgentSession) getSummarizationRequestAuth(ctx context.Context, model *t
 	// pi: `this.agent.streamFunction === streamSimple`; Go funcs aren't
 	// comparable, so identity goes through utils.SameFuncValue. The SDK path
 	// always wraps streamSimple, so this is false there (matches pi).
-	if pigutils.SameFuncValue(s.Agent.StreamFunction, ai.StreamSimple) {
+	if pigutils.SameFuncValue(s.Agent.StreamFunction, defaultStreamFn) {
 		return s.getRequiredRequestAuth(ctx, model)
 	}
 
@@ -834,11 +834,10 @@ func (s *AgentSession) installAgentNextTurnRefresh() {
 			previousContext = &copied
 		}
 
-		systemPrompt := s.baseSystemPrompt
-		if s.systemPromptOverride != "" {
-			systemPrompt = s.systemPromptOverride
-		}
-		previousContext.SystemPrompt = systemPrompt
+		// pi v0.86.0: the loop context no longer carries the system prompt;
+		// prompt changes flow through transcript system messages (declareTool
+		// Changes inserts them). systemPromptOverride is wired to that path in
+		// the coding-agent sync batch.
 		stateTools := s.Agent.State().Tools
 		contextTools := make([]*agent.AgentTool, len(stateTools))
 		for i := range stateTools {

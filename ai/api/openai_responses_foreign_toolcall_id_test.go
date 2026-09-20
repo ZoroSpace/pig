@@ -35,14 +35,14 @@ func TestOpenAIResponsesForeignToolCallIDNormalization(t *testing.T) {
 			Role: types.RoleToolResult, ToolCallID: copilotRawToolCallID, ToolName: "edit",
 			Content: []types.Content{types.NewTextContent("ok")}, IsError: false, Timestamp: 1,
 		}
-		llmContext := &types.Context{
+		llmContext := utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are concise.",
 			Messages: []types.Message{
 				responsesUserMessage("Use the tool."),
 				assistant,
 				toolResult,
 			},
-		}
+		})
 
 		input := ConvertResponsesMessages(model, llmContext, map[string]struct{}{
 			"openai": {}, "openai-codex": {}, "opencode": {},

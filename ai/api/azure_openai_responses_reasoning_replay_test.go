@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/ai/utils"
 )
 
 // newAzureReplayModel is the replay test's fixture model (pi: createModel).
@@ -37,13 +38,13 @@ func azureReplayEvents(doneItem, completedItem *responsesOutputItem) func(yield 
 // reasoning input item (pi: getReplayedReasoning).
 func getAzureReplayedReasoning(t *testing.T, model *types.Model, assistant *types.AssistantMessage) map[string]any {
 	t.Helper()
-	llmContext := &types.Context{
+	llmContext := utils.NormalizeContext(&types.Context{
 		Messages: []types.Message{
 			responsesUserMessage("first"),
 			*assistant,
 			responsesUserMessage("follow-up"),
 		},
-	}
+	})
 	input := ConvertResponsesMessages(model, llmContext, map[string]struct{}{"azure-openai-responses": {}}, nil)
 	for _, item := range input {
 		if m, ok := item.(map[string]any); ok && m["type"] == "reasoning" {
