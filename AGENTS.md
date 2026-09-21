@@ -394,7 +394,7 @@ Go 原生扩展 API（从 Phase 4 起内部结构即按此接口组织）→ sid
 
 ### Phase 8：杂项 + 发布（2-3 周） — 未开始
 
-export-html（goldmark/chroma 替换，vendor JS 照搬，输出差异记录在案）、telemetry、photon 经 wazero、migrations、goreleaser 交叉编译。
+export-html（goldmark/chroma 替换，vendor JS 照搬，输出差异记录在案）、telemetry、photon 经 wazero（仅图像转码半区：剪贴板不常见格式→PNG；贴图主流程已交付）、migrations、goreleaser 交叉编译。
 
 **里程碑 M6：v1.0 发布。**
 
