@@ -186,6 +186,18 @@ func isRgiEmoji(segment string) bool {
 	return ok
 }
 
+// isNarrowEmojiPresentation reports whether segment is exactly the two-codepoint
+// sequence [base, U+FE0F] whose base has EAW width 1. Such clusters are RGI
+// emoji but terminals with ambiguous=narrow render them narrow; see the pig
+// hardening note at the emoji branch in graphemeWidth.
+func isNarrowEmojiPresentation(segment string) bool {
+	runes := []rune(segment)
+	if len(runes) != 2 || runes[1] != 0xfe0f {
+		return false
+	}
+	return eastAsianWidth(runes[0]) == 1
+}
+
 // couldBeEmoji is pi's fast heuristic to avoid the RGI_Emoji set lookup.
 // The code point ranges are deliberately broad to account for future Unicode
 // additions.
@@ -389,7 +401,17 @@ func graphemeWidth(segment string) int {
 
 	// Emoji check with pre-filter
 	if couldBeEmoji(segment) && isRgiEmoji(segment) {
-		return 2
+		// pig hardening (2026-09-21, docs/fix/2026-09-21-vs16-emoji-width-table-misalign.md):
+		// A VS16 emoji presentation sequence whose base code point has EAW width 1
+		// (neutral/ambiguous: ⏸️ ⚠️ ❤️ ☀️) is rendered ONE cell wide by strict-EAW
+		// terminals (tmux/VTE ambiguous=narrow — the observed ground truth that
+		// misaligned markdown table borders). Wide/fullwidth bases (❌ U+274C EAW=W),
+		// keycaps, ZWJ sequences and RI flag pairs render 2 everywhere and keep 2.
+		if isNarrowEmojiPresentation(segment) {
+			// fall through to eastAsianWidth(base) below (= 1)
+		} else {
+			return 2
+		}
 	}
 
 	// Get base visible codepoint

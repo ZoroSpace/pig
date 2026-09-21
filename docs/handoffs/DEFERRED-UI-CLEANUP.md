@@ -1,4 +1,6 @@
-# DEFERRED-UI-CLEANUP — 清交互面最后的声明延后（下一批定义）
+# DEFERRED-UI-CLEANUP — 清交互面最后的声明延后（✅ 已交付，2026-09-21）
+
+**状态：✅ 本批三件（daxnuts / anthropic 订阅警告 / /export .jsonl）已随 S6-3c 全部交付（见 docs/handoffs/S6-3c.md 第 0 节）；交互面相对 pi 的剩余已知缺口 = /export HTML 默认路径 + --export（P8 export-html）与 /share（gist API），见 S6-3c handoff 第 3 节。以下原文留档。**
 
 状态链：本批的上批 = **SLASH-COMMANDS-COMPLETION（2026-09-18，已交付）**，决策见 `docs/feat/SLASH-COMMANDS-COMPLETION.md`，两份 fix 见 `docs/fix/2026-09-18-reload-command-leaks-to-model.md`、`docs/fix/2026-09-18-autocomplete-stale-accept-mangles-text.md`（commits 6c9d086、82c4d07）。本批完成后交互面对 pi 的缺口只剩 `/export` HTML 路径与 `/share`（等 P8 / gist API）。
 

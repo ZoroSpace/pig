@@ -632,6 +632,12 @@ func (s *AgentSession) GetModelRuntime() *ModelRuntime {
 	return s.modelRuntime
 }
 
+// ExportToJsonl exports the current branch to a JSONL file and returns the
+// written path (pi: exportToJsonl).
+func (s *AgentSession) ExportToJsonl(outputPath string) (string, error) {
+	return ExportSessionToJsonl(s.SessionManager, outputPath, nil)
+}
+
 // requestAuth is the resolved request credential bundle (pi: the
 // { model, apiKey?, headers?, env? } return shape of
 // _getRequiredRequestAuth/_getSummarizationRequestAuth).

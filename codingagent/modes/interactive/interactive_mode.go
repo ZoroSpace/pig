@@ -308,6 +308,11 @@ type InteractiveMode struct {
 
 	// Tool output expansion state
 	toolOutputExpanded bool
+	// anthropicSubscriptionWarningShown is the shown-once flag for the
+	// Anthropic subscription-auth warning (pi: anthropicSubscriptionWarningShown;
+	// pig uses an atomic because callers span the submit worker, selector
+	// goroutines and the login goroutine).
+	anthropicSubscriptionWarningShown atomic.Bool
 
 	// Thinking block visibility state
 	hideThinkingBlock bool
@@ -890,6 +895,8 @@ func (m *InteractiveMode) Run(ctx context.Context) error {
 			codingagent.AppName, when, crash.Message))
 	}
 
+	m.maybeWarnAboutAnthropicSubscriptionAuth(nil)
+
 	// Process initial messages
 	if m.options.InitialMessage != "" {
 		if err := m.session().Prompt(ctx, m.options.InitialMessage, &core.PromptOptions{Images: m.options.InitialImages}); err != nil {
@@ -1111,6 +1118,10 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 		m.editor.SetText("")
 		m.handleImportCommand(text)
 		return
+	case text == "/export" || strings.HasPrefix(text, "/export "):
+		m.editor.SetText("")
+		m.handleExportCommand(text)
+		return
 	case text == "/bug" || strings.HasPrefix(text, "/bug "):
 		hint := strings.TrimSpace(strings.TrimPrefix(text, "/bug"))
 		m.editor.SetText("")
@@ -1250,9 +1261,9 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 // "/reload" fell through to the model as a plain message (fixed in the
 // same batch; see docs/fix/2026-09-18-reload-command-leaks-to-model.md).
 func isDeferredInteractiveCommand(text string) bool {
-	if text == "/export" || strings.HasPrefix(text, "/export ") {
-		return true
-	}
+	// /export moved to a real submit branch (2026-09-21): the .jsonl path is
+	// wired via handleExportCommand; bare /export and .html stay deferred
+	// (HTML export lands with Phase 8 export-html).
 	return text == "/share"
 }
 
@@ -1268,6 +1279,23 @@ func deferredCommandReason(commandName string) string {
 	default:
 		return "it lands in a later batch"
 	}
+}
+
+// handleExportCommand exports the session (pi: handleExportCommand). Only
+// the .jsonl path is wired; bare /export and .html stay deferred until
+// Phase 8 export-html (they report the deferred-command warning).
+func (m *InteractiveMode) handleExportCommand(text string) {
+	outputPath := m.getPathCommandArgument(text, "/export")
+	if !strings.HasSuffix(outputPath, ".jsonl") {
+		m.ShowWarning("/export is not yet available (" + deferredCommandReason("export") + ")")
+		return
+	}
+	filePath, err := m.session().ExportToJsonl(outputPath)
+	if err != nil {
+		m.ShowError("Failed to export session: " + errorMessageOf(err))
+		return
+	}
+	m.showStatus(fmt.Sprintf("Session exported to: %s", filePath))
 }
 
 // handleNameCommand sets the session name (pi: handleNameCommand).
@@ -2901,6 +2929,7 @@ func (m *InteractiveMode) cycleModel(direction string) {
 		name = result.Model.ID
 	}
 	m.showStatus("Switched to " + name + thinkingStr)
+	m.maybeWarnAboutAnthropicSubscriptionAuth(result.Model)
 }
 
 // toggleToolOutputExpansion flips tool output expansion (pi:
@@ -3512,6 +3541,76 @@ func (m *InteractiveMode) handleDementedDelves() {
 	m.chatContainer.AddChild(tui.NewSpacer(1))
 	m.chatContainer.AddChild(components.NewEarendilAnnouncementComponent())
 	m.ui.RequestRender(false)
+}
+
+// anthropicSubscriptionAuthWarning is pi's
+// ANTHROPIC_SUBSCRIPTION_AUTH_WARNING (wording verbatim).
+const anthropicSubscriptionAuthWarning = "Anthropic subscription auth is active. Third-party harness usage draws from extra usage and is billed per token, not your Claude plan limits. Manage extra usage at https://claude.ai/settings/usage. Disable this warning in /settings."
+
+// isAnthropicSubscriptionAuthKey reports whether apiKey is an Anthropic
+// OAuth access token (pi: isAnthropicSubscriptionAuthKey).
+func isAnthropicSubscriptionAuthKey(apiKey string) bool {
+	return strings.HasPrefix(apiKey, "sk-ant-oat")
+}
+
+// maybeWarnAboutAnthropicSubscriptionAuth warns once when the Anthropic
+// provider is authenticated with subscription auth — OAuth, or an OAuth
+// access-token API key (pi: maybeWarnAboutAnthropicSubscriptionAuth).
+// pig concurrency note: callers span the init path, cycle/selector
+// goroutines and the login goroutine; the shown-once flag is an atomic.Bool
+// (pi relies on the single-threaded event loop).
+func (m *InteractiveMode) maybeWarnAboutAnthropicSubscriptionAuth(model *ai.Model) {
+	if value := m.settingsManager().GetWarnings().AnthropicExtraUsage; value != nil && !*value {
+		return
+	}
+	if m.anthropicSubscriptionWarningShown.Load() {
+		return
+	}
+	if model == nil {
+		model = m.session().Model()
+	}
+	if model == nil || model.Provider != "anthropic" {
+		return
+	}
+
+	check, err := m.session().GetModelRuntime().CheckAuth(context.Background(), "anthropic")
+	if err != nil {
+		return // Ignore auth lookup failures for warning-only checks.
+	}
+	if check != nil && check.Type == auth.AuthTypeOAuth {
+		m.anthropicSubscriptionWarningShown.Store(true)
+		m.ShowWarning(anthropicSubscriptionAuthWarning)
+		return
+	}
+	result, err := m.session().GetModelRuntime().GetAuth(context.Background(), string(model.Provider), nil)
+	if err != nil {
+		return
+	}
+	apiKey := ""
+	if result != nil {
+		apiKey = result.Auth.APIKey
+	}
+	if !isAnthropicSubscriptionAuthKey(apiKey) {
+		return
+	}
+	m.anthropicSubscriptionWarningShown.Store(true)
+	m.ShowWarning(anthropicSubscriptionAuthWarning)
+}
+
+// handleDaxnuts mounts the animated daxnuts tribute component (pi:
+// handleDaxnuts).
+func (m *InteractiveMode) handleDaxnuts() {
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(components.NewDaxnutsComponent(m.ui))
+	m.ui.RequestRender(false)
+}
+
+// checkDaxnutsEasterEgg shows the daxnuts tribute when an OpenCode Kimi K2.5
+// model is selected (pi: checkDaxnutsEasterEgg).
+func (m *InteractiveMode) checkDaxnutsEasterEgg(model ai.Model) {
+	if model.Provider == "opencode" && strings.Contains(strings.ToLower(model.ID), "kimi-k2.5") {
+		m.handleDaxnuts()
+	}
 }
 
 // =========================================================================
@@ -6343,8 +6442,8 @@ func (m *InteractiveMode) handleModelCommand(searchTerm string) {
 		m.footer.Invalidate()
 		m.updateEditorBorderColor()
 		m.showStatus(fmt.Sprintf("Model: %s", model.ID))
-		// pi: maybeWarnAboutAnthropicSubscriptionAuth + checkDaxnutsEasterEgg
-		// stay deferred (see completeProviderAuthentication).
+		m.maybeWarnAboutAnthropicSubscriptionAuth(&model)
+		m.checkDaxnutsEasterEgg(model)
 		return
 	}
 
@@ -6418,6 +6517,8 @@ func (m *InteractiveMode) showModelSelector(initialSearchInput string) {
 				} else {
 					m.showStatus(fmt.Sprintf("Model: %s", model.ID))
 				}
+				m.maybeWarnAboutAnthropicSubscriptionAuth(&model)
+				m.checkDaxnutsEasterEgg(model)
 			}()
 		}
 		var defaultRef *components.ModelSelectorDefaultReference
@@ -7298,6 +7399,13 @@ func (m *InteractiveMode) showOAuthSelector(mode string) {
 // until after an authenticated catalog refresh when the default model is not
 // in the snapshot yet — dynamic catalogs may be empty until the first
 // authenticated network refresh).
+// modelRuntimeRefreshFn routes the post-login catalog refresh (pi:
+// runtime.refresh in completeProviderAuthentication; test seam mirroring
+// cacheWarmAfterFunc in core/cache_warmer.go).
+var modelRuntimeRefreshFn = func(ctx context.Context, runtime *core.ModelRuntime, options *ai.ModelsRefreshOptions) ai.ModelsRefreshResult {
+	return runtime.Refresh(ctx, options)
+}
+
 func (m *InteractiveMode) completeProviderAuthentication(ctx context.Context, providerID string, providerName string, authType auth.AuthType, previousModel *ai.Model) {
 	actionLabel := "Saved API key for " + providerName
 	if authType == auth.AuthTypeOAuth {
@@ -7365,13 +7473,14 @@ func (m *InteractiveMode) completeProviderAuthentication(ctx context.Context, pr
 		m.updateEditorBorderColor()
 		if selectedModel != nil {
 			m.showStatus(fmt.Sprintf("%s. Selected %s. Credentials saved to %s", actionLabel, selectedModel.ID, codingagent.GetAuthPath()))
-			// pi: maybeWarnAboutAnthropicSubscriptionAuth(selectedModel) +
-			// checkDaxnutsEasterEgg(selectedModel) — deferred (see
-			// docs/handoffs/DEFERRED-UI-CLEANUP.md).
+			m.maybeWarnAboutAnthropicSubscriptionAuth(selectedModel)
+			m.checkDaxnutsEasterEgg(*selectedModel)
 		} else {
 			m.showStatus(fmt.Sprintf("%s. Credentials saved to %s", actionLabel, codingagent.GetAuthPath()))
 			if selectionError != "" {
 				m.ShowError(selectionError)
+			} else {
+				m.maybeWarnAboutAnthropicSubscriptionAuth(nil)
 			}
 		}
 	}
@@ -7386,7 +7495,7 @@ func (m *InteractiveMode) completeProviderAuthentication(ctx context.Context, pr
 		defer pigutils.RecoverPanic("interactive.providerRefresh")
 		refreshCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		result := session.GetModelRuntime().Refresh(refreshCtx, &ai.ModelsRefreshOptions{Providers: []string{providerID}})
+		result := modelRuntimeRefreshFn(refreshCtx, session.GetModelRuntime(), &ai.ModelsRefreshOptions{Providers: []string{providerID}})
 		if result.Aborted {
 			m.ShowWarning(fmt.Sprintf("%s, but its model catalog refresh timed out; using cached models.", actionLabel))
 		} else if len(result.Errors) > 0 {

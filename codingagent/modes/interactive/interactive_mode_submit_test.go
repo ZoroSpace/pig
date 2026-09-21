@@ -144,7 +144,8 @@ func TestDeferredInteractiveCommandsStillWarn(t *testing.T) {
 		want string // full warning text shown to the user
 	}{
 		{"export bare", "/export", "/export is not yet available (HTML export lands in a later batch)"},
-		{"export with path arg", "/export /tmp/session.md", "/export is not yet available (HTML export lands in a later batch)"},
+		{"export with html arg", "/export /tmp/session.html", "/export is not yet available (HTML export lands in a later batch)"},
+		{"export with non-jsonl arg", "/export /tmp/session.md", "/export is not yet available (HTML export lands in a later batch)"},
 		{"share", "/share", "/share is not yet available (GitHub gist sharing lands in a later batch)"},
 	}
 
@@ -166,8 +167,13 @@ func TestDeferredInteractiveCommandsStillWarn(t *testing.T) {
 }
 
 func TestIsDeferredInteractiveCommandBoundaries(t *testing.T) {
-	yes := []string{"/export", "/export x", "/share"}
+	// The .jsonl path is wired (2026-09-21, DEFERRED-UI-CLEANUP); bare /export
+	// and non-.jsonl args still route through the deferred warning inside
+	// handleExportCommand.
+	yes := []string{"/share"}
 	no := []string{
+		"/export",                            // submit branch wired: warns for non-.jsonl, exports .jsonl
+		"/export x",                          // submit branch wired
 		"/exports x",                         // longer word, not the command
 		"/exportx",                           // no space boundary
 		"/var/folders/x/pi-clipboard.png 你好", // pasted path
@@ -194,6 +200,23 @@ func TestIsDeferredInteractiveCommandBoundaries(t *testing.T) {
 		if isDeferredInteractiveCommand(text) {
 			t.Errorf("isDeferredInteractiveCommand(%q) = true, want false", text)
 		}
+	}
+}
+
+func TestExportCommandJsonlExports(t *testing.T) {
+	m := newSubmitTestMode(t)
+	outPath := filepath.Join(t.TempDir(), "session.jsonl")
+	m.processSubmitText(context.Background(), "/export "+outPath)
+
+	rendered := normalizeRenderedOutput(renderAllChildren(m.chatContainer, 200))
+	if strings.Contains(rendered, "Warning:") {
+		t.Fatalf("unexpected warning for .jsonl export:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Session exported to: "+outPath) {
+		t.Fatalf("missing export status for %q, got:\n%s", outPath, rendered)
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		t.Fatalf("exported file missing: %v", err)
 	}
 }
 
