@@ -481,7 +481,14 @@ func TestModelRegistryProviderLevelCompatAppliesToBuiltinModels(t *testing.T) {
 	if len(models) == 0 {
 		t.Fatal("no models")
 	}
+	// S7 (pi v0.86.1 generator semantics): openrouter anthropic/* models are
+	// anthropic-messages and carry AnthropicMessagesCompat; provider-level
+	// completions compat only reaches the openai-completions half.
+	checked := 0
 	for _, model := range models {
+		if model.API != ai.ApiOpenAICompletions {
+			continue
+		}
 		compat, ok := model.Compat.(*ai.OpenAICompletionsCompat)
 		if !ok || compat.SupportsUsageInStreaming == nil || *compat.SupportsUsageInStreaming {
 			t.Fatalf("model %s supportsUsageInStreaming = %+v", model.ID, compat)
@@ -489,6 +496,10 @@ func TestModelRegistryProviderLevelCompatAppliesToBuiltinModels(t *testing.T) {
 		if compat.SupportsStrictMode == nil || *compat.SupportsStrictMode {
 			t.Fatalf("model %s supportsStrictMode = %+v", model.ID, compat)
 		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatal("no openai-completions models under the openrouter provider")
 	}
 }
 
@@ -845,10 +856,14 @@ func TestModelRegistryCustomModelAndModelOverrideCarrySamplingParams(t *testing.
 
 func TestModelRegistryModelOverrideWithCompatOpenRouterRouting(t *testing.T) {
 	h := newRegistryHarness(t)
+	// S7 (pi v0.86.1 generator semantics): openrouter anthropic/* models are
+	// anthropic-messages now, so the routing override targets a
+	// openai-completions model (pi's dynamic-object assertion has no typed
+	// equivalent on an AnthropicMessagesCompat).
 	h.writeRawModelsJSON(t, map[string]any{
 		"openrouter": map[string]any{
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{
+				"deepseek/deepseek-chat": map[string]any{
 					"compat": map[string]any{
 						"openRouterRouting": map[string]any{"only": []string{"amazon-bedrock"}},
 					},
@@ -858,11 +873,14 @@ func TestModelRegistryModelOverrideWithCompatOpenRouterRouting(t *testing.T) {
 	})
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
-	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-chat" })
 	if sonnet.ID == "" {
-		t.Fatal("sonnet missing")
+		t.Fatal("deepseek/deepseek-chat missing")
 	}
-	compat := sonnet.Compat.(*ai.OpenAICompletionsCompat)
+	compat, ok := sonnet.Compat.(*ai.OpenAICompletionsCompat)
+	if !ok {
+		t.Fatalf("compat type = %T, want OpenAICompletionsCompat", sonnet.Compat)
+	}
 	if compat.OpenRouterRouting == nil || !slices.Equal(compat.OpenRouterRouting.Only, []string{"amazon-bedrock"}) {
 		t.Fatalf("openRouterRouting = %+v", compat.OpenRouterRouting)
 	}
@@ -874,19 +892,29 @@ func TestModelRegistrySupportsFinishReasonConfiguredAtProviderAndModelLevels(t *
 		"openrouter": map[string]any{
 			"compat": map[string]any{"supportsFinishReason": true},
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{
+				"deepseek/deepseek-chat": map[string]any{
 					"compat": map[string]any{"supportsFinishReason": false},
 				},
 			},
 		},
 	})
+	// S7 (pi v0.86.1 generator semantics): pi's anthropic/claude-* fixtures
+	// are anthropic-messages now and its dynamic-object assertion has no
+	// typed equivalent (supportsFinishReason is completions-only), so the
+	// same provider/model-level intent is expressed over completions models.
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
-	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
-	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4" })
+	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-chat" })
+	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-r1" })
 
-	sonnetCompat := sonnet.Compat.(*ai.OpenAICompletionsCompat)
-	opusCompat := opus.Compat.(*ai.OpenAICompletionsCompat)
+	sonnetCompat, ok := sonnet.Compat.(*ai.OpenAICompletionsCompat)
+	if !ok {
+		t.Fatalf("sonnet compat type = %T, want OpenAICompletionsCompat", sonnet.Compat)
+	}
+	opusCompat, ok := opus.Compat.(*ai.OpenAICompletionsCompat)
+	if !ok {
+		t.Fatalf("opus compat type = %T, want OpenAICompletionsCompat", opus.Compat)
+	}
 	if sonnetCompat.SupportsFinishReason == nil || *sonnetCompat.SupportsFinishReason {
 		t.Fatalf("sonnet supportsFinishReason = %+v", sonnetCompat.SupportsFinishReason)
 	}
@@ -900,7 +928,9 @@ func TestModelRegistryModelOverrideDeepMergesCompatSettings(t *testing.T) {
 	h.writeRawModelsJSON(t, map[string]any{
 		"openrouter": map[string]any{
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{
+				// S7: completions model — anthropic/* models are
+				// anthropic-messages and carry no OpenAICompletionsCompat.
+				"deepseek/deepseek-chat": map[string]any{
 					"compat": map[string]any{
 						"openRouterRouting": map[string]any{"order": []string{"anthropic", "together"}},
 					},
@@ -910,8 +940,11 @@ func TestModelRegistryModelOverrideDeepMergesCompatSettings(t *testing.T) {
 	})
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
-	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
-	compat := sonnet.Compat.(*ai.OpenAICompletionsCompat)
+	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-chat" })
+	compat, ok := sonnet.Compat.(*ai.OpenAICompletionsCompat)
+	if !ok {
+		t.Fatalf("compat type = %T, want OpenAICompletionsCompat", sonnet.Compat)
+	}
 	if compat.OpenRouterRouting == nil {
 		t.Fatal("openRouterRouting missing")
 	}
@@ -926,10 +959,10 @@ func TestModelRegistryMultipleModelOverridesOnSameProvider(t *testing.T) {
 	h.writeRawModelsJSON(t, map[string]any{
 		"openrouter": map[string]any{
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{
+				"deepseek/deepseek-chat": map[string]any{
 					"compat": map[string]any{"openRouterRouting": map[string]any{"only": []string{"amazon-bedrock"}}},
 				},
-				"anthropic/claude-opus-4": map[string]any{
+				"deepseek/deepseek-r1": map[string]any{
 					"compat": map[string]any{"openRouterRouting": map[string]any{"only": []string{"anthropic"}}},
 				},
 			},
@@ -937,10 +970,16 @@ func TestModelRegistryMultipleModelOverridesOnSameProvider(t *testing.T) {
 	})
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
-	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
-	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4" })
-	sonnetCompat := sonnet.Compat.(*ai.OpenAICompletionsCompat)
-	opusCompat := opus.Compat.(*ai.OpenAICompletionsCompat)
+	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-chat" })
+	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-r1" })
+	sonnetCompat, ok := sonnet.Compat.(*ai.OpenAICompletionsCompat)
+	if !ok {
+		t.Fatalf("sonnet compat type = %T", sonnet.Compat)
+	}
+	opusCompat, ok := opus.Compat.(*ai.OpenAICompletionsCompat)
+	if !ok {
+		t.Fatalf("opus compat type = %T", opus.Compat)
+	}
 	if !slices.Equal(sonnetCompat.OpenRouterRouting.Only, []string{"amazon-bedrock"}) {
 		t.Fatalf("sonnet routing = %+v", sonnetCompat.OpenRouterRouting)
 	}

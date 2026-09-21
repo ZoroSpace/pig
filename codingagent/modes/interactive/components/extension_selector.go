@@ -56,6 +56,11 @@ func NewExtensionSelectorComponent(
 
 	c.titleText = tui.NewText(currentTheme.Fg("accent", currentTheme.Bold(title)), 1, 0)
 	c.AddChild(c.titleText)
+	// Description renders below the title (pi: opts?.description).
+	if opts != nil && opts.Description != "" {
+		c.AddChild(tui.NewSpacer(1))
+		c.AddChild(tui.NewText(currentTheme.Fg("text", opts.Description), 1, 0))
+	}
 	c.AddChild(tui.NewSpacer(1))
 
 	if opts != nil && opts.Timeout > 0 && opts.Tui != nil {

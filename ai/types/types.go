@@ -95,6 +95,7 @@ const (
 	ProviderOpenCode            ProviderID = "opencode"
 	ProviderOpenCodeGo          ProviderID = "opencode-go"
 	ProviderKimiCoding          ProviderID = "kimi-coding"
+	ProviderMeta                ProviderID = "meta"
 	ProviderCloudflareWorkersAI ProviderID = "cloudflare-workers-ai"
 	ProviderCloudflareAIGateway ProviderID = "cloudflare-ai-gateway"
 	ProviderAntLing             ProviderID = "ant-ling"

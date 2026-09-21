@@ -63,6 +63,7 @@ const (
 	ProviderOpenCode            = types.ProviderOpenCode
 	ProviderOpenCodeGo          = types.ProviderOpenCodeGo
 	ProviderKimiCoding          = types.ProviderKimiCoding
+	ProviderMeta                = types.ProviderMeta
 	ProviderCloudflareWorkersAI = types.ProviderCloudflareWorkersAI
 	ProviderCloudflareAIGateway = types.ProviderCloudflareAIGateway
 	ProviderAntLing             = types.ProviderAntLing

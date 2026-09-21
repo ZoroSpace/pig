@@ -1897,7 +1897,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 				}
 				m.pendingTools = map[string]*components.ToolExecutionComponent{}
 				if m.streamingMessage.StopReason == types.StopReasonError {
-					m.suggestBugReport()
+					m.maybeSuggestBugReport(m.streamingMessage)
 				}
 			} else {
 				// Args are now complete - trigger diff computation for edit
@@ -8236,6 +8236,23 @@ func (m *InteractiveMode) suggestBugReport() {
 		theme.Current().Fg("muted", fmt.Sprintf("If this looks like a %s bug, /bug sends a report to the developers.", codingagent.AppName)),
 		m.outputPad, 0))
 	m.ui.RequestRender(false)
+}
+
+// bugReportCancelPattern guards the /bug hint against expected failures (pi
+// v0.86.1: /\b(?:abort(?:ed)?|cancel(?:l?ed)?)\b/i on errorMessage).
+var bugReportCancelPattern = regexp.MustCompile(`(?i)\b(?:abort(?:ed)?|cancel(?:l?ed)?)\b`)
+
+// maybeSuggestBugReport shows the /bug hint only for unexpected errors (pi:
+// maybeSuggestBugReport, v0.86.1): not retryable failures and not
+// cancellations.
+func (m *InteractiveMode) maybeSuggestBugReport(message *types.AssistantMessage) {
+	if message.StopReason != types.StopReasonError || ai.IsRetryableAssistantError(message) {
+		return
+	}
+	if bugReportCancelPattern.MatchString(message.ErrorMessage) {
+		return
+	}
+	m.suggestBugReport()
 }
 
 // rebindCurrentSession rebinds UI subscriptions after a session replacement

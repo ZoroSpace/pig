@@ -49,7 +49,7 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 	want := []string{
 		"amazon-bedrock", "ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
 		"cloudflare-workers-ai", "deepseek", "fireworks", "github-copilot", "google",
-		"google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
+		"google-vertex", "groq", "huggingface", "kimi-coding", "meta", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
 		"openai-codex", "opencode", "opencode-go", "openrouter", "qwen-token-plan",
 		"qwen-token-plan-cn", "qwen-token-plan-individual", "together", "vercel-ai-gateway",
@@ -66,7 +66,7 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 	for _, id := range []string{
 		"amazon-bedrock", "ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
 		"cloudflare-workers-ai", "deepseek", "fireworks", "github-copilot", "google",
-		"google-vertex", "groq", "huggingface", "kimi-coding", "minimax",
+		"google-vertex", "groq", "huggingface", "kimi-coding", "meta", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
 		"openai-codex", "opencode", "opencode-go", "openrouter", "qwen-token-plan",
 		"qwen-token-plan-cn", "qwen-token-plan-individual", "together", "vercel-ai-gateway",
@@ -88,8 +88,8 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 38 {
-		t.Fatalf("GetProviders() length = %d, want 38", got)
+	if got := len(models.GetProviders()); got != 39 {
+		t.Fatalf("GetProviders() length = %d, want 39", got)
 	}
 }
 

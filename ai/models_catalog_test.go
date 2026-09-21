@@ -35,6 +35,7 @@ func TestBuiltinCatalogMatchesPiData(t *testing.T) {
 		{ProviderGoogle, "google.json", "google-generative-ai"},
 		{ProviderGoogleVertex, "google-vertex.json", "google-vertex"},
 		{ProviderAmazonBedrock, "amazon-bedrock.json", "bedrock-converse-stream"},
+		{ProviderMeta, "meta.json", "openai-responses"},
 	} {
 		t.Run(string(tt.provider), func(t *testing.T) {
 			raw, err := os.ReadFile(filepath.Join("testdata", tt.dataFile))

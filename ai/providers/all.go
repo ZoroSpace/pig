@@ -86,6 +86,7 @@ func BuiltinProviders() []ai.Provider {
 		GroqProvider(),
 		HuggingFaceProvider(),
 		KimiCodingProvider(),
+		MetaProvider(),
 		MinimaxProvider(),
 		MinimaxCNProvider(),
 		MoonshotAIProvider(),

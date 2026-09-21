@@ -233,9 +233,9 @@ git diff | ./pig -p "审查这个 diff，指出可能的正确性问题"
 | 🧪 mock / 单测已验证 | 其余 provider、OAuth、provider 特有语义 | 无真实服务或真实登录链路验证 |
 
 <details>
-<summary>当前注册的 38 个内置 Provider</summary>
+<summary>当前注册的 39 个内置 Provider</summary>
 
-`amazon-bedrock`、`ant-ling`、`anthropic`、`baseten`、`cerebras`、`cloudflare-ai-gateway`、`cloudflare-workers-ai`、`deepseek`、`fireworks`、`github-copilot`、`google`、`google-vertex`、`groq`、`huggingface`、`kimi-coding`、`minimax`、`minimax-cn`、`moonshotai`、`moonshotai-cn`、`nvidia`、`openai`、`openai-codex`、`opencode`、`opencode-go`、`openrouter`、`qwen-token-plan`、`qwen-token-plan-cn`、`qwen-token-plan-individual`、`together`、`vercel-ai-gateway`、`volcengine-plan`、`xiaomi`、`xiaomi-token-plan-ams`、`xiaomi-token-plan-cn`、`xiaomi-token-plan-sgp`、`xai`、`zai`、`zai-coding-cn`
+`amazon-bedrock`、`ant-ling`、`anthropic`、`baseten`、`cerebras`、`cloudflare-ai-gateway`、`cloudflare-workers-ai`、`deepseek`、`fireworks`、`github-copilot`、`google`、`google-vertex`、`groq`、`huggingface`、`kimi-coding`、`meta`、`minimax`、`minimax-cn`、`moonshotai`、`moonshotai-cn`、`nvidia`、`openai`、`openai-codex`、`opencode`、`opencode-go`、`openrouter`、`qwen-token-plan`、`qwen-token-plan-cn`、`qwen-token-plan-individual`、`together`、`vercel-ai-gateway`、`volcengine-plan`、`xiaomi`、`xiaomi-token-plan-ams`、`xiaomi-token-plan-cn`、`xiaomi-token-plan-sgp`、`xai`、`zai`、`zai-coding-cn`
 
 </details>
 

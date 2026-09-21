@@ -199,12 +199,12 @@ func detectCompat(model *types.Model) *resolvedOpenAICompletionsCompat {
 	isCloudflareWorkersAI := provider == "cloudflare-workers-ai" || strings.Contains(baseURL, "api.cloudflare.com")
 	isCloudflareAIGateway := provider == "cloudflare-ai-gateway" || strings.Contains(baseURL, "gateway.ai.cloudflare.com")
 	isNvidia := provider == "nvidia" || strings.Contains(baseURL, "integrate.api.nvidia.com")
+	isCerebras := provider == "cerebras" || strings.Contains(baseURL, "cerebras.ai")
 	isAntLing := provider == "ant-ling" || strings.Contains(baseURL, "api.ant-ling.com")
 	isDeepSeek := provider == "deepseek" || strings.Contains(baseURLLower, "deepseek.com")
 
 	isNonStandard := isNvidia ||
-		provider == "cerebras" ||
-		strings.Contains(baseURL, "cerebras.ai") ||
+		isCerebras ||
 		provider == "xai" ||
 		strings.Contains(baseURL, "api.x.ai") ||
 		isTogether ||
@@ -279,7 +279,7 @@ func detectCompat(model *types.Model) *resolvedOpenAICompletionsCompat {
 		zaiToolStream:                               false,
 		supportsThinkingTokenBudget:                 false,
 		thinkingTokenBudgetField:                    nil,
-		supportsStrictMode:                          !isMoonshot && !isTogether && !isCloudflareAIGateway && !isNvidia,
+		supportsStrictMode:                          !isMoonshot && !isTogether && !isCloudflareAIGateway && !isNvidia && !isCerebras,
 		supportsOpenAIGrammarTools:                  false,
 		supportsMidConvoSystemMessages:              false,
 		supportsMidConvoToolAdditions:               false,

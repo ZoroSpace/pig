@@ -85,13 +85,14 @@ type OpenRouterResponse struct {
 
 // OpenRouterModel is one OpenRouter model (pi: fetchOpenRouterModels).
 type OpenRouterModel struct {
-	ID                  string                  `json:"id"`
-	Name                string                  `json:"name"`
-	SupportedParameters []string                `json:"supported_parameters"`
-	Architecture        *OpenRouterArchitecture `json:"architecture"`
-	Pricing             *OpenRouterPricing      `json:"pricing"`
-	TopProvider         *OpenRouterTopProvider  `json:"top_provider"`
-	ContextLength       *int64                  `json:"context_length"`
+	ID                  string                       `json:"id"`
+	Name                string                       `json:"name"`
+	SupportedParameters []string                     `json:"supported_parameters"`
+	Architecture        *OpenRouterArchitecture      `json:"architecture"`
+	Pricing             *OpenRouterPricing           `json:"pricing"`
+	TopProvider         *OpenRouterTopProvider       `json:"top_provider"`
+	ContextLength       *int64                       `json:"context_length"`
+	Reasoning           *OpenRouterReasoningMetadata `json:"reasoning"`
 }
 
 // OpenRouterArchitecture carries input modalities. pi calls
@@ -240,6 +241,15 @@ func containsString(xs []string, v string) bool {
 func inputOf(m *ModelsDevModel) []ai.ModelInput {
 	if m.Modalities != nil && containsString(m.Modalities.Input, "image") {
 		return []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage}
+	}
+	return []ai.ModelInput{ai.ModelInputText}
+}
+
+// basetenInputOf applies the Baseten GLM-5.2 text-only override to inputOf
+// (pi: supportsImageInput = !isGlm52 && modalities includes image).
+func basetenInputOf(m *ModelsDevModel, isGLM52 bool) []ai.ModelInput {
+	if !isGLM52 {
+		return inputOf(m)
 	}
 	return []ai.ModelInput{ai.ModelInputText}
 }

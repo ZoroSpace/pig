@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 )
@@ -191,19 +190,10 @@ func readClipboardImageViaWlPaste() clipboardImageResult {
 	return clipboardImageFound(&ClipboardImage{Bytes: data, MimeType: clipboardBaseMimeType(selectedType)})
 }
 
-// clipboardIsWSL detects WSL (pi: isWSL).
+// clipboardIsWSL detects WSL (pi: isWSL, moved to utils/wsl.ts in v0.86.1 —
+// pig: shared isWSL in wsl.go).
 func clipboardIsWSL(env func(string) string) bool {
-	if env == nil {
-		env = os.Getenv
-	}
-	if env("WSL_DISTRO_NAME") != "" || env("WSLENV") != "" {
-		return true
-	}
-	release, err := os.ReadFile("/proc/version")
-	if err != nil {
-		return false
-	}
-	return regexp.MustCompile(`(?i)microsoft|wsl`).Match(release)
+	return isWSL(env)
 }
 
 // readClipboardImageViaPowerShell reads the Windows clipboard from WSL (pi:

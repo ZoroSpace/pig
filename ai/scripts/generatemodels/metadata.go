@@ -102,7 +102,7 @@ var midConvoEffortUnsupportedAnthropicModels = stringSet("openrouter:anthropic/c
 // v0.86.0 — narrowed to the models with a verified effort transport).
 func supportsAnthropicMidConvoEffort(modelID string) bool {
 	id := strings.ToLower(modelID)
-	id = regexp.MustCompile(`^~?anthropic\\/`).ReplaceAllString(id, "")
+	id = regexp.MustCompile(`^~?anthropic/`).ReplaceAllString(id, "")
 	return regexp.MustCompile(`^claude-opus-5(?:-\\d{8})?$`).MatchString(id) ||
 		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\\d{8})?$`).MatchString(id)
 }
@@ -186,12 +186,13 @@ func detectOpenAICompletionsCompat(model *ai.Model) openAICompletionsResolvedCom
 	isCloudflareWorkersAI := provider == "cloudflare-workers-ai" || strings.Contains(baseURL, "api.cloudflare.com")
 	isCloudflareAiGateway := provider == "cloudflare-ai-gateway" || strings.Contains(baseURL, "gateway.ai.cloudflare.com")
 	isNvidia := provider == "nvidia" || strings.Contains(baseURL, "integrate.api.nvidia.com")
+	isCerebras := provider == "cerebras" || strings.Contains(baseURL, "cerebras.ai")
 	isAntLing := provider == "ant-ling" || strings.Contains(baseURL, "api.ant-ling.com")
 	isTogetherReasoningOnly := isTogether && togetherReasoningOnlyModels[model.ID]
 	isDeepSeek := provider == "deepseek" || strings.Contains(lowerBaseURL, "deepseek.com")
 
 	isNonStandard := isNvidia ||
-		provider == "cerebras" || strings.Contains(baseURL, "cerebras.ai") ||
+		isCerebras ||
 		provider == "xai" || strings.Contains(baseURL, "api.x.ai") ||
 		isTogether ||
 		strings.Contains(baseURL, "chutes.ai") ||
@@ -220,9 +221,9 @@ func detectOpenAICompletionsCompat(model *ai.Model) openAICompletionsResolvedCom
 		requiresReasoningContentOnAssistantMessages: isDeepSeek,
 		thinkingFormat:                              ai.ThinkingFormatOpenAI,
 		zaiToolStream:                               false,
-		supportsStrictMode:                          !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia,
+		supportsStrictMode:                          !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia && !isCerebras,
 		supportsOpenAIGrammarTools:                  false,
-		sendSessionAffinityHeaders:                  false,
+		sendSessionAffinityHeaders:                  isOpenRouter,
 		supportsLongCacheRetention:                  !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway || isNvidia || isAntLing),
 	}
 	if useMaxTokens {
@@ -469,6 +470,12 @@ func mergeOverrideNonNil(dst, src *ai.OpenAICompletionsCompat) {
 	if src.SupportsThinkingTokenBudget != nil {
 		dst.SupportsThinkingTokenBudget = src.SupportsThinkingTokenBudget
 	}
+	if src.SupportsMidConvoSystemMessages != nil {
+		dst.SupportsMidConvoSystemMessages = src.SupportsMidConvoSystemMessages
+	}
+	if src.SupportsMidConvoToolAdditions != nil {
+		dst.SupportsMidConvoToolAdditions = src.SupportsMidConvoToolAdditions
+	}
 	if src.SupportsOpenAIGrammarTools != nil {
 		dst.SupportsOpenAIGrammarTools = src.SupportsOpenAIGrammarTools
 	}
@@ -644,6 +651,15 @@ func mergeAnthropicOverrideNonNil(dst, src *ai.AnthropicMessagesCompat) {
 	if src.SupportsStrictTools != nil {
 		dst.SupportsStrictTools = src.SupportsStrictTools
 	}
+	if src.SupportsMidConvoEffort != nil {
+		dst.SupportsMidConvoEffort = src.SupportsMidConvoEffort
+	}
+	if src.SupportsMidConvoSystemMessages != nil {
+		dst.SupportsMidConvoSystemMessages = src.SupportsMidConvoSystemMessages
+	}
+	if src.SupportsMidConvoToolChanges != nil {
+		dst.SupportsMidConvoToolChanges = src.SupportsMidConvoToolChanges
+	}
 	if src.AllowedFallbackModels != nil {
 		dst.AllowedFallbackModels = src.AllowedFallbackModels
 	}
@@ -696,6 +712,11 @@ func applyAnthropicMessagesCompatMetadata(model *ai.Model) {
 	compat := getAnthropicMessagesCompat(string(model.Provider), model.ID)
 	if compat != nil {
 		mergeAnthropicMessagesCompat(model, compat)
+		if compat.SupportsMidConvoEffort != nil {
+			// pi: mergeThinkingLevelMap(model, { off: null }) — the effort
+			// transport accepts an explicit off level.
+			mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil})
+		}
 	}
 }
 
@@ -728,8 +749,17 @@ func applyAnthropicAllowedFallbackModelMetadata(models []*ai.Model) {
 		if model == nil {
 			continue
 		}
+		// pi: when the model carries the verified mid-convo effort transport,
+		// fallbacks are filtered down to models that have it too.
+		filterFallbacks := false
+		if compat, ok := model.Compat.(*ai.AnthropicMessagesCompat); ok && compat != nil && compat.SupportsMidConvoEffort != nil && *compat.SupportsMidConvoEffort {
+			filterFallbacks = true
+		}
 		var allowed []ai.AnthropicAllowedFallbackModel
 		for _, fallbackModelID := range fallbackModelIds {
+			if filterFallbacks && !supportsAnthropicMidConvoEffort(fallbackModelID) {
+				continue
+			}
 			fallbackModel := modelsByID[fallbackModelID]
 			if fallbackModel != nil {
 				allowed = append(allowed, ai.AnthropicAllowedFallbackModel{
@@ -784,6 +814,9 @@ func mergeOpenAIResponsesCompat(model *ai.Model, compat *ai.OpenAIResponsesCompa
 	}
 	if compat.SupportsToolSearch != nil {
 		existing.SupportsToolSearch = compat.SupportsToolSearch
+	}
+	if compat.SupportsMidConvoSystemMessages != nil {
+		existing.SupportsMidConvoSystemMessages = compat.SupportsMidConvoSystemMessages
 	}
 	if compat.SupportsExplicitPromptCacheMode != nil {
 		existing.SupportsExplicitPromptCacheMode = compat.SupportsExplicitPromptCacheMode

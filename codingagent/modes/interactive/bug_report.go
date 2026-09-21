@@ -44,6 +44,7 @@ func (m *InteractiveMode) handleBugCommand(ctx context.Context, hint string) {
 		showError:       m.ShowError,
 		editorContainer: m.editorContainer,
 		editor:          m.editor,
+		keybindings:     m.keybindings,
 		ui:              m.ui,
 	}, hint)
 }
@@ -56,6 +57,7 @@ type bugReportContext struct {
 	showError       func(string)
 	editorContainer *tui.Container
 	editor          tui.Component
+	keybindings     *core.KeybindingsManager
 	ui              tui.TUI
 }
 
@@ -323,16 +325,24 @@ func (m *InteractiveMode) bugReportInput(bc bugReportContext, title string, desc
 	ok := false
 	m.mutateUI(func() {
 		bc.editorContainer.Clear()
-		component := components.NewExtensionInputComponent(title, nil, func(submitted string) {
-			value = submitted
-			ok = true
-			resultCh <- struct{}{}
-		}, func() {
-			resultCh <- struct{}{}
-		}, &components.ExtensionInputOptions{
-			InitialValue: initialValue,
-			Description:  description,
-		})
+		// pi v0.86.1: ExtensionInputComponent → ExtensionEditorComponent so
+		// pasted multiline descriptions survive (d1230ea20).
+		component := components.NewExtensionEditorComponent(
+			bc.ui,
+			bc.keybindings,
+			title,
+			initialValue,
+			func(submitted string) {
+				value = submitted
+				ok = true
+				resultCh <- struct{}{}
+			}, func() {
+				resultCh <- struct{}{}
+			}, &components.ExtensionEditorOptions{
+				Description: description,
+			},
+			bc.session.SettingsManager.GetExternalEditorCommand(),
+		)
 		bc.editorContainer.AddChild(component)
 		bc.ui.SetFocus(component)
 		bc.ui.RequestRender(false)

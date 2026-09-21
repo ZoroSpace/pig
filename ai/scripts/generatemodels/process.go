@@ -253,6 +253,35 @@ func processXaiModels(data ModelsDevCatalog) []*ai.Model {
 	return models
 }
 
+// processMetaModels (pi: loadModelsDevData meta block — the Muse Model API
+// catalog on the openai-responses API).
+func processMetaModels(data ModelsDevCatalog) []*ai.Model {
+	provider := data["meta"]
+	if provider == nil || provider.Models == nil {
+		return nil
+	}
+	var models []*ai.Model
+	for modelID, m := range provider.Models {
+		if !boolVal(m.ToolCall) {
+			continue
+		}
+		models = append(models, &ai.Model{
+			ID:            modelID,
+			Name:          orString(m.Name, modelID),
+			API:           ai.ApiOpenAIResponses,
+			Provider:      ai.ProviderMeta,
+			BaseURL:       "https://api.meta.ai/v1",
+			Reasoning:     boolVal(m.Reasoning),
+			Input:         inputOf(m),
+			Cost:          modelsDevFlatCostOf(m.Cost),
+			ContextWindow: int64Or(limitContext(m), 4096),
+			MaxTokens:     int64Or(limitOutput(m), 4096),
+		})
+		recordModelsDevReasoningOptions("meta", modelID, m)
+	}
+	return models
+}
+
 // processGroqModels (pi: loadModelsDevData groq block).
 func processGroqModels(data ModelsDevCatalog) []*ai.Model {
 	provider := data["groq"]
@@ -478,13 +507,15 @@ func processBasetenModels(provider *ModelsDevProvider) []*ai.Model {
 		}
 
 		model := &ai.Model{
-			ID:            modelID,
-			Name:          orString(m.Name, modelID),
-			API:           ai.ApiOpenAICompletions,
-			Provider:      ai.ProviderBaseten,
-			BaseURL:       baseURL,
-			Reasoning:     reasoning,
-			Input:         inputOf(m),
+			ID:        modelID,
+			Name:      orString(m.Name, modelID),
+			API:       ai.ApiOpenAICompletions,
+			Provider:  ai.ProviderBaseten,
+			BaseURL:   baseURL,
+			Reasoning: reasoning,
+			// Baseten's GLM-5.2 endpoints are text-only despite models.dev
+			// reporting image input (pi: supportsImageInput).
+			Input:         basetenInputOf(m, isGLM52),
 			Cost:          modelsDevFlatCostOf(m.Cost),
 			Compat:        compat,
 			ContextWindow: int64Or(limitContext(m), 4096),
@@ -547,7 +578,7 @@ func processFireworksModels(provider *ModelsDevProvider) []*ai.Model {
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		}
 		switch {
-		case strings.Contains(modelID, "glm-5p2"):
+		case strings.Contains(modelID, "glm-"):
 			common.API = ai.ApiOpenAICompletions
 			common.BaseURL = "https://api.fireworks.ai/inference/v1"
 			common.Compat = copyOpenAICompat(openAICompat)
@@ -923,6 +954,7 @@ func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 	models = append(models, processGoogleVertexModels(data)...)
 	models = append(models, processOpenAIModels(data)...)
 	models = append(models, processXaiModels(data)...)
+	models = append(models, processMetaModels(data)...)
 	models = append(models, processGroqModels(data)...)
 	models = append(models, processCerebrasModels(data)...)
 	models = append(models, processZaiModels(data)...)

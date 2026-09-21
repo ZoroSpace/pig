@@ -10,6 +10,7 @@
 package utils
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -376,8 +377,223 @@ func TestCopyToClipboardDoesNotEmitOversizedOsc52(t *testing.T) {
 	})
 	osc52 := stubOsc52(t)
 	err := CopyToClipboard(strings.Repeat("x", 80_000))
-	if err == nil || !strings.Contains(err.Error(), "Clipboard unavailable") {
+	if err == nil || err.Error() != "Clipboard unavailable: text exceeds the OSC 52 size limit" {
 		t.Fatalf("error = %v", err)
+	}
+	if len(*osc52) != 0 {
+		t.Fatalf("unexpected OSC 52 writes: %d", len(*osc52))
+	}
+}
+
+// clipboardTextEnv v0.86.1 补充：三个新 env 也需清零（pi: beforeEach
+// stubEnv WT_SESSION/WSL_DISTRO_NAME/WSLENV to ""）。
+func clipboardWSLEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"WT_SESSION", "WSL_DISTRO_NAME", "WSLENV"} {
+		t.Setenv(name, "")
+	}
+}
+
+// TestCopyToClipboardDisplaylessLinuxFallsBackToOsc52 ports "display-less
+// Linux falls back to OSC 52" (regression #9688: containers without X11/
+// Wayland access).
+func TestCopyToClipboardDisplaylessLinuxFallsBackToOsc52(t *testing.T) {
+	clipboardTextEnv(t)
+	clipboardWSLEnv(t)
+	stubTextPlatform(t, "linux")
+	calls := stubClipboardRunCommandOptions(t, func(string, []string, *clipboardCommandOptions) ([]byte, bool) {
+		return nil, false
+	})
+	osc52 := stubOsc52(t)
+	if err := CopyToClipboard("hello"); err != nil {
+		t.Fatalf("CopyToClipboard error: %v", err)
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("expected no commands, got %+v", *calls)
+	}
+	if len(*osc52) != 1 {
+		t.Fatalf("osc52 writes = %d, want 1", len(*osc52))
+	}
+}
+
+// TestCopyToClipboardWSLPowerShell ports "WSL without a display writes the
+// Windows clipboard through PowerShell" (#9688: WSL with WSLg disabled).
+func TestCopyToClipboardWSLPowerShell(t *testing.T) {
+	clipboardTextEnv(t)
+	clipboardWSLEnv(t)
+	stubTextPlatform(t, "linux")
+	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
+	tmpWritten := ""
+	calls := stubClipboardRunCommandOptions(t, func(command string, args []string, options *clipboardCommandOptions) ([]byte, bool) {
+		if command != "wslpath" {
+			return nil, true
+		}
+		raw, err := os.ReadFile(args[1])
+		if err != nil {
+			t.Fatalf("wslpath target unreadable: %v", err)
+		}
+		tmpWritten = string(raw)
+		return []byte("\\\\wsl.localhost\\Ubuntu\\tmp\\clip.txt\n"), true
+	})
+	osc52 := stubOsc52(t)
+	if err := CopyToClipboard("héllo"); err != nil {
+		t.Fatalf("CopyToClipboard error: %v", err)
+	}
+	commandNames := make([]string, 0, len(*calls))
+	for _, call := range *calls {
+		commandNames = append(commandNames, call.command)
+	}
+	if strings.Join(commandNames, ",") != "wslpath,powershell.exe" {
+		t.Fatalf("commands = %v, want [wslpath powershell.exe]", commandNames)
+	}
+	if tmpWritten != "héllo" {
+		t.Fatalf("temp file content = %q, want %q", tmpWritten, "héllo")
+	}
+	wslpathArgs := (*calls)[0].args
+	if _, err := os.Stat(wslpathArgs[1]); !os.IsNotExist(err) {
+		t.Fatalf("temp file should be removed after the copy, stat err = %v", err)
+	}
+	powershellScript := ""
+	for _, call := range *calls {
+		if call.command == "powershell.exe" {
+			powershellScript = call.args[2]
+		}
+	}
+	if !strings.Contains(powershellScript, "Set-Clipboard") {
+		t.Fatalf("powershell script missing Set-Clipboard: %s", powershellScript)
+	}
+	if !strings.Contains(powershellScript, `'\\wsl.localhost\Ubuntu\tmp\clip.txt'`) {
+		t.Fatalf("powershell script missing the quoted Windows path: %s", powershellScript)
+	}
+	if len(*osc52) != 0 {
+		t.Fatalf("unexpected OSC 52 writes: %d", len(*osc52))
+	}
+}
+
+// TestCopyToClipboardWSLFallsBackToOsc52 ports "WSL falls back to OSC 52
+// when Windows interop is unavailable".
+func TestCopyToClipboardWSLFallsBackToOsc52(t *testing.T) {
+	clipboardTextEnv(t)
+	clipboardWSLEnv(t)
+	stubTextPlatform(t, "linux")
+	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
+	calls := stubClipboardRunCommandOptions(t, func(string, []string, *clipboardCommandOptions) ([]byte, bool) {
+		return nil, false
+	})
+	osc52 := stubOsc52(t)
+	if err := CopyToClipboard("hello"); err != nil {
+		t.Fatalf("CopyToClipboard error: %v", err)
+	}
+	commandNames := []string{}
+	for _, call := range *calls {
+		commandNames = append(commandNames, call.command)
+	}
+	if strings.Join(commandNames, ",") != "wslpath" {
+		t.Fatalf("commands = %v, want [wslpath]", commandNames)
+	}
+	if len(*osc52) != 1 {
+		t.Fatalf("osc52 writes = %d, want 1", len(*osc52))
+	}
+}
+
+// TestCopyToClipboardWSLWindowsTerminalPrefersOsc52 ports "WSL in Windows
+// Terminal prefers OSC 52 over PowerShell".
+func TestCopyToClipboardWSLWindowsTerminalPrefersOsc52(t *testing.T) {
+	clipboardTextEnv(t)
+	clipboardWSLEnv(t)
+	stubTextPlatform(t, "linux")
+	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
+	t.Setenv("WT_SESSION", "session")
+	calls := stubClipboardRunCommandOptions(t, func(string, []string, *clipboardCommandOptions) ([]byte, bool) {
+		return nil, false
+	})
+	osc52 := stubOsc52(t)
+	if err := CopyToClipboard("hello"); err != nil {
+		t.Fatalf("CopyToClipboard error: %v", err)
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("expected no commands, got %+v", *calls)
+	}
+	if len(*osc52) != 1 {
+		t.Fatalf("osc52 writes = %d, want 1", len(*osc52))
+	}
+}
+
+// TestCopyToClipboardWSLWindowsTerminalRemoteEmitsOnce ports "WSL in Windows
+// Terminal emits OSC 52 once in a remote session".
+func TestCopyToClipboardWSLWindowsTerminalRemoteEmitsOnce(t *testing.T) {
+	clipboardTextEnv(t)
+	clipboardWSLEnv(t)
+	stubTextPlatform(t, "linux")
+	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
+	t.Setenv("WT_SESSION", "session")
+	t.Setenv("SSH_CONNECTION", "client server")
+	calls := stubClipboardRunCommandOptions(t, func(string, []string, *clipboardCommandOptions) ([]byte, bool) {
+		return nil, false
+	})
+	osc52 := stubOsc52(t)
+	if err := CopyToClipboard("hello"); err != nil {
+		t.Fatalf("CopyToClipboard error: %v", err)
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("expected no commands, got %+v", *calls)
+	}
+	if len(*osc52) != 1 {
+		t.Fatalf("osc52 writes = %d, want 1", len(*osc52))
+	}
+}
+
+// TestCopyToClipboardWSLWindowsTerminalOversizedUsesPowerShell ports "WSL in
+// Windows Terminal uses PowerShell for oversized OSC 52 payloads".
+func TestCopyToClipboardWSLWindowsTerminalOversizedUsesPowerShell(t *testing.T) {
+	clipboardTextEnv(t)
+	clipboardWSLEnv(t)
+	stubTextPlatform(t, "linux")
+	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
+	t.Setenv("WT_SESSION", "session")
+	calls := stubClipboardRunCommandOptions(t, func(command string, args []string, options *clipboardCommandOptions) ([]byte, bool) {
+		if command == "wslpath" {
+			return []byte("C:\\clip.txt"), true
+		}
+		return nil, true
+	})
+	osc52 := stubOsc52(t)
+	if err := CopyToClipboard(strings.Repeat("x", 80_000)); err != nil {
+		t.Fatalf("CopyToClipboard error: %v", err)
+	}
+	commandNames := []string{}
+	for _, call := range *calls {
+		commandNames = append(commandNames, call.command)
+	}
+	if strings.Join(commandNames, ",") != "wslpath,powershell.exe" {
+		t.Fatalf("commands = %v, want [wslpath powershell.exe]", commandNames)
+	}
+	if len(*osc52) != 0 {
+		t.Fatalf("unexpected OSC 52 writes: %d", len(*osc52))
+	}
+}
+
+// TestCopyToClipboardWSLWithDisplayPrefersLinuxTools ports "WSL with a
+// display prefers the Linux clipboard tools".
+func TestCopyToClipboardWSLWithDisplayPrefersLinuxTools(t *testing.T) {
+	clipboardTextEnv(t)
+	clipboardWSLEnv(t)
+	stubTextPlatform(t, "linux")
+	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
+	t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+	calls := stubClipboardRunCommandOptions(t, func(string, []string, *clipboardCommandOptions) ([]byte, bool) {
+		return nil, true
+	})
+	osc52 := stubOsc52(t)
+	if err := CopyToClipboard("hello"); err != nil {
+		t.Fatalf("CopyToClipboard error: %v", err)
+	}
+	commandNames := []string{}
+	for _, call := range *calls {
+		commandNames = append(commandNames, call.command)
+	}
+	if strings.Join(commandNames, ",") != "wl-copy" {
+		t.Fatalf("commands = %v, want [wl-copy]", commandNames)
 	}
 	if len(*osc52) != 0 {
 		t.Fatalf("unexpected OSC 52 writes: %d", len(*osc52))

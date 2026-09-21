@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,10 @@ const (
 
 // nvidiaHeaders are the static NVIDIA NIM request headers (pi: NVIDIA_HEADERS).
 var nvidiaHeaders = map[string]string{"NVCF-POLL-SECONDS": "3600"}
+
+// anthropicPrefixRegexp matches pi's /^anthropic\// OpenRouter routing test
+// (Go raw string: the slash needs no escape).
+var anthropicPrefixRegexp = regexp.MustCompile(`^anthropic/`)
 
 // nvidiaOpenAICompat is the NVIDIA NIM compat override (pi: NVIDIA_OPENAI_COMPAT).
 var nvidiaOpenAICompat = &ai.OpenAICompletionsCompat{
@@ -164,18 +169,34 @@ func fetchOpenRouterModels(ctx context.Context) ([]*ai.Model, error) {
 			maxTokens = *model.TopProvider.MaxCompletionTokens
 		}
 
-		models = append(models, &ai.Model{
+		thinkingLevelMap := getOpenRouterThinkingLevelMap(model.Reasoning)
+
+		// pi: anthropic/* models (except :batch aliases) are served by the
+		// Anthropic-compatible endpoint without the /v1 suffix.
+		useAnthropicMessages := anthropicPrefixRegexp.MatchString(model.ID) && !strings.HasSuffix(model.ID, ":batch")
+		baseURL := "https://openrouter.ai/api/v1"
+		api := ai.ApiOpenAICompletions
+		if useAnthropicMessages {
+			baseURL = "https://openrouter.ai/api"
+			api = ai.ApiAnthropicMessages
+		}
+
+		m := &ai.Model{
 			ID:            model.ID,
 			Name:          model.Name,
-			API:           ai.ApiOpenAICompletions,
-			BaseURL:       "https://openrouter.ai/api/v1",
+			API:           api,
+			BaseURL:       baseURL,
 			Provider:      ai.ProviderOpenRouter,
 			Reasoning:     containsString(model.SupportedParameters, "reasoning"),
 			Input:         input,
 			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: inputCost, Output: outputCost, CacheRead: cacheReadCost, CacheWrite: cacheWriteCost}},
 			ContextWindow: contextWindow,
 			MaxTokens:     maxTokens,
-		})
+		}
+		if thinkingLevelMap != nil {
+			m.ThinkingLevelMap = *thinkingLevelMap
+		}
+		models = append(models, m)
 	}
 
 	fmt.Printf("Fetched %d tool-capable models from OpenRouter\n", len(models))

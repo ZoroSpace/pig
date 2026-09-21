@@ -533,6 +533,7 @@ var providerConsts = map[ai.ProviderID]string{
 	ai.ProviderOpenCode:            "ProviderOpenCode",
 	ai.ProviderOpenCodeGo:          "ProviderOpenCodeGo",
 	ai.ProviderKimiCoding:          "ProviderKimiCoding",
+	ai.ProviderMeta:                "ProviderMeta",
 	ai.ProviderCloudflareWorkersAI: "ProviderCloudflareWorkersAI",
 	ai.ProviderCloudflareAIGateway: "ProviderCloudflareAIGateway",
 	ai.ProviderAntLing:             "ProviderAntLing",

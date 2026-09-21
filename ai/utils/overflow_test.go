@@ -41,6 +41,14 @@ func TestIsContextOverflowDetectsExplicitOllamaPromptTooLongErrors(t *testing.T)
 	}
 }
 
+// pi v0.86.1: regression for #9805.
+func TestIsContextOverflowDetectsZaiPromptTooLongErrors(t *testing.T) {
+	message := createErrorMessageWithProvider(`400 {"code":"1261","message":"Prompt too long"}`, "zai")
+	if !IsContextOverflow(&message, 1048576) {
+		t.Fatal("want overflow")
+	}
+}
+
 func TestIsContextOverflowDetectsTogetherAIContextLengthErrors(t *testing.T) {
 	message := createErrorMessage(
 		"400 The input (516368 tokens) is longer than the model's context length (262144 tokens).",

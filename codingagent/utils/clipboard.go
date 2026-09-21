@@ -15,10 +15,13 @@
 package utils
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 const maxOsc52EncodedLength = 100_000
@@ -113,11 +116,43 @@ func ReadClipboardText() string {
 	return ""
 }
 
+// copyViaWindowsClipboard writes the Windows clipboard through WSL interop
+// (pi: copyViaWindowsClipboard). WSL without WSLg has no Linux display, so
+// PowerShell reads the text from a file because `clip.exe` and PowerShell
+// stdin decode piped bytes with the console code page, which mangles
+// non-ASCII UTF-8. ok=false = pi returning undefined (fall through).
+func copyViaWindowsClipboard(text string) bool {
+	uuid := make([]byte, 16)
+	if _, err := rand.Read(uuid); err != nil {
+		return false
+	}
+	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("pi-wsl-clip-%x-%x-%x-%x.txt",
+		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10]))
+	defer func() { _ = os.Remove(tmpFile) }()
+	if err := os.WriteFile(tmpFile, []byte(text), 0o600); err != nil {
+		return false
+	}
+	winPath, ok := clipboardRunCommandOptionsFn("wslpath", []string{"-w", tmpFile},
+		&clipboardCommandOptions{TimeoutMs: 1000})
+	if !ok {
+		return false
+	}
+	winPathStr := strings.TrimSpace(string(winPath))
+	if winPathStr == "" {
+		return false
+	}
+	script := fmt.Sprintf(`Set-Clipboard -Value ([System.IO.File]::ReadAllText('%s', [System.Text.Encoding]::UTF8))`,
+		strings.ReplaceAll(winPathStr, "'", "''"))
+	_, ok = clipboardRunCommandOptionsFn("powershell.exe", []string{"-NoProfile", "-Command", script},
+		&clipboardCommandOptions{TimeoutMs: clipboardCommandTimeoutMs})
+	return ok
+}
+
 // CopyToClipboard writes text to the system clipboard, preferring direct
 // clipboard writes and emitting OSC 52 for remote sessions (pi:
 // copyToClipboard; v0.86.0 — "Direct writes precede OSC 52 so the terminal
-// cannot race the native writer"). See the file header for the native-addon
-// deviation.
+// cannot race the native writer"; v0.86.1 — WSL routes + OSC 52 for headless
+// sessions, #9688). See the file header for the native-addon deviation.
 func CopyToClipboard(text string) error {
 	p := clipboardPlatformFn()
 	copied := false
@@ -159,24 +194,42 @@ func CopyToClipboard(text string) error {
 		}
 	}
 
-	if isRemoteSession(nil) {
-		copied = emitOsc52(text) || copied
-	}
-
-	if !copied {
-		if p == "linux" {
-			if os.Getenv("TERMUX_VERSION") != "" {
-				return fmt.Errorf("Clipboard unavailable: install the Termux:API app and `termux-api` package")
-			}
-			if os.Getenv("WAYLAND_DISPLAY") != "" {
-				return fmt.Errorf("Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access")
-			}
-			if os.Getenv("DISPLAY") != "" {
-				return fmt.Errorf("Clipboard unavailable: install `xclip` or `xsel`, or check X11 access")
-			}
-			return fmt.Errorf("Clipboard unavailable: no Wayland or X11 display detected")
+	osc52Emitted := false
+	if !copied && p == "linux" && isWSL(nil) {
+		// Windows Terminal supports OSC 52; prefer it over the slower PowerShell round trip.
+		if os.Getenv("WT_SESSION") != "" {
+			osc52Emitted = emitOsc52(text)
 		}
-		return fmt.Errorf("Clipboard unavailable")
+		copied = osc52Emitted || copyViaWindowsClipboard(text)
 	}
-	return nil
+	// OSC 52 cannot be verified, so a desktop session with a display reports the failure
+	// instead (#9618). Without a display the terminal is the only clipboard route (containers,
+	// WSL without WSLg), and remote sessions always emit it to reach the client clipboard.
+	headless := p == "linux" && os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" && os.Getenv("TERMUX_VERSION") == ""
+	oversized := false
+	if !osc52Emitted && (isRemoteSession(nil) || (!copied && headless)) {
+		if emitOsc52(text) {
+			copied = true
+		} else {
+			oversized = true
+		}
+	}
+	if copied {
+		return nil
+	}
+	if oversized {
+		return fmt.Errorf("Clipboard unavailable: text exceeds the OSC 52 size limit")
+	}
+	if p == "linux" {
+		if os.Getenv("TERMUX_VERSION") != "" {
+			return fmt.Errorf("Clipboard unavailable: install the Termux:API app and `termux-api` package")
+		}
+		if os.Getenv("WAYLAND_DISPLAY") != "" {
+			return fmt.Errorf("Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access")
+		}
+		if os.Getenv("DISPLAY") != "" {
+			return fmt.Errorf("Clipboard unavailable: install `xclip` or `xsel`, or check X11 access")
+		}
+	}
+	return fmt.Errorf("Clipboard unavailable")
 }

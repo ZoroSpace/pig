@@ -29,6 +29,13 @@ type ExtensionEditorComponent struct {
 	focused bool
 }
 
+// ExtensionEditorOptions carries ExtensionEditorComponent-specific options
+// (pi: ExtensionEditorOptions extends EditorOptions with description).
+type ExtensionEditorOptions struct {
+	*tui.EditorOptions
+	Description string
+}
+
 // NewExtensionEditorComponent builds the editor (pi: constructor). prefill ""
 // = pi's undefined; externalEditorCommand "" falls back to VISUAL/EDITOR or
 // notepad/nano per platform.
@@ -39,7 +46,7 @@ func NewExtensionEditorComponent(
 	prefill string,
 	onSubmit func(value string),
 	onCancel func(),
-	options *tui.EditorOptions,
+	options *ExtensionEditorOptions,
 	externalEditorCommand string,
 ) *ExtensionEditorComponent {
 	c := &ExtensionEditorComponent{
@@ -62,18 +69,28 @@ func NewExtensionEditorComponent(
 			}
 		}
 	}
+	var editorOptions *tui.EditorOptions
+	description := ""
+	if options != nil {
+		editorOptions = options.EditorOptions
+		description = options.Description
+	}
 	currentTheme := theme.Current()
 
 	// Add top border
 	c.AddChild(NewDynamicBorder(nil))
 	c.AddChild(tui.NewSpacer(1))
 
-	// Add title
+	// Add title and optional description
 	c.AddChild(tui.NewText(currentTheme.Fg("accent", title), 1, 0))
+	if description != "" {
+		c.AddChild(tui.NewSpacer(1))
+		c.AddChild(tui.NewText(currentTheme.Fg("text", description), 1, 0))
+	}
 	c.AddChild(tui.NewSpacer(1))
 
 	// Create editor
-	c.editor = tui.NewEditor(tui_, theme.GetEditorTheme(), options)
+	c.editor = tui.NewEditor(tui_, theme.GetEditorTheme(), editorOptions)
 	if prefill != "" {
 		c.editor.SetText(prefill)
 	}
