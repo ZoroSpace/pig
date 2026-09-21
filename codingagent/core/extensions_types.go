@@ -1059,6 +1059,30 @@ type BeforeAgentStartCombinedResult struct {
 	SystemPromptOptions NormalizedBuildSystemPromptOptions `json:"systemPromptOptions"`
 }
 
+// UserBashEvent fires before the shell executes a `!` command (pi:
+// UserBashEvent).
+type UserBashEvent struct {
+	Type string `json:"type"`
+	// Command is the command to execute.
+	Command string `json:"command"`
+	// ExcludeFromContext is true for the !! prefix (excluded from LLM
+	// context).
+	ExcludeFromContext bool `json:"excludeFromContext"`
+	// Cwd is the current working directory.
+	Cwd string `json:"cwd"`
+}
+
+func (e *UserBashEvent) EventType() string { return e.Type }
+
+// UserBashEventResult intercepts a `!` command (pi: UserBashEventResult —
+// the `{ operations } | { result }` union; exactly one half is set).
+type UserBashEventResult struct {
+	// Operations customizes execution (pi: { operations }).
+	Operations *tools.BashOperations
+	// Result fully replaces execution (pi: { result }).
+	Result *BashResult
+}
+
 // InputEvent fires when the user submits input (pi: InputEvent).
 type InputEvent struct {
 	Type   string               `json:"type"`

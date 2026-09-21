@@ -1,6 +1,8 @@
 // interactive_mode_assistant_diagnostics_test.go (pi:
-// test/interactive-mode-assistant-diagnostics.test.ts, v0.85.1) — transcript
-// notices for Anthropic thinking blocks dropped by input transformations.
+// test/interactive-mode-assistant-diagnostics.test.ts, v0.86.0) — the
+// Anthropic thinking-drop notice now reports a count with a previous-response
+// comparison (maybeShowThinkingDropNotice replacing
+// maybeShowAssistantDiagnostics).
 package interactive
 
 import (
@@ -32,6 +34,16 @@ func diagnosticsTestMessage() *types.AssistantMessage {
 							"path":   "messages.2.content.0",
 							"reason": "prefix_binding_mismatch",
 						},
+						map[string]any{
+							"type":   "thinking_dropped",
+							"path":   "messages.5.content.0",
+							"reason": "prefix_binding_mismatch",
+						},
+						map[string]any{
+							"type":   "thinking_dropped",
+							"path":   "messages.8.content.0",
+							"reason": "prefix_binding_mismatch",
+						},
 					},
 				},
 			},
@@ -39,7 +51,7 @@ func diagnosticsTestMessage() *types.AssistantMessage {
 	}
 }
 
-func TestMaybeShowAssistantDiagnostics(t *testing.T) {
+func TestMaybeShowThinkingDropNotice(t *testing.T) {
 	initTestTheme(t)
 
 	t.Run("shows Anthropic thinking drops when cache miss notices are enabled", func(t *testing.T) {
@@ -48,9 +60,9 @@ func TestMaybeShowAssistantDiagnostics(t *testing.T) {
 		})
 		m := newSeamTestMode(session, nil)
 
-		m.maybeShowAssistantDiagnostics(diagnosticsTestMessage())
+		m.maybeShowThinkingDropNotice(diagnosticsTestMessage())
 		output := utils.StripAnsi(strings.Join(m.chatContainer.Render(120), "\n"))
-		if !strings.Contains(output, "Anthropic dropped thinking block: prefix_binding_mismatch at messages.2.content.0") {
+		if !strings.Contains(output, "Anthropic dropped 3 thinking blocks (details in session)") {
 			t.Fatalf("missing diagnostics notice:\n%s", output)
 		}
 	})
@@ -61,7 +73,30 @@ func TestMaybeShowAssistantDiagnostics(t *testing.T) {
 		})
 		m := newSeamTestMode(session, nil)
 
-		m.maybeShowAssistantDiagnostics(diagnosticsTestMessage())
+		m.maybeShowThinkingDropNotice(diagnosticsTestMessage())
+		if len(m.chatContainer.Children) != 0 {
+			t.Fatalf("expected empty chat container, got %d children", len(m.chatContainer.Children))
+		}
+	})
+
+	// pi v0.86.0: an unchanged drop count versus the branch's previous
+	// assistant response is silent.
+	t.Run("does not repeat unchanged Anthropic thinking drops", func(t *testing.T) {
+		session := createInteractiveTestSession(t, &fixtureResourceLoader{}, func(m *core.SettingsManager) {
+			m.ApplyOverrides(core.Settings{"showCacheMissNotices": true})
+		})
+		m := newSeamTestMode(session, nil)
+
+		previous := *diagnosticsTestMessage()
+		previous.Timestamp = 1
+		if _, err := session.SessionManager.AppendMessage(previous); err != nil {
+			t.Fatalf("AppendMessage: %v", err)
+		}
+
+		current := diagnosticsTestMessage()
+		current.Timestamp = 2
+		m.maybeShowThinkingDropNotice(current)
+
 		if len(m.chatContainer.Children) != 0 {
 			t.Fatalf("expected empty chat container, got %d children", len(m.chatContainer.Children))
 		}

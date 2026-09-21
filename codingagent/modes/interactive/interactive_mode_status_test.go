@@ -13,6 +13,7 @@
 package interactive
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -234,3 +235,106 @@ type stubGetClearOnShrinkTUI struct {
 }
 
 func (s *stubGetClearOnShrinkTUI) GetClearOnShrink() bool { return s.clearOnShrink }
+
+// pi v0.86.0: "routes every status through the editor opt-in" — every
+// StatusIndicator subtype (working/compaction/branchSummary/retry) embeds
+// into the editor border when the editor opts in, and lands in the status
+// container when it does not.
+func TestStatusIndicatorRoutesThroughEditorOptIn(t *testing.T) {
+	initTestTheme(t)
+	for _, embedWorkingStatus := range []bool{true, false} {
+		t.Run(fmt.Sprintf("embedWorkingStatus=%v", embedWorkingStatus), func(t *testing.T) {
+			m := newStatusTestMode()
+			editor := components.NewCustomEditor(&stubRequestRenderTUI{}, theme.GetEditorTheme(), core.CreateKeybindingsManager(""), &components.CustomEditorOptions{
+				EditorOptions:      tui.EditorOptions{},
+				EmbedWorkingStatus: embedWorkingStatus,
+			})
+			m.editor = editor
+			m.statusContainer = &tui.Container{}
+			m.options.TuiMode = "regular"
+			m.idleStatus = &components.IdleStatus{}
+			m.ui = &stubGetClearOnShrinkTUI{stubRequestRenderTUI: stubRequestRenderTUI{}, clearOnShrink: true}
+
+			indicators := []statusItemForTest{
+				components.NewWorkingStatusIndicator(m.ui, "Working", nil, nil),
+				components.NewCompactionStatusIndicator(m.ui, components.CompactionReasonManual),
+				components.NewCompactionStatusIndicator(m.ui, components.CompactionReasonThreshold),
+				components.NewCompactionStatusIndicator(m.ui, components.CompactionReasonOverflow),
+				components.NewBranchSummaryStatusIndicator(m.ui),
+				components.NewRetryStatusIndicator(m.ui, 1, 3, 1000),
+			}
+			for _, indicator := range indicators {
+				m.showStatusIndicator(indicator)
+				if m.activeStatusIndicator == nil {
+					t.Fatal("expected active indicator")
+				}
+				if m.activeWorkingIndicatorEmbedded != embedWorkingStatus {
+					t.Fatalf("embedded = %v, want %v", m.activeWorkingIndicatorEmbedded, embedWorkingStatus)
+				}
+				if embedWorkingStatus {
+					if len(m.statusContainer.Children) != 0 {
+						t.Fatalf("embedded indicator leaked into the status container")
+					}
+				} else if len(m.statusContainer.Children) != 1 {
+					t.Fatalf("standalone indicator missing from the status container")
+				}
+				m.clearStatusIndicator("")
+				if m.activeStatusIndicator != nil {
+					t.Fatal("expected indicator cleared")
+				}
+				if m.activeWorkingIndicatorEmbedded {
+					t.Fatal("embedded flag should reset on clear")
+				}
+			}
+		})
+	}
+}
+
+// pi v0.86.0: clearing any embedded kind frees the status row (the working
+// kind gate is gone from clearStatusIndicator).
+func TestClearStatusIndicatorFreesRowForEveryEmbeddedKind(t *testing.T) {
+	initTestTheme(t)
+	for _, kind := range []components.StatusIndicatorKind{
+		components.StatusKindWorking,
+		components.StatusKindCompaction,
+		components.StatusKindBranchSummary,
+		components.StatusKindRetry,
+	} {
+		m := newStatusTestMode()
+		m.statusContainer = &tui.Container{}
+		m.options.TuiMode = "regular"
+		m.idleStatus = &components.IdleStatus{}
+		m.ui = &stubGetClearOnShrinkTUI{stubRequestRenderTUI: stubRequestRenderTUI{}, clearOnShrink: true}
+
+		m.activeStatusIndicator = stubIndicatorItem{kind: kind}
+		m.activeWorkingIndicatorEmbedded = true
+		m.clearStatusIndicator("")
+		if m.activeStatusIndicator != nil {
+			t.Fatalf("%s: indicator not cleared", kind)
+		}
+		if len(m.statusContainer.Children) != 0 {
+			t.Fatalf("%s: idle filler restored for an embedded indicator", kind)
+		}
+	}
+}
+
+// statusItemForTest mirrors the interactive shell's statusIndicatorItem
+// surface for the routing test.
+type statusItemForTest interface {
+	tui.Component
+	Dispose()
+	IndicatorKind() components.StatusIndicatorKind
+	components.StatusBorderRenderer
+}
+
+// stubIndicatorItem is a bare statusIndicatorItem for clear-path tests.
+type stubIndicatorItem struct {
+	kind components.StatusIndicatorKind
+}
+
+func (s stubIndicatorItem) Render(int) []string                           { return nil }
+func (s stubIndicatorItem) Invalidate()                                   {}
+func (s stubIndicatorItem) Dispose()                                      {}
+func (s stubIndicatorItem) IndicatorKind() components.StatusIndicatorKind { return s.kind }
+func (s stubIndicatorItem) RenderInBorder(int) string                     { return "" }
+func (s stubIndicatorItem) RenderSpinnerInBorder(int) string              { return "" }

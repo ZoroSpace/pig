@@ -13,6 +13,7 @@
 package components
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -378,9 +379,14 @@ func flattenSessionTree(roots []*sessionTreeNode) []*flatSessionNode {
 // sessionList is the custom session list component with multi-line items and
 // search (pi: SessionList implements Component, Focusable).
 type sessionList struct {
-	allSessions                 []core.SessionInfo
-	filteredSessions            []*flatSessionNode
-	selectedIndex               int
+	allSessions      []core.SessionInfo
+	filteredSessions []*flatSessionNode
+	selectedIndex    int
+	// selectionTouched reports whether the user moved the selection since
+	// the last setSessions reset (pi v0.86.0: selectionTouched). While
+	// untouched, partial-progress updates keep the selection at index 0
+	// instead of fighting the user's cursor.
+	selectionTouched            bool
 	searchInput                 *tui.Input
 	showCwd                     bool
 	sortMode                    SortMode
@@ -479,9 +485,23 @@ func (l *sessionList) setNameFilter(nameFilter NameFilter) {
 }
 
 func (l *sessionList) setSessions(sessions []core.SessionInfo, showCwd bool) {
+	var selectedPath string
+	if l.selectionTouched {
+		selectedPath = l.GetSelectedSessionPath()
+	}
 	l.allSessions = sessions
 	l.showCwd = showCwd
 	l.filterSessions(l.searchInput.GetValue())
+	if !l.selectionTouched {
+		l.selectedIndex = 0
+	} else if selectedPath != "" {
+		for i, node := range l.filteredSessions {
+			if node.session.Path == selectedPath {
+				l.selectedIndex = i
+				break
+			}
+		}
+	}
 }
 
 func (l *sessionList) filterSessions(query string) {
@@ -781,6 +801,8 @@ func (l *sessionList) HandleInput(keyData string) {
 		return
 	}
 
+	l.selectionTouched = true
+
 	switch {
 	case kb.Matches(keyData, "tui.select.up"):
 		// Up arrow
@@ -813,10 +835,9 @@ func (l *sessionList) HandleInput(keyData string) {
 
 // sessionsLoader loads one scope's sessions (pi: SessionsLoader — async;
 // pig is sync and runs on a goroutine). onProgress may be nil. pi v0.86.0
-// adds partialSessions to the progress callback; pig threads it through
-// (v0.86.0 sync batch) while the selector keeps publishing only totals
-// until the S6-3b interactive batch reworks it.
-type sessionsLoader func(onProgress core.SessionListProgress) []core.SessionInfo
+// adds partialSessions to the progress callback; the loader receives the
+// load's context (pi: signal) so cancelLoads aborts an in-flight listing.
+type sessionsLoader func(ctx context.Context, onProgress core.SessionListProgress) []core.SessionInfo
 
 // sessionDeleteResult is the deleteSessionFile outcome (pi: inline return
 // type { ok, method, error? }).
@@ -917,9 +938,12 @@ type SessionSelectorComponent struct {
 	allSessionsLoader     sessionsLoader
 	requestRender         func()
 	renameSession         func(sessionPath string, nextName string) error
-	currentLoading        bool
-	allLoading            bool
-	allLoadSeq            int
+	// currentLoad/allLoad carry the in-flight load's cancellation (pi
+	// v0.86.0: currentLoad/allLoad AbortControllers). nil = idle.
+	currentLoad    context.CancelFunc
+	allLoad        context.CancelFunc
+	currentLoadCtx context.Context
+	allLoadCtx     context.Context
 
 	mode             string // "list" | "rename"
 	renameInput      *tui.Input
@@ -987,14 +1011,17 @@ func NewSessionSelectorComponent(
 	clearStatusMessage := func() { s.header.setStatusMessage(nil, 0) }
 	s.sessionList.OnSelect = func(sessionPath string) {
 		clearStatusMessage()
+		s.cancelLoads()
 		onSelect(sessionPath)
 	}
 	s.sessionList.OnCancel = func() {
 		clearStatusMessage()
+		s.cancelLoads()
 		onCancel()
 	}
 	s.sessionList.OnExit = func() {
 		clearStatusMessage()
+		s.cancelLoads()
 		onExit()
 	}
 	s.sessionList.OnToggleScope = func() { s.toggleScope() }
@@ -1004,10 +1031,8 @@ func NewSessionSelectorComponent(
 		if s.renameSession == nil {
 			return
 		}
-		if s.scope == sessionScopeCurrent && s.currentLoading {
-			return
-		}
-		if s.scope == sessionScopeAll && s.allLoading {
+		if (s.scope == sessionScopeCurrent && s.currentLoad != nil) ||
+			(s.scope == sessionScopeAll && s.allLoad != nil) {
 			return
 		}
 
@@ -1076,7 +1101,7 @@ func NewSessionSelectorComponent(
 	}
 
 	// Start loading current sessions immediately
-	s.loadCurrentSessions()
+	s.loadScope(sessionScopeCurrent)
 	return s
 }
 
@@ -1138,8 +1163,146 @@ func (s *SessionSelectorComponent) buildBaseLayout(content tui.Component, showHe
 	s.AddChild(NewDynamicBorder(func(text string) string { return theme.Fg("accent", text) }))
 }
 
-func (s *SessionSelectorComponent) loadCurrentSessions() {
-	s.loadScope(sessionScopeCurrent, "initial")
+// cancelLoads aborts both in-flight loads and clears their cached results
+// (pi v0.86.0: cancelLoads).
+func (s *SessionSelectorComponent) cancelLoads() {
+	if s.currentLoad != nil {
+		s.currentLoad()
+		s.currentLoad = nil
+		s.currentSessions = nil
+		s.hasCurrentSessions = false
+	}
+	if s.allLoad != nil {
+		s.allLoad()
+		s.allLoad = nil
+		s.allSessions = nil
+		s.hasAllSessions = false
+	}
+}
+
+// loadScope (re)loads one scope's sessions (pi: loadScope; v0.86.0 drops the
+// reason parameter, aborts via controllers, and applies partial progress).
+func (s *SessionSelectorComponent) loadScope(scope sessionScope) {
+	if (scope == sessionScopeCurrent && s.currentLoad != nil) ||
+		(scope == sessionScopeAll && s.allLoad != nil) {
+		return
+	}
+
+	showCwd := scope == sessionScopeAll
+	loadCtx, cancel := context.WithCancel(context.Background())
+	if scope == sessionScopeCurrent {
+		s.currentLoad = cancel
+		s.currentLoadCtx = loadCtx
+	} else {
+		s.allLoad = cancel
+		s.allLoadCtx = loadCtx
+	}
+	s.header.setScope(scope)
+	s.header.setLoading(true)
+	s.requestRender()
+
+	isActive := func() bool {
+		if scope == sessionScopeCurrent {
+			return s.currentLoad != nil && s.currentLoadCtx == loadCtx
+		}
+		return s.allLoad != nil && s.allLoadCtx == loadCtx
+	}
+	onProgress := func(loaded, total int, partialSessions []core.SessionInfo) {
+		if !isActive() {
+			return
+		}
+		s.mutate(func() {
+			if partialSessions != nil {
+				sessions := append([]core.SessionInfo(nil), partialSessions...)
+				if scope == sessionScopeCurrent {
+					s.currentSessions = sessions
+					s.hasCurrentSessions = true
+				} else {
+					s.allSessions = sessions
+					s.hasAllSessions = true
+				}
+				if scope == s.scope {
+					s.sessionList.setSessions(sessions, showCwd)
+				}
+			}
+			if scope != s.scope {
+				return
+			}
+			s.header.setProgress(loaded, total)
+			s.requestRender()
+		})
+	}
+
+	// pi: await loader — the sync loader runs on a goroutine (pig
+	// concurrency note).
+	go func() {
+		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
+		defer pigutils.RecoverPanic("components.sessionSelector.load")
+		var sessions []core.SessionInfo
+		var loadErr error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					loadErr = fmt.Errorf("%v", r)
+				}
+			}()
+			if scope == sessionScopeCurrent {
+				sessions = s.currentSessionsLoader(loadCtx, onProgress)
+			} else {
+				sessions = s.allSessionsLoader(loadCtx, onProgress)
+			}
+		}()
+
+		s.mutate(func() {
+			if !isActive() {
+				return
+			}
+			if loadErr == nil {
+				if scope == sessionScopeCurrent {
+					s.currentSessions = sessions
+					s.hasCurrentSessions = true
+					s.currentLoad = nil
+					s.currentLoadCtx = nil
+				} else {
+					s.allSessions = sessions
+					s.hasAllSessions = true
+					s.allLoad = nil
+					s.allLoadCtx = nil
+				}
+			} else {
+				if scope == sessionScopeCurrent {
+					s.currentLoad = nil
+					s.currentLoadCtx = nil
+					s.currentSessions = nil
+					s.hasCurrentSessions = false
+				} else {
+					s.allLoad = nil
+					s.allLoadCtx = nil
+					s.allSessions = nil
+					s.hasAllSessions = false
+				}
+			}
+
+			if scope != s.scope {
+				return
+			}
+
+			if loadErr != nil {
+				s.header.setLoading(false)
+				s.header.setStatusMessage(&sessionStatusMessage{
+					kind:    statusKindError,
+					message: fmt.Sprintf("Failed to load sessions: %s", errorMessageOf(loadErr)),
+				}, 4000)
+				s.sessionList.setSessions(nil, showCwd)
+				s.requestRender()
+				return
+			}
+
+			s.header.setLoading(false)
+			s.sessionList.setSessions(sessions, showCwd)
+			s.requestRender()
+		})
+	}()
 }
 
 func (s *SessionSelectorComponent) enterRenameMode(sessionPath string, currentName string) {
@@ -1199,115 +1362,6 @@ func (s *SessionSelectorComponent) confirmRename(value string) {
 	s.exitRenameMode()
 }
 
-// loadScopeReason mirrors pi's reason parameter.
-type loadScopeReason string
-
-const (
-	loadScopeInitial loadScopeReason = "initial"
-	loadScopeRefresh loadScopeReason = "refresh"
-	loadScopeToggle  loadScopeReason = "toggle"
-)
-
-func (s *SessionSelectorComponent) loadScope(scope sessionScope, reason loadScopeReason) {
-	showCwd := scope == sessionScopeAll
-
-	// Mark loading
-	if scope == sessionScopeCurrent {
-		s.currentLoading = true
-	} else {
-		s.allLoading = true
-	}
-
-	seq := -1
-	if scope == sessionScopeAll {
-		s.allLoadSeq++
-		seq = s.allLoadSeq
-	}
-	s.header.setScope(scope)
-	s.header.setLoading(true)
-	s.requestRender()
-
-	onProgress := func(loaded, total int, partialSessions []core.SessionInfo) {
-		_ = partialSessions // consumed by the interactive batch (pi v0.86.0)
-		s.mutate(func() {
-			if scope != s.scope {
-				return
-			}
-			if seq != -1 && seq != s.allLoadSeq {
-				return
-			}
-			s.header.setProgress(loaded, total)
-			s.requestRender()
-		})
-	}
-
-	// pi: await loader — the sync loader runs on a goroutine (pig
-	// concurrency note).
-	go func() {
-		// pig panic containment (see docs/feat/PANIC-RESILIENCE.md).
-		defer pigutils.RecoverPanic("components.sessionSelector.load")
-		var sessions []core.SessionInfo
-		var loadErr error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					loadErr = fmt.Errorf("%v", r)
-				}
-			}()
-			if scope == sessionScopeCurrent {
-				sessions = s.currentSessionsLoader(onProgress)
-			} else {
-				sessions = s.allSessionsLoader(onProgress)
-			}
-		}()
-
-		s.mutate(func() {
-			if loadErr == nil {
-				if scope == sessionScopeCurrent {
-					s.currentSessions = sessions
-					s.hasCurrentSessions = true
-					s.currentLoading = false
-				} else {
-					s.allSessions = sessions
-					s.hasAllSessions = true
-					s.allLoading = false
-				}
-			} else {
-				if scope == sessionScopeCurrent {
-					s.currentLoading = false
-				} else {
-					s.allLoading = false
-				}
-			}
-
-			if scope != s.scope {
-				return
-			}
-			if seq != -1 && seq != s.allLoadSeq {
-				return
-			}
-
-			if loadErr != nil {
-				s.header.setLoading(false)
-				s.header.setStatusMessage(&sessionStatusMessage{
-					kind:    statusKindError,
-					message: fmt.Sprintf("Failed to load sessions: %s", errorMessageOf(loadErr)),
-				}, 4000)
-
-				if reason == loadScopeInitial {
-					s.sessionList.setSessions(nil, showCwd)
-				}
-				s.requestRender()
-				return
-			}
-
-			s.header.setLoading(false)
-			s.sessionList.setSessions(sessions, showCwd)
-			s.requestRender()
-		})
-	}()
-}
-
 func (s *SessionSelectorComponent) toggleSortMode() {
 	// Cycle: threaded -> recent -> relevance -> threaded
 	if s.sortMode == SortModeThreaded {
@@ -1333,33 +1387,48 @@ func (s *SessionSelectorComponent) toggleNameFilter() {
 	s.requestRender()
 }
 
+// refreshSessionsAfterMutation restarts the current scope's load (pi:
+// refreshSessionsAfterMutation; v0.86.0 aborts in-flight loads first).
 func (s *SessionSelectorComponent) refreshSessionsAfterMutation() {
-	s.loadScope(s.scope, loadScopeRefresh)
+	s.cancelLoads()
+	s.currentSessions = nil
+	s.hasCurrentSessions = false
+	s.allSessions = nil
+	s.hasAllSessions = false
+	s.loadScope(s.scope)
 }
 
+// toggleScope switches between the current project and the global list (pi:
+// toggleScope; v0.86.0 unifies the branch shape).
 func (s *SessionSelectorComponent) toggleScope() {
 	if s.scope == sessionScopeCurrent {
 		s.scope = sessionScopeAll
-		s.header.setScope(s.scope)
-
-		if s.hasAllSessions {
-			s.header.setLoading(false)
-			s.sessionList.setSessions(s.allSessions, true)
-			s.requestRender()
-			return
-		}
-
-		if !s.allLoading {
-			s.loadScope(sessionScopeAll, loadScopeToggle)
-		}
-		return
+	} else {
+		s.scope = sessionScopeCurrent
 	}
-
-	s.scope = sessionScopeCurrent
+	var sessions []core.SessionInfo
+	hasSessions := false
+	loading := false
+	if s.scope == sessionScopeCurrent {
+		sessions = s.currentSessions
+		hasSessions = s.hasCurrentSessions
+		loading = s.currentLoad != nil
+	} else {
+		sessions = s.allSessions
+		hasSessions = s.hasAllSessions
+		loading = s.allLoad != nil
+	}
 	s.header.setScope(s.scope)
-	s.header.setLoading(s.currentLoading)
-	s.sessionList.setSessions(s.currentSessions, false)
+	s.header.setLoading(loading)
+	if hasSessions {
+		s.sessionList.setSessions(sessions, s.scope == sessionScopeAll)
+	} else {
+		s.sessionList.setSessions(nil, s.scope == sessionScopeAll)
+	}
 	s.requestRender()
+	if !hasSessions && !loading {
+		s.loadScope(s.scope)
+	}
 }
 
 // GetSessionList exposes the inner list (pi: getSessionList).

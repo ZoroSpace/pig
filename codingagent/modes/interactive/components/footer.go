@@ -262,6 +262,14 @@ func (f *FooterComponent) Render(width int) []string {
 	var latestCacheHitRate *float64
 
 	for _, entry := range view.entries() {
+		// pi v0.86.0: usage entries feed the totals (e.g. cache-warming
+		// refreshes paid on their own).
+		if usageEntry, ok := entry.(*core.UsageEntry); ok {
+			if usageEntry.Usage != nil {
+				core.AddUsageToTotals(&usageTotals, *usageEntry.Usage)
+			}
+			continue
+		}
 		if messageEntry, ok := entry.(*core.SessionMessageEntry); ok {
 			switch messageEntry.Message.MessageRole() {
 			case types.RoleAssistant:

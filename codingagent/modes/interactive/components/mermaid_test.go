@@ -101,8 +101,25 @@ func TestMermaidRendersIncompleteBlocksDuringStreaming(t *testing.T) {
 	}
 }
 
-func TestMermaidFallsBackWithWarningAfterStreaming(t *testing.T) {
+// pi v0.86.0 (grok-mermaid 0.2.3): `A:::class --> B` parses — the class tag
+// is swallowed instead of dropping the rest of the line.
+func TestMermaidRendersDiagramsClassAssignments(t *testing.T) {
 	markdown := "```mermaid\nflowchart LR\n  A[Foo]:::highlight --> B[Bar]\n```"
+	rendered := transformMermaid(markdown, transformOptions{})
+
+	if strings.Contains(rendered, "```mermaid") {
+		t.Errorf("expected rendered to not contain ```mermaid\nrendered:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Mermaid diagram not rendered") {
+		t.Errorf("expected rendered to not contain the warning\nrendered:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "│ Foo ├───▶│ Bar │") {
+		t.Errorf("expected rendered to contain the linked nodes\nrendered:\n%s", rendered)
+	}
+}
+
+func TestMermaidFallsBackWithWarningAfterStreaming(t *testing.T) {
+	markdown := "```mermaid\nflowchart LR\n  A[Foo] invalid\n```"
 	final := transformMermaid(markdown, transformOptions{})
 	followedByText := transformMermaid(markdown+"\nFollowing text", transformOptions{})
 	streaming := transformMermaid(markdown, transformOptions{isStreaming: true})
@@ -113,7 +130,7 @@ func TestMermaidFallsBackWithWarningAfterStreaming(t *testing.T) {
 	if !strings.Contains(final, "```\n`Mermaid diagram not rendered") {
 		t.Errorf("expected final to contain the warning\nfinal:\n%s", final)
 	}
-	if !strings.Contains(final, `dropped, expected a link: ":::highlight --> B[Bar]"`) {
+	if !strings.Contains(final, `dropped, expected a link: "invalid"`) {
 		t.Errorf("expected final to contain the dropped link warning\nfinal:\n%s", final)
 	}
 	if strings.Contains(final, "more)") {
@@ -128,25 +145,25 @@ func TestMermaidFallsBackWithWarningAfterStreaming(t *testing.T) {
 	if strings.Contains(streaming, "```mermaid") {
 		t.Errorf("expected streaming to not contain ```mermaid\nstreaming:\n%s", streaming)
 	}
-	if !strings.Contains(streaming, "│ Foo │") {
-		t.Errorf("expected streaming to contain the rendered node\nstreaming:\n%s", streaming)
+	if strings.Contains(streaming, "Mermaid diagram not rendered") {
+		t.Errorf("expected streaming to not contain the warning\nstreaming:\n%s", streaming)
 	}
 }
 
 func TestMermaidSummarizesAdditionalPartialRenderWarnings(t *testing.T) {
-	markdown := "```mermaid\nflowchart LR\n  A[Foo]:::highlight --> B[Bar]\n  C[Baz]:::other --> D[Qux]\n```"
+	markdown := "```mermaid\nflowchart LR\n  A[Foo] invalid\n  B[Bar] also-invalid\n```"
 	rendered := transformMermaid(markdown, transformOptions{})
 
 	if !strings.Contains(rendered, markdown) {
 		t.Errorf("expected rendered to contain the source markdown\nrendered:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, `dropped, expected a link: ":::highlight --> B[Bar]"`) {
+	if !strings.Contains(rendered, `dropped, expected a link: "invalid"`) {
 		t.Errorf("expected rendered to contain the first warning\nrendered:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "(+1 more)") {
 		t.Errorf("expected rendered to contain (+1 more)\nrendered:\n%s", rendered)
 	}
-	if strings.Contains(rendered, `dropped, expected a link: ":::other --> D[Qux]"`) {
+	if strings.Contains(rendered, `dropped, expected a link: "also-invalid"`) {
 		t.Errorf("expected rendered to not contain the second warning\nrendered:\n%s", rendered)
 	}
 }

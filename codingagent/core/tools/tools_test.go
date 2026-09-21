@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1733,4 +1734,101 @@ func TestToolCwdResolution(t *testing.T) {
 			t.Fatalf("output = %q, want %q", output, testDir)
 		}
 	})
+}
+
+// pi v0.86.0 (#9577/#9068): signal-killed shells report 128 + signal number
+// and a null exit code from custom operations fails closed.
+func TestBashToolSignalAndNullExitCodes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pi: it.skipIf(process.platform === \"win32\") — Unix signals")
+	}
+	testDir := newTestDir(t)
+
+	t.Run("should map signal-killed commands to 128 plus the signal number", func(t *testing.T) {
+		ops := CreateLocalBashOperations(testDir, nil)
+		for _, tc := range []struct {
+			signal   string
+			exitCode int
+		}{
+			{"KILL", 137},
+			{"TERM", 143},
+		} {
+			exitCode, err := ops.Exec(context.Background(), "kill -"+tc.signal+" $$", testDir, &BashExecOptions{OnData: func([]byte) {}})
+			if err != nil {
+				t.Fatalf("kill -%s: %v", tc.signal, err)
+			}
+			if exitCode == nil || *exitCode != tc.exitCode {
+				t.Fatalf("kill -%s: exitCode = %v, want %d", tc.signal, exitCode, tc.exitCode)
+			}
+		}
+	})
+
+	t.Run("should reject signal-killed commands while preserving partial output", func(t *testing.T) {
+		shellPath, err := exec.LookPath("bash")
+		if err != nil {
+			shellPath = "/bin/sh"
+		}
+		bashTool := CreateBashTool(testDir, &BashToolOptions{ShellPath: shellPath})
+		for _, tc := range []struct {
+			signal   string
+			exitCode int
+		}{
+			{"KILL", 137},
+			{"TERM", 143},
+		} {
+			_, err := bashTool.ExecuteWithToolContext(context.Background(),
+				"test-call-signal-"+tc.signal,
+				map[string]any{"command": fmt.Sprintf("printf 'before-kill\\n'; kill -%s $$", tc.signal)},
+				nil, nil)
+			if err == nil {
+				t.Fatalf("kill -%s: expected error", tc.signal)
+			}
+			pattern := regexp.MustCompile(`before-kill\s+Command exited with code ` + strconv.Itoa(tc.exitCode) + `$`)
+			if !pattern.MatchString(err.Error()) {
+				t.Fatalf("kill -%s: err = %q, want match %v", tc.signal, err.Error(), pattern)
+			}
+		}
+	})
+
+	t.Run("should reject a null exit code from custom operations", func(t *testing.T) {
+		operations := BashOperations{
+			Exec: func(ctx context.Context, command string, cwd string, options *BashExecOptions) (*int, error) {
+				options.OnData([]byte("partial\n"))
+				return nil, nil
+			},
+		}
+		bash := CreateBashTool(testDir, &BashToolOptions{Operations: &operations})
+		_, err := bash.ExecuteWithToolContext(context.Background(), "test-call-null-exit", map[string]any{"command": "remote"}, nil, nil)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		pattern := regexp.MustCompile(`partial\s+Command terminated without an exit code$`)
+		if !pattern.MatchString(err.Error()) {
+			t.Fatalf("err = %q, want match %v", err.Error(), pattern)
+		}
+	})
+}
+
+// pi v0.86.0 (#9628): formatDuration keeps short durations precise and makes
+// long shell durations readable.
+func TestFormatDurationTable(t *testing.T) {
+	for _, tc := range []struct {
+		ms        float64
+		formatted string
+	}{
+		{0, "0.0s"},
+		{4_200, "4.2s"},
+		{59_900, "59.9s"},
+		{59_999, "60.0s"},
+		{60_000, "1m 0s"},
+		{90_900, "1m 30s"},
+		{1_592_200, "26m 32s"},
+		{3_599_999, "59m 59s"},
+		{3_600_000, "1h 0m 0s"},
+		{7_384_900, "2h 3m 4s"},
+	} {
+		if got := formatDuration(tc.ms); got != tc.formatted {
+			t.Errorf("formatDuration(%v) = %q, want %q", tc.ms, got, tc.formatted)
+		}
+	}
 }

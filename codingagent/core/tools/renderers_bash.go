@@ -15,6 +15,7 @@ package tools
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -90,9 +91,20 @@ func (b *bashPreviewComponent) Invalidate() {
 	b.state.CachedSkipped = 0
 }
 
-// formatDuration renders seconds with one decimal (pi: formatDuration).
+// formatDuration renders short durations with one decimal and falls back to
+// m/h breakdowns for long shell runs (pi v0.86.0: formatDuration; #9628).
 func formatDuration(ms float64) string {
-	return fmt.Sprintf("%.1fs", ms/1000)
+	seconds := ms / 1000
+	if seconds < 60 {
+		return fmt.Sprintf("%.1fs", seconds)
+	}
+	totalSeconds := int64(math.Floor(seconds))
+	minutes := totalSeconds / 60
+	remainder := totalSeconds % 60
+	if minutes < 60 {
+		return fmt.Sprintf("%dm %ds", minutes, remainder)
+	}
+	return fmt.Sprintf("%dh %dm %ds", minutes/60, minutes%60, remainder)
 }
 
 // argsToMap normalizes raw call arguments to the map shape the renderers

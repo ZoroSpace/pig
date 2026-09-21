@@ -15,6 +15,8 @@ type ExtensionSelectorOptions struct {
 	Tui                   tui.TUI
 	Timeout               int
 	OnToggleToolsExpanded func()
+	// Description renders below the title (pi v0.86.0: description).
+	Description string
 }
 
 // ExtensionSelectorComponent renders an extension-provided option list.

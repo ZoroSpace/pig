@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 
 	"github.com/ZoroSpace/pig/codingagent/core"
@@ -11,8 +12,9 @@ import (
 	"github.com/samber/lo"
 )
 
-// SessionsLoader loads the session list (pi: SessionsLoader).
-type SessionsLoader = func(onProgress core.SessionListProgress) []core.SessionInfo
+// SessionsLoader loads the session list (pi: SessionsLoader; v0.86.0 adds
+// the signal parameter — pig threads the load's context).
+type SessionsLoader = func(ctx context.Context, onProgress core.SessionListProgress) []core.SessionInfo
 
 // SelectSession shows the TUI session selector and returns the selected
 // session path (ok=false if cancelled). The onExit callback exits the process

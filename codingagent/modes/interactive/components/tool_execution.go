@@ -76,11 +76,15 @@ type ToolExecutionComponent struct {
 	mu sync.Mutex
 }
 
-// imageConversion is pi's convertedImages value shape { data, mimeType };
-// populated by the Phase 8 Kitty transcoder.
+// imageConversion is pi v0.86.0's convertedImages value shape
+// { sourceData, sourceMimeType, data, mimeType }; populated by the Phase 8
+// Kitty transcoder. The source fields key the cache: a conversion that
+// finishes after the image was replaced must be dropped (#8577).
 type imageConversion struct {
-	Data     string
-	MimeType string
+	SourceData     string
+	SourceMimeType string
+	Data           string
+	MimeType       string
 }
 
 // NewToolExecutionComponent builds the component (pi: constructor).
@@ -302,8 +306,12 @@ func (c *ToolExecutionComponent) maybeConvertImagesForKitty() {
 	if caps.Images != "kitty" {
 		return
 	}
-	// Phase 8: convertToPng(img.Data, img.MimeType).then(converted => ...)
-	// per image block, filling c.convertedImages and re-rendering.
+	// Phase 8: convertToPng(sourceData, sourceMimeType).then(converted =>
+	// ...) per image block, filling c.convertedImages and re-rendering. pi
+	// v0.86.0 (#8577) adds the stale-conversion guard here: only record the
+	// conversion when the block at the same index still carries the source
+	// data/mimeType the conversion started from; the cache entry stores the
+	// source fields and the read side re-validates them.
 }
 
 // SetExpanded toggles the full-output view (pi: setExpanded).
@@ -510,10 +518,16 @@ func (c *ToolExecutionComponent) updateDisplay() {
 			// The Image component and Kitty transcoding arrive with Phase 8;
 			// until then caps.images is falsy and this stays unreachable.
 			if caps.Images != nil && caps.Images != false && c.showImages && img.Data != "" && img.MimeType != "" {
-				converted, hasConverted := c.convertedImages[i]
+				// pi v0.86.0 (#8577): a cached conversion only applies to the
+				// same source image it was computed from.
+				cached, hasConverted := c.convertedImages[i]
+				var converted *imageConversion
+				if hasConverted && cached.SourceData == img.Data && cached.SourceMimeType == img.MimeType {
+					converted = &cached
+				}
 				imageData := img.Data
 				imageMimeType := img.MimeType
-				if hasConverted {
+				if converted != nil {
 					imageData = converted.Data
 					imageMimeType = converted.MimeType
 				}

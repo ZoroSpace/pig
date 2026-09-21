@@ -66,19 +66,20 @@ func formatTokenCount(n int64) string {
 
 func (c *CompactionSummaryMessageComponent) updateDisplay() {
 	c.Clear()
+	content := &tui.Container{}
 
 	tokenStr := formatTokenCount(c.message.TokensBefore)
 	label := theme.Fg("customMessageLabel", "\x1b[1m[compaction]\x1b[22m")
-	c.AddChild(tui.NewText(label, 0, 0))
-	c.AddChild(tui.NewSpacer(1))
+	content.AddChild(tui.NewText(label, 0, 0))
+	content.AddChild(tui.NewSpacer(1))
 
 	if c.expanded {
 		header := "**Compacted from " + tokenStr + " tokens**\n\n"
-		c.AddChild(tui.NewMarkdown(header+c.message.Summary, 0, 0, c.markdownTheme, &tui.DefaultTextStyle{
+		content.AddChild(tui.NewMarkdown(header+c.message.Summary, 0, 0, c.markdownTheme, &tui.DefaultTextStyle{
 			Color: func(text string) string { return theme.Fg("customMessageText", text) },
 		}, nil))
 	} else {
-		c.AddChild(tui.NewText(
+		content.AddChild(tui.NewText(
 			theme.Fg("customMessageText", "Compacted from "+tokenStr+" tokens (")+
 				theme.Fg("dim", tools.KeyText("app.tools.expand"))+
 				theme.Fg("customMessageText", " to expand)"),
@@ -86,4 +87,13 @@ func (c *CompactionSummaryMessageComponent) updateDisplay() {
 			0,
 		))
 	}
+
+	// pi v0.86.0: a left click anywhere on the message toggles it.
+	c.AddChild(tui.NewMouseRegion(content, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
+		if event.Type != tui.MouseEventTypeClick || event.Button != tui.MouseButtonLeft {
+			return nil
+		}
+		c.SetExpanded(!c.expanded)
+		return &tui.TuiMouseEventResult{Handled: true}
+	}))
 }

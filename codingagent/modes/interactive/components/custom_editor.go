@@ -29,7 +29,7 @@ type CustomEditor struct {
 	// actionHandlers maps app actions to handlers (pi: actionHandlers).
 	actionHandlers map[core.AppKeybinding]func()
 
-	workingStatusIndicator *WorkingStatusIndicator
+	workingStatusIndicator StatusBorderRenderer
 	// EmbedWorkingStatus reports whether the working status is rendered in
 	// the editor top border (pi: readonly embedWorkingStatus).
 	EmbedWorkingStatus bool
@@ -77,9 +77,11 @@ func unwrapEditorOptions(options *CustomEditorOptions) *tui.EditorOptions {
 	return &options.EditorOptions
 }
 
-// SetWorkingStatusIndicator attaches the streaming indicator to embed in the
-// top border (pi: setWorkingStatusIndicator; nil = none).
-func (e *CustomEditor) SetWorkingStatusIndicator(indicator *WorkingStatusIndicator) {
+// SetWorkingStatusIndicator attaches the status indicator to embed in the
+// top border (pi: setWorkingStatusIndicator; nil = none; v0.86.0 widens the
+// type from WorkingStatusIndicator to StatusIndicator — working, compaction,
+// summarization, and retry all embed).
+func (e *CustomEditor) SetWorkingStatusIndicator(indicator StatusBorderRenderer) {
 	e.workingStatusIndicator = indicator
 }
 

@@ -2,6 +2,7 @@ package components
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,28 +37,34 @@ func TestStatusIndicators(t *testing.T) {
 		initTestTheme(t)
 		fakeTUI := &countRenderTUI{}
 		indicator := NewRetryStatusIndicator(fakeTUI, 1, 3, 1000)
-		callsBeforeDispose := fakeTUI.renderCalls
+		callsBeforeDispose := fakeTUI.renderCallCount()
 
 		indicator.Dispose()
 		// Give the ticker goroutine time to fire one tick if it were still
 		// running (pi: vi.advanceTimersByTime(2000)).
 		time.Sleep(1200 * time.Millisecond)
 
-		if fakeTUI.renderCalls != callsBeforeDispose {
-			t.Fatalf("requestRender after dispose: %d -> %d", callsBeforeDispose, fakeTUI.renderCalls)
+		if got := fakeTUI.renderCallCount(); got != callsBeforeDispose {
+			t.Fatalf("requestRender after dispose: %d -> %d", callsBeforeDispose, got)
 		}
 	})
 }
 
-// countRenderTUI stubs the TUI surface NewLoader consumes.
+// countRenderTUI stubs the TUI surface NewLoader consumes. The render
+// counter is atomic: the loader animation goroutine calls RequestRender
+// concurrently with the test goroutine (pi's event loop serializes these —
+// pig does not).
 type countRenderTUI struct {
 	tui.TUI
-	renderCalls int
+	renderCalls atomic.Int64
 }
 
 func (c *countRenderTUI) RequestRender(force bool) {
-	c.renderCalls++
+	c.renderCalls.Add(1)
 }
+
+// renderCallCount snapshots the counter.
+func (c *countRenderTUI) renderCallCount() int64 { return c.renderCalls.Load() }
 
 // editorBorderTUI adds the Terminal surface Editor.Render consumes (pi:
 // terminal: { rows: 10 }).
@@ -116,3 +123,61 @@ func TestStatusIndicatorEmbedsWorkingIndicatorInBorder(t *testing.T) {
 	}
 	indicator.Dispose()
 }
+
+// pi v0.86.0: "embeds compaction, summary, and retry labels within the border
+// width" — all StatusIndicator subtypes embed now (renderInBorder moved to
+// the base class); the editor border keeps its exact width at every panel
+// width and the retry countdown updates in place.
+func TestStatusIndicatorEmbedsAllIndicatorKindsInBorder(t *testing.T) {
+	initTestTheme(t)
+	editorTUI := &editorBorderTUI{countRenderTUI: countRenderTUI{}}
+	editor := NewCustomEditor(editorTUI, theme.GetEditorTheme(), core.CreateKeybindingsManager(""), &CustomEditorOptions{
+		EditorOptions:      tui.EditorOptions{},
+		EmbedWorkingStatus: true,
+	})
+	indicators := []tui.Component{
+		NewCompactionStatusIndicator(editorTUI, CompactionReasonManual),
+		NewCompactionStatusIndicator(editorTUI, CompactionReasonThreshold),
+		NewCompactionStatusIndicator(editorTUI, CompactionReasonOverflow),
+		NewBranchSummaryStatusIndicator(editorTUI),
+		NewRetryStatusIndicator(editorTUI, 1, 3, 3000),
+	}
+	defer func() {
+		for _, indicator := range indicators {
+			if disposer, ok := indicator.(interface{ Dispose() }); ok {
+				disposer.Dispose()
+			}
+		}
+	}()
+	for _, indicator := range indicators {
+		editor.SetWorkingStatusIndicator(indicator.(StatusBorderRenderer))
+		label := utils.StripAnsi(indicator.Render(120)[1])
+		label = strings.TrimSpace(label)
+		border := utils.StripAnsi(editor.Render(120)[0])
+		if !strings.Contains(border, "── "+label+" ") {
+			t.Fatalf("border %q missing label %q", border, label)
+		}
+		for _, width := range []int{1, 4, 10, 20, 80, 120} {
+			if got := visibleWidthOf(utils.StripAnsi(editor.Render(width)[0])); got != width {
+				t.Fatalf("editor border width %d: got %d", width, got)
+			}
+		}
+	}
+	// Retry countdown: after the delay elapses the retry message re-renders
+	// with the next second. (pi advances fake timers; pig waits the 1s
+	// countdown tick with a real sleep bounded to the test timeout.)
+	retry := indicators[4].(*RetryStatusIndicator)
+	editor.SetWorkingStatusIndicator(retry)
+	retry.SetMessage("Retrying (1/3) in 2s... (esc to cancel)")
+	time.Sleep(1100 * time.Millisecond)
+	if got := utils.StripAnsi(editor.Render(120)[0]); !strings.Contains(got, "Retrying (1/3) in 2s") {
+		t.Fatalf("retry countdown label missing: %q", got)
+	}
+	editor.SetWorkingStatusIndicator(nil)
+	if got := utils.StripAnsi(editor.Render(120)[0]); got != strings.Repeat("─", 120) {
+		t.Fatalf("expected plain border, got %q", got)
+	}
+}
+
+// visibleWidthOf wraps tui.VisibleWidth for the assertion above.
+func visibleWidthOf(text string) int { return tui.VisibleWidth(text) }

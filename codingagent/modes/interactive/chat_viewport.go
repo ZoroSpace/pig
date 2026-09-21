@@ -64,7 +64,7 @@ func createChatViewport(options chatViewportOptions) *chatViewport {
 	if options.widgetsBelow != nil {
 		dockChildren = append(dockChildren, tui.StackEntryOf(options.widgetsBelow, &tui.StackEntryOptions{Shrink: lo.ToPtr(1), MinSize: 0}))
 	}
-	dockChildren = append(dockChildren, tui.StackEntryOf(options.footer, &tui.StackEntryOptions{Shrink: lo.ToPtr(1), MinSize: 1}))
+	dockChildren = append(dockChildren, tui.StackEntryOf(options.footer, &tui.StackEntryOptions{Shrink: lo.ToPtr(1), MinSize: 0}))
 	dock := tui.NewVStack(dockChildren, nil)
 
 	root := tui.NewVStack([]tui.StackChild{

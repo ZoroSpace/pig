@@ -745,6 +745,61 @@ func (r *ExtensionRunner) Emit(ctx context.Context, event ExtensionEvent) (any, 
 	return lastResult, nil
 }
 
+// isUserBashEventResult validates a handler result (pi:
+// isUserBashEventResult — exactly one of { operations } / { result }).
+func isUserBashEventResult(value *UserBashEventResult) bool {
+	if value == nil {
+		return false
+	}
+	hasOperations := value.Operations != nil
+	hasResult := value.Result != nil
+	if hasOperations == hasResult {
+		return false
+	}
+	if hasOperations {
+		return value.Operations.Exec != nil
+	}
+	return value.Result != nil
+}
+
+// EmitUserBash runs user_bash handlers and returns the interception, if any
+// (pi: emitUserBash). nil result = run locally. A throwing handler is
+// reported and re-thrown (error return); an invalid result fails closed so
+// the `!` command never silently falls back to local execution (#9068).
+func (r *ExtensionRunner) EmitUserBash(ctx context.Context, event *UserBashEvent) (*UserBashEventResult, error) {
+	handlerCtxValue := r.CreateContext()
+	handlerCtx := &handlerCtxValue
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers[event.EventType()]
+		for _, handler := range handlers {
+			result, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         event.EventType(),
+					Error:         err.Error(),
+				})
+				return nil, err
+			}
+			if result == nil {
+				continue
+			}
+			validated, ok := result.(*UserBashEventResult)
+			if !ok || !isUserBashEventResult(validated) {
+				invalid := fmt.Errorf("Invalid user_bash handler result: return undefined for local execution or exactly one valid { operations } or { result } object")
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         event.EventType(),
+					Error:         invalid.Error(),
+				})
+				return nil, invalid
+			}
+			return validated, nil
+		}
+	}
+	return nil, nil
+}
+
 // EmitMessageEnd runs message_end handlers and returns the replacement
 // message, if any handler produced one (pi: emitMessageEnd).
 func (r *ExtensionRunner) EmitMessageEnd(ctx context.Context, event *MessageEndEvent) (agent.AgentMessage, error) {

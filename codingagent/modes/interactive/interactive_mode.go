@@ -135,11 +135,12 @@ type CompactionCostNotice struct {
 	Usage types.Usage
 }
 
-// renderSessionItem is one transcript item (pi: RenderSessionItem =
-// AgentMessage | custom SessionEntry | CompactionCostNotice).
+// renderSessionItem is one transcript item (pi v0.86.0: RenderSessionItem =
+// AgentMessage | custom|usage SessionEntry | CompactionCostNotice).
 type renderSessionItem struct {
 	message     agent.AgentMessage
 	customEntry *core.CustomEntry
+	usageEntry  *core.UsageEntry
 	costNotice  *CompactionCostNotice
 }
 
@@ -204,6 +205,10 @@ type statusIndicatorItem interface {
 	tui.Component
 	Dispose()
 	IndicatorKind() components.StatusIndicatorKind
+	// pi v0.86.0: the field is typed StatusIndicator, whose surface now
+	// includes the border-embed methods (all indicator subtypes inherit
+	// them).
+	components.StatusBorderRenderer
 }
 
 // InteractiveMode is the TUI application (pi: class InteractiveMode).
@@ -327,7 +332,11 @@ type InteractiveMode struct {
 
 	// Shutdown state
 	shutdownRequested bool
-	isShuttingDown    bool
+
+	// bugReportHintShown: the /bug hint renders at most once per session so
+	// error output stays readable (pi v0.86.0: bugReportHintShown).
+	bugReportHintShown bool
+	isShuttingDown     bool
 
 	options              InteractiveModeOptions
 	autoTrustOnReloadCwd string
@@ -872,6 +881,15 @@ func (m *InteractiveMode) Run(ctx context.Context) error {
 		m.ShowWarning(modelFallback)
 	}
 
+	if crash := core.TakeUnnotifiedCrash("", time.Time{}); crash != nil {
+		when := crash.Timestamp
+		if parsed, err := time.Parse(time.RFC3339Nano, crash.Timestamp); err == nil {
+			when = parsed.Local().Format("1/2/06, 3:04:05 PM")
+		}
+		m.ShowWarning(fmt.Sprintf("%s crashed on %s (%s). Run /bug to report it; the crash details are attached automatically.",
+			codingagent.AppName, when, crash.Message))
+	}
+
 	// Process initial messages
 	if m.options.InitialMessage != "" {
 		if err := m.session().Prompt(ctx, m.options.InitialMessage, &core.PromptOptions{Images: m.options.InitialImages}); err != nil {
@@ -1092,6 +1110,11 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 	case text == "/import" || strings.HasPrefix(text, "/import "):
 		m.editor.SetText("")
 		m.handleImportCommand(text)
+		return
+	case text == "/bug" || strings.HasPrefix(text, "/bug "):
+		hint := strings.TrimSpace(strings.TrimPrefix(text, "/bug"))
+		m.editor.SetText("")
+		m.handleBugCommand(ctx, hint)
 		return
 	case text == "/copy":
 		// pi: await handleCopyCommand() (defaults: flash=true, preferSelection=false)
@@ -1399,6 +1422,20 @@ func (m *InteractiveMode) handleSessionCommand() {
 	info.WriteString(current.Fg("dim", "Output:") + " " + formatLocaleInt(stats.Tokens.Output) + "\n")
 	info.WriteString(current.Fg("dim", "Total:") + " " + formatLocaleInt(stats.Tokens.Total) + "\n")
 
+	// pi v0.86.0: cache warming status section.
+	info.WriteString("\n" + current.Bold("Cache Warming") + "\n")
+	info.WriteString(current.Fg("dim", "Mode:") + " " + string(m.settingsManager().GetCacheWarmingMode()) + "\n")
+	warmingStatus, warmingAvailable := m.session().CacheWarmingStatus()
+	warmingText := "Inactive (cache warming unavailable)"
+	if warmingAvailable {
+		warmingText = core.FormatCacheWarmingStatus(warmingStatus, time.Now().UnixMilli())
+	}
+	info.WriteString(current.Fg("dim", "Status:") + " " + warmingText + "\n")
+	if warmingAvailable && warmingStatus.Decision != nil && warmingStatus.Decision.EconomicsAvailable {
+		info.WriteString(current.Fg("dim", "Cache miss penalty:") + fmt.Sprintf(" $%.3f\n", warmingStatus.Decision.MissCost))
+		info.WriteString(current.Fg("dim", "Refresh cost:") + fmt.Sprintf(" $%.3f\n", warmingStatus.Decision.WarmCost))
+	}
+
 	if stats.Cost > 0 || cacheWaste.MissedTokens > 0 {
 		info.WriteString("\n" + current.Bold("Cost") + "\n")
 		info.WriteString(current.Fg("dim", "Total:") + fmt.Sprintf(" $%.3f", stats.Cost))
@@ -1704,6 +1741,9 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 		if entry, ok := event.Entry.(*core.CustomEntry); ok {
 			m.addCustomEntryToChat(entry)
 			m.ui.RequestRender(false)
+		} else if entry, ok := event.Entry.(*core.UsageEntry); ok && entry.Kind == "cache_warm" {
+			m.addCacheWarmingUsage(entry)
+			m.ui.RequestRender(false)
 		}
 
 	case core.AgentSessionEventSessionInfoChanged:
@@ -1823,13 +1863,16 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 					}, false)
 				}
 				m.pendingTools = map[string]*components.ToolExecutionComponent{}
+				if m.streamingMessage.StopReason == types.StopReasonError {
+					m.suggestBugReport()
+				}
 			} else {
 				// Args are now complete - trigger diff computation for edit
 				// tools
 				for _, component := range m.pendingTools {
 					component.SetArgsComplete()
 				}
-				m.maybeShowAssistantDiagnostics(m.streamingMessage)
+				m.maybeShowThinkingDropNotice(m.streamingMessage)
 				m.maybeShowCacheMissNotice(m.streamingMessage)
 			}
 			m.streamingComponent = nil
@@ -2299,6 +2342,10 @@ func (m *InteractiveMode) renderSessionItems(items []renderSessionItem, options 
 			m.addCustomEntryToChat(item.customEntry)
 			continue
 		}
+		if item.usageEntry != nil {
+			m.addCacheWarmingUsage(item.usageEntry)
+			continue
+		}
 		if item.costNotice != nil {
 			m.addCompactionCostNotice(item.costNotice)
 			continue
@@ -2353,7 +2400,8 @@ func (m *InteractiveMode) renderSessionItems(items []renderSessionItem, options 
 				}
 			}
 			if assistant.StopReason != types.StopReasonAborted && assistant.StopReason != types.StopReasonError {
-				m.maybeShowAssistantDiagnostics(assistant)
+				// pi v0.86.0: diagnostics notices are not re-derived on
+				// rebuild (the details live in the session).
 				if miss := cacheMisses[assistant]; miss != nil {
 					m.addCacheMissNotice(miss)
 				}
@@ -2395,6 +2443,10 @@ func (m *InteractiveMode) renderSessionEntries(entries []core.SessionEntry, opti
 	for _, entry := range entries {
 		if custom, ok := entry.(*core.CustomEntry); ok {
 			items = append(items, renderSessionItem{customEntry: custom})
+			continue
+		}
+		if usage, ok := entry.(*core.UsageEntry); ok && usage.Kind == "cache_warm" {
+			items = append(items, renderSessionItem{usageEntry: usage})
 			continue
 		}
 		messages := core.SessionEntryToContextMessages(entry)
@@ -2448,14 +2500,20 @@ func (m *InteractiveMode) addCompactionCostNotice(notice *CompactionCostNotice) 
 		fmt.Sprintf("%s: %s tokens billed%s", label, components.FormatTokens(tokens), cost)), 1, 0))
 }
 
-// maybeShowAssistantDiagnostics surfaces assistant-message diagnostics as
-// transcript notices (pi: maybeShowAssistantDiagnostics, v0.85.1). Currently
-// reports Anthropic thinking blocks dropped by input transformations.
-func (m *InteractiveMode) maybeShowAssistantDiagnostics(message *types.AssistantMessage) {
+// addCacheWarmingUsage renders one persisted cache-warming usage notice (pi:
+// addCacheWarmingUsage, v0.86.0).
+func (m *InteractiveMode) addCacheWarmingUsage(entry *core.UsageEntry) {
 	if !m.settingsManager().GetShowCacheMissNotices() {
 		return
 	}
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(tui.NewText(theme.Current().Fg("dim", core.FormatCacheWarmingUsage(entry)), 1, 0))
+}
 
+// countDroppedThinkingBlocks counts Anthropic thinking_dropped
+// transformations in one message (pi: countDroppedThinkingBlocks, v0.86.0).
+func countDroppedThinkingBlocks(message *types.AssistantMessage) int {
+	count := 0
 	for _, diagnostic := range message.Diagnostics {
 		if diagnostic.Type != "anthropic_input_transformations" {
 			continue
@@ -2464,38 +2522,59 @@ func (m *InteractiveMode) maybeShowAssistantDiagnostics(message *types.Assistant
 		if !ok {
 			continue
 		}
-
-		dropped := make([]string, 0, len(transformations))
 		for _, transformation := range transformations {
 			details, ok := transformation.(map[string]any)
 			if !ok {
 				continue
 			}
-			if details["type"] != "thinking_dropped" {
-				continue
+			if details["type"] == "thinking_dropped" {
+				count++
 			}
-			reason := "unknown reason"
-			if r, ok := details["reason"].(string); ok {
-				reason = r
-			}
-			location := ""
-			if p, ok := details["path"].(string); ok {
-				location = " at " + p
-			}
-			dropped = append(dropped, reason+location)
 		}
-		if len(dropped) == 0 {
+	}
+	return count
+}
+
+// maybeShowThinkingDropNotice surfaces Anthropic thinking drops as a
+// transcript notice — only when the count grew versus the branch's previous
+// assistant response (pi: maybeShowThinkingDropNotice, v0.86.0, replacing
+// maybeShowAssistantDiagnostics).
+func (m *InteractiveMode) maybeShowThinkingDropNotice(message *types.AssistantMessage) {
+	if !m.settingsManager().GetShowCacheMissNotices() {
+		return
+	}
+
+	droppedCount := countDroppedThinkingBlocks(message)
+	if droppedCount == 0 {
+		return
+	}
+
+	previousDroppedCount := 0
+	// message_end reaches the UI before the current message is persisted,
+	// so the branch's last assistant message is the previous response.
+	branch := m.sessionManager().GetBranch("")
+	for i := len(branch) - 1; i >= 0; i-- {
+		entry, ok := branch[i].(*core.SessionMessageEntry)
+		if !ok || entry.Message.MessageRole() != types.RoleAssistant {
 			continue
 		}
-
-		noun := "thinking block"
-		if len(dropped) != 1 {
-			noun = fmt.Sprintf("%d thinking blocks", len(dropped))
+		assistant := asAssistantMessage(entry.Message)
+		if assistant != nil {
+			previousDroppedCount = countDroppedThinkingBlocks(assistant)
 		}
-		m.chatContainer.AddChild(tui.NewSpacer(1))
-		m.chatContainer.AddChild(tui.NewText(
-			theme.Fg("warning", fmt.Sprintf("Anthropic dropped %s: %s", noun, strings.Join(dropped, "; "))), 1, 0))
+		break
 	}
+	if droppedCount <= previousDroppedCount {
+		return
+	}
+
+	noun := "thinking block"
+	if droppedCount != 1 {
+		noun = "thinking blocks"
+	}
+	m.chatContainer.AddChild(tui.NewSpacer(1))
+	m.chatContainer.AddChild(tui.NewText(
+		theme.Fg("warning", fmt.Sprintf("Anthropic dropped %d %s (details in session)", droppedCount, noun)), 1, 0))
 }
 
 // maybeShowCacheMissNotice shows a transcript notice when a completed
@@ -2657,6 +2736,9 @@ func (m *InteractiveMode) uncaughtCrash(err error) {
 	}()
 	fmt.Fprintf(os.Stderr, "%s exiting due to uncaughtException:\n", codingagent.AppName)
 	fmt.Fprintln(os.Stderr, err)
+	if m.recordCrash(core.CrashKindUncaughtException, err, "") {
+		fmt.Fprintf(os.Stderr, "\n%s\n", m.crashReportInstructions())
+	}
 	os.Exit(1)
 }
 
@@ -2909,9 +2991,9 @@ func (m *InteractiveMode) ShowWarning(warningMessage string) {
 
 // setEditorWorkingStatusIndicator forwards the indicator to the active
 // editor when it opted into border embedding (pi:
-// setEditorWorkingStatusIndicator, v0.85.1). Returns false when the active
-// editor does not support it.
-func (m *InteractiveMode) setEditorWorkingStatusIndicator(indicator *components.WorkingStatusIndicator) bool {
+// setEditorWorkingStatusIndicator; v0.86.0 widens the indicator type to
+// StatusIndicator). Returns false when the active editor does not support it.
+func (m *InteractiveMode) setEditorWorkingStatusIndicator(indicator components.StatusBorderRenderer) bool {
 	m.defaultEditor.SetWorkingStatusIndicator(nil)
 	editor, ok := m.editor.(*components.CustomEditor)
 	if !ok || !editor.EmbedWorkingStatus {
@@ -2932,7 +3014,9 @@ func (m *InteractiveMode) showStatusIndicator(indicator statusIndicatorItem) {
 	m.activeWorkingIndicatorEmbedded = false
 	m.statusContainer.Clear()
 	m.setEditorWorkingStatusIndicator(nil)
-	if working, ok := indicator.(*components.WorkingStatusIndicator); ok && m.setEditorWorkingStatusIndicator(working) {
+	// pi v0.86.0: every StatusIndicator embeds — no WorkingStatusIndicator
+	// instanceof gate anymore.
+	if m.setEditorWorkingStatusIndicator(indicator) {
 		m.activeWorkingIndicatorEmbedded = true
 		return
 	}
@@ -2946,9 +3030,8 @@ func (m *InteractiveMode) clearStatusIndicator(kind components.StatusIndicatorKi
 		return
 	}
 	clearedIndicator := m.activeStatusIndicator
-	clearedIndicatorWasEmbedded := clearedIndicator != nil &&
-		clearedIndicator.IndicatorKind() == components.StatusKindWorking &&
-		m.activeWorkingIndicatorEmbedded
+	// pi v0.86.0: the embedded flag alone decides (no working-kind gate).
+	clearedIndicatorWasEmbedded := m.activeWorkingIndicatorEmbedded
 	if clearedIndicator != nil {
 		clearedIndicator.Dispose()
 	}
@@ -3049,7 +3132,8 @@ func (m *InteractiveMode) restoreQueuedMessagesToEditor(abort bool) int {
 	if len(allQueued) == 0 {
 		m.updatePendingMessagesDisplay()
 		if abort {
-			m.agent().Abort()
+			// pi v0.86.0 (#9340): route the abort through AgentSession.
+			_ = m.session().Abort(context.Background())
 		}
 		return 0
 	}
@@ -3066,7 +3150,8 @@ func (m *InteractiveMode) restoreQueuedMessagesToEditor(abort bool) int {
 	m.editor.SetText(combinedText)
 	m.updatePendingMessagesDisplay()
 	if abort {
-		m.agent().Abort()
+		// pi v0.86.0 (#9340): route the abort through AgentSession.
+		_ = m.session().Abort(context.Background())
 	}
 	return len(allQueued)
 }
@@ -3211,9 +3296,63 @@ func (m *InteractiveMode) flushPendingBashComponents() {
 // =========================================================================
 
 // handleBashCommand executes a `!` command and streams its output (pi:
-// handleBashCommand; the extension user_bash interception branch lands with
-// Phase 7 — the plain execution path runs here).
+// handleBashCommand). Extensions intercept via the user_bash event (pi
+// v0.86.0 fail-closed: a throwing handler or an invalid result aborts the
+// command with no local fallback — #9068).
 func (m *InteractiveMode) handleBashCommand(ctx context.Context, command string, excludeFromContext bool) {
+	// Emit user_bash event to let extensions intercept
+	var eventResult *core.UserBashEventResult
+	_, emitErr := func() (result *core.UserBashEventResult, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("%v", r)
+			}
+		}()
+		return m.session().GetExtensionRunner().EmitUserBash(ctx, &core.UserBashEvent{
+			Type:               "user_bash",
+			Command:            command,
+			ExcludeFromContext: excludeFromContext,
+			Cwd:                m.sessionManager().GetCwd(),
+		})
+	}()
+	if emitErr != nil {
+		// The extension runner already reported the error. Do not fall back
+		// to local execution (pi v0.86.0 try/catch — #9068).
+		return
+	}
+
+	// If extension returned a full result, use it directly
+	if eventResult != nil && eventResult.Result != nil {
+		result := eventResult.Result
+
+		// Create UI component for display
+		m.bashComponent = components.NewBashExecutionComponent(command, m.ui, excludeFromContext)
+		if m.session().IsStreaming() {
+			m.pendingMessagesContainer.AddChild(m.bashComponent)
+			m.pendingBashComponents = append(m.pendingBashComponents, m.bashComponent)
+		} else {
+			m.chatContainer.AddChild(m.bashComponent)
+		}
+
+		// Show output and complete
+		if result.Output != "" {
+			m.bashComponent.AppendOutput(result.Output)
+		}
+		var truncation *harnessutils.TruncationResult
+		if result.Truncated {
+			truncation = &harnessutils.TruncationResult{Truncated: true, Content: result.Output}
+		}
+		m.bashComponent.SetComplete(result.ExitCode, result.Cancelled, truncation, result.FullOutputPath)
+
+		// Record the result in session
+		exclude := excludeFromContext
+		m.session().RecordBashResult(command, *result, exclude)
+		m.bashComponent = nil
+		m.ui.RequestRender(false)
+		return
+	}
+
+	// Normal execution path (possibly with custom operations)
 	isDeferred := m.session().IsStreaming()
 	m.bashComponent = components.NewBashExecutionComponent(command, m.ui, excludeFromContext)
 
@@ -3227,12 +3366,17 @@ func (m *InteractiveMode) handleBashCommand(ctx context.Context, command string,
 	}
 	m.ui.RequestRender(false)
 
-	result, err := m.session().ExecuteBash(ctx, command, func(chunk string) {
+	operations := core.BashExecuteOptions{ExcludeFromContext: excludeFromContext}
+	if eventResult != nil && eventResult.Operations != nil {
+		operations.Operations = *eventResult.Operations
+		operations.HasOperations = true
+	}
+	result2, err := m.session().ExecuteBash(ctx, command, func(chunk string) {
 		if m.bashComponent != nil {
 			m.bashComponent.AppendOutput(chunk)
 			m.ui.RequestRender(false)
 		}
-	}, &core.BashExecuteOptions{ExcludeFromContext: excludeFromContext})
+	}, &operations)
 
 	if err != nil {
 		if m.bashComponent != nil {
@@ -3241,10 +3385,10 @@ func (m *InteractiveMode) handleBashCommand(ctx context.Context, command string,
 		m.ShowError("Bash command failed: " + errorMessageOf(err))
 	} else if m.bashComponent != nil {
 		var truncation *harnessutils.TruncationResult
-		if result.Truncated {
-			truncation = &harnessutils.TruncationResult{Truncated: true, Content: result.Output}
+		if result2.Truncated {
+			truncation = &harnessutils.TruncationResult{Truncated: true, Content: result2.Output}
 		}
-		m.bashComponent.SetComplete(result.ExitCode, result.Cancelled, truncation, result.FullOutputPath)
+		m.bashComponent.SetComplete(result2.ExitCode, result2.Cancelled, truncation, result2.FullOutputPath)
 	}
 
 	m.bashComponent = nil
@@ -5567,11 +5711,12 @@ func (m *InteractiveMode) setCustomEditorComponent(factory core.EditorFactory) {
 
 	m.mutateUI(func() {
 		m.editorContainer.AddChild(m.editor)
-		// Re-embed the working indicator when a custom editor without border
-		// embedding was swapped out (pi: setCustomEditorComponent tail, v0.85.1).
-		if working, ok := m.activeStatusIndicator.(*components.WorkingStatusIndicator); ok {
+		// Re-embed the active indicator when a custom editor without border
+		// embedding was swapped out (pi: setCustomEditorComponent tail;
+		// v0.86.0 drops the WorkingStatusIndicator instanceof gate).
+		if m.activeStatusIndicator != nil {
 			m.statusContainer.Clear()
-			m.activeWorkingIndicatorEmbedded = m.setEditorWorkingStatusIndicator(working)
+			m.activeWorkingIndicatorEmbedded = m.setEditorWorkingStatusIndicator(m.activeStatusIndicator)
 			if !m.activeWorkingIndicatorEmbedded {
 				m.statusContainer.AddChild(m.activeStatusIndicator)
 			}
@@ -5774,6 +5919,7 @@ func (m *InteractiveMode) showSettingsSelector() {
 				FollowUpMode:           string(m.session().FollowUpMode()),
 				Transport:              m.settingsManager().GetTransport(),
 				HTTPIdleTimeoutMs:      httpIdleTimeoutMs,
+				CacheWarmingMode:       m.settingsManager().GetCacheWarmingMode(),
 				ThinkingLevel:          thinkingLevel,
 				// pi: [...THINKING_LEVEL_OPTIONS] — read by no component code
 				// today (pi shape fidelity).
@@ -5851,6 +5997,10 @@ func (m *InteractiveMode) showSettingsSelector() {
 					// pi: configureHttpDispatcher(timeoutMs) — deferred (Node
 					// undici-specific; pig's HTTP layer has no global dispatcher).
 					m.showStatus("HTTP idle timeout: " + core.FormatHTTPIdleTimeoutMs(timeoutMs))
+				},
+				OnCacheWarmingModeChange: func(mode core.CacheWarmingMode) {
+					m.session().SetCacheWarmingMode(mode)
+					m.showStatus("Cache warming: " + string(mode))
 				},
 				OnModelThinkingLevelChange: func(provider string, modelID string, level agent.ThinkingLevel) {
 					m.settingsManager().SetModelThinkingLevel(provider, modelID, level)
@@ -6576,6 +6726,13 @@ func (m *InteractiveMode) handleTreeNavigation(entryID string, done func()) {
 		}
 	}
 
+	// pi v0.86.0 (#9178): recheck after the dialogs and streaming abort,
+	// before replacing another operation's UI.
+	if m.session().IsCompacting() {
+		m.ShowError("Wait for the current compaction or tree navigation to finish before navigating the session tree.")
+		return
+	}
+
 	// Set up escape handler and status indicator if summarizing
 	showingSummaryIndicator := false
 
@@ -6641,14 +6798,14 @@ func (m *InteractiveMode) handleTreeNavigation(entryID string, done func()) {
 func (m *InteractiveMode) showSessionSelector() {
 	m.showSelector(func(done func()) selectorComponent {
 		selector := components.NewSessionSelectorComponent(
-			func(onProgress core.SessionListProgress) []core.SessionInfo {
-				return core.ListSessions(context.Background(), m.sessionManager().GetCwd(), m.sessionManager().GetSessionDir(), onProgress)
+			func(ctx context.Context, onProgress core.SessionListProgress) []core.SessionInfo {
+				return core.ListSessions(ctx, m.sessionManager().GetCwd(), m.sessionManager().GetSessionDir(), onProgress)
 			},
-			func(onProgress core.SessionListProgress) []core.SessionInfo {
+			func(ctx context.Context, onProgress core.SessionListProgress) []core.SessionInfo {
 				if m.sessionManager().UsesDefaultSessionDir() {
-					return core.ListAllSessions(context.Background(), "", onProgress)
+					return core.ListAllSessions(ctx, "", onProgress)
 				}
-				return core.ListAllSessions(context.Background(), m.sessionManager().GetSessionDir(), onProgress)
+				return core.ListAllSessions(ctx, m.sessionManager().GetSessionDir(), onProgress)
 			},
 			func(sessionPath string) {
 				done()
@@ -7137,59 +7294,91 @@ func (m *InteractiveMode) showOAuthSelector(mode string) {
 }
 
 // completeProviderAuthentication applies post-login state updates and model
-// selection (pi: completeProviderAuthentication). The anthropic-subscription
-// warning and daxnuts easter egg calls are deferred.
+// selection (pi: completeProviderAuthentication; v0.86.0 defers selection
+// until after an authenticated catalog refresh when the default model is not
+// in the snapshot yet — dynamic catalogs may be empty until the first
+// authenticated network refresh).
 func (m *InteractiveMode) completeProviderAuthentication(ctx context.Context, providerID string, providerName string, authType auth.AuthType, previousModel *ai.Model) {
 	actionLabel := "Saved API key for " + providerName
 	if authType == auth.AuthTypeOAuth {
 		actionLabel = "Logged in to " + providerName
 	}
 
-	var selectedModel *ai.Model
-	selectionError := ""
-	if isUnknownModel(previousModel) {
-		availableModels := m.session().GetModelRuntime().GetAvailableSnapshot()
-		var providerModels []ai.Model
-		for _, model := range availableModels {
-			if string(model.Provider) == providerID {
-				providerModels = append(providerModels, model)
+	session := m.session()
+	// Dynamic catalogs may be empty until the first authenticated network
+	// refresh.
+	deferSelection := false
+	if isUnknownModel(previousModel) && hasDefaultModelProvider(providerID) {
+		defaultModelID := core.DefaultModelPerProvider[providerID]
+		hasDefault := false
+		for _, model := range session.GetModelRuntime().GetAvailableSnapshot() {
+			if string(model.Provider) == providerID && model.ID == defaultModelID {
+				hasDefault = true
+				break
 			}
 		}
-		// Matches LLAMA_PROVIDER_ID from extensions/llama/provider.ts; kept
-		// inline to avoid coupling interactive mode to the built-in extension.
-		if providerID == "llama.cpp" {
-			selectionError = llamaCppPostLoginGuidance(actionLabel, len(providerModels))
-		} else if !hasDefaultModelProvider(providerID) {
-			selectionError = fmt.Sprintf("%s, but no default model is configured for provider %q. Use /model to select a model.", actionLabel, providerID)
-		} else if len(providerModels) == 0 {
-			selectionError = fmt.Sprintf("%s, but no models are available for that provider. Use /model to select a model.", actionLabel)
-		} else {
-			defaultModelID := core.DefaultModelPerProvider[providerID]
-			for i := range providerModels {
-				if providerModels[i].ID == defaultModelID {
-					selectedModel = &providerModels[i]
-					break
+		deferSelection = !hasDefault
+	}
+	finishAuthentication := func() {
+		var selectedModel *ai.Model
+		selectionError := ""
+		if isUnknownModel(previousModel) {
+			availableModels := session.GetModelRuntime().GetAvailableSnapshot()
+			var providerModels []ai.Model
+			for _, model := range availableModels {
+				if string(model.Provider) == providerID {
+					providerModels = append(providerModels, model)
 				}
 			}
-			if selectedModel == nil {
-				selectionError = fmt.Sprintf("%s, but its default model %q is not available. Use /model to select a model.", actionLabel, defaultModelID)
-			} else if err := m.session().SetModel(ctx, selectedModel, nil); err != nil {
-				selectedModel = nil
-				selectionError = fmt.Sprintf("%s, but selecting its default model failed: %s. Use /model to select a model.", actionLabel, err.Error())
+			// Matches LLAMA_PROVIDER_ID from extensions/llama/provider.ts; kept
+			// inline to avoid coupling interactive mode to the built-in extension.
+			if providerID == "llama.cpp" {
+				selectionError = llamaCppPostLoginGuidance(actionLabel, len(providerModels))
+			} else if !hasDefaultModelProvider(providerID) {
+				selectionError = fmt.Sprintf("%s, but no default model is configured for provider %q. Use /model to select a model.", actionLabel, providerID)
+			} else if len(providerModels) == 0 {
+				selectionError = fmt.Sprintf("%s, but no models are available for that provider. Use /model to select a model.", actionLabel)
+			} else {
+				defaultModelID := core.DefaultModelPerProvider[providerID]
+				// Radius catalogs vary by account; prefer balanced, then use
+				// catalog order.
+				for i := range providerModels {
+					if providerModels[i].ID == defaultModelID {
+						selectedModel = &providerModels[i]
+						break
+					}
+				}
+				if selectedModel == nil && providerID == "radius" && len(providerModels) > 0 {
+					selectedModel = &providerModels[0]
+				}
+				if selectedModel == nil {
+					selectionError = fmt.Sprintf("%s, but its default model %q is not available. Use /model to select a model.", actionLabel, defaultModelID)
+				} else if err := session.SetModel(ctx, selectedModel, &core.ModelMutationOptions{Persist: true}); err != nil {
+					selectedModel = nil
+					selectionError = fmt.Sprintf("%s, but selecting its default model failed: %s. Use /model to select a model.", actionLabel, err.Error())
+				}
+			}
+		}
+
+		m.updateAvailableProviderCount()
+		m.footer.Invalidate()
+		m.updateEditorBorderColor()
+		if selectedModel != nil {
+			m.showStatus(fmt.Sprintf("%s. Selected %s. Credentials saved to %s", actionLabel, selectedModel.ID, codingagent.GetAuthPath()))
+			// pi: maybeWarnAboutAnthropicSubscriptionAuth(selectedModel) +
+			// checkDaxnutsEasterEgg(selectedModel) — deferred (see
+			// docs/handoffs/DEFERRED-UI-CLEANUP.md).
+		} else {
+			m.showStatus(fmt.Sprintf("%s. Credentials saved to %s", actionLabel, codingagent.GetAuthPath()))
+			if selectionError != "" {
+				m.ShowError(selectionError)
 			}
 		}
 	}
-
-	m.updateAvailableProviderCount()
-	m.footer.Invalidate()
-	m.updateEditorBorderColor()
-	if selectedModel != nil {
-		m.showStatus(fmt.Sprintf("%s. Selected %s. Credentials saved to %s", actionLabel, selectedModel.ID, codingagent.GetAuthPath()))
+	if deferSelection {
+		m.showStatus(fmt.Sprintf("%s. Credentials saved to %s. Refreshing model catalog…", actionLabel, codingagent.GetAuthPath()))
 	} else {
-		m.showStatus(fmt.Sprintf("%s. Credentials saved to %s", actionLabel, codingagent.GetAuthPath()))
-		if selectionError != "" {
-			m.ShowError(selectionError)
-		}
+		finishAuthentication()
 	}
 
 	go func() {
@@ -7197,17 +7386,16 @@ func (m *InteractiveMode) completeProviderAuthentication(ctx context.Context, pr
 		defer pigutils.RecoverPanic("interactive.providerRefresh")
 		refreshCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		result := m.session().GetModelRuntime().Refresh(refreshCtx, &ai.ModelsRefreshOptions{Providers: []string{providerID}})
+		result := session.GetModelRuntime().Refresh(refreshCtx, &ai.ModelsRefreshOptions{Providers: []string{providerID}})
 		if result.Aborted {
 			m.ShowWarning(fmt.Sprintf("%s, but its model catalog refresh timed out; using cached models.", actionLabel))
 		} else if len(result.Errors) > 0 {
-			failed := make([]string, 0, len(result.Errors))
-			for provider := range result.Errors {
-				failed = append(failed, provider)
-			}
-			sort.Strings(failed)
 			m.ShowWarning(fmt.Sprintf("%s, but its model catalog could not be refreshed; using cached models.", actionLabel))
-			_ = failed
+		}
+		// Do not replace a model or session selected while the refresh was
+		// running.
+		if deferSelection && m.session() == session && session.Model() == previousModel {
+			finishAuthentication()
 		}
 		m.updateAvailableProviderCount()
 		m.footer.Invalidate()
@@ -7893,9 +8081,47 @@ func (m *InteractiveMode) handleResumeSession(ctx context.Context, sessionPath s
 func (m *InteractiveMode) handleFatalRuntimeError(prefix string, err error) error {
 	message := errorMessageOf(err)
 	m.ShowError(fmt.Sprintf("%s: %s", prefix, message))
+	if m.recordCrash(core.CrashKindFatalError, err, "") {
+		m.chatContainer.AddChild(tui.NewText(theme.Current().Fg("muted", m.crashReportInstructions()), m.outputPad, 0))
+	}
 	m.stopInteractive()
 	os.Exit(1)
 	return fmt.Errorf("unreachable")
+}
+
+// recordCrash persists a crash so the next start can point the user at /bug
+// (pi: recordCrash, v0.86.0). Returns false when nothing was written.
+func (m *InteractiveMode) recordCrash(kind core.CrashRecordKind, err error, stack string) bool {
+	return core.RecordCrash(core.CrashRecordInput{
+		Kind:        kind,
+		Error:       err,
+		SessionFile: m.session().SessionFile(),
+		Cwd:         m.sessionManager().GetCwd(),
+		Stack:       stack,
+	}, "") != nil
+}
+
+// crashReportInstructions is the /bug follow-up hint (pi:
+// crashReportInstructions, v0.86.0).
+func (m *InteractiveMode) crashReportInstructions() string {
+	resume := "start " + codingagent.AppName + " and"
+	if m.session().SessionFile() != "" {
+		resume = fmt.Sprintf("run `%s -r` to resume the session, then", codingagent.AppName)
+	}
+	return fmt.Sprintf("To report this crash: %s run /bug. The crash details are attached automatically.", resume)
+}
+
+// suggestBugReport shows the /bug hint once per session after a failure (pi:
+// suggestBugReport, v0.86.0).
+func (m *InteractiveMode) suggestBugReport() {
+	if m.bugReportHintShown {
+		return
+	}
+	m.bugReportHintShown = true
+	m.chatContainer.AddChild(tui.NewText(
+		theme.Current().Fg("muted", fmt.Sprintf("If this looks like a %s bug, /bug sends a report to the developers.", codingagent.AppName)),
+		m.outputPad, 0))
+	m.ui.RequestRender(false)
 }
 
 // rebindCurrentSession rebinds UI subscriptions after a session replacement

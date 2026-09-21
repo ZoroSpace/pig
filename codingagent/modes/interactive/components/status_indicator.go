@@ -63,6 +63,41 @@ func (s *StatusIndicator) Dispose() {
 	s.Stop()
 }
 
+// StatusBorderRenderer is the editor-top-border embed surface (pi v0.86.0:
+// renderInBorder/renderSpinnerInBorder moved from WorkingStatusIndicator to
+// StatusIndicator, so every indicator subtype embeds — see the new
+// interactive-tui/status-indicator tests). pig surfaces the method set as an
+// interface because Go subtypes are not assignable to the base pointer type.
+type StatusBorderRenderer interface {
+	RenderInBorder(width int) string
+	RenderSpinnerInBorder(width int) string
+}
+
+// RenderInBorder renders the indicator line for embedding into an editor
+// border of the given width (pi: renderInBorder, v0.86.0 on the base class).
+// Strips the loader's leading blank line and trailing padding.
+func (s *StatusIndicator) RenderInBorder(width int) string {
+	lines := s.Render(width + 2)
+	line := ""
+	if len(lines) > 1 {
+		line = lines[1]
+	}
+	var trimmed string
+	if strings.HasPrefix(line, " ") {
+		trimmed = strings.TrimRight(line[1:], " ")
+	} else {
+		trimmed = strings.TrimRight(line, " ")
+	}
+	return tui.TruncateToWidth(trimmed, width, "", false)
+}
+
+// RenderSpinnerInBorder renders only the spinner frame, for the narrow
+// fallback when the full message cannot fit (pi: renderSpinnerInBorder,
+// v0.86.0 on the base class).
+func (s *StatusIndicator) RenderSpinnerInBorder(width int) string {
+	return tui.TruncateToWidth(s.GetRenderedIndicator(), width, "", false)
+}
+
 // WorkingStatusIndicator is the default streaming indicator (pi: class
 // WorkingStatusIndicator). Value-embeds StatusIndicator: the Loader state
 // lives behind the embedded pointer, so copies are safe (same reasoning as
@@ -94,33 +129,11 @@ func NewWorkingStatusIndicator(ui tui.TUI, message string, indicator *core.Worki
 	}
 }
 
-// RenderInBorder renders the indicator line for embedding into an editor
-// border of the given width (pi: renderInBorder, v0.85.1). Strips the
-// loader's leading blank line and trailing padding.
-func (w *WorkingStatusIndicator) RenderInBorder(width int) string {
-	lines := w.Render(width + 2)
-	line := ""
-	if len(lines) > 1 {
-		line = lines[1]
-	}
-	var trimmed string
-	if strings.HasPrefix(line, " ") {
-		trimmed = strings.TrimRight(line[1:], " ")
-	} else {
-		trimmed = strings.TrimRight(line, " ")
-	}
-	return tui.TruncateToWidth(trimmed, width, "", false)
-}
-
-// RenderSpinnerInBorder renders only the spinner frame, for the narrow
-// fallback when the full message cannot fit (pi: renderSpinnerInBorder,
-// v0.85.1).
-func (w *WorkingStatusIndicator) RenderSpinnerInBorder(width int) string {
-	return tui.TruncateToWidth(w.GetRenderedIndicator(), width, "", false)
-}
-
 // SetIndicator replaces the animation options (pi: setIndicator override on
-// WorkingStatusIndicator; nil restores the default spinner).
+// WorkingStatusIndicator; nil restores the default spinner). pi v0.86.0
+// dropped this override and calls setIndicator on the base; pig keeps the
+// WorkingIndicatorOptions → loader-options conversion here because only
+// working indicators receive them.
 func (w *WorkingStatusIndicator) SetIndicator(indicator *core.WorkingIndicatorOptions) {
 	w.Loader.SetIndicator(workingIndicatorToLoader(indicator))
 }

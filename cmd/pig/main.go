@@ -466,11 +466,11 @@ func createSessionManager(ctx context.Context, parsed *cli.Args, cwd string, ses
 		// pi delegates --resume to the TUI session picker (cli/session-picker.ts
 		// + startup-ui), which runs before interactive mode mounts.
 		selectedPath, ok := cli.SelectSession(
-			func(onProgress core.SessionListProgress) []core.SessionInfo {
-				return core.ListSessions(context.Background(), cwd, sessionDir, onProgress)
+			func(ctx context.Context, onProgress core.SessionListProgress) []core.SessionInfo {
+				return core.ListSessions(ctx, cwd, sessionDir, onProgress)
 			},
-			func(onProgress core.SessionListProgress) []core.SessionInfo {
-				return core.ListAllSessions(context.Background(), sessionDir, onProgress)
+			func(ctx context.Context, onProgress core.SessionListProgress) []core.SessionInfo {
+				return core.ListAllSessions(ctx, sessionDir, onProgress)
 			},
 			settingsManager,
 		)

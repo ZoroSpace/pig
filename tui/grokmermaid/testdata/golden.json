@@ -1,369 +1,367 @@
 {
- "flow_lr": {
-  "plain": [
-   "┌───────┐    ┌──────┐",
-   "│ Start ├───▶│ Done │",
-   "└───────┘    └──────┘"
-  ],
-  "width": 21,
-  "warnings": []
- },
- "flow_tb_label": {
-  "plain": [
-   "  ┌─────┐",
-   "  │ One │",
-   "  └──┬──┘",
-   "     │",
-   "     ▼yes",
-   "  ┌─────┐",
-   "  │ Two │",
-   "  └──┬──┘",
-   "     │",
-   "     ▼no",
-   " ┌───────┐",
-   " │ Three │",
-   " └───────┘"
-  ],
-  "width": 10,
-  "warnings": []
- },
- "flow_subgraph": {
-  "plain": [
-   "                  ┌ Inner ┐",
-   "                  │       │",
-   "┌───┐    ┌───┐    │ ┌───┐ │    ┌───┐",
-   "│ A ├───▶│ B ├───▶│ │ C │ ├───▶│ D │",
-   "└───┘    └───┘    │ └───┘ │    └───┘",
-   "                  └───────┘"
-  ],
-  "width": 36,
-  "warnings": []
- },
- "flow_styles": {
-  "plain": [
-   " ┌───┐",
-   " │ A │",
-   " └─┬─┘",
-   "   │",
-   "   ▼dotted",
-   " ┌───┐",
-   " │ B │",
-   " └───┘"
-  ],
-  "width": 10,
-  "warnings": []
- },
- "flow_cycle": {
-  "plain": [
-   " ┌───┐",
-   " │ A │◄┐",
-   " └─┬─┘ │",
-   "   │   │",
-   "   ▼   │",
-   " ┌───┐ │",
-   " │ B │ │",
-   " └─┬─┘ │",
-   "   │   │",
-   "   ▼   │",
-   " ┌───┐ │",
-   " │ C ├─┘",
-   " └───┘"
-  ],
-  "width": 8,
-  "warnings": []
- },
- "flow_rl": {
-  "plain": [
-   "┌───┐    ┌───┐    ┌───┐",
-   "│ C │◄───┤ B │◄───┤ A │",
-   "└───┘    └───┘    └───┘"
-  ],
-  "width": 23,
-  "warnings": []
- },
- "flow_warn": {
-  "plain": [
-   "┌─────┐",
-   "│ Foo │",
-   "└─────┘"
-  ],
-  "width": 7,
-  "warnings": [
-   "dropped, expected a link: \":::highlight --> B[Bar]\""
-  ]
- },
- "flow_shapes": {
-  "plain": [
-   "╭───────╮    ╭─────────╮    ┌──────┐",
-   "│ round ├───▶│ diamond ├───▶│ rect │",
-   "╰───────╯    ╰─────────╯    └──────┘"
-  ],
-  "width": 36,
-  "warnings": []
- },
- "flow_selfloop": {
-  "plain": [
-   " ┌─────┐",
-   " │  A  │",
-   " └──┬┬─┘",
-   "    ││▲",
-   "    │╰╯",
-   "    │",
-   "    ▼",
-   "  ┌───┐",
-   "  │ B │",
-   "  └───┘"
-  ],
-  "width": 8,
-  "warnings": []
- },
- "flow_open_edge": {
-  "plain": [
-   "┌───┐    ┌───┐",
-   "│ A ├────│ o │",
-   "└───┘    └───┘",
-   "",
-   "┌───┐    ┌───┐",
-   "│ B ├────│ x │",
-   "└───┘    └───┘"
-  ],
-  "width": 14,
-  "warnings": [
-   "dropped, expected a link: \"B\"",
-   "dropped, expected a link: \"C\""
-  ]
- },
- "state": {
-  "plain": [
-   "    ╭───╮",
-   "    │ ● │",
-   "    ╰─┬─╯",
-   "      │",
-   "      ▼",
-   "  ╭──────╮",
-   "  │ Idle │",
-   "  ╰───┬──╯",
-   "      │",
-   "      ▼start",
-   " ╭─────────╮",
-   " │ Running │",
-   " ╰────┬────╯",
-   "      │",
-   "      ▼stop",
-   "    ╭───╮",
-   "    │ ● │",
-   "    ╰───╯"
-  ],
-  "width": 12,
-  "warnings": []
- },
- "state_choice": {
-  "plain": [
-   " ╭───╮",
-   " │ A │",
-   " ╰─┬─╯",
-   "   │",
-   "   ▼",
-   " ╭───╮",
-   " │ B │",
-   " ╰─┬─╯",
-   "   │",
-   "   ▼",
-   " ╭───╮",
-   " │ C │",
-   " ╰───╯"
-  ],
-  "width": 6,
-  "warnings": []
- },
- "class": {
-  "plain": [
-   "┌────────┐",
-   "│ Animal │",
-   "└────△───┘",
-   "     │",
-   "     │",
-   "┌────────┐",
-   "│  Dog   │",
-   "├────────┤",
-   "│ +name  │",
-   "├────────┤",
-   "│ bark() │",
-   "└────────┘"
-  ],
-  "width": 10,
-  "warnings": []
- },
- "class_generics": {
-  "plain": [
-   " ┌─────────┐",
-   " │ List<T> │",
-   " ├─────────┤",
-   " │ add(T)  │",
-   " └─────────┘"
-  ],
-  "width": 12,
-  "warnings": []
- },
- "class_annotation": {
-  "plain": [
-   "┌────────────┐",
-   "│ «abstract» │",
-   "│   Shape    │",
-   "├────────────┤",
-   "│ area()     │",
-   "└────────────┘"
-  ],
-  "width": 14,
-  "warnings": []
- },
- "er": {
-  "plain": [
-   "┌──────────┐",
-   "│ CUSTOMER │",
-   "└─────┬────┘",
-   "      │",
-   "      │1 places 0..*",
-   "  ┌───────┐",
-   "  │ ORDER │",
-   "  └───────┘"
-  ],
-  "width": 20,
-  "warnings": [
-   "dropped, unreadable final line: \"ORDER { string id }\""
-  ]
- },
- "sequence": {
-  "plain": [
-   "┌───────┐  ┌─────┐",
-   "│ Alice │  │ Bob │",
-   "└───┬───┘  └──┬──┘",
-   "    │         │",
-   "    │  Hello  │",
-   "    ├────────▶│",
-   "    │         │",
-   "    │   Hi    │",
-   "    │◄╌╌╌╌╌╌╌╌┤",
-   "    │         │",
-   "┌───┴───┐  ┌──┴──┐",
-   "│ Alice │  │ Bob │",
-   "└───────┘  └─────┘"
-  ],
-  "width": 18,
-  "warnings": []
- },
- "sequence_notes": {
-  "plain": [
-   "┌───┐  ┌───┐  ┌─────┐",
-   "│ A │  │ B │  │ x B │",
-   "└─┬─┘  └─┬─┘  └──┬──┘",
-   "  │      │       │",
-   "┌──────────┐     │",
-   "│  shared  │     │",
-   "└──────────┘     │",
-   "  │      │       │",
-   "  │    cross     │",
-   "  ├─────────────▶│",
-   "  │      │       │",
-   "── loop every ────────",
-   "  │      │       │",
-   "  │ ping │       │",
-   "  ├─────▶│       │",
-   "  │      │       │",
-   "── end ───────────────",
-   "  │      │       │",
-   "┌─┴─┐  ┌─┴─┐  ┌──┴──┐",
-   "│ A │  │ B │  │ x B │",
-   "└───┘  └───┘  └─────┘"
-  ],
-  "width": 22,
-  "warnings": []
- },
- "sequence_autonumber": {
-  "plain": [
-   "┌───┐   ┌───┐   ┌───┐",
-   "│ A │   │ B │   │ C │",
-   "└─┬─┘   └─┬─┘   └─┬─┘",
-   "  │       │       │",
-   "  │1. one │       │",
-   "  ├──────▶│       │",
-   "  │       │       │",
-   "  │       │2. two │",
-   "  │       ├──────▶│",
-   "  │       │       │",
-   "┌─┴─┐   ┌─┴─┐   ┌─┴─┐",
-   "│ A │   │ B │   │ C │",
-   "└───┘   └───┘   └───┘"
-  ],
-  "width": 21,
-  "warnings": []
- },
- "cjk": {
-  "plain": [
-   "┌──────┐    ┌──────┐",
-   "│ 开始 ├───▶│ 结束 │",
-   "└──────┘    └──────┘"
-  ],
-  "width": 20,
-  "warnings": []
- },
- "unsupported": null,
- "partial_stream": {
-  "plain": [
-   "┌───┐    ┌───┐",
-   "│ A ├───▶│ B │",
-   "└───┘    └───┘"
-  ],
-  "width": 14,
-  "warnings": []
- },
- "empty": null,
- "syntax_err": null,
- "width_table": {
-  "plain": [
-   "┌─────────────┐    ┌────────────────┐",
-   "│ 👨‍👩‍👧 flag🇯🇵 x ├───▶│ 日本語テキスト │",
-   "└─────────────┘    └────────────────┘"
-  ],
-  "width": 37,
-  "warnings": []
- },
- "source_box": {
-  "plain": [
-   "╭ mermaid: flowchart ──╮",
-   "│ flowchart LR         │",
-   "│   A --> B            │",
-   "│   pie                │",
-   "╰──────────────────────╯"
-  ],
-  "width": 24,
-  "warnings": []
- },
- "diagram_kind": {
-  "flow_lr": "flowchart",
-  "flow_tb_label": "flowchart",
-  "flow_subgraph": "flowchart",
-  "flow_styles": "flowchart",
-  "flow_cycle": "flowchart",
-  "flow_rl": "flowchart",
-  "flow_warn": "flowchart",
-  "flow_shapes": "flowchart",
-  "flow_selfloop": "flowchart",
-  "flow_open_edge": "flowchart",
-  "state": "state",
-  "state_choice": "state",
-  "class": "class",
-  "class_generics": "class",
-  "class_annotation": "class",
-  "er": "er",
-  "sequence": "sequence",
-  "sequence_notes": "sequence",
-  "sequence_autonumber": "sequence",
-  "cjk": "flowchart",
+  "flow_lr": {
+    "plain": [
+      "┌───────┐    ┌──────┐",
+      "│ Start ├───▶│ Done │",
+      "└───────┘    └──────┘"
+    ],
+    "width": 21,
+    "warnings": []
+  },
+  "flow_tb_label": {
+    "plain": [
+      "  ┌─────┐",
+      "  │ One │",
+      "  └──┬──┘",
+      "     │",
+      "     ▼yes",
+      "  ┌─────┐",
+      "  │ Two │",
+      "  └──┬──┘",
+      "     │",
+      "     ▼no",
+      " ┌───────┐",
+      " │ Three │",
+      " └───────┘"
+    ],
+    "width": 10,
+    "warnings": []
+  },
+  "flow_subgraph": {
+    "plain": [
+      "                  ┌ Inner ┐",
+      "                  │       │",
+      "┌───┐    ┌───┐    │ ┌───┐ │    ┌───┐",
+      "│ A ├───▶│ B ├───▶│ │ C │ ├───▶│ D │",
+      "└───┘    └───┘    │ └───┘ │    └───┘",
+      "                  └───────┘"
+    ],
+    "width": 36,
+    "warnings": []
+  },
+  "flow_styles": {
+    "plain": [
+      " ┌───┐",
+      " │ A │",
+      " └─┬─┘",
+      "   │",
+      "   ▼dotted",
+      " ┌───┐",
+      " │ B │",
+      " └───┘"
+    ],
+    "width": 10,
+    "warnings": []
+  },
+  "flow_cycle": {
+    "plain": [
+      " ┌───┐",
+      " │ A │◄┐",
+      " └─┬─┘ │",
+      "   │   │",
+      "   ▼   │",
+      " ┌───┐ │",
+      " │ B │ │",
+      " └─┬─┘ │",
+      "   │   │",
+      "   ▼   │",
+      " ┌───┐ │",
+      " │ C ├─┘",
+      " └───┘"
+    ],
+    "width": 8,
+    "warnings": []
+  },
+  "flow_rl": {
+    "plain": [
+      "┌───┐    ┌───┐    ┌───┐",
+      "│ C │◄───┤ B │◄───┤ A │",
+      "└───┘    └───┘    └───┘"
+    ],
+    "width": 23,
+    "warnings": []
+  },
+  "flow_warn": {
+    "plain": [
+      "┌─────┐    ┌─────┐",
+      "│ Foo ├───▶│ Bar │",
+      "└─────┘    └─────┘"
+    ],
+    "width": 18,
+    "warnings": []
+  },
+  "flow_shapes": {
+    "plain": [
+      "╭───────╮    ╭─────────╮    ┌──────┐",
+      "│ round ├───▶│ diamond ├───▶│ rect │",
+      "╰───────╯    ╰─────────╯    └──────┘"
+    ],
+    "width": 36,
+    "warnings": []
+  },
+  "flow_selfloop": {
+    "plain": [
+      " ┌─────┐",
+      " │  A  │",
+      " └──┬┬─┘",
+      "    ││▲",
+      "    │╰╯",
+      "    │",
+      "    ▼",
+      "  ┌───┐",
+      "  │ B │",
+      "  └───┘"
+    ],
+    "width": 8,
+    "warnings": []
+  },
+  "flow_open_edge": {
+    "plain": [
+      "┌───┐    ┌───┐",
+      "│ A ├────│ o │",
+      "└───┘    └───┘",
+      "",
+      "┌───┐    ┌───┐",
+      "│ B ├────│ x │",
+      "└───┘    └───┘"
+    ],
+    "width": 14,
+    "warnings": [
+      "dropped, expected a link: \"B\"",
+      "dropped, expected a link: \"C\""
+    ]
+  },
+  "state": {
+    "plain": [
+      "    ╭───╮",
+      "    │ ● │",
+      "    ╰─┬─╯",
+      "      │",
+      "      ▼",
+      "  ╭──────╮",
+      "  │ Idle │",
+      "  ╰───┬──╯",
+      "      │",
+      "      ▼start",
+      " ╭─────────╮",
+      " │ Running │",
+      " ╰────┬────╯",
+      "      │",
+      "      ▼stop",
+      "    ╭───╮",
+      "    │ ● │",
+      "    ╰───╯"
+    ],
+    "width": 12,
+    "warnings": []
+  },
+  "state_choice": {
+    "plain": [
+      " ╭───╮",
+      " │ A │",
+      " ╰─┬─╯",
+      "   │",
+      "   ▼",
+      " ╭───╮",
+      " │ B │",
+      " ╰─┬─╯",
+      "   │",
+      "   ▼",
+      " ╭───╮",
+      " │ C │",
+      " ╰───╯"
+    ],
+    "width": 6,
+    "warnings": []
+  },
+  "class": {
+    "plain": [
+      "┌────────┐",
+      "│ Animal │",
+      "└────△───┘",
+      "     │",
+      "     │",
+      "┌────────┐",
+      "│  Dog   │",
+      "├────────┤",
+      "│ +name  │",
+      "├────────┤",
+      "│ bark() │",
+      "└────────┘"
+    ],
+    "width": 10,
+    "warnings": []
+  },
+  "class_generics": {
+    "plain": [
+      " ┌─────────┐",
+      " │ List<T> │",
+      " ├─────────┤",
+      " │ add(T)  │",
+      " └─────────┘"
+    ],
+    "width": 12,
+    "warnings": []
+  },
+  "class_annotation": {
+    "plain": [
+      "┌────────────┐",
+      "│ «abstract» │",
+      "│   Shape    │",
+      "├────────────┤",
+      "│ area()     │",
+      "└────────────┘"
+    ],
+    "width": 14,
+    "warnings": []
+  },
+  "er": {
+    "plain": [
+      "┌──────────┐",
+      "│ CUSTOMER │",
+      "└─────┬────┘",
+      "      │",
+      "      │1 places 0..*",
+      "  ┌───────┐",
+      "  │ ORDER │",
+      "  └───────┘"
+    ],
+    "width": 20,
+    "warnings": [
+      "dropped, unreadable final line: \"ORDER { string id }\""
+    ]
+  },
+  "sequence": {
+    "plain": [
+      "┌───────┐  ┌─────┐",
+      "│ Alice │  │ Bob │",
+      "└───┬───┘  └──┬──┘",
+      "    │         │",
+      "    │  Hello  │",
+      "    ├────────▶│",
+      "    │         │",
+      "    │   Hi    │",
+      "    │◄╌╌╌╌╌╌╌╌┤",
+      "    │         │",
+      "┌───┴───┐  ┌──┴──┐",
+      "│ Alice │  │ Bob │",
+      "└───────┘  └─────┘"
+    ],
+    "width": 18,
+    "warnings": []
+  },
+  "sequence_notes": {
+    "plain": [
+      "┌───┐  ┌───┐  ┌─────┐",
+      "│ A │  │ B │  │ x B │",
+      "└─┬─┘  └─┬─┘  └──┬──┘",
+      "  │      │       │",
+      "┌──────────┐     │",
+      "│  shared  │     │",
+      "└──────────┘     │",
+      "  │      │       │",
+      "  │    cross     │",
+      "  ├─────────────▶│",
+      "  │      │       │",
+      "── loop every ────────",
+      "  │      │       │",
+      "  │ ping │       │",
+      "  ├─────▶│       │",
+      "  │      │       │",
+      "── end ───────────────",
+      "  │      │       │",
+      "┌─┴─┐  ┌─┴─┐  ┌──┴──┐",
+      "│ A │  │ B │  │ x B │",
+      "└───┘  └───┘  └─────┘"
+    ],
+    "width": 22,
+    "warnings": []
+  },
+  "sequence_autonumber": {
+    "plain": [
+      "┌───┐   ┌───┐   ┌───┐",
+      "│ A │   │ B │   │ C │",
+      "└─┬─┘   └─┬─┘   └─┬─┘",
+      "  │       │       │",
+      "  │1. one │       │",
+      "  ├──────▶│       │",
+      "  │       │       │",
+      "  │       │2. two │",
+      "  │       ├──────▶│",
+      "  │       │       │",
+      "┌─┴─┐   ┌─┴─┐   ┌─┴─┐",
+      "│ A │   │ B │   │ C │",
+      "└───┘   └───┘   └───┘"
+    ],
+    "width": 21,
+    "warnings": []
+  },
+  "cjk": {
+    "plain": [
+      "┌──────┐    ┌──────┐",
+      "│ 开始 ├───▶│ 结束 │",
+      "└──────┘    └──────┘"
+    ],
+    "width": 20,
+    "warnings": []
+  },
   "unsupported": null,
-  "partial_stream": "flowchart",
+  "partial_stream": {
+    "plain": [
+      "┌───┐    ┌───┐",
+      "│ A ├───▶│ B │",
+      "└───┘    └───┘"
+    ],
+    "width": 14,
+    "warnings": []
+  },
   "empty": null,
-  "syntax_err": "flowchart",
-  "width_table": "flowchart"
- }
+  "syntax_err": null,
+  "width_table": {
+    "plain": [
+      "┌─────────────┐    ┌────────────────┐",
+      "│ 👨‍👩‍👧 flag🇯🇵 x ├───▶│ 日本語テキスト │",
+      "└─────────────┘    └────────────────┘"
+    ],
+    "width": 37,
+    "warnings": []
+  },
+  "source_box": {
+    "plain": [
+      "╭ mermaid: flowchart ──╮",
+      "│ flowchart LR         │",
+      "│   A --> B            │",
+      "│   pie                │",
+      "╰──────────────────────╯"
+    ],
+    "width": 24,
+    "warnings": []
+  },
+  "diagram_kind": {
+    "flow_lr": "flowchart",
+    "flow_tb_label": "flowchart",
+    "flow_subgraph": "flowchart",
+    "flow_styles": "flowchart",
+    "flow_cycle": "flowchart",
+    "flow_rl": "flowchart",
+    "flow_warn": "flowchart",
+    "flow_shapes": "flowchart",
+    "flow_selfloop": "flowchart",
+    "flow_open_edge": "flowchart",
+    "state": "state",
+    "state_choice": "state",
+    "class": "class",
+    "class_generics": "class",
+    "class_annotation": "class",
+    "er": "er",
+    "sequence": "sequence",
+    "sequence_notes": "sequence",
+    "sequence_autonumber": "sequence",
+    "cjk": "flowchart",
+    "unsupported": null,
+    "partial_stream": "flowchart",
+    "empty": null,
+    "syntax_err": "flowchart",
+    "width_table": "flowchart"
+  }
 }

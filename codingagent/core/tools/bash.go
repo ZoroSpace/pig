@@ -216,12 +216,20 @@ func CreateLocalShellOperations(shellName string, cwd string, resolveShellConfig
 				}
 				return nil, fmt.Errorf("timeout:%s", timeoutText)
 			}
-			// pi: waitForChildProcess resolves null on signal kill → exitCode
-			// nil. AwaitChild surfaces that through the ProcessState.
-			if cmd.ProcessState != nil && !cmd.ProcessState.Exited() {
-				return nil, nil
+			// pi v0.86.0: a signal-killed shell has no exit code; report the
+			// standard 128 + signal number convention so callers do not mistake
+			// the termination for a successful command (#9577).
+			if cmd.ProcessState != nil {
+				if code, signaled := signalExitCode(cmd.ProcessState); signaled {
+					return &code, nil
+				}
 			}
 			code := cmd.ProcessState.ExitCode()
+			if code < 0 {
+				// pi: exitCode ?? (signalCode ? ... : 1) — a null exit code
+				// without a signal still fails closed as exit code 1.
+				code = 1
+			}
 			return &code, nil
 		},
 	}
@@ -572,7 +580,12 @@ func CreateShellToolDefinition(cwd string, config ShellToolConfig, options *Bash
 					return agent.AgentToolResult{}, finishErr
 				}
 				outputText, details := formatOutput(snapshot, "(no output)")
-				if exitCode != nil && *exitCode != 0 {
+				// pi v0.86.0 (#9068 fail-closed): a null exit code is treated as
+				// a failed command.
+				if exitCode == nil {
+					return agent.AgentToolResult{}, fmt.Errorf("%s", appendStatus(outputText, "Command terminated without an exit code"))
+				}
+				if *exitCode != 0 {
 					return agent.AgentToolResult{}, fmt.Errorf("%s", appendStatus(outputText, fmt.Sprintf("Command exited with code %d", *exitCode)))
 				}
 				var detailsValue any

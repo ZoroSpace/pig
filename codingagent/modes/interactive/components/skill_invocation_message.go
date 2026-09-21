@@ -50,13 +50,14 @@ func (c *SkillInvocationMessageComponent) Invalidate() {
 
 func (c *SkillInvocationMessageComponent) updateDisplay() {
 	c.Clear()
+	content := &tui.Container{}
 
 	if c.expanded {
 		// Expanded: label + skill name header + full content
 		label := theme.Fg("customMessageLabel", "\x1b[1m[skill]\x1b[22m")
-		c.AddChild(tui.NewText(label, 0, 0))
+		content.AddChild(tui.NewText(label, 0, 0))
 		header := "**" + c.skillBlock.Name + "**\n\n"
-		c.AddChild(tui.NewMarkdown(header+c.skillBlock.Content, 0, 0, c.markdownTheme, &tui.DefaultTextStyle{
+		content.AddChild(tui.NewMarkdown(header+c.skillBlock.Content, 0, 0, c.markdownTheme, &tui.DefaultTextStyle{
 			Color: func(text string) string { return theme.Fg("customMessageText", text) },
 		}, nil))
 	} else {
@@ -64,6 +65,14 @@ func (c *SkillInvocationMessageComponent) updateDisplay() {
 		line := theme.Fg("customMessageLabel", "\x1b[1m[skill]\x1b[22m ") +
 			theme.Fg("customMessageText", c.skillBlock.Name) +
 			theme.Fg("dim", " ("+tools.KeyText("app.tools.expand")+" to expand)")
-		c.AddChild(tui.NewText(line, 0, 0))
+		content.AddChild(tui.NewText(line, 0, 0))
 	}
+	// pi v0.86.0: a left click anywhere on the message toggles it.
+	c.AddChild(tui.NewMouseRegion(content, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
+		if event.Type != tui.MouseEventTypeClick || event.Button != tui.MouseButtonLeft {
+			return nil
+		}
+		c.SetExpanded(!c.expanded)
+		return &tui.TuiMouseEventResult{Handled: true}
+	}))
 }

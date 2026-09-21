@@ -3,6 +3,7 @@
 package components
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -34,8 +35,8 @@ func newTestSelector(t *testing.T, sessions []core.SessionInfo, options *Session
 	tui.SetKeybindings(core.NewKeybindingsManager(nil, "").KeybindingsManager)
 	mutator := &testMutator{}
 	selector := NewSessionSelectorComponent(
-		func(core.SessionListProgress) []core.SessionInfo { return sessions },
-		func(core.SessionListProgress) []core.SessionInfo { return nil },
+		func(context.Context, core.SessionListProgress) []core.SessionInfo { return sessions },
+		func(context.Context, core.SessionListProgress) []core.SessionInfo { return nil },
 		func(string) {}, func() {}, func() {}, func() {},
 		options,
 		"",

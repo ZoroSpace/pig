@@ -472,6 +472,10 @@ func (l *treeList) applyFilter() {
 	filtered := []*flatNode{}
 	for _, flatNode := range l.flatNodes {
 		entry := flatNode.node.Entry
+		// pi v0.86.0: usage entries never render in the tree.
+		if entry.EntryType() == "usage" {
+			continue
+		}
 		isCurrentLeaf := entry.Base().ID == l.currentLeafID
 
 		// Skip assistant messages with only tool calls (no text) unless error/aborted

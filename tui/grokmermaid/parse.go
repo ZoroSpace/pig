@@ -362,7 +362,25 @@ func parseNode(chars []rune, start int, graph *Graph) *nodeResult {
 	if index == -1 {
 		return nil
 	}
-	return &nodeResult{index: index, next: shaped.after}
+
+	// grok-mermaid 0.2.3: `id:::name` (after any shape) attaches a style
+	// class; swallow it so the statement keeps parsing — 0.2.2 dropped the
+	// rest of the line here.
+	next := shaped.after
+	if next+2 < len(chars) && chars[next] == ':' && chars[next+1] == ':' && chars[next+2] == ':' {
+		k := next + 3
+		for k < len(chars) && (isIdChar(string(chars[k])) || chars[k] == '-') {
+			k++
+		}
+		// A name never ends in `-`: back off so `A:::x-->B` keeps its link.
+		for k > next+3 && chars[k-1] == '-' {
+			k--
+		}
+		if k > next+3 {
+			next = k
+		}
+	}
+	return &nodeResult{index: index, next: next}
 }
 
 // shapedResult is what a shape bracket yielded. Closer is set when the bracket
@@ -597,7 +615,11 @@ func ParseState(src string) *Graph {
 	graph := NewGraph(DirDown)
 	inNote := false
 
-	for _, st := range statements[1:] {
+	for _, rawSt := range statements[1:] {
+		// grok-mermaid 0.2.3: drop :::style tags before dispatch (state and
+		// class statements are read by string splits; the `:` label split
+		// would cut inside a `:::`).
+		st := dropStyleTags(rawSt)
 		if inNote {
 			if asciiLower(st) == "end note" {
 				inNote = false
@@ -853,7 +875,8 @@ func ParseClass(src string) *classParseResult {
 	}
 	curClass := -1
 
-	for _, st := range statements[1:] {
+	for _, rawSt := range statements[1:] {
+		st := dropStyleTags(rawSt) // grok-mermaid 0.2.3
 		if curClass != -1 {
 			if st == "}" {
 				curClass = -1
@@ -1679,4 +1702,32 @@ outer:
 	}
 	return &seqMessageResult{from: from, to: to, text: text,
 		dashed: found.dashed, head: found.head}
+}
+
+// dropStyleTags removes every `:::name` style tag from a statement, parsed
+// with the same name scan as the flowchart shorthand (grok-mermaid 0.2.3).
+// State and class statements are read by string splits, and the `:` label
+// split would cut inside a `:::`, so tags are dropped before dispatch rather
+// than at each id.
+func dropStyleTags(st string) string {
+	chars := []rune(st)
+	out := make([]rune, 0, len(chars))
+	for i := 0; i < len(chars); {
+		if i+2 < len(chars) && chars[i] == ':' && chars[i+1] == ':' && chars[i+2] == ':' {
+			k := i + 3
+			for k < len(chars) && (isIdChar(string(chars[k])) || chars[k] == '-') {
+				k++
+			}
+			for k > i+3 && chars[k-1] == '-' {
+				k--
+			}
+			if k > i+3 {
+				i = k
+				continue
+			}
+		}
+		out = append(out, chars[i])
+		i++
+	}
+	return string(out)
 }

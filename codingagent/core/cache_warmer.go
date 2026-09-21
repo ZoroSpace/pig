@@ -360,7 +360,7 @@ func (w *CacheWarmer) Start(request CacheWarmRequest, isCurrent func() bool) {
 	ttlMs, ok := GetPromptCacheTtlMs(request.Model, request.simpleStreamOptions())
 	if !ok {
 		reason := "cache lifetime unavailable"
-		if request.Options.CacheRetention == types.CacheRetentionNone {
+		if request.Options != nil && request.Options.CacheRetention == types.CacheRetentionNone {
 			reason = "request disabled prompt caching"
 		}
 		w.stopLocked(reason, nil, false)
@@ -459,6 +459,13 @@ func (w *CacheWarmer) stopLocked(reason string, decision *CacheWarmingDecision, 
 	}
 }
 
+// cacheWarmAfterFunc arms the refresh timer (pi: setTimeout; test seam for
+// the fake-timer cache-warmer tests — the pi suite drives refreshes with
+// vi.useFakeTimers, which has no Go equivalent).
+var cacheWarmAfterFunc = func(delay time.Duration, fn func()) *time.Timer {
+	return time.AfterFunc(delay, fn)
+}
+
 // schedule arms the next refresh timer (pi: schedule).
 func (w *CacheWarmer) schedule(run *cacheWarmActiveRun) {
 	w.mu.Lock()
@@ -486,7 +493,7 @@ func (w *CacheWarmer) schedule(run *cacheWarmActiveRun) {
 	if delay < 0 {
 		delay = 0
 	}
-	run.timer = time.AfterFunc(delay, func() { w.refresh(run) })
+	run.timer = cacheWarmAfterFunc(delay, func() { w.refresh(run) })
 }
 
 // refresh runs one warm request (pi: refresh).

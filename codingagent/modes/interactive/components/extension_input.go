@@ -12,6 +12,10 @@ import (
 type ExtensionInputOptions struct {
 	Tui     tui.TUI
 	Timeout int
+	// InitialValue pre-fills the input (pi v0.86.0: initialValue).
+	InitialValue string
+	// Description renders below the title (pi v0.86.0: description).
+	Description string
 }
 
 // ExtensionInputComponent renders a one-line prompt with confirm/cancel.
@@ -48,6 +52,10 @@ func NewExtensionInputComponent(
 
 	c.titleText = tui.NewText(currentTheme.Fg("accent", title), 1, 0)
 	c.AddChild(c.titleText)
+	if opts != nil && opts.Description != "" {
+		c.AddChild(tui.NewSpacer(1))
+		c.AddChild(tui.NewText(currentTheme.Fg("text", opts.Description), 1, 0))
+	}
 	c.AddChild(tui.NewSpacer(1))
 
 	if opts != nil && opts.Timeout > 0 && opts.Tui != nil {
@@ -60,6 +68,9 @@ func NewExtensionInputComponent(
 	}
 
 	c.input = tui.NewInput()
+	if opts != nil && opts.InitialValue != "" {
+		c.input.SetValue(opts.InitialValue)
+	}
 	c.AddChild(c.input)
 	c.AddChild(tui.NewSpacer(1))
 	c.AddChild(tui.NewText(

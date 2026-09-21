@@ -95,6 +95,7 @@ type SettingsConfig struct {
 	FollowUpMode            string // "all" | "one-at-a-time"
 	Transport               ai.Transport
 	HTTPIdleTimeoutMs       int64
+	CacheWarmingMode        core.CacheWarmingMode
 	ThinkingLevel           agent.ThinkingLevel
 	AvailableThinkingLevels []agent.ThinkingLevel
 	ModelThinkingLevels     map[string]agent.ThinkingLevel
@@ -138,6 +139,7 @@ type SettingsCallbacks struct {
 	OnFollowUpModeChange           func(mode string)
 	OnTransportChange              func(transport ai.Transport)
 	OnHTTPIdleTimeoutMsChange      func(timeoutMs int64)
+	OnCacheWarmingModeChange       func(mode core.CacheWarmingMode)
 	OnModelThinkingLevelChange     func(provider string, modelID string, level agent.ThinkingLevel)
 	OnModelThinkingLevelRemove     func(provider string, modelID string)
 	OnThemeChange                  func(themeSetting string)
@@ -678,6 +680,13 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 			CurrentValue: core.FormatHTTPIdleTimeoutMs(config.HTTPIdleTimeoutMs),
 		},
 		{
+			Id:           "cache-warming-mode",
+			Label:        "Cache warming",
+			Description:  "off; streaming while the agent runs; idle also between runs while continuation stays profitable",
+			CurrentValue: string(config.CacheWarmingMode),
+			Values:       cacheWarmingModeStrings(),
+		},
+		{
 			Id:           "hide-thinking",
 			Label:        "Hide thinking",
 			Description:  "Hide thinking blocks in assistant responses",
@@ -1170,6 +1179,10 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 						break
 					}
 				}
+			case "cache-warming-mode":
+				if callbacks.OnCacheWarmingModeChange != nil {
+					callbacks.OnCacheWarmingModeChange(core.CacheWarmingMode(newValue))
+				}
 			case "hide-thinking":
 				if callbacks.OnHideThinkingBlockChange != nil {
 					callbacks.OnHideThinkingBlockChange(newValue == "true")
@@ -1317,4 +1330,14 @@ func parseNonNegativeInt(value string) int64 {
 // getSettingsList).
 func (s *SettingsSelectorComponent) GetSettingsList() *tui.SettingsList {
 	return s.settingsList
+}
+
+// cacheWarmingModeStrings converts the mode list for the value picker (pi:
+// [...CACHE_WARMING_MODES]).
+func cacheWarmingModeStrings() []string {
+	out := make([]string, 0, len(core.CacheWarmingModes))
+	for _, mode := range core.CacheWarmingModes {
+		out = append(out, string(mode))
+	}
+	return out
 }
