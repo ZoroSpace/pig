@@ -186,18 +186,6 @@ func isRgiEmoji(segment string) bool {
 	return ok
 }
 
-// isNarrowEmojiPresentation reports whether segment is exactly the two-codepoint
-// sequence [base, U+FE0F] whose base has EAW width 1. Such clusters are RGI
-// emoji but terminals with ambiguous=narrow render them narrow; see the pig
-// hardening note at the emoji branch in graphemeWidth.
-func isNarrowEmojiPresentation(segment string) bool {
-	runes := []rune(segment)
-	if len(runes) != 2 || runes[1] != 0xfe0f {
-		return false
-	}
-	return eastAsianWidth(runes[0]) == 1
-}
-
 // couldBeEmoji is pi's fast heuristic to avoid the RGI_Emoji set lookup.
 // The code point ranges are deliberately broad to account for future Unicode
 // additions.
@@ -399,19 +387,25 @@ func graphemeWidth(segment string) int {
 		return 0
 	}
 
-	// Emoji check with pre-filter
+	// Emoji check with pre-filter. Every RGI emoji counts 2 — including
+	// narrow-base VS16 presentation sequences (⚠️ ⏸️ ❤️ ☀️).
+	//
+	// pig history (2026-09-22, docs/fix/2026-09-22-vs16-emoji-width-wrap-desync.md):
+	// a 2026-09-21 hardening briefly counted those as 1, trusting a
+	// "strict-EAW terminals render them narrow" ground truth. A DSR (ESC[6n)
+	// cursor-position probe on the real environments (tmux 3.7c pane AND
+	// direct iTerm2) measured BOTH rendering them 2 cells. Counting 1 made
+	// pig under-count affected lines by one cell; when such a line sat at the
+	// wrap boundary the terminal auto-wrapped one cell early, the renderer's
+	// row accounting desynced, and every subsequent streaming frame stacked
+	// ghost lines with the editor's Working border drawn mid-text.
+	//
+	// Asymmetry worth keeping: over-counting (2 vs real 1) can only pad a
+	// cell one column wide in tables — it never triggers an early terminal
+	// wrap, so the renderer stays in sync. Under-counting is the catastrophic
+	// direction. When in doubt, count wider.
 	if couldBeEmoji(segment) && isRgiEmoji(segment) {
-		// pig hardening (2026-09-21, docs/fix/2026-09-21-vs16-emoji-width-table-misalign.md):
-		// A VS16 emoji presentation sequence whose base code point has EAW width 1
-		// (neutral/ambiguous: ⏸️ ⚠️ ❤️ ☀️) is rendered ONE cell wide by strict-EAW
-		// terminals (tmux/VTE ambiguous=narrow — the observed ground truth that
-		// misaligned markdown table borders). Wide/fullwidth bases (❌ U+274C EAW=W),
-		// keycaps, ZWJ sequences and RI flag pairs render 2 everywhere and keep 2.
-		if isNarrowEmojiPresentation(segment) {
-			// fall through to eastAsianWidth(base) below (= 1)
-		} else {
-			return 2
-		}
+		return 2
 	}
 
 	// Get base visible codepoint
