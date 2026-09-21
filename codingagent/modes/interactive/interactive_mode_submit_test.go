@@ -136,16 +136,13 @@ func TestClipboardPathSubmissionReachesModel(t *testing.T) {
 
 func TestDeferredInteractiveCommandsStillWarn(t *testing.T) {
 	// The 2026-09-18 batch wired import/copy/session/changelog/hotkeys/clone/
-	// debug + easter eggs (see interactive_mode_commands_test.go); only the
-	// externally-blocked pair stays deferred, each with its own reason.
+	// debug + easter eggs (see interactive_mode_commands_test.go); /export
+	// joined them in P8-EH1 (HTML export), leaving only /share deferred.
 	tests := []struct {
 		name string
 		text string
 		want string // full warning text shown to the user
 	}{
-		{"export bare", "/export", "/export is not yet available (HTML export lands in a later batch)"},
-		{"export with html arg", "/export /tmp/session.html", "/export is not yet available (HTML export lands in a later batch)"},
-		{"export with non-jsonl arg", "/export /tmp/session.md", "/export is not yet available (HTML export lands in a later batch)"},
 		{"share", "/share", "/share is not yet available (GitHub gist sharing lands in a later batch)"},
 	}
 
@@ -218,6 +215,75 @@ func TestExportCommandJsonlExports(t *testing.T) {
 	if _, err := os.Stat(outPath); err != nil {
 		t.Fatalf("exported file missing: %v", err)
 	}
+}
+
+func TestExportCommandHtmlExports(t *testing.T) {
+	// P8-EH1: bare /export and .html/.md args route to ExportToHtml (pi:
+	// handleExportCommand's non-.jsonl branch); .md keeps the given name
+	// with HTML content, and bare /export writes the AppName default next
+	// to the process cwd. HTML export requires a real session file, so the
+	// fixture is file-backed (InMemorySession cannot export — pi throws
+	// "Cannot export in-memory session to HTML").
+	theme.SetGlobalTheme(newSubmitTestTheme(t))
+	sessionManager, err := core.CreateSessionManager(t.TempDir(), t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := createInteractiveTestSessionWithManager(t, &fixtureResourceLoader{}, sessionManager, nil)
+	m := newSeamTestMode(session, nil)
+	m.editor = components.NewCustomEditor(&stubRequestRenderTUI{}, theme.GetEditorTheme(), core.CreateKeybindingsManager(""), nil)
+
+	// Materialize the session file: pig (like pi) only flushes the file to
+	// disk once the first assistant message is persisted, and /export
+	// refuses earlier with "Nothing to export yet".
+	entryID, err := sessionManager.AppendMessage(types.AssistantMessage{
+		Role: types.RoleAssistant, Content: []types.Content{types.TextContent{Kind: types.KindText, Text: "hi"}},
+		StopReason: types.StopReasonStop,
+	})
+	if err != nil || entryID == "" {
+		t.Fatalf("append assistant: %v", err)
+	}
+
+	t.Run("explicit html path", func(t *testing.T) {
+		outPath := filepath.Join(t.TempDir(), "session.html")
+		m.processSubmitText(context.Background(), "/export "+outPath)
+		rendered := normalizeRenderedOutput(renderAllChildren(m.chatContainer, 200))
+		if strings.Contains(rendered, "Warning:") || strings.Contains(rendered, "Error:") {
+			t.Fatalf("unexpected error/warning for .html export:\n%s", rendered)
+		}
+		if !strings.Contains(rendered, "Session exported to: "+outPath) {
+			t.Fatalf("missing export status for %q, got:\n%s", outPath, rendered)
+		}
+		html, err := os.ReadFile(outPath)
+		if err != nil {
+			t.Fatalf("exported file missing: %v", err)
+		}
+		if !strings.Contains(string(html), `id="session-data" type="application/json"`) {
+			t.Fatal("exported HTML lacks the session-data payload tag")
+		}
+	})
+
+	t.Run("non-jsonl arg keeps its name", func(t *testing.T) {
+		outPath := filepath.Join(t.TempDir(), "session.md")
+		m.processSubmitText(context.Background(), "/export "+outPath)
+		html, err := os.ReadFile(outPath)
+		if err != nil {
+			t.Fatalf("exported file missing: %v", err)
+		}
+		if !strings.Contains(string(html), "<!DOCTYPE html>") {
+			t.Fatal("non-.jsonl export must contain HTML content")
+		}
+	})
+
+	t.Run("bare export writes AppName default", func(t *testing.T) {
+		tmp := t.TempDir()
+		t.Chdir(tmp)
+		m.processSubmitText(context.Background(), "/export")
+		matches, err := filepath.Glob(filepath.Join(tmp, "pig-session-*.html"))
+		if err != nil || len(matches) != 1 {
+			t.Fatalf("expected exactly one pig-session-*.html in cwd, got %v (err=%v)", matches, err)
+		}
+	})
 }
 
 func TestClipboardPasteInsertsImagePlaceholder(t *testing.T) {

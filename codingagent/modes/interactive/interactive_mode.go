@@ -1261,9 +1261,9 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 // "/reload" fell through to the model as a plain message (fixed in the
 // same batch; see docs/fix/2026-09-18-reload-command-leaks-to-model.md).
 func isDeferredInteractiveCommand(text string) bool {
-	// /export moved to a real submit branch (2026-09-21): the .jsonl path is
-	// wired via handleExportCommand; bare /export and .html stay deferred
-	// (HTML export lands with Phase 8 export-html).
+	// /export moved to a real submit branch (2026-09-21): .jsonl, bare and
+	// .html/.md paths all route through handleExportCommand (HTML export
+	// landed with P8-EH1).
 	return text == "/share"
 }
 
@@ -1272,8 +1272,6 @@ func isDeferredInteractiveCommand(text string) bool {
 // land in a later batch" was stale — the selectors shipped in T6).
 func deferredCommandReason(commandName string) string {
 	switch commandName {
-	case "export":
-		return "HTML export lands in a later batch"
 	case "share":
 		return "GitHub gist sharing lands in a later batch"
 	default:
@@ -1286,11 +1284,18 @@ func deferredCommandReason(commandName string) string {
 // Phase 8 export-html (they report the deferred-command warning).
 func (m *InteractiveMode) handleExportCommand(text string) {
 	outputPath := m.getPathCommandArgument(text, "/export")
-	if !strings.HasSuffix(outputPath, ".jsonl") {
-		m.ShowWarning("/export is not yet available (" + deferredCommandReason("export") + ")")
+	if strings.HasSuffix(outputPath, ".jsonl") {
+		filePath, err := m.session().ExportToJsonl(outputPath)
+		if err != nil {
+			m.ShowError("Failed to export session: " + errorMessageOf(err))
+			return
+		}
+		m.showStatus(fmt.Sprintf("Session exported to: %s", filePath))
 		return
 	}
-	filePath, err := m.session().ExportToJsonl(outputPath)
+	// themeName: pi passes theme.name (the live theme instance; "" =
+	// unnamed, letting exportToHtml fall back to the settings theme).
+	filePath, err := m.session().ExportToHtml(outputPath, theme.Current().GetName())
 	if err != nil {
 		m.ShowError("Failed to export session: " + errorMessageOf(err))
 		return

@@ -44,6 +44,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent"
 	"github.com/ZoroSpace/pig/codingagent/cli"
 	"github.com/ZoroSpace/pig/codingagent/core"
+	"github.com/ZoroSpace/pig/codingagent/core/exporthtml"
 	"github.com/ZoroSpace/pig/codingagent/modes"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive"
 	"github.com/ZoroSpace/pig/codingagent/utils"
@@ -887,10 +888,19 @@ func Main(args []string) int {
 	}
 
 	if parsed.Export != nil {
-		// pi calls exportFromFile here; export-html (goldmark/chroma) is the
-		// Phase 8 batch, so the flag reports not-yet-available (declared).
-		fmt.Fprintln(os.Stderr, "Error: --export is not yet available (export-html lands in a later phase).")
-		return 1
+		// pi: exportFromFile(parsed.export, outputPath) where outputPath is
+		// the first positional message (main.ts --export branch).
+		outputPath := ""
+		if len(parsed.Messages) > 0 {
+			outputPath = parsed.Messages[0]
+		}
+		result, err := core.ExportFromFile(*parsed.Export, exporthtml.ExportOptions{OutputPath: outputPath})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error: "+err.Error())
+			return 1
+		}
+		fmt.Println("Exported to: " + result)
+		return 0
 	}
 
 	stdinIsTTY := isCharDevice(os.Stdin)
@@ -910,8 +920,8 @@ func Main(args []string) int {
 	validateSessionIdFlags(&parsed)
 
 	// pi runs runMigrations(cwd) here (auth/models.json migrations +
-	// deprecation warnings); migrations arrive with the Phase 8 batch, and
-	// its deprecation warnings surface only in interactive mode.
+	// deprecation warnings collected for interactive mode).
+	migrationsResult := core.RunMigrations(cwd)
 	core.Time("runMigrations", core.TimingMain)
 
 	startupSettingsManager := core.CreateSettingsManager(cwd, agentDir, nil)
@@ -1052,12 +1062,14 @@ func Main(args []string) int {
 	autoResizeImages := settingsManager.GetImageAutoResize()
 	initialMessage, initialImages := prepareInitialMessage(&parsed, autoResizeImages, stdinContent)
 	core.Time("prepareInitialMessage", core.TimingMain)
-	// pi calls initTheme(...) here; theme loading arrives with the theme
-	// batch (Phase 8) and print/json modes do not consume it.
-	core.Time("initTheme", core.TimingMain)
-
+	// pi calls initTheme(...) here (main-level, before the deprecation
+	// warnings); pig initializes the theme inside InteractiveMode, so the
+	// warnings render before theme init relative to pi.
 	// pi shows deprecation warnings in interactive mode (runMigrations
-	// half); deferred with the migrations batch.
+	// half).
+	if appMode == "interactive" && len(migrationsResult.DeprecationWarnings) > 0 {
+		core.ShowDeprecationWarnings(migrationsResult.DeprecationWarnings)
+	}
 	core.Time("resolveModelScope", core.TimingMain)
 
 	startupDiagnostics := core.DeduplicateDiagnostics(append(append([]core.AgentSessionRuntimeDiagnostic(nil), startupSettingsDiagnostics...), runtime.Diagnostics()...))
@@ -1106,6 +1118,7 @@ func Main(args []string) int {
 		interactiveMode := interactive.NewInteractiveMode(runtime, interactive.InteractiveModeOptions{
 			StartupDiagnostics:   runtime.Diagnostics(),
 			ModelFallbackMessage: runtime.ModelFallbackMessage(),
+			MigratedProviders:    migrationsResult.MigratedAuthProviders,
 			InitialMessage:       lo.FromPtr(initialMessage),
 			InitialImages:        initialImages,
 			InitialMessages:      parsed.Messages,

@@ -191,6 +191,7 @@ pig 的行为对齐有测试兜底：**17 万行 Go 源码 + 7.2 万行测试，
 | `/session` | 查看会话信息与统计（消息数、token、费用、cache） |
 | `/copy` | 复制最后一条助手回复到剪贴板 |
 | `/import` | 导入 JSONL 会话文件并恢复 |
+| `/export` | 导出当前会话为 HTML（参数以 `.jsonl` 结尾时导出 JSONL） |
 | `/name` | 设置会话名称 |
 | `/new` | 开始新会话 |
 | `/reload` | 重载 keybindings、扩展、skills、主题与上下文文件 |
@@ -210,6 +211,12 @@ git diff | ./pig -p "审查这个 diff，指出可能的正确性问题"
 ```
 
 支持管道输入与 `@文件` 引用；会话参数如 `--continue` / `--resume` / `--no-session` / `--session-dir` 见 `./pig --help`。
+
+离线分享会话可用 `--export` 把任意 JSONL 会话文件渲染成自包含的 HTML（内置会话树、过滤、搜索与消息渲染，无需服务器）：
+
+```bash
+./pig --export ~/.pig/agent/sessions/<项目>/<会话>.jsonl session.html
+```
 
 ## Provider：实现 ≠ 验证
 

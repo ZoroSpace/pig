@@ -45,7 +45,9 @@ import (
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
 	aiutils "github.com/ZoroSpace/pig/ai/utils"
+	"github.com/ZoroSpace/pig/codingagent/core/exporthtml"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
+	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	"github.com/ZoroSpace/pig/codingagent/utils"
 	pigutils "github.com/ZoroSpace/pig/utils"
 )
@@ -636,6 +638,41 @@ func (s *AgentSession) GetModelRuntime() *ModelRuntime {
 // written path (pi: exportToJsonl).
 func (s *AgentSession) ExportToJsonl(outputPath string) (string, error) {
 	return ExportSessionToJsonl(s.SessionManager, outputPath, nil)
+}
+
+// ExportToHtml exports the session to HTML (pi: agent-session.ts
+// exportToHtml). outputPath "" = a default next to the session file (pi:
+// outputPath?).
+func (s *AgentSession) ExportToHtml(outputPath string, themeName string) (string, error) {
+	// pi: [options.themeName, this.settingsManager.getTheme()].find(
+	//   (candidate) => candidate !== undefined && getThemeByName(candidate) !== undefined)
+	candidates := []string{themeName}
+	if setting, ok := s.SettingsManager.GetTheme(); ok {
+		candidates = append(candidates, setting)
+	}
+	resolvedThemeName := ""
+	for _, candidate := range candidates {
+		if candidate != "" && theme.GetThemeByName(candidate) != nil {
+			resolvedThemeName = candidate
+			break
+		}
+	}
+
+	// pi passes the live theme proxy (createToolHtmlRenderer's deps.theme);
+	// ThemeFunc keeps the dereference lazy so an uninitialized theme throws
+	// inside the renderers' recover-guarded calls and export falls back to
+	// structured rendering, exactly like pi.
+	toolRenderer := exporthtml.CreateToolHtmlRenderer(exporthtml.ToolHtmlRendererDeps{
+		GetToolDefinition: s.GetToolDefinition,
+		ThemeFunc:         theme.Current,
+		Cwd:               s.SessionManager.GetCwd(),
+	})
+
+	return ExportSessionToHtml(s.SessionManager, s.Agent.State(), exporthtml.ExportOptions{
+		OutputPath:   outputPath,
+		ThemeName:    resolvedThemeName,
+		ToolRenderer: toolRenderer,
+	})
 }
 
 // requestAuth is the resolved request credential bundle (pi: the

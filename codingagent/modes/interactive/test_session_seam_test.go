@@ -77,6 +77,17 @@ func (l *fixtureResourceLoader) Reload(*core.ResourceLoaderReloadOptions) error 
 // createInteractiveTestSession assembles an AgentSession with in-memory
 // stores and the fixture loader (pi: createSession helper).
 func createInteractiveTestSession(t *testing.T, loader core.ResourceLoader, configureSettings func(*core.SettingsManager)) *core.AgentSession {
+	sessionManager, err := core.InMemorySession(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return createInteractiveTestSessionWithManager(t, loader, sessionManager, configureSettings)
+}
+
+// createInteractiveTestSessionWithManager is createInteractiveTestSession
+// over a caller-provided session manager (pig addition: HTML export tests
+// need a file-backed session, which InMemorySession cannot provide).
+func createInteractiveTestSessionWithManager(t *testing.T, loader core.ResourceLoader, sessionManager *core.SessionManager, configureSettings func(*core.SettingsManager)) *core.AgentSession {
 	t.Helper()
 
 	agentInstance, err := agent.NewAgent(agent.AgentOptions{
@@ -89,10 +100,6 @@ func createInteractiveTestSession(t *testing.T, loader core.ResourceLoader, conf
 		t.Fatal(err)
 	}
 
-	sessionManager, err := core.InMemorySession(t.TempDir(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
 	settingsManager := core.InMemorySettingsManager(core.Settings{}, nil)
 	if configureSettings != nil {
 		configureSettings(settingsManager)
