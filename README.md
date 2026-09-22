@@ -309,7 +309,8 @@ cp -a ~/.pi/agent ~/.pig/agent
 | 中文分词与 CJK 渲染修复、macOS Ctrl+V 剪贴板贴图（粘贴显示 `[Image N]` 占位符） | — | ✅ pig 增强（pi 走 native addon，pig 用 osascript 零依赖实现） |
 | RPC 模式 / sqlite 会话后端 | ✅ | ⏳ 按需排期 |
 | 扩展系统（Node sidecar、包管理器） | ✅ | ⏳ 装配位已留，见 [EXTENSION-PLAN](docs/handoffs/EXTENSION-PLAN.md) |
-| 终端图片检测、photon/WASM 图像处理、发行打包 | ✅ | ⏳ |
+| 图像转码与缩放（read/贴图/工具结果：BMP/WebP/TIFF→PNG、2000px 自动缩放，Go 原生） | ✅ | ✅ pig 偏差：Go 原生实现替代 photon/WASM，见 [fix 文档](docs/fix/2026-09-22-image-tool-413-oversize-and-history-bloat.md) |
+| 终端图片检测、发行打包 | ✅ | ⏳ |
 
 两个大块按计划押后：
 

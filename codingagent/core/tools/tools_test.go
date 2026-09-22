@@ -6,8 +6,8 @@
 //   - The two executeBashWithOperations cases depend on core/
 //     bash-executor.ts (agent-session batch) and are placeholders.
 //   - "should read BMP files from disk as PNG image attachments" asserts
-//     pi's photon-unavailable path: pig's photon runtime arrives with Phase
-//     8, so conversion fails exactly as pi without a loadable photon.
+//     the 2026-09-22 Go-native conversion (pi's photon behavior); see
+//     docs/fix/2026-09-22-image-tool-413-oversize-and-history-bloat.md.
 //   - applyPatch is a test-only minimal applier (npm diff.applyPatch is not
 //     a harness dependency).
 //   - The process.platform mock of the stdin-transport test is replaced by
@@ -341,15 +341,20 @@ func TestReadTool(t *testing.T) {
 		}
 	})
 
-	t.Run("should read BMP files from disk (photon-unavailable path)", func(t *testing.T) {
+	t.Run("should read BMP files from disk as PNG image attachments", func(t *testing.T) {
 		testFile := filepath.Join(testDir, "image.bmp")
 		writeTestFile(t, testFile, string(createTinyBmp1x1Red24bpp()))
 
 		result := execTool(t, readTool, "test-call-img-bmp", map[string]any{"path": testFile})
-		// pi (with photon) converts to PNG; pig's photon placeholder takes
-		// the documented omission path.
-		if !strings.Contains(textOf(result), "[Image omitted: could not be converted to a supported inline image format.]") {
+		// pig (2026-09-22) implements BMP→PNG conversion Go-natively, matching
+		// pi with photon (the former placeholder asserted the
+		// photon-unavailable omission path; see
+		// docs/fix/2026-09-22-image-tool-413-oversize-and-history-bloat.md).
+		if !strings.Contains(textOf(result), "[Image converted from image/bmp to image/png.]") {
 			t.Fatalf("output = %q", textOf(result))
+		}
+		if len(imagesOf(result)) != 1 || imagesOf(result)[0].MimeType != "image/png" {
+			t.Fatalf("expected one PNG attachment, got %+v", imagesOf(result))
 		}
 	})
 

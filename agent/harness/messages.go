@@ -177,6 +177,12 @@ func CreateCustomMessage(
 // ConvertToLlm converts AgentMessages to LLM-compatible messages before the
 // agent loop streams (pi: convertToLlm). Custom roles project to user
 // messages; unknown message types are dropped.
+//
+// pig deviation (v0.86.1): tool-result images the model has already
+// responded to are elided from the converted context (see image_elision.go);
+// pi sends them on every request, which makes request bodies grow without
+// bound over image-heavy sessions. Single choke point: all LLM callers
+// (agent loop, compaction, branch summaries, bug reports) go through here.
 func ConvertToLlm(messages []agent.AgentMessage) []types.Message {
 	converted := make([]types.Message, 0, len(messages))
 	for _, message := range messages {
@@ -234,5 +240,7 @@ func ConvertToLlm(messages []agent.AgentMessage) []types.Message {
 			// pi's default arm returns undefined (message dropped).
 		}
 	}
-	return converted
+	// pig deviation: elide tool-result images the model has already
+	// responded to (see image_elision.go for the policy and rationale).
+	return ElideRespondedToolResultImages(converted)
 }

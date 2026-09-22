@@ -51,6 +51,8 @@
 
 Phase 8 余量（S6-3c handoff 第 3 节已圈）：**① photon 经 wazero**（仅图像转码半区：剪贴板不常见格式→PNG 的 convertToPng〔codingagent/utils/clipboard_image.go 已声明 not-ok〕；贴图主流程已交付不受影响；另解锁 terminal-image.ts 与 tui Image 组件）② **telemetry 真实上报面评估** ③ **goreleaser 发布链** ④ **/share gist API**（独立小批）。下一批选哪件由用户拍板，模型不擅自定。
 
+> **2026-09-22 增补**：①的图像转码半区已用 Go 原生解码/缩放实现（BMP/WebP/TIFF→PNG + 2000px ApproxBiLinear resize，`codingagent/utils/image_process.go`），不再依赖 photon/wazero——convertToPng 余量仅剩 clipboard_image.go 的接线（可直接复用新实现）；photon/wazero 彻底出局，剩余解锁面只有 terminal-image.ts + tui Image 组件。见 docs/fix/2026-09-22-image-tool-413-oversize-and-history-bloat.md。
+
 **若做 photon/wazero，要读的 pi 源文件**：
 - `packages/coding-agent/src/utils/clipboard-image.ts`（convertToPng 的 photon 调用面）
 - `packages/coding-agent/src/utils/terminal-image.ts`（657 行，iTerm2/kitty 六el 协议分族）

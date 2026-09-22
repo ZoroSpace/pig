@@ -1,7 +1,7 @@
 // pi: test/tool-result-images.test.ts — normalizeToolResultImages behavior.
-// Photon-dependent expectations are adapted to the Phase 8 placeholder
-// (resizeImage no-ops, convertImageBytesToPng fails), see the
-// image_process.go header.
+// Image resizing/transcoding is Go-native (see the image_process.go header);
+// the former photon-placeholder expectations were retired 2026-09-22 (see
+// docs/fix/2026-09-22-image-tool-413-oversize-and-history-bloat.md).
 package utils
 
 import (
@@ -45,21 +45,6 @@ func TestNormalizeToolResultImagesReturnsTheOriginalArrayWhenImagesAreAlreadyWit
 	}
 	if _, ok := normalized[1].(types.ImageContent); !ok {
 		t.Fatalf("expected image block, got %T", normalized[1])
-	}
-}
-
-func TestNormalizeToolResultImagesLeavesOversizedImagesAloneUntilPhotonArrives(t *testing.T) {
-	// pi resizes a 2400x4800 PNG and appends a dimension note. pig's
-	// resizeImage is a Phase 8 no-op, so the block passes through unchanged
-	// (declared deviation, core/tools batch).
-	content := []types.Content{imageBlock(tinyPngBase64, "image/png")}
-
-	normalized, err := NormalizeToolResultImages(content, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(normalized) != 1 {
-		t.Fatalf("expected 1 block, got %d", len(normalized))
 	}
 }
 
