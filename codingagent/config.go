@@ -181,7 +181,9 @@ const ConfigDirName = ".pig"
 // Version is the product version (pi: VERSION = pkg.version || "0.0.0";
 // pig pins the pi baseline version it tracks — user decision 2026-09-10;
 // ldflags injection arrives with the packaging batch).
-const Version = "0.86.0"
+// Bump discipline: MUST be updated in the same batch as every pi baseline
+// sync (S7 missed the v0.86.1 bump; pinned by TestVersionTracksPiBaseline).
+const Version = "0.86.1"
 
 // EnvAgentDir is the env var overriding the agent config dir (pi:
 // ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`; pig deviates:
