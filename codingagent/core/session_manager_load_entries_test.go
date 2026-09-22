@@ -180,7 +180,7 @@ func TestLoadEntriesInMemory(t *testing.T) {
 				t.Fatal(err)
 			}
 			keptID = id
-			if _, err := source.AppendCompaction("summary so far", keptID, 1000, nil, nil, nil); err != nil {
+			if _, err := source.AppendCompaction("summary so far", lo.ToPtr(keptID), 1000, nil, nil, nil); err != nil {
 				t.Fatal(err)
 			}
 		})

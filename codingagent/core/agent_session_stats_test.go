@@ -101,7 +101,7 @@ func TestSessionStatsReportsUnknownContextUsageImmediatelyAfterCompaction(t *tes
 	_, _ = sessionManager.AppendMessage(statsTestAssistantMessage("response1", 180000, 2))
 	keptUserID, _ := sessionManager.AppendMessage(statsTestUserMessage("second", 3))
 	_, _ = sessionManager.AppendMessage(statsTestAssistantMessage("response2", 195000, 4))
-	if _, err := sessionManager.AppendCompaction("summary", keptUserID, 195000, nil, nil, nil); err != nil {
+	if _, err := sessionManager.AppendCompaction("summary", lo.ToPtr(keptUserID), 195000, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	_, _ = sessionManager.AppendMessage(statsTestUserMessage("third", 5))
@@ -130,7 +130,7 @@ func TestSessionStatsUsesPostCompactionUsageInsteadOfStaleKeptUsage(t *testing.T
 	_, _ = sessionManager.AppendMessage(statsTestAssistantMessage("response1", 180000, 2))
 	keptUserID, _ := sessionManager.AppendMessage(statsTestUserMessage("second", 3))
 	_, _ = sessionManager.AppendMessage(statsTestAssistantMessage("response2", 195000, 4))
-	if _, err := sessionManager.AppendCompaction("summary", keptUserID, 195000, nil, nil, nil); err != nil {
+	if _, err := sessionManager.AppendCompaction("summary", lo.ToPtr(keptUserID), 195000, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	_, _ = sessionManager.AppendMessage(statsTestUserMessage("third", 5))
@@ -184,7 +184,7 @@ func TestSessionStatsIncludesCompactionUsageInTotals(t *testing.T) {
 		Input: 10, Output: 20, CacheRead: 30, CacheWrite: 40, TotalTokens: 100,
 		Cost: types.Cost{Input: 0.1, Output: 0.2, CacheRead: 0.3, CacheWrite: 0.4, Total: 1},
 	}
-	if _, err := sessionManager.AppendCompaction("summary", firstKeptEntryID, 100, nil, lo.ToPtr(false), &usage); err != nil {
+	if _, err := sessionManager.AppendCompaction("summary", lo.ToPtr(firstKeptEntryID), 100, nil, lo.ToPtr(false), &usage); err != nil {
 		t.Fatal(err)
 	}
 	syncAgentMessages(session, sessionManager)
@@ -231,7 +231,7 @@ func TestSessionStatsGroupsToolAndSummaryUsageSeparately(t *testing.T) {
 	_, _ = sessionManager.AppendMessage(toolResult)
 	compactionUsage := statsTestUsage(100)
 	compactionUsage.Cost = types.Cost{Total: 2}
-	if _, err := sessionManager.AppendCompaction("summary", rootID, 100, nil, lo.ToPtr(false), &compactionUsage); err != nil {
+	if _, err := sessionManager.AppendCompaction("summary", lo.ToPtr(rootID), 100, nil, lo.ToPtr(false), &compactionUsage); err != nil {
 		t.Fatal(err)
 	}
 	branchUsage := statsTestUsage(100)
@@ -261,7 +261,7 @@ func TestSessionStatsIgnoresZeroUsageMessagesForPostCompactionContextUsage(t *te
 	_, _ = sessionManager.AppendMessage(statsTestAssistantMessage("response1", 180000, 2))
 	keptUserID, _ := sessionManager.AppendMessage(statsTestUserMessage("second", 3))
 	_, _ = sessionManager.AppendMessage(statsTestAssistantMessage("response2", 195000, 4))
-	if _, err := sessionManager.AppendCompaction("summary", keptUserID, 195000, nil, nil, nil); err != nil {
+	if _, err := sessionManager.AppendCompaction("summary", lo.ToPtr(keptUserID), 195000, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	_, _ = sessionManager.AppendMessage(statsTestUserMessage("third", 5))

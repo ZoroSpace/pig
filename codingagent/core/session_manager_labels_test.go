@@ -325,7 +325,7 @@ func TestForkPreservesCompactionWhenBoundaryLabelRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := session.AppendCompaction("summary", labelID, 100, nil, nil, nil); err != nil {
+	if _, err := session.AppendCompaction("summary", lo.ToPtr(labelID), 100, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	leafID, err := session.AppendMessage(userMsg("after"))

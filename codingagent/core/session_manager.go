@@ -19,9 +19,10 @@
 //   - pi throws synchronously (invalid session ids, missing entries, mkdir /
 //     write failures, non-session files) → error returns on the same methods.
 //   - leafId: string | null on the manager maps to *string (nil = null). The
-//     package-level BuildContextEntries/BuildSessionContext take *string with
-//     nil = TS undefined (fall back to the last entry); the null semantics
-//     (empty path) is internalized by the manager methods.
+//     package-level BuildContextEntries/BuildSessionProjection/
+//     BuildSessionContext take *string with nil = TS undefined (fall back to
+//     the last entry); the null semantics (empty path) is internalized by the
+//     manager methods.
 //   - SessionManager.list/listAll/buildSessionInfo are async in pi purely for
 //     fs concurrency; pig runs them synchronously with the same bounded
 //     concurrency (10) and progress callbacks. No ctx: pi has no AbortSignal.
@@ -235,6 +236,56 @@ type CustomMessageEntry struct {
 	Display bool `json:"display"`
 }
 
+// ContextEditableContent is the content shape an append-only context edit
+// may replace without changing message metadata (pi: ContextEditableContent
+// = UserMessage.content | AssistantMessage.content | ToolResultMessage.content
+// | CustomMessage.content). Decoded values are string or []types.Content
+// (see ContextEditReplacement.UnmarshalJSON).
+type ContextEditableContent = any
+
+// ContextEditEntry is an append-only edit of one earlier context-producing
+// entry (pi: ContextEditEntry; v0.87.0). It changes only future model
+// context; the target entry and its metadata remain unchanged in raw
+// history, UI, exports, and session accounting.
+type ContextEditEntry struct {
+	EntryBase
+	TargetID string `json:"targetId"`
+	// Replacement nil (pi: null) omits the target from model context; a
+	// value replaces only its content.
+	Replacement *ContextEditReplacement `json:"replacement"`
+}
+
+// ContextEditReplacement is the non-null replacement payload of a
+// ContextEditEntry (pi: `{ content: ContextEditableContent }`).
+type ContextEditReplacement struct {
+	Content ContextEditableContent `json:"content"`
+}
+
+// UnmarshalJSON decodes replacement content as string or []types.Content
+// (pi: ContextEditableContent; pig decodes content-block arrays into typed
+// Content at the boundary so projections see one shape). JSON null content
+// normalizes to an empty array (pi's own writer never produces it;
+// appendContextEdit rejects it).
+func (r *ContextEditReplacement) UnmarshalJSON(data []byte) error {
+	var probe struct {
+		Content json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return err
+	}
+	var s string
+	if len(probe.Content) > 0 && json.Unmarshal(probe.Content, &s) == nil {
+		r.Content = s
+		return nil
+	}
+	parts, err := types.DecodeContentList(probe.Content)
+	if err != nil {
+		return err
+	}
+	r.Content = parts
+	return nil
+}
+
 // rawFileEntry preserves an entry line whose shape pig's typed decode
 // rejects; it round-trips byte-for-byte (see package header).
 type rawFileEntry struct {
@@ -266,6 +317,26 @@ type SessionTreeNode struct {
 	Label *string
 	// Timestamp of the latest label change for this entry, if any.
 	LabelTimestamp *string
+}
+
+// ProjectedSessionEntry is one selected entry with its model-visible
+// messages after context edits (pi: ProjectedSessionEntry).
+type ProjectedSessionEntry struct {
+	// SourceEntry is the raw append-only entry that owns this projected
+	// contribution.
+	SourceEntry SessionEntry
+	// Messages are the model-visible messages after context edits; empty
+	// for state-only entries and omissions.
+	Messages []agent.AgentMessage
+}
+
+// SessionProjection is the provenance-preserving, compaction-aware model
+// context (pi: SessionProjection; v0.87.0).
+type SessionProjection struct {
+	Entries       []ProjectedSessionEntry
+	Messages      []agent.AgentMessage
+	ThinkingLevel string
+	Model         *SessionModelRef
 }
 
 // SessionModelRef is the model reference carried by SessionContext (pi:
@@ -315,6 +386,7 @@ type ReadonlySessionManager interface {
 	GetLabel(id string) (string, bool)
 	GetBranch(fromID string) []SessionEntry
 	BuildContextEntries() []SessionEntry
+	BuildSessionProjection() SessionProjection
 	GetHeader() *SessionHeader
 	GetEntries() []SessionEntry
 	GetTree() []*SessionTreeNode
@@ -697,19 +769,118 @@ func BuildContextEntries(entries []SessionEntry, leafID *string, byID map[string
 	return contextEntries
 }
 
-// BuildSessionContext builds the session context from entries using tree
-// traversal. If leafID is provided, walks from that entry to root. Handles
-// compaction and branch summaries along the path (pi: buildSessionContext;
-// leafID nil = TS undefined → last entry).
-func BuildSessionContext(entries []SessionEntry, leafID *string, byID map[string]SessionEntry) SessionContext {
+// projectContextEntry projects one selected entry, applying the latest
+// branch-relative context edit targeting it (pi: projectContextEntry; edit
+// nil = TS undefined).
+func projectContextEntry(entry SessionEntry, edit *ContextEditEntry) []agent.AgentMessage {
+	messages := SessionEntryToContextMessages(entry)
+	if edit == nil {
+		return messages
+	}
+	if edit.Replacement == nil {
+		// Null replacement omits the target from model context.
+		return []agent.AgentMessage{}
+	}
+	content := edit.Replacement.Content
+	projected := make([]agent.AgentMessage, 0, len(messages))
+	for _, message := range messages {
+		projected = append(projected, replaceMessageContent(message, content))
+	}
+	return projected
+}
+
+// replaceMessageContent clones a message with the replacement content,
+// leaving roles without editable content unchanged (pi: projectContextEntry's
+// map callback; assistant/toolResult string replacements normalize to one
+// text block because those roles require content arrays).
+func replaceMessageContent(message agent.AgentMessage, content ContextEditableContent) agent.AgentMessage {
+	switch m := message.(type) {
+	case types.UserMessage:
+		m.Content = userContentFromReplacement(content)
+		return m
+	case types.AssistantMessage:
+		m.Content = contentBlocksFromReplacement(content)
+		return m
+	case types.ToolResultMessage:
+		m.Content = contentBlocksFromReplacement(content)
+		return m
+	case harness.CustomMessage:
+		m.Content = content
+		return m
+	}
+	return message
+}
+
+// userContentFromReplacement maps replacement content onto the user-message
+// content union (string stays string; arrays become typed parts).
+func userContentFromReplacement(content ContextEditableContent) types.UserContent {
+	switch c := content.(type) {
+	case string:
+		return types.UserContent{String: c}
+	case []types.Content:
+		return types.UserContent{Parts: c}
+	}
+	// pi carries arbitrary shapes through; the typed world normalizes
+	// unknown shapes to empty content.
+	return types.UserContent{Parts: []types.Content{}}
+}
+
+// contentBlocksFromReplacement maps replacement content onto the
+// array-only assistant/toolResult content shape.
+func contentBlocksFromReplacement(content ContextEditableContent) []types.Content {
+	switch c := content.(type) {
+	case string:
+		return []types.Content{types.NewTextContent(c)}
+	case []types.Content:
+		return c
+	}
+	// pi carries arbitrary shapes through; the typed world normalizes
+	// unknown shapes to an empty array.
+	return []types.Content{}
+}
+
+// BuildSessionProjection builds the provenance-preserving, compaction-aware
+// model context from entries using tree traversal. If leafID is provided,
+// walks from that entry to root. Handles compaction, branch summaries, and
+// context edits along the path (pi: buildSessionProjection; leafID nil = TS
+// undefined → last entry).
+func BuildSessionProjection(entries []SessionEntry, leafID *string, byID map[string]SessionEntry) SessionProjection {
 	path := buildSessionPath(entries, leafID, byID)
 	thinkingLevel, model := getSessionContextSettings(path)
-
-	var messages []agent.AgentMessage
-	for _, entry := range BuildContextEntries(entries, leafID, byID) {
-		messages = append(messages, SessionEntryToContextMessages(entry)...)
+	contextEntries := BuildContextEntries(entries, leafID, byID)
+	edits := map[string]*ContextEditEntry{}
+	for _, entry := range contextEntries {
+		if edit, ok := entry.(*ContextEditEntry); ok {
+			edits[edit.TargetID] = edit
+		}
 	}
-	return SessionContext{Messages: messages, ThinkingLevel: thinkingLevel, Model: model}
+	projectedEntries := make([]ProjectedSessionEntry, 0, len(contextEntries))
+	for index, sourceEntry := range contextEntries {
+		var messages []agent.AgentMessage
+		// buildContextEntries() may retain an older compaction entry because
+		// its raw ID lies inside the newest retained range. Only the newest
+		// compaction at index zero contributes a checkpoint and summary.
+		_, isCompaction := sourceEntry.(*CompactionEntry)
+		if !isCompaction || index == 0 {
+			messages = projectContextEntry(sourceEntry, edits[sourceEntry.Base().ID])
+		} else {
+			messages = []agent.AgentMessage{}
+		}
+		projectedEntries = append(projectedEntries, ProjectedSessionEntry{SourceEntry: sourceEntry, Messages: messages})
+	}
+	var messages []agent.AgentMessage
+	for _, entry := range projectedEntries {
+		messages = append(messages, entry.Messages...)
+	}
+	return SessionProjection{Entries: projectedEntries, Messages: messages, ThinkingLevel: thinkingLevel, Model: model}
+}
+
+// BuildSessionContext builds the finalized model context from the canonical
+// session projection (pi: buildSessionContext; leafID nil = TS undefined →
+// last entry).
+func BuildSessionContext(entries []SessionEntry, leafID *string, byID map[string]SessionEntry) SessionContext {
+	projection := BuildSessionProjection(entries, leafID, byID)
+	return SessionContext{Messages: projection.Messages, ThinkingLevel: projection.ThinkingLevel, Model: projection.Model}
 }
 
 // getDefaultSessionDirPath computes the default session directory for a cwd,
@@ -816,6 +987,9 @@ func decodeTypedFileEntry(data []byte) (FileEntry, error) {
 		return &e, json.Unmarshal(data, &e)
 	case "custom_message":
 		var e CustomMessageEntry
+		return &e, json.Unmarshal(data, &e)
+	case "context_edit":
+		var e ContextEditEntry
 		return &e, json.Unmarshal(data, &e)
 	case "label":
 		var e LabelEntry
@@ -1624,14 +1798,21 @@ func (m *SessionManager) AppendUsage(kind string, provider string, model string,
 // then advances leaf. Returns the entry id (pi: appendCompaction). The
 // complete prompt state at this boundary is captured from the current
 // session context (pi v0.86.0).
-func (m *SessionManager) AppendCompaction(summary string, firstKeptEntryID string, tokensBefore int64, details any, fromHook *bool, usage *types.Usage) (string, error) {
+func (m *SessionManager) AppendCompaction(summary string, firstKeptEntryID *string, tokensBefore int64, details any, fromHook *bool, usage *types.Usage) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	timestamp := sessionTimestamp()
 	systemMessage := currentSystemMessageFromEntries(m.getEntriesLocked(), m.leafID, m.byID)
+	id := m.generateIDLocked()
+	// pi v0.87.0: firstKeptEntryId ?? id — a null firstKeptEntryId makes the
+	// compaction self-referencing (retain none of the preceding entries).
+	keptID := id
+	if firstKeptEntryID != nil {
+		keptID = *firstKeptEntryID
+	}
 	entry := &CompactionEntry{
 		Summary:          summary,
-		FirstKeptEntryID: firstKeptEntryID,
+		FirstKeptEntryID: keptID,
 		TokensBefore:     tokensBefore,
 		Details:          details,
 		Usage:            usage,
@@ -1643,7 +1824,7 @@ func (m *SessionManager) AppendCompaction(summary string, firstKeptEntryID strin
 		entry.SystemMessage = &captured
 	}
 	entry.Type = "compaction"
-	entry.ID = m.generateIDLocked()
+	entry.ID = id
 	entry.ParentID = m.leafID
 	entry.Timestamp = timestamp
 	if err := m.appendEntryLocked(entry); err != nil {
@@ -1654,12 +1835,13 @@ func (m *SessionManager) AppendCompaction(summary string, firstKeptEntryID strin
 
 // currentSystemMessageFromEntries replays the transcript's system messages
 // for the current branch (pi: getCurrentSystemMessage(
-// this.buildSessionContext().messages); pig works from the entry list to
-// avoid re-locking buildSessionContext under the held mutex).
+// this.buildSessionProjection().messages); pig works from the entry list
+// with the package-level projection to avoid re-locking the manager under
+// the held mutex).
 func currentSystemMessageFromEntries(entries []SessionEntry, leafID *string, byID map[string]SessionEntry) *types.SystemMessage {
-	context := BuildSessionContext(entries, leafID, byID)
+	projection := BuildSessionProjection(entries, leafID, byID)
 	var transcript aiutils.TranscriptMessages
-	for _, message := range context.Messages {
+	for _, message := range projection.Messages {
 		if typed, ok := message.(types.Message); ok {
 			transcript = append(transcript, typed)
 		}
@@ -1736,6 +1918,67 @@ func (m *SessionManager) AppendCustomMessageEntry(customType string, content any
 		Details:    details,
 	}
 	entry.Type = "custom_message"
+	entry.ID = m.generateIDLocked()
+	entry.ParentID = m.leafID
+	entry.Timestamp = sessionTimestamp()
+	if err := m.appendEntryLocked(entry); err != nil {
+		return "", err
+	}
+	return entry.ID, nil
+}
+
+// AppendContextEdit appends a branch-local edit to an earlier
+// model-visible entry. Returns the entry id (pi: appendContextEdit; throws
+// → error return).
+func (m *SessionManager) AppendContextEdit(targetID string, replacement *ContextEditReplacement) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if replacement != nil {
+		switch replacement.Content.(type) {
+		case string, []types.Content:
+		default:
+			return "", fmt.Errorf("Context edit replacement must be null or contain string/array content")
+		}
+	}
+	target, ok := m.byID[targetID]
+	if !ok {
+		return "", fmt.Errorf("Entry %s not found", targetID)
+	}
+	onBranch := false
+	for _, entry := range m.getBranchLocked("") {
+		if entry.Base().ID == targetID {
+			onBranch = true
+			break
+		}
+	}
+	if !onBranch {
+		return "", fmt.Errorf("Entry %s is not on the active branch", targetID)
+	}
+	editable := false
+	targetRole := "custom"
+	if messageEntry, ok := target.(*SessionMessageEntry); ok {
+		switch messageEntry.Message.MessageRole() {
+		case types.RoleUser, types.RoleAssistant, types.RoleToolResult:
+			editable = true
+			targetRole = string(messageEntry.Message.MessageRole())
+		}
+	} else if _, ok := target.(*CustomMessageEntry); ok {
+		editable = true
+	}
+	if !editable {
+		return "", fmt.Errorf("Entry %s does not contribute editable model content", targetID)
+	}
+	normalized := replacement
+	if replacement != nil && (targetRole == string(types.RoleAssistant) || targetRole == string(types.RoleToolResult)) {
+		if text, ok := replacement.Content.(string); ok {
+			normalized = &ContextEditReplacement{Content: []types.Content{types.NewTextContent(text)}}
+		}
+	}
+	entry := &ContextEditEntry{
+		TargetID:    targetID,
+		Replacement: normalized,
+	}
+	entry.Type = "context_edit"
 	entry.ID = m.generateIDLocked()
 	entry.ParentID = m.leafID
 	entry.Timestamp = sessionTimestamp()
@@ -1879,9 +2122,23 @@ func (m *SessionManager) BuildContextEntries() []SessionEntry {
 	return BuildContextEntries(m.getEntriesLocked(), m.leafID, m.byID)
 }
 
-// BuildSessionContext builds the session context (what gets sent to the
-// LLM), using tree traversal from current leaf (pi: buildSessionContext). A
-// null leaf yields the default context.
+// BuildSessionProjection builds the provenance-preserving, compaction-aware
+// model context (what gets sent to the LLM), using tree traversal from
+// current leaf (pi: buildSessionProjection). A null leaf yields the default
+// projection.
+func (m *SessionManager) BuildSessionProjection() SessionProjection {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.leafID == nil {
+		// pi passes leafId: null → empty path → default settings.
+		return SessionProjection{Entries: []ProjectedSessionEntry{}, Messages: []agent.AgentMessage{}, ThinkingLevel: "off"}
+	}
+	return BuildSessionProjection(m.getEntriesLocked(), m.leafID, m.byID)
+}
+
+// BuildSessionContext builds the finalized model context from the canonical
+// session projection, using tree traversal from current leaf (pi:
+// buildSessionContext). A null leaf yields the default context.
 func (m *SessionManager) BuildSessionContext() SessionContext {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1889,7 +2146,8 @@ func (m *SessionManager) BuildSessionContext() SessionContext {
 		// pi passes leafId: null → empty path → default settings.
 		return SessionContext{Messages: []agent.AgentMessage{}, ThinkingLevel: "off"}
 	}
-	return BuildSessionContext(m.getEntriesLocked(), m.leafID, m.byID)
+	projection := BuildSessionProjection(m.getEntriesLocked(), m.leafID, m.byID)
+	return SessionContext{Messages: projection.Messages, ThinkingLevel: projection.ThinkingLevel, Model: projection.Model}
 }
 
 // GetHeader returns the session header, or nil (pi: getHeader).
@@ -2088,6 +2346,10 @@ func cloneEntryWithParent(entry SessionEntry, parentID *string) SessionEntry {
 		c := *e
 		c.ParentID = parentID
 		return &c
+	case *ContextEditEntry:
+		c := *e
+		c.ParentID = parentID
+		return &c
 	case *LabelEntry:
 		c := *e
 		c.ParentID = parentID
@@ -2139,8 +2401,12 @@ func (m *SessionManager) CreateBranchedSession(leafID string) (string, error) {
 		if compaction, ok := entry.(*CompactionEntry); ok {
 			clone := cloneEntryWithParent(entry, pathParentID).(*CompactionEntry)
 			// pi: firstKeptEntryId: replacementByLabelId.get(entry.firstKeptEntryId) ?? entry.firstKeptEntryId.
-			if replacement, remapped := replacementByLabelID[compaction.FirstKeptEntryID]; remapped {
-				clone.FirstKeptEntryID = replacement
+			// pi v0.87.0: a retain-none compaction keeps its self-referencing
+			// firstKeptEntryId even when a removed label precedes it.
+			if compaction.FirstKeptEntryID != compaction.Base().ID {
+				if replacement, remapped := replacementByLabelID[compaction.FirstKeptEntryID]; remapped {
+					clone.FirstKeptEntryID = replacement
+				}
 			}
 			pathWithoutLabels = append(pathWithoutLabels, clone)
 		} else {

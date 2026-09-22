@@ -179,7 +179,7 @@ func TestAutoCompactionQueueIgnoresStalePreCompactionAssistantUsageOnPrePromptCh
 	}
 
 	firstKeptEntryID := sessionManager.GetEntries()[0].Base().ID
-	if _, err := sessionManager.AppendCompaction("summary", firstKeptEntryID, staleAssistant.Usage.TotalTokens, nil, lo.ToPtr(false), nil); err != nil {
+	if _, err := sessionManager.AppendCompaction("summary", lo.ToPtr(firstKeptEntryID), staleAssistant.Usage.TotalTokens, nil, lo.ToPtr(false), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -340,7 +340,7 @@ func TestAutoCompactionQueueNoThresholdCompactionWhenOnlyKeptPreCompactionUsageE
 		t.Fatal(err)
 	}
 	firstKeptEntryID := sessionManager.GetEntries()[0].Base().ID
-	if _, err := sessionManager.AppendCompaction("summary", firstKeptEntryID, keptAssistant.Usage.TotalTokens, nil, lo.ToPtr(false), nil); err != nil {
+	if _, err := sessionManager.AppendCompaction("summary", lo.ToPtr(firstKeptEntryID), keptAssistant.Usage.TotalTokens, nil, lo.ToPtr(false), nil); err != nil {
 		t.Fatal(err)
 	}
 

@@ -119,7 +119,7 @@ func TestAppendOperations(t *testing.T) {
 			Input: 10, Output: 20, CacheRead: 30, CacheWrite: 40, TotalTokens: 100,
 			Cost: types.Cost{Input: 0.1, Output: 0.2, CacheRead: 0.3, CacheWrite: 0.4, Total: 1},
 		}
-		compactionID, err := session.AppendCompaction("summary", id1, 1000, nil, lo.ToPtr(false), &usage)
+		compactionID, err := session.AppendCompaction("summary", lo.ToPtr(id1), 1000, nil, lo.ToPtr(false), &usage)
 		mustAppend(t, compactionID, err)
 		_, _ = session.AppendMessage(userMsg("3"))
 
@@ -787,7 +787,7 @@ func TestCreateBranchedSession(t *testing.T) {
 			Usage:      &usage,
 			Timestamp:  timeNowMillis(),
 		})
-		_, _ = session.AppendCompaction("summary", rootID, 100, nil, lo.ToPtr(false), &usage)
+		_, _ = session.AppendCompaction("summary", lo.ToPtr(rootID), 100, nil, lo.ToPtr(false), &usage)
 		_, _ = session.BranchWithSummary(rootID, "branch summary", nil, lo.ToPtr(false), &usage)
 
 		file := session.GetSessionFile()

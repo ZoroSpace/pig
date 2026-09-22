@@ -3188,7 +3188,7 @@ func (s *AgentSession) Compact(ctx context.Context, customInstructions string) (
 		return fail(fmt.Errorf("Compaction cancelled"))
 	}
 
-	if _, err := s.SessionManager.AppendCompaction(summary, firstKeptEntryID, tokensBefore, details, lo.ToPtr(fromExtension), usage); err != nil {
+	if _, err := s.SessionManager.AppendCompaction(summary, lo.ToPtr(firstKeptEntryID), tokensBefore, details, lo.ToPtr(fromExtension), usage); err != nil {
 		return fail(err)
 	}
 	newEntries := s.SessionManager.GetEntries()
@@ -3552,7 +3552,7 @@ func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, wil
 		return fail(autoCtx.Err())
 	}
 
-	if _, err := s.SessionManager.AppendCompaction(summary, firstKeptEntryID, tokensBefore, details, lo.ToPtr(fromExtension), usage); err != nil {
+	if _, err := s.SessionManager.AppendCompaction(summary, lo.ToPtr(firstKeptEntryID), tokensBefore, details, lo.ToPtr(fromExtension), usage); err != nil {
 		return fail(err)
 	}
 	newEntries := s.SessionManager.GetEntries()
