@@ -397,6 +397,11 @@ func TestAgentSessionConcurrentPersistsMessageEndEventsInOrderWithSlowExtensionH
 	session, sessionManager, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
 		GetAPIKey:         true,
 		BaseToolsOverride: map[string]agent.AgentTool{"dummy": dummyTool()},
+		// pi constructs the Agent directly with initialState.tools=[tool];
+		// the leading system message then declares the tool, and after the
+		// v0.87.0 projection replaces the loop context the declaration is
+		// re-synthesized as a second system entry at the next turn.
+		InitialTools: []agent.AgentTool{dummyTool()},
 		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			stream := newMockAssistantStream()
 			go func() {
@@ -456,7 +461,7 @@ func TestAgentSessionConcurrentPersistsMessageEndEventsInOrderWithSlowExtensionH
 			roles = append(roles, string(messageEntry.Message.MessageRole()))
 		}
 	}
-	if strings.Join(roles, ",") != "system,user,assistant,toolResult,assistant" {
+	if strings.Join(roles, ",") != "system,user,assistant,toolResult,system,assistant" {
 		t.Fatalf("roles = %v", roles)
 	}
 }

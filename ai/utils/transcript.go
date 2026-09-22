@@ -286,7 +286,26 @@ func DeclarationsEqual(left, right tool) bool {
 	if err != nil {
 		return false
 	}
-	return string(l) == string(r)
+	// pig: ConstrainedSampling is typed any — a JSONL-decoded value
+	// re-marshals as a map (keys sorted) while a registry-side struct keeps
+	// field order, so raw byte comparison flags semantically identical tools
+	// on session resume (spurious toolsRemoved+toolsAdded declaration).
+	// pi's JS object key order is stable across this comparison in every real
+	// flow, so canonicalize both sides through decode-to-any (map keys sort
+	// deterministically) before the byte comparison.
+	var lc, rc any
+	if json.Unmarshal(l, &lc) != nil || json.Unmarshal(r, &rc) != nil {
+		return false
+	}
+	lb, err := json.Marshal(lc)
+	if err != nil {
+		return false
+	}
+	rb, err := json.Marshal(rc)
+	if err != nil {
+		return false
+	}
+	return string(lb) == string(rb)
 }
 
 // ToolStateChanges is the delta between two complete tool states.

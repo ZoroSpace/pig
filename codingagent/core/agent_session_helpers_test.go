@@ -192,6 +192,11 @@ func createAgentTestSession(t *testing.T, options *createAgentTestSessionOptions
 	if cfg.OmitSeedSystemPrompt {
 		seedSystemPrompt = ""
 	}
+	// pi test/suite/harness.ts:170 wires transformContext through the
+	// extensionRunnerRef closure at agent construction time (mirrors the
+	// production wiring in sdk.go); without it, context/context_with_system
+	// extension handlers never run in session-level tests.
+	runnerRef := &ExtensionRunnerRef{}
 	agentOptions := agent.AgentOptions{
 		StreamFn: streamFn,
 		// pi's createHarness runs through the SDK assembly, which installs
@@ -201,7 +206,14 @@ func createAgentTestSession(t *testing.T, options *createAgentTestSessionOptions
 		// createAgentSession overrides it — mirror that here).
 
 		ConvertToLlm: harness.ConvertToLlm,
-		InitialState: &agent.AgentState{Model: model, SystemPrompt: seedSystemPrompt, ThinkingLevel: cfg.ThinkingLevel},
+		InitialState: &agent.AgentState{Model: model, SystemPrompt: seedSystemPrompt, ThinkingLevel: cfg.ThinkingLevel, Tools: cfg.InitialTools},
+		TransformContext: func(ctx context.Context, messages []agent.AgentMessage) []agent.AgentMessage {
+			runner := runnerRef.Current
+			if runner == nil {
+				return messages
+			}
+			return runner.EmitContext(ctx, messages)
+		},
 	}
 	if cfg.GetAPIKey {
 		agentOptions.GetApiKey = func(types.ProviderID) string { return "test-key" }
@@ -229,13 +241,14 @@ func createAgentTestSession(t *testing.T, options *createAgentTestSessionOptions
 		cwd = t.TempDir()
 	}
 	session := NewAgentSession(AgentSessionConfig{
-		Agent:             agentInstance,
-		SessionManager:    sessionManager,
-		SettingsManager:   settingsManager,
-		Cwd:               cwd,
-		ModelRuntime:      registry.GetModelRuntime(),
-		ResourceLoader:    createTestResourceLoader(cfg.ExtensionsResult...),
-		BaseToolsOverride: cfg.BaseToolsOverride,
+		Agent:              agentInstance,
+		SessionManager:     sessionManager,
+		SettingsManager:    settingsManager,
+		Cwd:                cwd,
+		ModelRuntime:       registry.GetModelRuntime(),
+		ResourceLoader:     createTestResourceLoader(cfg.ExtensionsResult...),
+		BaseToolsOverride:  cfg.BaseToolsOverride,
+		ExtensionRunnerRef: runnerRef,
 	})
 	t.Cleanup(session.Dispose)
 	return session, sessionManager, settingsManager
@@ -251,6 +264,11 @@ type createAgentTestSessionOptions struct {
 	ExtensionsResult  []*LoadExtensionsResult
 	// BaseToolsOverride overrides base tools (pi: baseToolsOverride).
 	BaseToolsOverride map[string]agent.AgentTool
+	// InitialTools seeds the agent's initial state tools (pi: tests that
+	// construct Agent directly pass initialState.tools; the leading system
+	// message then declares them, which matters for declareToolChanges
+	// deltas once the v0.87.0 projection replaces the loop context).
+	InitialTools []agent.AgentTool
 	// Cwd overrides the session working directory.
 	Cwd string
 	// OmitSeedSystemPrompt leaves the initial state's system prompt empty

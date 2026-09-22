@@ -160,7 +160,9 @@ func Test9789KeepsMidConversationSystemMessagesWhenUnchanged(t *testing.T) {
 		}
 		turn++
 		if turn == 2 {
-			planMode := "<plan_mode>\nPlan only.\n</plan_mode>"
+			// pi sets the raw section content; buildSystemPromptSections wraps
+			// it in <plan_mode> tags for the transcript/request.
+			planMode := "Plan only."
 			beforeStart.SystemPromptOptions.Sections = &types.SystemSections{
 				Keys:   []string{"plan_mode"},
 				Values: map[string]*string{"plan_mode": &planMode},

@@ -1153,8 +1153,10 @@ type BeforeAgentStartEvent struct {
 	// getter; pig renders it once per handler dispatch).
 	SystemPrompt string `json:"systemPrompt"`
 	// SystemPromptOptions is mutable; later handlers observe mutations made
-	// by earlier handlers (pi v0.86.0).
-	SystemPromptOptions NormalizedBuildSystemPromptOptions `json:"systemPromptOptions"`
+	// by earlier handlers (pi v0.86.0). Pointer so handler field assignments
+	// (e.g. replacing Sections) are visible to the runner's result — pi
+	// passes the same options object by reference.
+	SystemPromptOptions *NormalizedBuildSystemPromptOptions `json:"systemPromptOptions"`
 }
 
 func (e *BeforeAgentStartEvent) EventType() string { return e.Type }

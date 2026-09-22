@@ -961,7 +961,7 @@ func (r *ExtensionRunner) EmitBeforeAgentStart(
 				Prompt:              prompt,
 				Images:              images,
 				SystemPrompt:        renderCurrentSystemPrompt(),
-				SystemPromptOptions: currentOptions,
+				SystemPromptOptions: &currentOptions,
 			}
 			result, err := handler(ctx, handlerCtx, event)
 			if err != nil {
