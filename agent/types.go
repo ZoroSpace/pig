@@ -151,12 +151,14 @@ type AfterToolCallContext struct {
 	Context *AgentContext
 }
 
-// ShouldStopAfterTurnContext is passed to `shouldStopAfterTurn`.
-type ShouldStopAfterTurnContext struct {
+// AgentTurnContext is passed to completed-turn callbacks (pi v0.87.0:
+// renamed from ShouldStopAfterTurnContext; consumed by finishTurn,
+// prepareNextTurn, and their Agent-level variants).
+type AgentTurnContext struct {
 	// Message is the assistant message that completed the turn.
 	Message types.AssistantMessage
-	// ToolResults are the tool result messages passed to the preceding
-	// `turn_end` event.
+	// ToolResults are the tool result messages emitted for the completed
+	// turn (pi v0.87.0 wording).
 	ToolResults []types.ToolResultMessage
 	// Context is the current agent context after the turn's assistant message
 	// and tool results have been appended.
@@ -166,6 +168,29 @@ type ShouldStopAfterTurnContext struct {
 	// continuation runs do not include pre-existing context messages.
 	NewMessages []AgentMessage
 }
+
+// AgentTurnAction enumerates the decisions FinishTurn may return (pi:
+// { action: "continue" } | { action: "end" }).
+type AgentTurnAction string
+
+const (
+	AgentTurnActionContinue AgentTurnAction = "continue"
+	AgentTurnActionEnd      AgentTurnAction = "end"
+)
+
+// AgentTurnDecision is the decision returned by FinishTurn. nil preserves
+// normal scheduling (pi: returning undefined).
+type AgentTurnDecision struct {
+	Action AgentTurnAction
+}
+
+// FinishTurn is called after a completed assistant turn and all of its
+// tool-result messages, but before `turn_end`. On a normal turn,
+// { action: "continue" } ensures one next provider request. Tool-result,
+// steering, or follow-up scheduling can satisfy that request and adds no
+// extra request; otherwise the loop continues once with the current context.
+// Error and aborted responses remain hard exits (the decision is ignored).
+type FinishTurn func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision
 
 // AgentLoopTurnUpdate is replacement runtime state used by the agent loop
 // before starting another provider request.
@@ -181,9 +206,33 @@ type AgentLoopTurnUpdate struct {
 	ThinkingLevel ThinkingLevel
 }
 
+// PrepareRequestContext is the runtime state available immediately before a
+// conversational provider request (pi v0.87.0).
+type PrepareRequestContext struct {
+	Context *AgentContext
+	Model   *types.Model
+	// ThinkingLevel mirrors pi's `config.reasoning ?? "off"`: never empty.
+	ThinkingLevel ThinkingLevel
+}
+
+// AgentRequestUpdate is replacement runtime state for the provider request
+// being prepared (pi: Omit<AgentLoopTurnUpdate, "messages">).
+type AgentRequestUpdate struct {
+	Context       *AgentContext
+	Model         *types.Model
+	ThinkingLevel ThinkingLevel
+}
+
+// PrepareRequest is called immediately before every conversational provider
+// request, including the first. Pending messages have already been appended
+// and emitted when this callback runs. The returned context, model, and
+// thinking level replace the runtime values for this and later requests in
+// the run. This hook does not poll queues.
+type PrepareRequest func(ctx context.Context, request PrepareRequestContext) *AgentRequestUpdate
+
 // PrepareNextTurnContext is the context passed to `prepareNextTurn` (pi
-// re-declares ShouldStopAfterTurnContext unchanged).
-type PrepareNextTurnContext = ShouldStopAfterTurnContext
+// v0.87.0 re-declares it as an extension-free alias of AgentTurnContext).
+type PrepareNextTurnContext = AgentTurnContext
 
 // AgentLoopConfig extends SimpleStreamOptions with the agent loop's hooks.
 // Field comments carry pi's behavioral contracts verbatim; all callbacks are
@@ -226,21 +275,28 @@ type AgentLoopConfig struct {
 	// Contract: must not panic. Return "" when no key is available.
 	GetApiKey func(provider types.ProviderID) string
 
-	// ShouldStopAfterTurn is called after each turn fully completes and
-	// `turn_end` has been emitted.
+	// FinishTurn is called after the assistant message and all tool-result
+	// messages have been emitted, immediately before `turn_end`.
 	//
-	// If it returns true, the loop emits `agent_end` and exits before polling
-	// steering or follow-up queues, without starting another LLM call. The
-	// current assistant response and any tool executions finish normally.
-	// This callback sees the completed-turn context and runs before
-	// `PrepareNextTurn`.
-	//
-	// Use this to request a graceful stop after the current turn, e.g. before
-	// context gets too full.
+	// `{ action: "end" }` ends the run without polling queues or preparing
+	// another request. On a normal turn, `{ action: "continue" }` ensures one
+	// next provider request. Tool-result, steering, or follow-up scheduling
+	// can satisfy that request and adds no extra request; otherwise the loop
+	// continues once with the current context. Returning nil preserves normal
+	// scheduling. Error and aborted responses remain hard exits (the callback
+	// still runs, but its decision is ignored).
 	//
 	// Contract: must not panic. Panicking interrupts the low-level agent loop
 	// without producing a normal event sequence.
-	ShouldStopAfterTurn func(context ShouldStopAfterTurnContext) bool
+	FinishTurn FinishTurn
+
+	// PrepareRequest is called immediately before every conversational
+	// provider request, including the first. Pending messages have already
+	// been appended. The returned context, model, and thinking level replace
+	// the runtime values for this and later requests in the run. This hook
+	// does not poll queues. Return nil to keep using the current
+	// context/config.
+	PrepareRequest PrepareRequest
 
 	// PrepareNextTurn is called after `turn_end` when the loop will continue,
 	// immediately before the next turn starts. Return replacement
@@ -252,7 +308,7 @@ type AgentLoopConfig struct {
 	// conversation mid-run.
 	//
 	// Called after the current assistant turn finishes executing its tool
-	// calls, unless `shouldStopAfterTurn` exits first. If messages are
+	// calls, unless `finishTurn` ends the run. If messages are
 	// returned, they are added to the context before the next LLM call. Tool
 	// calls from the current assistant message are not skipped.
 	//

@@ -6,6 +6,8 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1007,7 +1009,9 @@ func TestAgentLoopUsesPrepareNextTurnSnapshotBeforeContinuing(t *testing.T) {
 	}
 }
 
-func TestAgentLoopStopsAfterTurnWhenShouldStopAfterTurnReturnsTrue(t *testing.T) {
+// pi v0.87.0: "action:end receives finalized turn context and stops before
+// queue polling" (formerly shouldStopAfterTurn returns true).
+func TestAgentLoopActionEndReceivesFinalizedTurnContext(t *testing.T) {
 	executed := []string{}
 	tool := &AgentTool{
 		Tool:  types.Tool{Name: "echo", Description: "Echo tool", Parameters: echoToolSchema(t)},
@@ -1039,19 +1043,19 @@ func TestAgentLoopStopsAfterTurnWhenShouldStopAfterTurnReturnsTrue(t *testing.T)
 			followUpPolls++
 			return []AgentMessage{createUserMessage("follow up should stay queued")}
 		},
-		ShouldStopAfterTurn: func(context ShouldStopAfterTurnContext) bool {
-			if context.Message.MessageRole() != types.RoleAssistant {
-				t.Errorf("message role = %v, want assistant", context.Message.MessageRole())
+		FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
+			if turn.Message.MessageRole() != types.RoleAssistant {
+				t.Errorf("message role = %v, want assistant", turn.Message.MessageRole())
 			}
 			callbackToolResultIDs = nil
-			for _, toolResult := range context.ToolResults {
+			for _, toolResult := range turn.ToolResults {
 				callbackToolResultIDs = append(callbackToolResultIDs, toolResult.ToolCallID)
 			}
 			callbackContextRoles = nil
-			for _, message := range context.Context.Messages {
+			for _, message := range turn.Context.Messages {
 				callbackContextRoles = append(callbackContextRoles, message.MessageRole())
 			}
-			return true
+			return &AgentTurnDecision{Action: AgentTurnActionEnd}
 		},
 	}
 
@@ -1494,5 +1498,542 @@ func TestAgentLoopContinueRejectsAssistantLastMessage(t *testing.T) {
 	_, err := AgentLoopContinue(context.Background(), agentContext, config, nil)
 	if err == nil || err.Error() != "Cannot continue from message role: assistant" {
 		t.Fatalf("err = %v, want Cannot continue from message role: assistant", err)
+	}
+}
+
+// ---- pi v0.87.0: finishTurn / prepareRequest (agent-loop.test.ts) ----
+
+// pi: "runs finishTurn after tool-result messages and before turn_end".
+func TestAgentLoopRunsFinishTurnAfterToolResultsBeforeTurnEnd(t *testing.T) {
+	tool := &AgentTool{
+		Tool:  types.Tool{Name: "echo", Description: "Echo tool", Parameters: echoToolSchema(t)},
+		Label: "Echo",
+		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate AgentToolUpdateCallback) (AgentToolResult, error) {
+			value := params.(map[string]any)["value"].(string)
+			return AgentToolResult{
+				Content:   []types.Content{types.NewTextContent(value)},
+				Details:   map[string]any{"value": value},
+				Terminate: true,
+			}, nil
+		},
+	}
+	var ordering []string
+	var mu sync.Mutex
+	record := func(entry string) {
+		mu.Lock()
+		defer mu.Unlock()
+		ordering = append(ordering, entry)
+	}
+	config := AgentLoopConfig{
+		Model:        createModel(),
+		ConvertToLlm: identityConverter,
+		FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
+			record("finishTurn")
+			if len(turn.ToolResults) != 1 {
+				t.Errorf("toolResults = %d, want 1", len(turn.ToolResults))
+			}
+			messages := turn.Context.Messages
+			if len(messages) == 0 || messages[len(messages)-1].MessageRole() != types.RoleToolResult {
+				t.Errorf("last context message role = %v, want toolResult", messages[len(messages)-1].MessageRole())
+			}
+			return nil
+		},
+	}
+
+	RunAgentLoop(
+		context.Background(),
+		[]AgentMessage{createUserMessage("echo")},
+		AgentContext{Tools: []*AgentTool{tool}},
+		config,
+		func(event AgentEvent) {
+			if event.Type == AgentEventMessageEnd {
+				record("message_end:" + string(event.Message.MessageRole()))
+			}
+			if event.Type == AgentEventTurnEnd {
+				record("turn_end")
+			}
+		},
+		func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			assistant := createAssistantMessage([]types.Content{
+				types.NewToolCall("tool-1", "echo", map[string]any{"value": "hello"}),
+			}, types.StopReasonToolUse)
+			return mockStreamFn(doneEvent(assistant))(ctx, model, llmContext, options)
+		},
+	)
+
+	if len(ordering) < 3 {
+		t.Fatalf("ordering = %v, want at least 3 entries", ordering)
+	}
+	tail := ordering[len(ordering)-3:]
+	wantTail := []string{"message_end:toolResult", "finishTurn", "turn_end"}
+	for index, want := range wantTail {
+		if tail[index] != want {
+			t.Fatalf("ordering tail = %v, want %v", tail, wantTail)
+		}
+	}
+}
+
+// pi: "runs finishTurn for a %s assistant before turn_end without changing
+// the hard exit" (parameterized over error and aborted).
+func TestAgentLoopRunsFinishTurnForErrorAbortedBeforeTurnEnd(t *testing.T) {
+	for _, reason := range []types.StopReason{types.StopReasonError, types.StopReasonAborted} {
+		t.Run(string(reason), func(t *testing.T) {
+			var ordering []string
+			var providerCalls, steeringPolls, followUpPolls atomic.Int64
+			RunAgentLoop(
+				context.Background(),
+				[]AgentMessage{createUserMessage("run")},
+				AgentContext{},
+				AgentLoopConfig{
+					Model:        createModel(),
+					ConvertToLlm: identityConverter,
+					FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
+						if turn.Message.StopReason != reason {
+							t.Errorf("stopReason = %v, want %v", turn.Message.StopReason, reason)
+						}
+						ordering = append(ordering, "finishTurn")
+						return &AgentTurnDecision{Action: AgentTurnActionContinue}
+					},
+					GetSteeringMessages: func() []AgentMessage {
+						steeringPolls.Add(1)
+						return nil
+					},
+					GetFollowUpMessages: func() []AgentMessage {
+						followUpPolls.Add(1)
+						return []AgentMessage{createUserMessage("queued")}
+					},
+				},
+				func(event AgentEvent) {
+					if event.Type == AgentEventTurnEnd {
+						ordering = append(ordering, "turn_end")
+					}
+				},
+				func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+					providerCalls.Add(1)
+					failure := createAssistantMessage(nil, reason)
+					failure.ErrorMessage = string(reason)
+					return mockStreamFn(types.AssistantMessageEvent{Type: types.EventError, Reason: reason, Message: &failure})(ctx, model, llmContext, options)
+				},
+			)
+
+			if len(ordering) != 2 || ordering[0] != "finishTurn" || ordering[1] != "turn_end" {
+				t.Fatalf("ordering = %v, want [finishTurn turn_end]", ordering)
+			}
+			if providerCalls.Load() != 1 {
+				t.Errorf("providerCalls = %d, want 1", providerCalls.Load())
+			}
+			if steeringPolls.Load() != 1 {
+				t.Errorf("steeringPolls = %d, want 1", steeringPolls.Load())
+			}
+			if followUpPolls.Load() != 0 {
+				t.Errorf("followUpPolls = %d, want 0", followUpPolls.Load())
+			}
+		})
+	}
+}
+
+// pi: "action:end skips queue polling and next-turn preparation".
+func TestAgentLoopActionEndSkipsQueuePollingAndNextTurnPreparation(t *testing.T) {
+	tool := &AgentTool{
+		Tool:  types.Tool{Name: "noop", Description: "Noop tool", Parameters: rawSchema(t, map[string]any{"type": "object", "properties": map[string]any{}})},
+		Label: "Noop",
+		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate AgentToolUpdateCallback) (AgentToolResult, error) {
+			return AgentToolResult{Content: []types.Content{types.NewTextContent("done")}}, nil
+		},
+	}
+	var providerCalls, steeringPolls, followUpPolls, prepareNextTurnCalls atomic.Int64
+	config := AgentLoopConfig{
+		Model:        createModel(),
+		ConvertToLlm: identityConverter,
+		FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
+			return &AgentTurnDecision{Action: AgentTurnActionEnd}
+		},
+		PrepareNextTurn: func(turn PrepareNextTurnContext) *AgentLoopTurnUpdate {
+			prepareNextTurnCalls.Add(1)
+			return nil
+		},
+		GetSteeringMessages: func() []AgentMessage {
+			steeringPolls.Add(1)
+			return nil
+		},
+		GetFollowUpMessages: func() []AgentMessage {
+			followUpPolls.Add(1)
+			return []AgentMessage{createUserMessage("queued")}
+		},
+	}
+
+	stream := AgentLoop(context.Background(), []AgentMessage{createUserMessage("run")}, AgentContext{Tools: []*AgentTool{tool}}, config, func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		providerCalls.Add(1)
+		assistant := createAssistantMessage([]types.Content{
+			types.NewToolCall("tool-1", "noop", map[string]any{}),
+		}, types.StopReasonToolUse)
+		return mockStreamFn(doneEvent(assistant))(ctx, model, llmContext, options)
+	})
+	collectEvents(t, stream)
+
+	if providerCalls.Load() != 1 {
+		t.Errorf("providerCalls = %d, want 1", providerCalls.Load())
+	}
+	if steeringPolls.Load() != 1 {
+		t.Errorf("steeringPolls = %d, want 1", steeringPolls.Load())
+	}
+	if followUpPolls.Load() != 0 {
+		t.Errorf("followUpPolls = %d, want 0", followUpPolls.Load())
+	}
+	if prepareNextTurnCalls.Load() != 0 {
+		t.Errorf("prepareNextTurnCalls = %d, want 0", prepareNextTurnCalls.Load())
+	}
+}
+
+// pi: "makes exactly one context-only request when no natural request
+// satisfies continuation".
+func TestAgentLoopExplicitContinuationMakesOneContextOnlyRequest(t *testing.T) {
+	var providerCalls, finishCalls atomic.Int64
+	stream := AgentLoop(context.Background(), []AgentMessage{createUserMessage("run")}, AgentContext{}, AgentLoopConfig{
+		Model:        createModel(),
+		ConvertToLlm: identityConverter,
+		FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
+			count := finishCalls.Add(1)
+			if count == 1 {
+				return &AgentTurnDecision{Action: AgentTurnActionContinue}
+			}
+			return nil
+		},
+	}, func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		count := providerCalls.Add(1)
+		assistant := createAssistantMessage([]types.Content{types.NewTextContent(fmt.Sprintf("response %d", count))}, "")
+		return mockStreamFn(doneEvent(assistant))(ctx, model, llmContext, options)
+	})
+	collectEvents(t, stream)
+
+	if providerCalls.Load() != 2 {
+		t.Errorf("providerCalls = %d, want 2", providerCalls.Load())
+	}
+	if finishCalls.Load() != 2 {
+		t.Errorf("finishCalls = %d, want 2", finishCalls.Load())
+	}
+}
+
+// pi: "lets a natural tool-result request satisfy continuation".
+func TestAgentLoopNaturalToolResultRequestSatisfiesContinuation(t *testing.T) {
+	tool := &AgentTool{
+		Tool:  types.Tool{Name: "noop", Description: "Noop tool", Parameters: agentToolSchema(t)},
+		Label: "Noop",
+		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate AgentToolUpdateCallback) (AgentToolResult, error) {
+			return AgentToolResult{Content: []types.Content{types.NewTextContent("done")}}, nil
+		},
+	}
+	var providerCalls, finishCalls atomic.Int64
+	config := AgentLoopConfig{
+		Model:        createModel(),
+		ConvertToLlm: identityConverter,
+		FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
+			count := finishCalls.Add(1)
+			if count == 1 {
+				return &AgentTurnDecision{Action: AgentTurnActionContinue}
+			}
+			return nil
+		},
+	}
+	stream := AgentLoop(context.Background(), []AgentMessage{createUserMessage("run")}, AgentContext{Tools: []*AgentTool{tool}}, config, func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		count := providerCalls.Add(1)
+		var assistant types.AssistantMessage
+		if count == 1 {
+			assistant = createAssistantMessage([]types.Content{
+				types.NewToolCall("tool-1", "noop", map[string]any{}),
+			}, types.StopReasonToolUse)
+		} else {
+			assistant = createAssistantMessage([]types.Content{types.NewTextContent("done")}, "")
+		}
+		return mockStreamFn(doneEvent(assistant))(ctx, model, llmContext, options)
+	})
+	collectEvents(t, stream)
+
+	if providerCalls.Load() != 2 {
+		t.Errorf("providerCalls = %d, want 2", providerCalls.Load())
+	}
+	if finishCalls.Load() != 2 {
+		t.Errorf("finishCalls = %d, want 2", finishCalls.Load())
+	}
+}
+
+// pi: "lets a natural %s request satisfy continuation" (parameterized over
+// steering and follow-up).
+func TestAgentLoopNaturalQueuedRequestSatisfiesContinuation(t *testing.T) {
+	for _, queueKind := range []string{"steering", "follow-up"} {
+		t.Run(queueKind, func(t *testing.T) {
+			queuedMessage := createUserMessage(queueKind)
+			var providerCalls, finishCalls, steeringPolls atomic.Int64
+			var followUpDelivered atomic.Bool
+			var mu sync.Mutex
+			var secondRequestUsers []string
+			config := AgentLoopConfig{
+				Model:        createModel(),
+				ConvertToLlm: identityConverter,
+				FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
+					count := finishCalls.Add(1)
+					if count == 1 {
+						return &AgentTurnDecision{Action: AgentTurnActionContinue}
+					}
+					return nil
+				},
+				GetSteeringMessages: func() []AgentMessage {
+					poll := steeringPolls.Add(1)
+					if queueKind == "steering" && poll == 2 {
+						return []AgentMessage{queuedMessage}
+					}
+					return nil
+				},
+				GetFollowUpMessages: func() []AgentMessage {
+					if queueKind != "follow-up" {
+						return nil
+					}
+					if followUpDelivered.CompareAndSwap(false, true) {
+						return []AgentMessage{queuedMessage}
+					}
+					return nil
+				},
+			}
+
+			stream := AgentLoop(context.Background(), []AgentMessage{createUserMessage("run")}, AgentContext{}, config, func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+				count := providerCalls.Add(1)
+				if count == 2 {
+					mu.Lock()
+					for _, message := range llmContext.Messages {
+						if user, ok := message.(types.UserMessage); ok && user.Content.String != "" {
+							secondRequestUsers = append(secondRequestUsers, user.Content.String)
+						}
+					}
+					mu.Unlock()
+				}
+				assistant := createAssistantMessage([]types.Content{types.NewTextContent("done")}, "")
+				return mockStreamFn(doneEvent(assistant))(ctx, model, llmContext, options)
+			})
+			collectEvents(t, stream)
+
+			if providerCalls.Load() != 2 {
+				t.Errorf("providerCalls = %d, want 2", providerCalls.Load())
+			}
+			if finishCalls.Load() != 2 {
+				t.Errorf("finishCalls = %d, want 2", finishCalls.Load())
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			found := false
+			for _, user := range secondRequestUsers {
+				if user == queueKind {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("secondRequestUsers = %v, want to contain %q", secondRequestUsers, queueKind)
+			}
+		})
+	}
+}
+
+// pi: "prepares the initial request after pending messages and can replace
+// request state".
+func TestAgentLoopPreparesInitialRequestAfterPendingMessages(t *testing.T) {
+	replacementModel := createModel()
+	replacementModel.ID = "replacement"
+	replacementModel.Name = "replacement"
+	canonicalMessage := createUserMessage("canonical projection")
+	steeringMessage := createUserMessage("steering")
+	var mu sync.Mutex
+	var completedMessages []AgentMessage
+	var steeringDelivered atomic.Bool
+	var prepareCalls atomic.Int64
+	config := AgentLoopConfig{
+		Model:        createModel(),
+		ConvertToLlm: identityConverter,
+		GetSteeringMessages: func() []AgentMessage {
+			if steeringDelivered.CompareAndSwap(false, true) {
+				return []AgentMessage{steeringMessage}
+			}
+			return nil
+		},
+		PrepareRequest: func(ctx context.Context, request PrepareRequestContext) *AgentRequestUpdate {
+			prepareCalls.Add(1)
+			mu.Lock()
+			containsSteeringCompleted := false
+			for _, message := range completedMessages {
+				if message.MessageRole() == types.RoleUser {
+					if user, ok := message.(types.UserMessage); ok && user.Content.String == "steering" {
+						containsSteeringCompleted = true
+					}
+				}
+			}
+			mu.Unlock()
+			if !containsSteeringCompleted {
+				t.Error("prepareRequest ran before pending messages were emitted")
+			}
+			containsSteeringContext := false
+			for _, message := range request.Context.Messages {
+				if user, ok := message.(types.UserMessage); ok && user.Content.String == "steering" {
+					containsSteeringContext = true
+				}
+			}
+			if !containsSteeringContext {
+				t.Error("prepareRequest context does not contain the steering message")
+			}
+			return &AgentRequestUpdate{
+				Context:       &AgentContext{Messages: []AgentMessage{canonicalMessage}},
+				Model:         replacementModel,
+				ThinkingLevel: types.ModelThinkingHigh,
+			}
+		},
+	}
+
+	RunAgentLoop(
+		context.Background(),
+		[]AgentMessage{createUserMessage("prompt")},
+		AgentContext{},
+		config,
+		func(event AgentEvent) {
+			if event.Type == AgentEventMessageEnd {
+				mu.Lock()
+				completedMessages = append(completedMessages, event.Message)
+				mu.Unlock()
+			}
+		},
+		func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			if model != replacementModel {
+				t.Errorf("streamFn model = %v, want replacement", model.ID)
+			}
+			if len(llmContext.Messages) != 1 {
+				t.Fatalf("llmContext.Messages = %d, want 1", len(llmContext.Messages))
+			}
+			if user, ok := llmContext.Messages[0].(types.UserMessage); !ok || user.Content.String != "canonical projection" {
+				t.Errorf("llmContext.Messages[0] = %v, want canonical projection", llmContext.Messages[0])
+			}
+			if options == nil || options.Reasoning != types.ThinkingLevelHigh {
+				t.Errorf("options.Reasoning = %v, want high", options)
+			}
+			assistant := createAssistantMessage([]types.Content{types.NewTextContent("done")}, "")
+			return mockStreamFn(doneEvent(assistant))(ctx, model, llmContext, options)
+		},
+	)
+
+	if prepareCalls.Load() != 1 {
+		t.Errorf("prepareCalls = %d, want 1", prepareCalls.Load())
+	}
+}
+
+// pi: "does not poll steering after prepareRequest".
+func TestAgentLoopDoesNotPollSteeringAfterPrepareRequest(t *testing.T) {
+	var mu sync.Mutex
+	var queued []AgentMessage
+	lateSteering := createUserMessage("late steering")
+	var requestIncludedSteering []bool
+	var requestPreparations, steeringPolls atomic.Int64
+	config := AgentLoopConfig{
+		Model:        createModel(),
+		ConvertToLlm: identityConverter,
+		GetSteeringMessages: func() []AgentMessage {
+			steeringPolls.Add(1)
+			mu.Lock()
+			drained := queued
+			queued = nil
+			mu.Unlock()
+			return drained
+		},
+		PrepareRequest: func(ctx context.Context, request PrepareRequestContext) *AgentRequestUpdate {
+			count := requestPreparations.Add(1)
+			if count == 1 {
+				mu.Lock()
+				queued = append(queued, lateSteering)
+				mu.Unlock()
+			}
+			return nil
+		},
+	}
+
+	stream := AgentLoop(context.Background(), []AgentMessage{createUserMessage("run")}, AgentContext{}, config, func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		includes := false
+		for _, message := range llmContext.Messages {
+			if user, ok := message.(types.UserMessage); ok && user.Content.String == "late steering" {
+				includes = true
+			}
+		}
+		mu.Lock()
+		requestIncludedSteering = append(requestIncludedSteering, includes)
+		mu.Unlock()
+		assistant := createAssistantMessage([]types.Content{types.NewTextContent("done")}, "")
+		return mockStreamFn(doneEvent(assistant))(ctx, model, llmContext, options)
+	})
+	collectEvents(t, stream)
+
+	if len(requestIncludedSteering) != 2 || requestIncludedSteering[0] || !requestIncludedSteering[1] {
+		t.Errorf("requestIncludedSteering = %v, want [false true]", requestIncludedSteering)
+	}
+	if requestPreparations.Load() != 2 {
+		t.Errorf("requestPreparations = %d, want 2", requestPreparations.Load())
+	}
+	// Startup, post-turn delivery, then the final natural-stop check.
+	if steeringPolls.Load() != 3 {
+		t.Errorf("steeringPolls = %d, want 3", steeringPolls.Load())
+	}
+}
+
+// pi: "picks up steering queued during prepareNextTurn before the next
+// request".
+func TestAgentLoopPicksUpSteeringQueuedDuringPrepareNextTurn(t *testing.T) {
+	tool := &AgentTool{
+		Tool:  types.Tool{Name: "noop", Description: "Noop tool", Parameters: agentToolSchema(t)},
+		Label: "Noop",
+		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate AgentToolUpdateCallback) (AgentToolResult, error) {
+			return AgentToolResult{Content: []types.Content{types.NewTextContent("done")}}, nil
+		},
+	}
+	var mu sync.Mutex
+	var queued []AgentMessage
+	lateSteering := createUserMessage("late steering")
+	var providerCalls atomic.Int64
+	var secondRequestIncludedSteering atomic.Bool
+	config := AgentLoopConfig{
+		Model:        createModel(),
+		ConvertToLlm: identityConverter,
+		PrepareNextTurn: func(turn PrepareNextTurnContext) *AgentLoopTurnUpdate {
+			mu.Lock()
+			queued = append(queued, lateSteering)
+			mu.Unlock()
+			return nil
+		},
+		GetSteeringMessages: func() []AgentMessage {
+			mu.Lock()
+			drained := queued
+			queued = nil
+			mu.Unlock()
+			return drained
+		},
+	}
+
+	stream := AgentLoop(context.Background(), []AgentMessage{createUserMessage("run")}, AgentContext{Tools: []*AgentTool{tool}}, config, func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		count := providerCalls.Add(1)
+		if count == 2 {
+			for _, message := range llmContext.Messages {
+				if user, ok := message.(types.UserMessage); ok && user.Content.String == "late steering" {
+					secondRequestIncludedSteering.Store(true)
+				}
+			}
+		}
+		var assistant types.AssistantMessage
+		if count == 1 {
+			assistant = createAssistantMessage([]types.Content{
+				types.NewToolCall("tool-1", "noop", map[string]any{}),
+			}, types.StopReasonToolUse)
+		} else {
+			assistant = createAssistantMessage([]types.Content{types.NewTextContent("done")}, "")
+		}
+		return mockStreamFn(doneEvent(assistant))(ctx, model, llmContext, options)
+	})
+	collectEvents(t, stream)
+
+	if providerCalls.Load() != 2 {
+		t.Errorf("providerCalls = %d, want 2", providerCalls.Load())
+	}
+	if !secondRequestIncludedSteering.Load() {
+		t.Error("second request did not include steering queued during prepareNextTurn")
 	}
 }

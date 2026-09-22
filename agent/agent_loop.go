@@ -156,7 +156,11 @@ func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []Ag
 	// prepareNextTurn at the start of the next turn (moved from the turn_end
 	// site in v0.85.1: preparation now runs immediately before the next turn
 	// starts, not before the loop decides whether to continue).
-	var lastCompletedTurn *ShouldStopAfterTurnContext
+	var lastCompletedTurn *AgentTurnContext
+	// pi v0.87.0: a finishTurn { action: "continue" } decision guarantees one
+	// next provider request even when no natural request (tool result,
+	// steering, or follow-up) satisfies it.
+	explicitContinuation := false
 	// Check for steering messages at start (user may have typed while waiting)
 	var pendingMessages []AgentMessage
 	var preparedMessages []AgentMessage
@@ -225,11 +229,53 @@ func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []Ag
 			preparedMessages = nil
 			pendingMessages = nil
 
+			// pi v0.87.0: prepareRequest runs immediately before every
+			// conversational provider request, including the first; pending
+			// messages have already been appended and emitted.
+			if config.PrepareRequest != nil {
+				requestThinkingLevel := ThinkingLevel(config.Reasoning)
+				if requestThinkingLevel == "" {
+					// pi: config.reasoning ?? "off".
+					requestThinkingLevel = types.ModelThinkingOff
+				}
+				requestUpdate := config.PrepareRequest(ctx, PrepareRequestContext{
+					Context:       currentContext,
+					Model:         config.Model,
+					ThinkingLevel: requestThinkingLevel,
+				})
+				if requestUpdate != nil {
+					if requestUpdate.Context != nil {
+						currentContext = requestUpdate.Context
+					}
+					if requestUpdate.Model != nil {
+						config.Model = requestUpdate.Model
+					}
+					if requestUpdate.ThinkingLevel == "" {
+						// keep config.Reasoning (pi: undefined ?? config.reasoning)
+					} else if requestUpdate.ThinkingLevel == types.ModelThinkingOff {
+						config.Reasoning = ""
+					} else {
+						config.Reasoning = types.ThinkingLevel(requestUpdate.ThinkingLevel)
+					}
+				}
+			}
+
 			// Stream assistant response
 			message := streamAssistantResponse(ctx, currentContext, config, emit, streamFunction)
 			newMessages = append(newMessages, message)
 
 			if message.StopReason == types.StopReasonError || message.StopReason == types.StopReasonAborted {
+				// pi v0.87.0: the hard exit still reports the completed turn to
+				// finishTurn (with no tool results), but the decision is ignored.
+				lastCompletedTurn = &AgentTurnContext{
+					Message:     message,
+					ToolResults: nil,
+					Context:     currentContext,
+					NewMessages: newMessages,
+				}
+				if config.FinishTurn != nil {
+					config.FinishTurn(ctx, *lastCompletedTurn)
+				}
 				emit(AgentEvent{Type: AgentEventTurnEnd, Message: message})
 				emit(AgentEvent{Type: AgentEventAgentEnd, Messages: newMessages})
 				return newMessages
@@ -264,25 +310,33 @@ func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []Ag
 				}
 			}
 
-			emit(AgentEvent{Type: AgentEventTurnEnd, Message: message, ToolResults: toolResults})
-
-			lastCompletedTurn = &ShouldStopAfterTurnContext{
+			lastCompletedTurn = &AgentTurnContext{
 				Message:     message,
 				ToolResults: toolResults,
 				Context:     currentContext,
 				NewMessages: newMessages,
 			}
+			// pi v0.87.0: finishTurn runs after tool-result messages and before
+			// the turn_end emission.
+			var decision *AgentTurnDecision
+			if config.FinishTurn != nil {
+				decision = config.FinishTurn(ctx, *lastCompletedTurn)
+			}
+			emit(AgentEvent{Type: AgentEventTurnEnd, Message: message, ToolResults: toolResults})
 
-			if config.ShouldStopAfterTurn != nil &&
-				config.ShouldStopAfterTurn(*lastCompletedTurn) {
+			if decision != nil && decision.Action == AgentTurnActionEnd {
 				emit(AgentEvent{Type: AgentEventAgentEnd, Messages: newMessages})
 				return newMessages
 			}
 
+			explicitContinuation = decision != nil && decision.Action == AgentTurnActionContinue
 			if config.GetSteeringMessages != nil {
 				pendingMessages = config.GetSteeringMessages()
 			} else {
 				pendingMessages = nil
+			}
+			if hasMoreToolCalls || len(pendingMessages) > 0 {
+				explicitContinuation = false
 			}
 		}
 
@@ -293,7 +347,15 @@ func runLoop(ctx context.Context, initialContext *AgentContext, newMessages []Ag
 		}
 		if len(followUpMessages) > 0 {
 			// Set as pending so inner loop processes them
+			explicitContinuation = false
 			pendingMessages = followUpMessages
+			continue
+		}
+
+		// No natural request was selected, so fulfill the continuation decision
+		// with one context-only turn.
+		if explicitContinuation {
+			explicitContinuation = false
 			continue
 		}
 

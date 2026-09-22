@@ -101,9 +101,11 @@ type AgentOptions struct {
 	// error returns model pi's hook throws (caught by the loop).
 	BeforeToolCall func(ctx context.Context, context BeforeToolCallContext) (*BeforeToolCallResult, error)
 	AfterToolCall  func(ctx context.Context, context AfterToolCallContext) (*AfterToolCallResult, error)
-	// ShouldStopAfterTurn forwards to the loop config with the run context
-	// injected (pi: (context, signal)).
-	ShouldStopAfterTurn func(ctx context.Context, context ShouldStopAfterTurnContext) bool
+	// FinishTurn forwards to the loop config (pi v0.87.0: (context, signal);
+	// the loop ctx carries the run cancellation).
+	FinishTurn FinishTurn
+	// PrepareRequest forwards to the loop config (pi: (request, signal)).
+	PrepareRequest PrepareRequest
 	// PrepareNextTurn receives only the run context (pi: (signal)).
 	PrepareNextTurn func(ctx context.Context) *AgentLoopTurnUpdate
 	// PrepareNextTurnWithContext receives the turn context and the run
@@ -152,6 +154,18 @@ func (q *pendingMessageQueue) hasItems() bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return len(q.messages) > 0
+}
+
+func (q *pendingMessageQueue) peek() []AgentMessage {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.mode == QueueModeAll {
+		return append([]AgentMessage(nil), q.messages...)
+	}
+	if len(q.messages) == 0 {
+		return nil
+	}
+	return []AgentMessage{q.messages[0]}
 }
 
 func (q *pendingMessageQueue) drain() []AgentMessage {
@@ -214,7 +228,8 @@ type Agent struct {
 	OnResponse                 func(response types.ProviderResponse, model *types.Model)
 	BeforeToolCall             func(ctx context.Context, context BeforeToolCallContext) (*BeforeToolCallResult, error)
 	AfterToolCall              func(ctx context.Context, context AfterToolCallContext) (*AfterToolCallResult, error)
-	ShouldStopAfterTurn        func(ctx context.Context, context ShouldStopAfterTurnContext) bool
+	FinishTurn                 FinishTurn
+	PrepareRequest             PrepareRequest
 	PrepareNextTurn            func(ctx context.Context) *AgentLoopTurnUpdate
 	PrepareNextTurnWithContext func(ctx context.Context, context PrepareNextTurnContext) *AgentLoopTurnUpdate
 	// SessionID is forwarded to providers for cache-aware backends.
@@ -290,7 +305,8 @@ func NewAgent(options AgentOptions) (*Agent, error) {
 	agent.OnResponse = options.OnResponse
 	agent.BeforeToolCall = options.BeforeToolCall
 	agent.AfterToolCall = options.AfterToolCall
-	agent.ShouldStopAfterTurn = options.ShouldStopAfterTurn
+	agent.FinishTurn = options.FinishTurn
+	agent.PrepareRequest = options.PrepareRequest
 	agent.PrepareNextTurn = options.PrepareNextTurn
 	agent.PrepareNextTurnWithContext = options.PrepareNextTurnWithContext
 	agent.steeringQueue = newPendingMessageQueue(options.SteeringMode)
@@ -429,6 +445,16 @@ func (a *Agent) ClearAllQueues() {
 // messages.
 func (a *Agent) HasQueuedMessages() bool {
 	return a.steeringQueue.hasItems() || a.followUpQueue.hasItems()
+}
+
+// PeekQueuedMessages previews the messages selected for the next turn
+// without consuming them (pi v0.87.0: steering wins over follow-up).
+func (a *Agent) PeekQueuedMessages() []AgentMessage {
+	steering := a.steeringQueue.peek()
+	if len(steering) > 0 {
+		return steering
+	}
+	return a.followUpQueue.peek()
 }
 
 // Signal returns the active run context, or nil when idle (pi: get signal).
@@ -656,14 +682,14 @@ func (a *Agent) createLoopConfig(skipInitialSteeringPoll bool) AgentLoopConfig {
 		ToolExecution:  a.ToolExecution,
 		BeforeToolCall: a.BeforeToolCall,
 		AfterToolCall:  a.AfterToolCall,
-		// pi wraps the hooks to inject this.signal; in pig the loop ctx IS
-		// the run ctx, but the AgentOptions signatures carry ctx explicitly,
-		// so close over the run context for them.
-		ShouldStopAfterTurn: a.wrapShouldStopAfterTurn(),
-		PrepareNextTurn:     a.wrapPrepareNextTurn(),
-		ConvertToLlm:        a.ConvertToLlm,
-		TransformContext:    a.TransformContext,
-		GetApiKey:           a.GetApiKey,
+		// pi v0.87.0 passes finishTurn/prepareRequest through unwrapped; the
+		// loop injects its own ctx (pig's run context).
+		FinishTurn:       a.FinishTurn,
+		PrepareRequest:   a.PrepareRequest,
+		PrepareNextTurn:  a.wrapPrepareNextTurn(),
+		ConvertToLlm:     a.ConvertToLlm,
+		TransformContext: a.TransformContext,
+		GetApiKey:        a.GetApiKey,
 		GetSteeringMessages: func() []AgentMessage {
 			if skipInitialSteeringPoll {
 				skipInitialSteeringPoll = false
@@ -682,15 +708,6 @@ func reasoningFromThinkingLevel(thinkingLevel ThinkingLevel) types.ThinkingLevel
 		return ""
 	}
 	return types.ThinkingLevel(thinkingLevel)
-}
-
-func (a *Agent) wrapShouldStopAfterTurn() func(context ShouldStopAfterTurnContext) bool {
-	if a.ShouldStopAfterTurn == nil {
-		return nil
-	}
-	return func(context ShouldStopAfterTurnContext) bool {
-		return a.ShouldStopAfterTurn(a.runContextOrPanic(), context)
-	}
 }
 
 func (a *Agent) wrapPrepareNextTurn() func(context PrepareNextTurnContext) *AgentLoopTurnUpdate {

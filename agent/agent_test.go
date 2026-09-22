@@ -953,7 +953,9 @@ func TestAgentLegacyPrepareNextTurnReceivesRunContext(t *testing.T) {
 	}
 }
 
-func TestAgentForwardsShouldStopAfterTurn(t *testing.T) {
+// pi v0.87.0: "forwards finishTurn through AgentOptions with the active
+// abort signal" (formerly shouldStopAfterTurn).
+func TestAgentForwardsFinishTurn(t *testing.T) {
 	tool := &AgentTool{
 		Tool:  types.Tool{Name: "noop", Description: "Noop tool", Parameters: agentToolSchema(t)},
 		Label: "Noop",
@@ -969,13 +971,13 @@ func TestAgentForwardsShouldStopAfterTurn(t *testing.T) {
 	var callbackContextRoles []types.Role
 	agent, err := NewAgent(AgentOptions{
 		InitialState: &AgentState{Tools: []AgentTool{*tool}},
-		ShouldStopAfterTurn: func(ctx context.Context, context ShouldStopAfterTurnContext) bool {
+		FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
 			sawRunContext.Store(ctx != nil && ctx.Err() == nil)
 			callbackContextRoles = nil
-			for _, message := range context.Context.Messages {
+			for _, message := range turn.Context.Messages {
 				callbackContextRoles = append(callbackContextRoles, message.MessageRole())
 			}
-			return true
+			return &AgentTurnDecision{Action: AgentTurnActionEnd}
 		},
 		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
 			count := requestCount.Add(1)
@@ -1002,7 +1004,7 @@ func TestAgentForwardsShouldStopAfterTurn(t *testing.T) {
 		t.Errorf("requestCount = %d, want 1", requestCount.Load())
 	}
 	if !sawRunContext.Load() {
-		t.Error("shouldStopAfterTurn did not receive a live run context")
+		t.Error("finishTurn did not receive a live run context")
 	}
 	// v0.86.0: the loop announces the tool loadout with a leading system
 	// message (pi: expect(callbackContextRoles).toEqual(["system", ...])).
@@ -1291,4 +1293,491 @@ func TestAgentRestoresTranscriptBaselineOnReset(t *testing.T) {
 	if len(initial.ToolsAdded) != 1 || initial.ToolsAdded[0].Name != "echo" {
 		t.Fatalf("toolsAdded = %+v", initial.ToolsAdded)
 	}
+}
+
+// ---- pi v0.87.0: finishTurn / prepareRequest / queue preview (agent.test.ts) ----
+
+// pi: "continue() keeps $mode steering semantics for assistant-tail fallback"
+// (v0.87.0 replaces the one-at-a-time-only test with a parameterized one).
+func TestAgentContinueKeepsSteeringSemanticsForAssistantTailFallback(t *testing.T) {
+	tests := []struct {
+		name             string
+		mode             QueueMode
+		expectedRequests int
+	}{
+		{name: "one-at-a-time", mode: QueueModeOneAtATime, expectedRequests: 2},
+		{name: "all", mode: QueueModeAll, expectedRequests: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var requests [][]string
+			record := func(llmContext *types.TranscriptContext) {
+				var users []string
+				for _, message := range llmContext.Messages {
+					if user, ok := message.(types.UserMessage); ok && user.Content.String != "" {
+						users = append(users, user.Content.String)
+					} else if ok {
+						for _, part := range user.Content.Parts {
+							if text, ok := part.(types.TextContent); ok {
+								users = append(users, text.Text)
+							}
+						}
+					}
+				}
+				mu.Lock()
+				requests = append(requests, users)
+				mu.Unlock()
+			}
+			agent, err := NewAgent(AgentOptions{
+				SteeringMode: tt.mode,
+				StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+					record(llmContext)
+					return mockStreamFn(doneEvent(agentTestAssistantMessage("Processed")))(ctx, model, llmContext, options)
+				},
+			})
+			if err != nil {
+				t.Fatalf("NewAgent: %v", err)
+			}
+			agent.SetMessages([]AgentMessage{
+				agentTestUserMessage("Initial"),
+				agentTestAssistantMessage("Initial response"),
+			})
+			agent.Steer(agentTestUserMessage("Steering 1"))
+			agent.Steer(agentTestUserMessage("Steering 2"))
+
+			if err := agent.Continue(context.Background()); err != nil {
+				t.Fatalf("continue: %v", err)
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			if len(requests) != tt.expectedRequests {
+				t.Fatalf("requests = %d, want %d", len(requests), tt.expectedRequests)
+			}
+			if !containsString(requests[0], "Steering 1") {
+				t.Errorf("requests[0] = %v, want to contain Steering 1", requests[0])
+			}
+			if tt.mode == QueueModeOneAtATime {
+				if containsString(requests[0], "Steering 2") {
+					t.Errorf("requests[0] = %v, want not to contain Steering 2", requests[0])
+				}
+				if !containsString(requests[1], "Steering 2") {
+					t.Errorf("requests[1] = %v, want to contain Steering 2", requests[1])
+				}
+			} else if !containsString(requests[0], "Steering 2") {
+				t.Errorf("requests[0] = %v, want to contain Steering 2", requests[0])
+			}
+		})
+	}
+}
+
+// pi: "rejects a queued continuation from $name context without draining
+// queues" (parameterized over empty and system-only).
+func TestAgentRejectsQueuedContinuationWithoutDrainingQueues(t *testing.T) {
+	tests := []struct {
+		name     string
+		messages []AgentMessage
+	}{
+		{name: "empty", messages: nil},
+		{name: "system-only", messages: []AgentMessage{types.SystemMessage{
+			Role:      types.RoleSystem,
+			Content:   types.SystemContent{String: "system only"},
+			Timestamp: 1,
+		}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			agent, err := NewAgent(AgentOptions{
+				InitialState: &AgentState{Messages: tt.messages},
+				StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+					t.Error("streamFn should not be called")
+					return mockStreamFn()(ctx, model, llmContext, options)
+				},
+			})
+			if err != nil {
+				t.Fatalf("NewAgent: %v", err)
+			}
+			steering := agentTestUserMessage("steering")
+			followUp := agentTestUserMessage("follow-up")
+			agent.Steer(steering)
+			agent.FollowUp(followUp)
+
+			if err := agent.Continue(context.Background()); err == nil || err.Error() != "No messages to continue from" {
+				t.Fatalf("err = %v, want No messages to continue from", err)
+			}
+			peeked := agent.PeekQueuedMessages()
+			if len(peeked) != 1 || peeked[0].MessageRole() != types.RoleUser {
+				t.Fatalf("peekQueuedMessages = %v, want [steering]", peeked)
+			}
+			agent.ClearSteeringQueue()
+			peeked = agent.PeekQueuedMessages()
+			if len(peeked) != 1 || peeked[0].MessageRole() != types.RoleUser {
+				t.Fatalf("peekQueuedMessages after clear = %v, want [follow-up]", peeked)
+			}
+		})
+	}
+}
+
+// pi: "defers follow-up input on the first continuation request from a $name
+// tail" (parameterized over user and toolResult tails).
+func TestAgentDefersFollowUpOnFirstContinuationRequest(t *testing.T) {
+	tests := []struct {
+		name     string
+		messages []AgentMessage
+	}{
+		{
+			name:     "user",
+			messages: []AgentMessage{agentTestUserMessage("existing user")},
+		},
+		{
+			name: "toolResult",
+			messages: []AgentMessage{
+				agentTestUserMessage("existing user"),
+				agentTestToolUseMessage(t, []types.Content{
+					textToolCall("call-1", "noop", map[string]any{}),
+				}),
+				types.ToolResultMessage{
+					Role:       types.RoleToolResult,
+					ToolCallID: "call-1",
+					ToolName:   "noop",
+					Content:    []types.Content{types.NewTextContent("done")},
+					IsError:    false,
+					Timestamp:  1,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var requests [][]string
+			record := func(llmContext *types.TranscriptContext) {
+				var users []string
+				for _, message := range llmContext.Messages {
+					if user, ok := message.(types.UserMessage); ok {
+						if user.Content.String != "" {
+							users = append(users, user.Content.String)
+						}
+						for _, part := range user.Content.Parts {
+							if text, ok := part.(types.TextContent); ok {
+								users = append(users, text.Text)
+							}
+						}
+					}
+				}
+				mu.Lock()
+				requests = append(requests, users)
+				mu.Unlock()
+			}
+			agent, err := NewAgent(AgentOptions{
+				InitialState: &AgentState{Messages: tt.messages},
+				StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+					record(llmContext)
+					return mockStreamFn(doneEvent(agentTestAssistantMessage("done")))(ctx, model, llmContext, options)
+				},
+			})
+			if err != nil {
+				t.Fatalf("NewAgent: %v", err)
+			}
+			agent.FollowUp(agentTestUserMessage("follow-up"))
+
+			if err := agent.Continue(context.Background()); err != nil {
+				t.Fatalf("continue: %v", err)
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			if len(requests) != 2 {
+				t.Fatalf("requests = %d, want 2", len(requests))
+			}
+			if containsString(requests[0], "follow-up") {
+				t.Errorf("requests[0] = %v, want not to contain follow-up", requests[0])
+			}
+			if !containsString(requests[1], "follow-up") {
+				t.Errorf("requests[1] = %v, want to contain follow-up", requests[1])
+			}
+		})
+	}
+}
+
+// pi: "polls $mode steering at continuation startup" (parameterized over
+// one-at-a-time and all).
+func TestAgentPollsSteeringAtContinuationStartup(t *testing.T) {
+	tests := []struct {
+		name             string
+		mode             QueueMode
+		expectedRequests int
+	}{
+		{name: "one-at-a-time", mode: QueueModeOneAtATime, expectedRequests: 2},
+		{name: "all", mode: QueueModeAll, expectedRequests: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var requests [][]string
+			record := func(llmContext *types.TranscriptContext) {
+				var users []string
+				for _, message := range llmContext.Messages {
+					if user, ok := message.(types.UserMessage); ok {
+						if user.Content.String != "" {
+							users = append(users, user.Content.String)
+						}
+						for _, part := range user.Content.Parts {
+							if text, ok := part.(types.TextContent); ok {
+								users = append(users, text.Text)
+							}
+						}
+					}
+				}
+				mu.Lock()
+				requests = append(requests, users)
+				mu.Unlock()
+			}
+			agent, err := NewAgent(AgentOptions{
+				InitialState: &AgentState{Messages: []AgentMessage{agentTestUserMessage("existing")}},
+				SteeringMode: tt.mode,
+				StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+					record(llmContext)
+					return mockStreamFn(doneEvent(agentTestAssistantMessage("done")))(ctx, model, llmContext, options)
+				},
+			})
+			if err != nil {
+				t.Fatalf("NewAgent: %v", err)
+			}
+			agent.Steer(agentTestUserMessage("first"))
+			agent.Steer(agentTestUserMessage("second"))
+
+			if err := agent.Continue(context.Background()); err != nil {
+				t.Fatalf("continue: %v", err)
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			if len(requests) != tt.expectedRequests {
+				t.Fatalf("requests = %d, want %d", len(requests), tt.expectedRequests)
+			}
+			if !containsString(requests[0], "first") {
+				t.Errorf("requests[0] = %v, want to contain first", requests[0])
+			}
+			if tt.mode == QueueModeOneAtATime {
+				if containsString(requests[0], "second") {
+					t.Errorf("requests[0] = %v, want not to contain second", requests[0])
+				}
+				if !containsString(requests[1], "second") {
+					t.Errorf("requests[1] = %v, want to contain second", requests[1])
+				}
+			} else if !containsString(requests[0], "second") {
+				t.Errorf("requests[0] = %v, want to contain second", requests[0])
+			}
+		})
+	}
+}
+
+// pi: "keeps steering ahead of follow-up from a non-assistant continuation
+// tail".
+func TestAgentKeepsSteeringAheadOfFollowUpFromNonAssistantTail(t *testing.T) {
+	var mu sync.Mutex
+	var requests [][]string
+	record := func(llmContext *types.TranscriptContext) {
+		var users []string
+		for _, message := range llmContext.Messages {
+			if user, ok := message.(types.UserMessage); ok {
+				if user.Content.String != "" {
+					users = append(users, user.Content.String)
+				}
+				for _, part := range user.Content.Parts {
+					if text, ok := part.(types.TextContent); ok {
+						users = append(users, text.Text)
+					}
+				}
+			}
+		}
+		mu.Lock()
+		requests = append(requests, users)
+		mu.Unlock()
+	}
+	agent, err := NewAgent(AgentOptions{
+		InitialState: &AgentState{Messages: []AgentMessage{agentTestUserMessage("existing")}},
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			record(llmContext)
+			return mockStreamFn(doneEvent(agentTestAssistantMessage("done")))(ctx, model, llmContext, options)
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	agent.Steer(agentTestUserMessage("steering"))
+	agent.FollowUp(agentTestUserMessage("follow-up"))
+
+	if err := agent.Continue(context.Background()); err != nil {
+		t.Fatalf("continue: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(requests) != 2 {
+		t.Fatalf("requests = %d, want 2", len(requests))
+	}
+	if !containsString(requests[0], "steering") || containsString(requests[0], "follow-up") {
+		t.Errorf("requests[0] = %v, want steering without follow-up", requests[0])
+	}
+	if !containsString(requests[1], "follow-up") {
+		t.Errorf("requests[1] = %v, want to contain follow-up", requests[1])
+	}
+}
+
+// pi: "keeps queues on a %s response even when finishTurn requests
+// continuation" (parameterized over error and aborted).
+func TestAgentKeepsQueuesOnErrorAbortedEvenWhenFinishTurnRequestsContinuation(t *testing.T) {
+	for _, stopReason := range []types.StopReason{types.StopReasonError, types.StopReasonAborted} {
+		t.Run(string(stopReason), func(t *testing.T) {
+			queuedDuringResponse := agentTestUserMessage("steering")
+			followUp := agentTestUserMessage("follow-up")
+			agent, err := NewAgent(AgentOptions{
+				FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
+					return &AgentTurnDecision{Action: AgentTurnActionContinue}
+				},
+				StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+					failure := agentTestAssistantMessage(string(stopReason))
+					failure.StopReason = stopReason
+					failure.ErrorMessage = string(stopReason)
+					return mockStreamFn(types.AssistantMessageEvent{Type: types.EventError, Reason: stopReason, Message: &failure})(ctx, model, llmContext, options)
+				},
+			})
+			if err != nil {
+				t.Fatalf("NewAgent: %v", err)
+			}
+			agent.FollowUp(followUp)
+			unsubscribe := agent.Subscribe(func(ctx context.Context, event AgentEvent) {
+				if event.Type == AgentEventMessageEnd && event.Message.MessageRole() == types.RoleAssistant {
+					agent.Steer(queuedDuringResponse)
+				}
+			})
+			defer unsubscribe()
+
+			if err := agent.PromptText(context.Background(), "start"); err != nil {
+				t.Fatalf("prompt: %v", err)
+			}
+
+			peeked := agent.PeekQueuedMessages()
+			if len(peeked) != 1 || peeked[0].MessageRole() != types.RoleUser {
+				t.Fatalf("peekQueuedMessages = %v, want [steering]", peeked)
+			}
+			agent.ClearSteeringQueue()
+			peeked = agent.PeekQueuedMessages()
+			if len(peeked) != 1 || peeked[0].MessageRole() != types.RoleUser {
+				t.Fatalf("peekQueuedMessages after clear = %v, want [follow-up]", peeked)
+			}
+		})
+	}
+}
+
+// pi: "keeps queues when finishTurn ends the run".
+func TestAgentKeepsQueuesWhenFinishTurnEndsRun(t *testing.T) {
+	queuedDuringResponse := agentTestUserMessage("steering")
+	followUp := agentTestUserMessage("follow-up")
+	agent, err := NewAgent(AgentOptions{
+		FinishTurn: func(ctx context.Context, turn AgentTurnContext) *AgentTurnDecision {
+			return &AgentTurnDecision{Action: AgentTurnActionEnd}
+		},
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			return mockStreamFn(doneEvent(agentTestAssistantMessage("done")))(ctx, model, llmContext, options)
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	agent.FollowUp(followUp)
+	unsubscribe := agent.Subscribe(func(ctx context.Context, event AgentEvent) {
+		if event.Type == AgentEventMessageEnd && event.Message.MessageRole() == types.RoleAssistant {
+			agent.Steer(queuedDuringResponse)
+		}
+	})
+	defer unsubscribe()
+
+	if err := agent.PromptText(context.Background(), "start"); err != nil {
+		t.Fatalf("prompt: %v", err)
+	}
+
+	peeked := agent.PeekQueuedMessages()
+	if len(peeked) != 1 || peeked[0].MessageRole() != types.RoleUser {
+		t.Fatalf("peekQueuedMessages = %v, want [steering]", peeked)
+	}
+	agent.ClearSteeringQueue()
+	peeked = agent.PeekQueuedMessages()
+	if len(peeked) != 1 || peeked[0].MessageRole() != types.RoleUser {
+		t.Fatalf("peekQueuedMessages after clear = %v, want [follow-up]", peeked)
+	}
+}
+
+// pi: "previews the next selected queued messages without consuming them".
+func TestAgentPreviewsNextSelectedQueuedMessages(t *testing.T) {
+	agent, err := NewAgent(AgentOptions{
+		SteeringMode: QueueModeOneAtATime,
+		FollowUpMode: QueueModeAll,
+		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+			return mockStreamFn()(ctx, model, llmContext, options)
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	first := agentTestUserMessage("first steering")
+	second := agentTestUserMessage("second steering")
+	followUp := agentTestUserMessage("follow-up")
+	agent.Steer(first)
+	agent.Steer(second)
+	agent.FollowUp(followUp)
+
+	for range 2 {
+		peeked := agent.PeekQueuedMessages()
+		if len(peeked) != 1 || peeked[0].MessageRole() != types.RoleUser {
+			t.Fatalf("peekQueuedMessages = %v, want [first steering]", peeked)
+		}
+		if user, ok := peeked[0].(types.UserMessage); !ok || firstText(user) != "first steering" {
+			t.Fatalf("peekQueuedMessages[0] = %v, want first steering", peeked[0])
+		}
+	}
+	agent.ClearSteeringQueue()
+	peeked := agent.PeekQueuedMessages()
+	if len(peeked) != 1 {
+		t.Fatalf("peekQueuedMessages after clear = %v, want [follow-up]", peeked)
+	}
+	if user, ok := peeked[0].(types.UserMessage); !ok || firstText(user) != "follow-up" {
+		t.Fatalf("peekQueuedMessages[0] = %v, want follow-up", peeked[0])
+	}
+}
+
+// agentTestUserMessage builds a user message with Parts content (the
+// agent_test.go fixture convention).
+func agentTestUserMessage(text string) types.UserMessage {
+	return types.UserMessage{
+		Role:      types.RoleUser,
+		Content:   types.UserContent{Parts: []types.Content{types.NewTextContent(text)}},
+		Timestamp: time.Now().UnixMilli(),
+	}
+}
+
+// firstText extracts the first text part of a user message (test helper).
+func firstText(message types.UserMessage) string {
+	if message.Content.String != "" {
+		return message.Content.String
+	}
+	for _, part := range message.Content.Parts {
+		if text, ok := part.(types.TextContent); ok {
+			return text.Text
+		}
+	}
+	return ""
+}
+
+// containsString reports whether the list contains the value (test helper).
+func containsString(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
