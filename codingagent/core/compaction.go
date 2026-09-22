@@ -30,10 +30,21 @@
 //     (docs/fix/2026-09-13-env-api-keys-fill.md). AgentSession always supplies the
 //     agent's streamFn, so the fallback is only reachable for direct
 //     library callers.
+//   - pi v0.87.0 (466db0fec) added a system-message branch to THIS file's
+//     estimateTokens only (replayed prompt content, sections, toolsAdded
+//     JSON); the agent-harness twin stayed untouched, so the two TS copies
+//     are no longer byte-identical. pig keeps the shared twin and adds the
+//     branch in the core EstimateTokens wrapper below: the projection
+//     cut-point walk and the EstimateProjectedContextTokens fallback see
+//     system-message tokens, while the harness-delegated
+//     EstimateContextTokens keeps counting trailing system messages as 0
+//     (its callers are usage-anchored; agent-session swaps to the projected
+//     estimator with the S8-4 batch).
 package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -114,23 +125,23 @@ func extractFileOperations(messages []agent.AgentMessage, entries []SessionEntry
 // Message Extraction
 // ============================================================================
 
-// getMessageFromEntryForCompaction extracts the AgentMessage from an entry if
-// it produces one; entries that don't contribute to LLM context return nil
-// (pi: getMessageFromEntryForCompaction).
-func getMessageFromEntryForCompaction(entry SessionEntry) agent.AgentMessage {
-	if _, ok := entry.(*CompactionEntry); ok {
+// getMessagesFromProjectedEntryForCompaction extracts the model-visible
+// messages of one projected entry for summarization (pi:
+// getMessagesFromProjectedEntryForCompaction; v0.87.0 replaced the
+// single-message getMessageFromEntryForCompaction). Compaction entries
+// contribute nothing, and system messages are prompt state, not
+// conversation — the compaction entry carries their replay.
+func getMessagesFromProjectedEntryForCompaction(entry ProjectedSessionEntry) []agent.AgentMessage {
+	if _, ok := entry.SourceEntry.(*CompactionEntry); ok {
 		return nil
 	}
-	// pi v0.86.0: system messages are prompt state, not conversation; the
-	// compaction entry carries their replay.
-	messages := SessionEntryToContextMessages(entry)
-	if len(messages) > 0 {
-		if messages[0].MessageRole() == types.RoleSystem {
-			return nil
+	messages := make([]agent.AgentMessage, 0, len(entry.Messages))
+	for _, message := range entry.Messages {
+		if message.MessageRole() != types.RoleSystem {
+			messages = append(messages, message)
 		}
-		return messages[0]
 	}
-	return nil
+	return messages
 }
 
 // CompactionResult is the result from Compact — SessionManager adds
@@ -225,6 +236,73 @@ func EstimateContextTokens(messages []agent.AgentMessage) ContextUsageEstimate {
 	return compaction.EstimateContextTokens(messages)
 }
 
+// EstimateProjectedContextTokens estimates the projected context without
+// trusting usage captured before a later edit or compaction (pi:
+// estimateProjectedContextTokens; v0.87.0). When the message carrying the
+// last assistant usage is followed — along the raw branch — by a
+// context_edit or compaction entry, the usage no longer describes the
+// projected context and every message falls back to the chars/4 estimate,
+// with the replayed system message replacing the stored system entries.
+func EstimateProjectedContextTokens(projection SessionProjection, branchEntries []SessionEntry) ContextUsageEstimate {
+	estimate := EstimateContextTokens(projection.Messages)
+	if estimate.LastUsageIndex != nil {
+		projectedMessageIndex := 0
+		var usageEntryID string
+		for _, entry := range projection.Entries {
+			nextMessageIndex := projectedMessageIndex + len(entry.Messages)
+			if *estimate.LastUsageIndex < nextMessageIndex {
+				usageEntryID = entry.SourceEntry.Base().ID
+				break
+			}
+			projectedMessageIndex = nextMessageIndex
+		}
+
+		usageEntryIndex := -1
+		if usageEntryID != "" {
+			for i, entry := range branchEntries {
+				if entry.Base().ID == usageEntryID {
+					usageEntryIndex = i
+					break
+				}
+			}
+		}
+		latestInvalidatingEntryIndex := -1
+		for i := len(branchEntries) - 1; i >= 0; i-- {
+			switch branchEntries[i].(type) {
+			case *ContextEditEntry, *CompactionEntry:
+				latestInvalidatingEntryIndex = i
+			}
+			if latestInvalidatingEntryIndex >= 0 {
+				break
+			}
+		}
+		if usageEntryIndex > latestInvalidatingEntryIndex {
+			return estimate
+		}
+	}
+
+	tokens := int64(0)
+	if currentSystem := aiutils.GetCurrentSystemMessage(agentMessagesAsTypesMessages(projection.Messages)); currentSystem != nil {
+		tokens += EstimateTokens(*currentSystem)
+	}
+	for _, message := range projection.Messages {
+		if message.MessageRole() != types.RoleSystem {
+			tokens += EstimateTokens(message)
+		}
+	}
+	return ContextUsageEstimate{Tokens: tokens, UsageTokens: 0, TrailingTokens: tokens, LastUsageIndex: nil}
+}
+
+// agentMessagesAsTypesMessages adapts an agent message list to the
+// transcript-helper input (pig-only: TS has one array type).
+func agentMessagesAsTypesMessages(messages []agent.AgentMessage) []types.Message {
+	out := make([]types.Message, 0, len(messages))
+	for _, message := range messages {
+		out = append(out, message)
+	}
+	return out
+}
+
 // ShouldCompact checks if compaction should trigger based on context usage
 // (pi: shouldCompact; identical twin reimplemented over the resolved
 // settings shape).
@@ -239,11 +317,59 @@ func ShouldCompact(contextTokens int64, contextWindow int64, settings Compaction
 // Cut point detection
 // ============================================================================
 
+// estimatedImageChars is the char budget charged per image block (pi:
+// ESTIMATED_IMAGE_CHARS; core copy for the v0.87.0 system branch).
+const estimatedImageChars = 4800
+
 // EstimateTokens estimates the token count for a message using the chars/4
-// heuristic; conservative (overestimates tokens) (pi: estimateTokens;
-// identical twin delegated to the harness implementation, see header).
+// heuristic; conservative (overestimates tokens) (pi: estimateTokens).
+//
+// The v0.87.0 system-message branch lives in this core wrapper — see the
+// package header for why the harness twin stays untouched.
 func EstimateTokens(message agent.AgentMessage) int64 {
+	switch system := message.(type) {
+	case types.SystemMessage:
+		return estimateSystemTokens(system)
+	case *types.SystemMessage:
+		if system != nil {
+			return estimateSystemTokens(*system)
+		}
+	}
 	return compaction.EstimateTokens(message)
+}
+
+// estimateSystemTokens implements the v0.87.0 system branch of pi's
+// estimateTokens: content chars, one length per non-nil section value, and
+// the JSON length of toolsAdded (pi: the `case "system"` block; Object.values
+// skips holes, pig skips nil section values; JSON.stringify cannot fail for
+// a []Tool, and a marshal error contributes 0 chars).
+func estimateSystemTokens(system types.SystemMessage) int64 {
+	chars := int64(0)
+	if system.Content.Parts != nil {
+		for _, block := range system.Content.Parts {
+			switch b := block.(type) {
+			case types.TextContent:
+				chars += int64(len(b.Text))
+			case types.ImageContent:
+				chars += int64(estimatedImageChars)
+			}
+		}
+	} else {
+		chars = int64(len(system.Content.String))
+	}
+	if system.Sections != nil {
+		for _, name := range system.Sections.Keys {
+			if section := system.Sections.Values[name]; section != nil {
+				chars += int64(len(*section))
+			}
+		}
+	}
+	if system.ToolsAdded != nil {
+		if encoded, err := json.Marshal(system.ToolsAdded); err == nil {
+			chars += int64(len(encoded))
+		}
+	}
+	return (chars + 3) / 4
 }
 
 // isCutPointMessage reports whether a context message may host a cut (pi:
@@ -779,8 +905,169 @@ type CompactionPreparation struct {
 	Settings CompactionSettingsValues
 }
 
+// isProjectedTurnStart reports whether a projected entry starts a turn (pi:
+// isProjectedTurnStart).
+func isProjectedTurnStart(entry ProjectedSessionEntry) bool {
+	if _, ok := entry.SourceEntry.(*CompactionEntry); ok {
+		return false
+	}
+	for _, message := range entry.Messages {
+		if isTurnStartMessage(message) {
+			return true
+		}
+	}
+	return false
+}
+
+// findProjectedTurnStartIndex finds the projected turn start at or before
+// entryIndex, not older than startIndex; -1 when none (pi:
+// findProjectedTurnStartIndex).
+func findProjectedTurnStartIndex(entries []ProjectedSessionEntry, entryIndex int, startIndex int) int {
+	for i := entryIndex; i >= startIndex; i-- {
+		if isProjectedTurnStart(entries[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
+// findProjectedCutPoint is the projection-based cut-point search (pi:
+// findProjectedCutPoint; v0.87.0). Beyond the raw-entry budget walk it
+// carries the recovery-omission-suffix rule (pi docs/compaction.md
+// "Overflow and Length Recovery Ordering"): preparation advances the kept
+// boundary into a context-invisible suffix only when that suffix contains
+// an omitted assistant attempt and no unomitted context-producing entries;
+// metadata alone and newly appended custom messages do not move the cut,
+// and a replacement edit affecting the candidate input blocks advancement
+// because the omitted assistant answered the pre-edit input. The
+// orchestration that appends those omission edits (persist → turn_end →
+// agent_end → context_edit omissions → session_before_compact + compaction
+// → fresh retry) lives in agent-session and lands with the S8-4 batch.
+func findProjectedCutPoint(entries []ProjectedSessionEntry, startIndex int, endIndex int, keepRecentTokens int64) CutPointResult {
+	var cutPoints []int
+	for i := startIndex; i < endIndex; i++ {
+		entry := entries[i]
+		if _, isCompaction := entry.SourceEntry.(*CompactionEntry); !isCompaction {
+			for _, message := range entry.Messages {
+				if isCutPointMessage(message) {
+					cutPoints = append(cutPoints, i)
+					break
+				}
+			}
+		}
+	}
+	if len(cutPoints) == 0 {
+		return CutPointResult{FirstKeptEntryIndex: startIndex, TurnStartIndex: -1, IsSplitTurn: false}
+	}
+
+	// Walk backwards from newest, accumulating estimated message sizes
+	accumulatedTokens := int64(0)
+	exceededBudget := false
+	cutIndex := cutPoints[0] // Default: keep from first message (not header)
+
+	for i := endIndex - 1; i >= startIndex; i-- {
+		messageTokens := int64(0)
+		for _, message := range entries[i].Messages {
+			messageTokens += EstimateTokens(message)
+		}
+		if messageTokens == 0 {
+			continue
+		}
+		accumulatedTokens += messageTokens
+
+		// Check if we've exceeded the budget. Prefer the closest valid cut
+		// point at or after this entry (pi #9740).
+		if accumulatedTokens >= keepRecentTokens {
+			exceededBudget = true
+			cutIndex = cutPoints[0]
+			found := false
+			for _, candidate := range cutPoints {
+				if candidate >= i {
+					cutIndex = candidate
+					found = true
+					break
+				}
+			}
+			if !found {
+				cutIndex = cutPoints[len(cutPoints)-1]
+			}
+			break
+		}
+	}
+
+	// A recovery attempt and its omission edits are context-invisible after
+	// the last visible input. Advance only for a closed suffix containing an
+	// omitted assistant attempt; arbitrary metadata must not move the cut
+	// past unsent input.
+	suffix := entries[cutIndex+1 : endIndex]
+	isIntrinsicallyVisible := func(entry ProjectedSessionEntry) bool {
+		if _, isEdit := entry.SourceEntry.(*ContextEditEntry); isEdit {
+			return false
+		}
+		return len(SessionEntryToContextMessages(entry.SourceEntry)) > 0
+	}
+	isOmitted := func(entry ProjectedSessionEntry) bool {
+		return isIntrinsicallyVisible(entry) && len(entry.Messages) == 0
+	}
+	omittedSuffixIDs := make(map[string]bool)
+	for _, entry := range suffix {
+		if isOmitted(entry) {
+			omittedSuffixIDs[entry.SourceEntry.Base().ID] = true
+		}
+	}
+	hasExternalReplacement := false
+	for _, entry := range suffix {
+		if edit, ok := entry.SourceEntry.(*ContextEditEntry); ok && edit.Replacement != nil && !omittedSuffixIDs[edit.TargetID] {
+			hasExternalReplacement = true
+			break
+		}
+	}
+	if exceededBudget && !hasExternalReplacement {
+		hasOmittedAssistant := false
+		allClosed := true
+		for _, entry := range suffix {
+			if msg, ok := entry.SourceEntry.(*SessionMessageEntry); ok && msg.Message.MessageRole() == types.RoleAssistant && isOmitted(entry) {
+				hasOmittedAssistant = true
+			}
+			_, isCompaction := entry.SourceEntry.(*CompactionEntry)
+			if isCompaction || (isIntrinsicallyVisible(entry) && !isOmitted(entry)) {
+				allClosed = false
+				break
+			}
+		}
+		if hasOmittedAssistant && allClosed {
+			cutIndex++
+		}
+	}
+
+	// Scan backwards from cutIndex to include adjacent metadata entries that
+	// do not affect the projected context. Stop at compaction boundaries or
+	// context-visible entries.
+	for cutIndex > startIndex {
+		previous := entries[cutIndex-1]
+		if _, isCompaction := previous.SourceEntry.(*CompactionEntry); isCompaction || len(previous.Messages) > 0 {
+			break
+		}
+		cutIndex--
+	}
+
+	// Determine if this is a split turn
+	startsTurn := isProjectedTurnStart(entries[cutIndex])
+	turnStartIndex := -1
+	if !startsTurn {
+		turnStartIndex = findProjectedTurnStartIndex(entries, cutIndex, startIndex)
+	}
+
+	return CutPointResult{
+		FirstKeptEntryIndex: cutIndex,
+		TurnStartIndex:      turnStartIndex,
+		IsSplitTurn:         !startsTurn && turnStartIndex != -1,
+	}
+}
+
 // PrepareCompaction computes the compaction preparation for a session branch;
-// nil means nothing to compact (pi: prepareCompaction).
+// nil means nothing to compact (pi: prepareCompaction; v0.87.0 projection
+// rewrite).
 func PrepareCompaction(pathEntries []SessionEntry, settings CompactionSettingsValues) *CompactionPreparation {
 	if len(pathEntries) > 0 {
 		if _, ok := pathEntries[len(pathEntries)-1].(*CompactionEntry); ok {
@@ -788,9 +1075,18 @@ func PrepareCompaction(pathEntries []SessionEntry, settings CompactionSettingsVa
 		}
 	}
 
+	projection := BuildSessionProjection(pathEntries, nil, nil)
+	projectedEntries := projection.Entries
+	sourceEntries := make([]SessionEntry, len(projectedEntries))
+	for i, entry := range projectedEntries {
+		sourceEntries[i] = entry.SourceEntry
+	}
+	// The newest compaction is projected first. Older compaction entries can
+	// still occur in its retained raw range, but their projected contribution
+	// is empty.
 	prevCompactionIndex := -1
-	for i := len(pathEntries) - 1; i >= 0; i-- {
-		if _, ok := pathEntries[i].(*CompactionEntry); ok {
+	for i, entry := range projectedEntries {
+		if _, ok := entry.SourceEntry.(*CompactionEntry); ok && len(entry.Messages) > 0 {
 			prevCompactionIndex = i
 			break
 		}
@@ -799,30 +1095,23 @@ func PrepareCompaction(pathEntries []SessionEntry, settings CompactionSettingsVa
 	var previousSummary string
 	boundaryStart := 0
 	if prevCompactionIndex >= 0 {
-		prevCompaction := pathEntries[prevCompactionIndex].(*CompactionEntry)
-		previousSummary = prevCompaction.Summary
-		firstKeptEntryIndex := -1
-		for i, entry := range pathEntries {
-			if entry.Base().ID == prevCompaction.FirstKeptEntryID {
-				firstKeptEntryIndex = i
-				break
-			}
-		}
-		if firstKeptEntryIndex >= 0 {
-			boundaryStart = firstKeptEntryIndex
-		} else {
-			boundaryStart = prevCompactionIndex + 1
-		}
+		previousSummary = projectedEntries[prevCompactionIndex].SourceEntry.(*CompactionEntry).Summary
+		// The canonical projection has already selected the previous
+		// compaction's retained tail.
+		boundaryStart = prevCompactionIndex + 1
 	}
-	boundaryEnd := len(pathEntries)
+	boundaryEnd := len(projectedEntries)
 
-	tokensBefore := EstimateContextTokens(BuildSessionContext(pathEntries, nil, nil).Messages).Tokens
+	tokensBefore := EstimateProjectedContextTokens(projection, pathEntries).Tokens
 
-	cutPoint := FindCutPoint(pathEntries, boundaryStart, boundaryEnd, settings.KeepRecentTokens)
+	cutPoint := findProjectedCutPoint(projectedEntries, boundaryStart, boundaryEnd, settings.KeepRecentTokens)
 
 	// Get UUID of first kept entry
-	firstKeptEntry := pathEntries[cutPoint.FirstKeptEntryIndex]
-	if firstKeptEntry.Base().ID == "" {
+	var firstKeptEntry SessionEntry
+	if cutPoint.FirstKeptEntryIndex < len(projectedEntries) {
+		firstKeptEntry = projectedEntries[cutPoint.FirstKeptEntryIndex].SourceEntry
+	}
+	if firstKeptEntry == nil || firstKeptEntry.Base().ID == "" {
 		return nil // Session needs migration
 	}
 	firstKeptEntryID := firstKeptEntry.Base().ID
@@ -834,19 +1123,15 @@ func PrepareCompaction(pathEntries []SessionEntry, settings CompactionSettingsVa
 
 	// Messages to summarize (will be discarded after summary)
 	var messagesToSummarize []agent.AgentMessage
-	for i := boundaryStart; i < historyEnd; i++ {
-		if msg := getMessageFromEntryForCompaction(pathEntries[i]); msg != nil {
-			messagesToSummarize = append(messagesToSummarize, msg)
-		}
+	for _, entry := range projectedEntries[boundaryStart:historyEnd] {
+		messagesToSummarize = append(messagesToSummarize, getMessagesFromProjectedEntryForCompaction(entry)...)
 	}
 
 	// Messages for turn prefix summary (if splitting a turn)
 	var turnPrefixMessages []agent.AgentMessage
 	if cutPoint.IsSplitTurn {
-		for i := cutPoint.TurnStartIndex; i < cutPoint.FirstKeptEntryIndex; i++ {
-			if msg := getMessageFromEntryForCompaction(pathEntries[i]); msg != nil {
-				turnPrefixMessages = append(turnPrefixMessages, msg)
-			}
+		for _, entry := range projectedEntries[cutPoint.TurnStartIndex:cutPoint.FirstKeptEntryIndex] {
+			turnPrefixMessages = append(turnPrefixMessages, getMessagesFromProjectedEntryForCompaction(entry)...)
 		}
 	}
 
@@ -854,8 +1139,9 @@ func PrepareCompaction(pathEntries []SessionEntry, settings CompactionSettingsVa
 		return nil
 	}
 
-	// Extract file operations from messages and previous compaction
-	fileOps := extractFileOperations(messagesToSummarize, pathEntries, prevCompactionIndex)
+	// Extract file operations from edited model-visible messages and the
+	// previous compaction.
+	fileOps := extractFileOperations(messagesToSummarize, sourceEntries, prevCompactionIndex)
 
 	// Also extract file ops from turn prefix if splitting
 	if cutPoint.IsSplitTurn {

@@ -364,15 +364,16 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 	)
 
 	agentOptions, err := buildSdkAgentOptions(buildSdkAgentOptionsInput{
-		settingsManager:     settingsManager,
-		extensionRunnerRef:  extensionRunnerRef,
-		modelRuntime:        modelRuntime,
-		sessionManager:      sessionManager,
-		model:               model,
-		thinkingLevel:       thinkingLevel,
-		convertToLlmWrapper: convertToLlmWithBlockImages,
-		cacheWarmer:         cacheWarmer,
-		agentRef:            agentRef,
+		settingsManager:         settingsManager,
+		extensionRunnerRef:      extensionRunnerRef,
+		modelRuntime:            modelRuntime,
+		sessionManager:          sessionManager,
+		model:                   model,
+		thinkingLevel:           thinkingLevel,
+		convertToLlmWrapper:     convertToLlmWithBlockImages,
+		cacheWarmer:             cacheWarmer,
+		agentRef:                agentRef,
+		existingSessionMessages: existingSession.Messages,
 	})
 	if err != nil {
 		return nil, err
@@ -384,9 +385,8 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 	}
 	agentRef.current = agentInstance
 
-	// Restore messages if session has existing data
+	// Restore missing settings metadata for older sessions.
 	if hasExistingSession {
-		agentInstance.State().Messages = existingSession.Messages
 		if !hasThinkingEntry {
 			_, _ = sessionManager.AppendThinkingLevelChange(string(thinkingLevel))
 		}
@@ -454,6 +454,10 @@ type buildSdkAgentOptionsInput struct {
 	// constructed from these very options (pi: the `agent` variable is
 	// assigned by the surrounding scope).
 	agentRef *agentRefBox
+	// existingSessionMessages seeds the agent's initial state from a resumed
+	// session (pi v0.87.0: initialState.messages; the post-construction
+	// restore was removed).
+	existingSessionMessages []agent.AgentMessage
 }
 
 // agentRefBox is a mutable single-value box (pig addition, see agentRef).
@@ -561,6 +565,7 @@ func buildSdkAgentOptions(input buildSdkAgentOptionsInput) (*agent.AgentOptions,
 			Model:         input.model,
 			ThinkingLevel: input.thinkingLevel,
 			Tools:         []agent.AgentTool{},
+			Messages:      input.existingSessionMessages,
 		},
 		ConvertToLlm: input.convertToLlmWrapper,
 		StreamFn: func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {

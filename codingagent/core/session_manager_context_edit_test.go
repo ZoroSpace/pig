@@ -1,12 +1,10 @@
 // pi: test/session-context-edit.test.ts — append-only context edits and
 // retain-none compactions in the session projection.
 //
-// Batch boundary (S8-2): the compaction-dependent cases of the pi file
-// ("uses only the newest summary when a repeated compaction retains entries
-// before the older compaction", the estimateProjectedContextTokens usage
-// cases, and the prepareCompaction cut-point cases) land with S8-3
-// (compaction projection-ization); they need EstimateProjectedContextTokens
-// and the projection-based PrepareCompaction.
+// Batch boundary (S8-2/S8-3): the projection and wire-format cases live
+// here; the compaction-dependent cases of the pi file (the
+// estimateProjectedContextTokens usage cases and the prepareCompaction
+// cut-point cases) landed with S8-3 in compaction_projection_test.go.
 package core
 
 import (

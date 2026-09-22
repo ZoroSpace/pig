@@ -345,7 +345,7 @@ func (r *AgentSessionRuntime) NewSession(ctx context.Context, options *RuntimeNe
 		if err := options.Setup(r.session.SessionManager); err != nil {
 			return false, err
 		}
-		r.session.Agent.State().Messages = r.session.SessionManager.BuildSessionContext().Messages
+		r.session.RefreshContext()
 	}
 	if err := r.finishSessionReplacement(ctx, options.WithSession); err != nil {
 		return false, err

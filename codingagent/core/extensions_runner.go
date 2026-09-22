@@ -11,11 +11,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
+	"slices"
 	"strings"
 	"sync"
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
+	aiutils "github.com/ZoroSpace/pig/ai/utils"
 	"github.com/ZoroSpace/pig/tui"
 )
 
@@ -659,6 +662,18 @@ func (r *ExtensionRunner) CreateContext() ExtensionContext {
 		GetSystemPrompt: func() string {
 			return r.getSystemPromptFn()
 		},
+		SendMessage: func(ctx context.Context, message *CustomMessagePayload, options *SendMessageOptions) {
+			if r.runtime.SendMessage == nil {
+				panic("Extension runtime is not initialized")
+			}
+			r.runtime.SendMessage(ctx, message, options)
+		},
+		SendUserMessage: func(ctx context.Context, content string, options *SendUserMessageOptions) {
+			if r.runtime.SendUserMessage == nil {
+				panic("Extension runtime is not initialized")
+			}
+			r.runtime.SendUserMessage(ctx, content, options)
+		},
 	}
 }
 
@@ -1095,7 +1110,159 @@ func (r *ExtensionRunner) EmitCacheWarmingDecision(ctx context.Context, event *C
 	return action
 }
 
-// EmitContext runs context handlers (pi: emitContext).
+// sameAgentMessages reports element-wise equality (pi: sameMessages
+// compares object identity; pig messages are value copies, so DeepEqual is
+// the honest equivalent — S6-3a DeepEqual precedent).
+func sameAgentMessages(left, right []agent.AgentMessage) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if !reflect.DeepEqual(left[i], right[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// transcriptOfMessages filters the LLM-message subset of AgentMessage
+// (pig-only: pi's getCurrentSystemMessage consumes AgentMessage[] directly;
+// pig's aiutils.GetCurrentSystemMessage takes TranscriptMessages).
+func transcriptOfMessages(messages []agent.AgentMessage) aiutils.TranscriptMessages {
+	var transcript aiutils.TranscriptMessages
+	for _, message := range messages {
+		if typed, ok := message.(types.Message); ok {
+			transcript = append(transcript, typed)
+		}
+	}
+	return transcript
+}
+
+// restoreSystemMessages re-attaches the prompt and tool state after a
+// `context` handler. Handlers only see the conversation; the system messages
+// belong to Pi. An unchanged conversation keeps every system message in
+// place, so models with mid-conversation support keep their cached prefix. A
+// changed one gets the replayed prompt sections and tool declarations as one
+// leading system message, so pruning, windowing, or slicing from a compaction
+// summary cannot drop them (pi: restoreSystemMessages, v0.87.0).
+func restoreSystemMessages(current, visible, returned []agent.AgentMessage) []agent.AgentMessage {
+	if sameAgentMessages(returned, visible) {
+		return current
+	}
+	if head := aiutils.GetCurrentSystemMessage(transcriptOfMessages(current)); head != nil {
+		return append([]agent.AgentMessage{*head}, returned...)
+	}
+	return returned
+}
+
+// BoundaryContextBuilder builds the would-be model context for the proposed
+// drafts (pi: emitBoundary's buildContext callback). An error marks the
+// preview invalid.
+type BoundaryContextBuilder func(entries []SessionBoundaryDraft) (BoundaryContextPreview, error)
+
+// BoundaryDispatchResult is the outcome of EmitBoundary (pi:
+// BoundaryDispatchResult, v0.87.0).
+type BoundaryDispatchResult struct {
+	Entries  []SessionBoundaryDraft
+	Continue bool
+	Context  BoundaryContextPreview
+	// Valid reports whether the last preview build succeeded; an invalid
+	// dispatch drops the drafts and the continuation (pi: valid).
+	Valid bool
+}
+
+// EmitBoundary dispatches one boundary event (turn_end / agent_before_settle)
+// to all handlers in registration order, threading the shared draft list and
+// continuation flag through every handler (pi: emitBoundary, v0.87.0).
+//
+// Handlers see a fresh event per dispatch carrying the current shared state;
+// mutating event.Entries appends to the shared list (pi: the event holds the
+// same array), and a BoundaryResult return overrides entries/continue. After
+// every handler the preview is rebuilt; a build failure reports
+// "Invalid boundary entries" and marks the dispatch invalid — an invalid
+// final dispatch drops the drafts and the continuation. An error from the
+// INITIAL preview build is returned (pi: it rejects the emitBoundary promise
+// and fails the run).
+func (r *ExtensionRunner) EmitBoundary(ctx context.Context, baseEvent ExtensionEvent, buildContext BoundaryContextBuilder) (BoundaryDispatchResult, error) {
+	handlerCtxValue := r.CreateContext()
+	handlerCtx := &handlerCtxValue
+	entries := []SessionBoundaryDraft{}
+	shouldContinue := false
+	initialContext, err := buildContext(entries)
+	if err != nil {
+		return BoundaryDispatchResult{}, err
+	}
+	context := initialContext
+	valid := true
+
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers[baseEvent.EventType()]
+		if len(handlers) == 0 {
+			continue
+		}
+		for _, handler := range handlers {
+			var event ExtensionEvent
+			switch base := baseEvent.(type) {
+			case *TurnEndEvent:
+				ev := *base
+				ev.BoundaryState = BoundaryState{Entries: entries, Continue: shouldContinue, Context: context}
+				event = &ev
+			case *AgentBeforeSettleEvent:
+				ev := *base
+				ev.BoundaryState = BoundaryState{Entries: entries, Continue: shouldContinue, Context: context}
+				event = &ev
+			default:
+				return BoundaryDispatchResult{}, fmt.Errorf("emitBoundary requires a turn_end or agent_before_settle event, got %T", baseEvent)
+			}
+			result, handlerErr := handler(ctx, handlerCtx, event)
+			// Capture in-place Entries mutations before applying overrides
+			// (pi: the handler mutates the shared array by reference).
+			switch ev := event.(type) {
+			case *TurnEndEvent:
+				entries = ev.Entries
+			case *AgentBeforeSettleEvent:
+				entries = ev.Entries
+			}
+			if handlerErr != nil {
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         baseEvent.EventType(),
+					Error:         handlerErr.Error(),
+				})
+			} else if boundaryResult, ok := result.(*BoundaryResult); ok && boundaryResult != nil {
+				if boundaryResult.Entries != nil {
+					entries = boundaryResult.Entries
+				}
+				if boundaryResult.Continue != nil {
+					shouldContinue = *boundaryResult.Continue
+				}
+			}
+
+			newContext, buildErr := buildContext(entries)
+			if buildErr != nil {
+				valid = false
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         baseEvent.EventType(),
+					Error:         fmt.Sprintf("Invalid boundary entries: %s", buildErr.Error()),
+				})
+			} else {
+				context = newContext
+				valid = true
+			}
+		}
+	}
+
+	if valid {
+		return BoundaryDispatchResult{Entries: entries, Continue: shouldContinue, Context: context, Valid: true}, nil
+	}
+	return BoundaryDispatchResult{Entries: []SessionBoundaryDraft{}, Continue: false, Context: context, Valid: false}, nil
+}
+
+// EmitContext runs the request-time transforms in two phases (pi:
+// emitContext, v0.87.0). `context` handlers see the conversation only and Pi
+// restores the prompt and tool state after each; `context_with_system`
+// handlers then see the full transcript and their output is used as returned.
 func (r *ExtensionRunner) EmitContext(ctx context.Context, messages []agent.AgentMessage) []agent.AgentMessage {
 	currentMessages := cloneAgentMessages(messages)
 
@@ -1104,11 +1271,17 @@ func (r *ExtensionRunner) EmitContext(ctx context.Context, messages []agent.Agen
 		if len(handlers) == 0 {
 			continue
 		}
-
 		handlerCtxValue := r.CreateContext()
 		handlerCtx := &handlerCtxValue
 		for _, handler := range handlers {
-			event := &ContextEvent{Type: "context", Messages: currentMessages}
+			visibleMessages := make([]agent.AgentMessage, 0, len(currentMessages))
+			for _, message := range currentMessages {
+				if message.MessageRole() != types.RoleSystem {
+					visibleMessages = append(visibleMessages, message)
+				}
+			}
+			visibleSnapshot := slices.Clone(visibleMessages)
+			event := &ContextEvent{Type: "context", Messages: visibleMessages}
 			result, err := handler(ctx, handlerCtx, event)
 			if err != nil {
 				r.EmitError(ExtensionError{
@@ -1118,8 +1291,55 @@ func (r *ExtensionRunner) EmitContext(ctx context.Context, messages []agent.Agen
 				})
 				continue
 			}
+			// Handlers may return a new list or edit event.messages in place
+			// (pig detects edits by comparing against the pre-handler
+			// snapshot; pi's object identity also leaks in-place property
+			// mutations through the shared references, which value semantics
+			// cannot — declared adaptation).
+			var returned []agent.AgentMessage
+			if eventResult, ok := result.(*ContextEventResult); ok && eventResult != nil && eventResult.Messages != nil {
+				returned = eventResult.Messages
+			} else if !sameAgentMessages(event.Messages, visibleSnapshot) {
+				returned = event.Messages
+			}
+			if returned == nil {
+				continue
+			}
+			currentMessages = restoreSystemMessages(currentMessages, visibleSnapshot, returned)
+		}
+	}
+
+	for _, ext := range r.extensions {
+		handlers := ext.Handlers["context_with_system"]
+		if len(handlers) == 0 {
+			continue
+		}
+		handlerCtxValue := r.CreateContext()
+		handlerCtx := &handlerCtxValue
+		for _, handler := range handlers {
+			hadLeadingSystemMessage := len(currentMessages) > 0 && currentMessages[0].MessageRole() == types.RoleSystem
+			event := &ContextWithSystemEvent{Type: "context_with_system", Messages: currentMessages}
+			result, err := handler(ctx, handlerCtx, event)
+			if err != nil {
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         "context_with_system",
+					Error:         err.Error(),
+				})
+				continue
+			}
 			if eventResult, ok := result.(*ContextEventResult); ok && eventResult != nil && eventResult.Messages != nil {
 				currentMessages = eventResult.Messages
+			}
+			// Providers read the prompt and initial tools from the leading
+			// system message. Losing it is never intended; report it but
+			// honor the handler's output.
+			if hadLeadingSystemMessage && (len(currentMessages) == 0 || currentMessages[0].MessageRole() != types.RoleSystem) {
+				r.EmitError(ExtensionError{
+					ExtensionPath: ext.Path,
+					Event:         "context_with_system",
+					Error:         "Handler removed the leading system message; the request has no prompt or initial tool declarations. Keep it at index 0 or replace a dropped prefix with getCurrentSystemMessage().",
+				})
 			}
 		}
 	}

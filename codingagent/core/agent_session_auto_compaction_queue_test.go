@@ -126,12 +126,12 @@ func TestAutoCompactionQueueDoesNotCompactRepeatedlyAfterOverflowRecoveryAttempt
 		}
 	})
 
-	if _, err := session.checkCompaction(context.Background(), &overflowMessage, true); err != nil {
+	if _, err := session.checkCompaction(context.Background(), &overflowMessage, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	second := overflowMessage
 	second.Timestamp = time.Now().UnixMilli() + 1
-	if _, err := session.checkCompaction(context.Background(), &second, true); err != nil {
+	if _, err := session.checkCompaction(context.Background(), &second, true, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -200,7 +200,7 @@ func TestAutoCompactionQueueIgnoresStalePreCompactionAssistantUsageOnPrePromptCh
 		return false, nil
 	}
 
-	if _, err := session.checkCompaction(context.Background(), &staleAssistant, false); err != nil {
+	if _, err := session.checkCompaction(context.Background(), &staleAssistant, false, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -261,7 +261,7 @@ func TestAutoCompactionQueueTriggersThresholdCompactionForErrorMessagesUsingLast
 		return false, nil
 	}
 
-	if _, err := session.checkCompaction(context.Background(), &errorAssistant, true); err != nil {
+	if _, err := session.checkCompaction(context.Background(), &errorAssistant, true, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -302,7 +302,7 @@ func TestAutoCompactionQueueNoThresholdCompactionForErrorMessagesWithoutPriorUsa
 		return false, nil
 	}
 
-	if _, err := session.checkCompaction(context.Background(), &errorAssistant, true); err != nil {
+	if _, err := session.checkCompaction(context.Background(), &errorAssistant, true, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -372,7 +372,7 @@ func TestAutoCompactionQueueNoThresholdCompactionWhenOnlyKeptPreCompactionUsageE
 		return false, nil
 	}
 
-	if _, err := session.checkCompaction(context.Background(), &errorAssistant, true); err != nil {
+	if _, err := session.checkCompaction(context.Background(), &errorAssistant, true, nil); err != nil {
 		t.Fatal(err)
 	}
 

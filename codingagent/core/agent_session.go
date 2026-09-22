@@ -26,6 +26,9 @@ package core
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -436,6 +439,47 @@ func estimateMessagesTokens(messages []agent.AgentMessage) int64 {
 	return tokens
 }
 
+// agentMessageIdentityKey builds a stable identity key for one message value
+// (pig-only; pi: object identity via WeakMap/WeakSet). pig messages flow as
+// values that are bit-identical copies of the same logical message, so a
+// canonical JSON digest identifies them and also unifies the value/pointer
+// dual forms (docs/fix/2026-09-11-tool-execution-live-output-empty.md);
+// DeepEqual-equal messages of identical content are indistinguishable in pig
+// (declared deviation, S6-3a DeepEqual precedent).
+func agentMessageIdentityKey(message agent.AgentMessage) string {
+	encoded, err := json.Marshal(message)
+	if err != nil {
+		// Messages are always JSON-serializable (they are persisted); fall
+		// back to the format verb so identity still distinguishes values.
+		return fmt.Sprintf("%#v", message)
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:])
+}
+
+// agentMessagesContain reports whether messages holds an equal value (pi:
+// Array.prototype.includes uses object identity; pig compares values).
+func agentMessagesContain(messages []agent.AgentMessage, target agent.AgentMessage) bool {
+	for _, message := range messages {
+		if reflect.DeepEqual(message, target) {
+			return true
+		}
+	}
+	return false
+}
+
+// agentToolsAsPointers copies the state tool values into context-tool
+// pointers (pi: state.tools.slice() keeps object references; pig's state
+// holds values, so the copy materializes pointers to the copies).
+func agentToolsAsPointers(stateTools []agent.AgentTool) []*agent.AgentTool {
+	contextTools := make([]*agent.AgentTool, len(stateTools))
+	for i := range stateTools {
+		toolCopy := stateTools[i]
+		contextTools[i] = &toolCopy
+	}
+	return contextTools
+}
+
 // ============================================================================
 // AgentSession Class
 // ============================================================================
@@ -503,6 +547,33 @@ type AgentSession struct {
 	// Extension system
 	extensionRunner *ExtensionRunner
 	turnIndex       int
+
+	// entryIDsByMessage maps message identity to its persisted session entry
+	// (pi: _entryIdsByMessage WeakMap<object, string>, v0.87.0). pig keys by a
+	// canonical JSON digest (see agentMessageIdentityKey) — messages are
+	// values, so object identity has no equivalent (declared deviation).
+	entryIDsByMessage map[string]string
+	// boundaryDispatchedMessages tracks turn messages whose turn_end boundary
+	// was already dispatched by the finishTurn hook (pi:
+	// _boundaryDispatchedMessages WeakSet<object>, v0.87.0; same
+	// identity-key adaptation as entryIDsByMessage).
+	boundaryDispatchedMessages map[string]struct{}
+	// lastAssistantToolResults are the tool results of the last completed
+	// turn, captured on turn_end for the post-run recovery omissions (pi:
+	// _lastAssistantToolResults, v0.87.0).
+	lastAssistantToolResults []agent.AgentMessage
+	// lastActivityOutcome classifies the most recent completed turn (pi:
+	// _lastActivityOutcome, v0.87.0).
+	lastActivityOutcome AgentActivityOutcome
+	// isBeforeSettle/abortDuringBeforeSettle carry the abort-during-settle
+	// latch (pi: _isBeforeSettle/_abortDuringBeforeSettle, v0.87.0).
+	isBeforeSettle          bool
+	abortDuringBeforeSettle bool
+	// isEmittingAgentSettled guards agent_settled dispatch; prompts arriving
+	// during it are queued in deferredSettledActions (pi:
+	// _isEmittingAgentSettled/_deferredSettledActions, v0.87.0).
+	isEmittingAgentSettled bool
+	deferredSettledActions []func(ctx context.Context) error
 
 	resourceLoader                 ResourceLoader
 	customTools                    []*tools.ToolDefinition
@@ -611,8 +682,14 @@ func NewAgentSession(config AgentSessionConfig) *AgentSession {
 	// (session persistence, extensions, auto-compaction, retry logic)
 	s.unsubscribeAgent = s.Agent.Subscribe(s.handleAgentEvent)
 
+	s.entryIDsByMessage = map[string]string{}
+	s.boundaryDispatchedMessages = map[string]struct{}{}
+	s.lastActivityOutcome = AgentActivityCompleted
+
 	s.installAgentToolHooks()
 	s.installAgentNextTurnRefresh()
+	s.installAgentRequestProjection()
+	s.installAgentBoundaryHooks()
 	s.installAgentForcedPromptProjection()
 
 	s.buildRuntime(buildRuntimeOptions{
@@ -852,7 +929,7 @@ func contentEqual(a, b types.Content) bool {
 
 // compactBeforeNextAssistantResponse runs threshold compaction before the
 // next assistant response when the estimated context exceeds the limit (pi:
-// _compactBeforeNextAssistantResponse, v0.85.1).
+// _compactBeforeNextAssistantResponse, v0.87.0 projection shape).
 func (s *AgentSession) compactBeforeNextAssistantResponse(ctx context.Context, llmContext *agent.AgentContext) *agent.AgentContext {
 	if llmContext == nil {
 		return llmContext
@@ -865,16 +942,18 @@ func (s *AgentSession) compactBeforeNextAssistantResponse(ctx context.Context, l
 	if err != nil {
 		panic(err)
 	}
-	if model == nil || model.ContextWindow <= 0 {
-		return llmContext
-	}
-	if !ShouldCompact(EstimateContextTokens(llmContext.Messages).Tokens, model.ContextWindow, settings) {
-		return llmContext
+	projection := s.SessionManager.BuildSessionProjection()
+	if model == nil || model.ContextWindow <= 0 ||
+		!ShouldCompact(EstimateProjectedContextTokens(projection, s.SessionManager.GetBranch("")).Tokens, model.ContextWindow, settings) {
+		nextContext := &agent.AgentContext{}
+		*nextContext = *llmContext
+		nextContext.Messages = projection.Messages
+		return nextContext
 	}
 	_, _ = s.runAutoCompactionChecked(ctx, "threshold", false)
 	nextContext := &agent.AgentContext{}
 	*nextContext = *llmContext
-	nextContext.Messages = slices.Clone(s.Agent.State().Messages)
+	nextContext.Messages = s.SessionManager.BuildSessionProjection().Messages
 	return nextContext
 }
 
@@ -950,12 +1029,7 @@ func (s *AgentSession) installAgentNextTurnRefresh() {
 		s.mu.Unlock()
 
 		stateTools := s.Agent.State().Tools
-		contextTools := make([]*agent.AgentTool, len(stateTools))
-		for i := range stateTools {
-			toolCopy := stateTools[i]
-			contextTools[i] = &toolCopy
-		}
-		nextContext.Tools = contextTools
+		nextContext.Tools = agentToolsAsPointers(stateTools)
 
 		update := &agent.AgentLoopTurnUpdate{Context: nextContext}
 		if previousSnapshot != nil {
@@ -978,9 +1052,287 @@ func (s *AgentSession) installAgentNextTurnRefresh() {
 	}
 }
 
+// installAgentRequestProjection routes every provider request through the
+// canonical session projection (pi: _installAgentRequestProjection,
+// v0.87.0). Wraps the agent's prepareRequest: the request context's messages
+// come from the session manager projection and its tools from the agent's
+// executable state (messages declare the provider-visible loadout;
+// context.tools keeps executable implementations).
+func (s *AgentSession) installAgentRequestProjection() {
+	previousPrepareRequest := s.Agent.PrepareRequest
+	s.Agent.PrepareRequest = func(ctx context.Context, request agent.PrepareRequestContext) *agent.AgentRequestUpdate {
+		canonicalContext := &agent.AgentContext{}
+		if request.Context != nil {
+			*canonicalContext = *request.Context
+		}
+		canonicalContext.Messages = s.SessionManager.BuildSessionProjection().Messages
+		state := s.Agent.State()
+		canonicalContext.Tools = agentToolsAsPointers(state.Tools)
+		var previous *agent.AgentRequestUpdate
+		if previousPrepareRequest != nil {
+			previous = previousPrepareRequest(ctx, agent.PrepareRequestContext{
+				Context:       canonicalContext,
+				Model:         state.Model,
+				ThinkingLevel: state.ThinkingLevel,
+			})
+		}
+		update := &agent.AgentRequestUpdate{Context: canonicalContext, Model: state.Model, ThinkingLevel: state.ThinkingLevel}
+		if previous != nil {
+			if previous.Context != nil {
+				update.Context = previous.Context
+			}
+			if previous.Model != nil {
+				update.Model = previous.Model
+			}
+			if previous.ThinkingLevel != "" {
+				update.ThinkingLevel = previous.ThinkingLevel
+			}
+		}
+		return update
+	}
+}
+
+// dispatchTurnEndBoundary dispatches the turn_end boundary to extensions (pi:
+// _dispatchTurnEndBoundary, v0.87.0). Returns whether the boundary requested
+// exactly one continuation. A missing preview build failure panics (pi: it
+// rejects the finishTurn promise and fails the run).
+func (s *AgentSession) dispatchTurnEndBoundary(ctx context.Context, message types.AssistantMessage, toolResults []types.ToolResultMessage) bool {
+	outcome := AgentActivityCompleted
+	switch message.StopReason {
+	case types.StopReasonAborted:
+		outcome = AgentActivityAborted
+	case types.StopReasonError:
+		outcome = AgentActivityError
+	}
+	s.mu.Lock()
+	s.lastActivityOutcome = outcome
+	s.mu.Unlock()
+	messageEntryID := s.findPersistedMessageEntryID(message)
+	if !s.extensionRunner.HasHandlers("turn_end") {
+		return false
+	}
+	if messageEntryID == "" {
+		s.extensionRunner.EmitError(ExtensionError{
+			ExtensionPath: "<boundary>",
+			Event:         "turn_end",
+			Error:         "turn_end could not resolve the persisted assistant entry ID",
+		})
+		return false
+	}
+	var toolResultEntryIDs []string
+	for _, result := range toolResults {
+		if entryID := s.findPersistedMessageEntryID(result); entryID != "" {
+			toolResultEntryIDs = append(toolResultEntryIDs, entryID)
+		}
+	}
+	s.mu.Lock()
+	turnIndex := s.turnIndex
+	s.mu.Unlock()
+	boundary, err := s.extensionRunner.EmitBoundary(ctx,
+		&TurnEndEvent{
+			Type:               "turn_end",
+			TurnIndex:          turnIndex,
+			Message:            message,
+			ToolResults:        toolResults,
+			MessageEntryID:     messageEntryID,
+			ToolResultEntryIDs: toolResultEntryIDs,
+			Outcome:            outcome,
+		},
+		func(entries []SessionBoundaryDraft) (BoundaryContextPreview, error) {
+			return s.buildBoundaryContext(entries, "turn_end")
+		})
+	if err != nil {
+		// pi: the initial preview build rejects the finishTurn promise; pig
+		// propagates through the agent-loop recover as a run failure.
+		panic(err)
+	}
+	s.commitBoundaryDrafts(boundary.Entries)
+	if boundary.Continue {
+		finalContext, buildErr := s.buildBoundaryContext(nil, "turn_end")
+		if buildErr != nil {
+			panic(buildErr)
+		}
+		if !finalContext.CanContinue {
+			s.reportInvalidBoundaryContinuation("turn_end")
+			return false
+		}
+	}
+	return boundary.Continue
+}
+
+// installAgentBoundaryHooks wraps the agent's finishTurn with the turn_end
+// boundary dispatch (pi: _installAgentBoundaryHooks, v0.87.0).
+func (s *AgentSession) installAgentBoundaryHooks() {
+	previousFinishTurn := s.Agent.FinishTurn
+	s.Agent.FinishTurn = func(ctx context.Context, turn agent.AgentTurnContext) *agent.AgentTurnDecision {
+		s.mu.Lock()
+		s.boundaryDispatchedMessages[agentMessageIdentityKey(turn.Message)] = struct{}{}
+		s.mu.Unlock()
+		extensionContinue := s.dispatchTurnEndBoundary(ctx, turn.Message, turn.ToolResults)
+		var previousDecision *agent.AgentTurnDecision
+		if previousFinishTurn != nil {
+			previousDecision = previousFinishTurn(ctx, turn)
+		}
+		if previousDecision != nil && previousDecision.Action == agent.AgentTurnActionEnd {
+			return previousDecision
+		}
+		if extensionContinue || (previousDecision != nil && previousDecision.Action == agent.AgentTurnActionContinue) {
+			return &agent.AgentTurnDecision{Action: agent.AgentTurnActionContinue}
+		}
+		return nil
+	}
+}
+
 // ============================================================================
 // Event Subscription
 // ============================================================================
+
+// refreshFinalizedContext rebuilds the finalized transcript and the entry-id
+// map from the canonical session projection (pi: _refreshFinalizedContext,
+// v0.87.0).
+func (s *AgentSession) refreshFinalizedContext() {
+	projection := s.SessionManager.BuildSessionProjection()
+	s.mu.Lock()
+	for _, entry := range projection.Entries {
+		for _, message := range entry.Messages {
+			s.entryIDsByMessage[agentMessageIdentityKey(message)] = entry.SourceEntry.Base().ID
+		}
+	}
+	s.mu.Unlock()
+	s.Agent.SetMessages(projection.Messages)
+}
+
+// applyBoundaryDrafts appends boundary drafts to a session manager and
+// returns the created entries (pi: _applyBoundaryDrafts, v0.87.0). Append
+// failures are returned (pi: they throw out of the boundary flow).
+func (s *AgentSession) applyBoundaryDrafts(manager *SessionManager, drafts []SessionBoundaryDraft) ([]SessionEntry, error) {
+	var appended []SessionEntry
+	for _, draft := range drafts {
+		var entryID string
+		var err error
+		switch d := draft.(type) {
+		case *CustomEntryDraft:
+			entryID, err = manager.AppendCustomEntry(d.CustomType, d.Data)
+		case *CustomMessageEntryDraft:
+			entryID, err = manager.AppendCustomMessageEntry(d.CustomType, d.Content, d.Display, d.Details)
+		case *ContextEditEntryDraft:
+			entryID, err = manager.AppendContextEdit(d.TargetID, d.Replacement)
+		case *CompactionEntryDraft:
+			tokensBefore := EstimateProjectedContextTokens(
+				manager.BuildSessionProjection(),
+				manager.GetBranch(""),
+			).Tokens
+			entryID, err = manager.AppendCompaction(d.Summary, d.FirstKeptEntryID, tokensBefore, d.Details, lo.ToPtr(true), d.Usage)
+		}
+		if err != nil {
+			return appended, err
+		}
+		if entry := manager.GetEntry(entryID); entry != nil {
+			appended = append(appended, entry)
+		}
+	}
+	return appended, nil
+}
+
+// createBoundaryPreviewManager builds an in-memory preview manager seeded
+// with the current branch plus the proposed drafts (pi:
+// _createBoundaryPreviewManager, v0.87.0).
+func (s *AgentSession) createBoundaryPreviewManager(drafts []SessionBoundaryDraft) (*SessionManager, error) {
+	header := s.SessionManager.GetHeader()
+	if header == nil {
+		return nil, errors.New("Session header is missing")
+	}
+	branch := s.SessionManager.GetBranch("")
+	fileEntries := make([]FileEntry, 0, len(branch)+1)
+	fileEntries = append(fileEntries, header)
+	for _, entry := range branch {
+		fileEntries = append(fileEntries, entry)
+	}
+	manager, err := InMemorySession(s.cwd, nil, fileEntries)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.applyBoundaryDrafts(manager, drafts); err != nil {
+		return nil, err
+	}
+	return manager, nil
+}
+
+// getPendingBoundaryMessages collects queued input for the boundary preview
+// (pi: _getPendingBoundaryMessages, v0.87.0).
+func (s *AgentSession) getPendingBoundaryMessages() []agent.AgentMessage {
+	out := append([]agent.AgentMessage{}, s.Agent.PeekQueuedMessages()...)
+	s.mu.Lock()
+	out = append(out, s.pendingCustomMessages...)
+	s.mu.Unlock()
+	return out
+}
+
+// buildBoundaryContext builds the would-be model context preview for the
+// proposed drafts (pi: _buildBoundaryContext, v0.87.0).
+func (s *AgentSession) buildBoundaryContext(drafts []SessionBoundaryDraft, boundary string) (BoundaryContextPreview, error) {
+	previewManager, err := s.createBoundaryPreviewManager(drafts)
+	if err != nil {
+		return BoundaryContextPreview{}, err
+	}
+	projection := previewManager.BuildSessionProjection()
+	pendingMessages := s.getPendingBoundaryMessages()
+	llmMessages := harness.ConvertToLlm(projection.Messages)
+	finalRole := types.Role("")
+	if len(llmMessages) > 0 {
+		finalRole = llmMessages[len(llmMessages)-1].MessageRole()
+	}
+	hasNonSystemContext := false
+	for _, message := range llmMessages {
+		if message.MessageRole() != types.RoleSystem {
+			hasNonSystemContext = true
+			break
+		}
+	}
+	contextCanContinue := hasNonSystemContext && finalRole != types.RoleAssistant
+	s.mu.Lock()
+	pendingCustomContext := len(s.pendingCustomMessages) > 0
+	s.mu.Unlock()
+	canContinue := contextCanContinue || pendingCustomContext
+	if boundary == "turn_end" {
+		canContinue = canContinue || s.Agent.HasQueuedMessages()
+	} else {
+		canContinue = canContinue || (finalRole == types.RoleAssistant && s.Agent.HasQueuedMessages())
+	}
+	return BoundaryContextPreview{
+		ContextEntries:  projection.Entries,
+		ContextMessages: projection.Messages,
+		LLMMessages:     llmMessages,
+		PendingMessages: pendingMessages,
+		CanContinue:     canContinue,
+	}, nil
+}
+
+// commitBoundaryDrafts persists the boundary drafts, refreshes the finalized
+// context, and publishes per-entry notifications (pi:
+// _commitBoundaryDrafts, v0.87.0). Append failures panic (pi: they reject
+// the enclosing finishTurn/before-settle promise and fail the run).
+func (s *AgentSession) commitBoundaryDrafts(drafts []SessionBoundaryDraft) {
+	appended, err := s.applyBoundaryDrafts(s.SessionManager, drafts)
+	if err != nil {
+		panic(err)
+	}
+	s.refreshFinalizedContext()
+	for _, entry := range appended {
+		s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventEntryAppended}, Entry: entry})
+	}
+}
+
+// reportInvalidBoundaryContinuation reports a boundary continuation request
+// without a runnable model context (pi: _reportInvalidBoundaryContinuation,
+// v0.87.0).
+func (s *AgentSession) reportInvalidBoundaryContinuation(event string) {
+	s.extensionRunner.EmitError(ExtensionError{
+		ExtensionPath: "<boundary>",
+		Event:         event,
+		Error:         fmt.Sprintf("%s requested continuation without runnable model context", event),
+	})
+}
 
 // emit sends an event to all listeners (pi: _emit).
 // pig panic containment: a panic in one listener is logged and contained so
@@ -1050,13 +1402,45 @@ func (s *AgentSession) resolveIdleWaitIfIdle() {
 func (s *AgentSession) emitAgentSettled(ctx context.Context) {
 	s.mu.Lock()
 	s.isAgentRunActive = false
+	s.isEmittingAgentSettled = true
 	s.mu.Unlock()
-	defer s.resolveIdleWaitIfIdle()
 	if s.cacheWarmer != nil {
 		s.cacheWarmer.OnAgentSettled()
 	}
-	_, _ = s.extensionRunner.Emit(ctx, &AgentSettledEvent{Type: "agent_settled"})
-	s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventAgentSettled}})
+	func() {
+		defer func() {
+			s.mu.Lock()
+			s.isEmittingAgentSettled = false
+			s.mu.Unlock()
+		}()
+		_, _ = s.extensionRunner.Emit(ctx, &AgentSettledEvent{Type: "agent_settled"})
+		s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventAgentSettled}})
+	}()
+
+	// Runs queued by agent_settled handlers wait until every settled handler
+	// completes; the idle wait resolves only after they drain (pi:
+	// _deferredSettledActions, v0.87.0).
+	deferred := s.takeDeferredSettledActions()
+	if len(deferred) > 0 {
+		func() {
+			defer s.resolveIdleWaitIfIdle()
+			for _, action := range deferred {
+				_ = action(ctx)
+			}
+		}()
+		return
+	}
+	s.resolveIdleWaitIfIdle()
+}
+
+// takeDeferredSettledActions drains the deferred settled queue (pig-only
+// helper for pi's splice(0)).
+func (s *AgentSession) takeDeferredSettledActions() []func(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	deferred := s.deferredSettledActions
+	s.deferredSettledActions = nil
+	return deferred
 }
 
 // handleAgentEvent is the internal handler for agent events, shared by
@@ -1098,31 +1482,39 @@ func (s *AgentSession) handleAgentEvent(ctx context.Context, event agent.AgentEv
 
 	// Handle session persistence
 	if event.Type == agent.AgentEventMessageEnd {
+		var entryID string
 		// Check if this is a custom message from extensions
 		if custom, ok := event.Message.(harness.CustomMessage); ok {
 			// Persist as CustomMessageEntry
-			_, _ = s.SessionManager.AppendCustomMessageEntry(custom.CustomType, custom.Content, custom.Display, custom.Details)
+			entryID, _ = s.SessionManager.AppendCustomMessageEntry(custom.CustomType, custom.Content, custom.Display, custom.Details)
 		} else if role := event.Message.MessageRole(); role == types.RoleSystem || role == types.RoleUser || role == types.RoleAssistant || role == types.RoleToolResult {
 			// Regular LLM message - persist as SessionMessageEntry
 			// (pi v0.86.0 adds the system role).
-			_, _ = s.SessionManager.AppendMessage(event.Message)
+			entryID, _ = s.SessionManager.AppendMessage(event.Message)
 		}
 		// Other message types (bashExecution, compactionSummary, branchSummary) are persisted elsewhere
+		if entryID != "" {
+			s.mu.Lock()
+			s.entryIDsByMessage[agentMessageIdentityKey(event.Message)] = entryID
+			s.mu.Unlock()
+		}
 
 		// Track assistant message for auto-compaction (checked on agent_end)
 		if assistantMsg, ok := event.Message.(types.AssistantMessage); ok {
 			s.mu.Lock()
 			s.lastAssistantMessage = &assistantMsg
 			resetOverflow := assistantMsg.StopReason != types.StopReasonError && assistantMsg.StopReason != types.StopReasonLength
+			if resetOverflow {
+				// A successful intermediate assistant turn re-arms the one-shot
+				// overflow recovery (pi: same reset at assistant message_end).
+				s.overflowRecoveryAttempted = false
+			}
 			resetRetry := assistantMsg.StopReason != types.StopReasonError && s.retryAttempt > 0
 			completedAttempt := s.retryAttempt
 			if resetRetry {
 				s.retryAttempt = 0
 			}
 			s.mu.Unlock()
-			if resetOverflow {
-				// nothing to do beyond the flag above; kept for shape parity
-			}
 			// Reset retry counter immediately on successful assistant response
 			// This prevents accumulation across multiple LLM calls within a turn
 			if resetRetry {
@@ -1133,6 +1525,22 @@ func (s *AgentSession) handleAgentEvent(ctx context.Context, event agent.AgentEv
 				})
 			}
 		}
+	}
+
+	// Track the turn's tool results and flush queued context-only custom
+	// messages. This runs after the extension and listener dispatch above, so
+	// it also picks up messages that turn_end handlers queued (pi v0.87.0:
+	// the flush moved here from the extension dispatch, whose turn_end branch
+	// now owns the boundary flow).
+	if event.Type == agent.AgentEventTurnEnd {
+		toolResults := make([]agent.AgentMessage, len(event.ToolResults))
+		for i, result := range event.ToolResults {
+			toolResults[i] = result
+		}
+		s.mu.Lock()
+		s.lastAssistantToolResults = toolResults
+		s.mu.Unlock()
+		s.flushPendingCustomMessages()
 	}
 }
 
@@ -1160,6 +1568,90 @@ func (s *AgentSession) willRetryAfterAgentEnd(event agent.AgentEvent) bool {
 		}
 	}
 	return false
+}
+
+// findPersistedMessageEntryID resolves the session entry a message was
+// persisted under (pi: _findPersistedMessageEntryId, v0.87.0). pig compares
+// values (DeepEqual) where pi compares object identity — see
+// agentMessageIdentityKey.
+func (s *AgentSession) findPersistedMessageEntryID(message agent.AgentMessage) string {
+	key := agentMessageIdentityKey(message)
+	s.mu.Lock()
+	mapped, ok := s.entryIDsByMessage[key]
+	s.mu.Unlock()
+	if ok && mapped != "" {
+		return mapped
+	}
+
+	branch := s.SessionManager.GetBranch("")
+	for i := len(branch) - 1; i >= 0; i-- {
+		if entry, isMessage := branch[i].(*SessionMessageEntry); isMessage && reflect.DeepEqual(entry.Message, message) {
+			return entry.ID
+		}
+	}
+
+	state := s.Agent.State()
+	messageIndex := -1
+	for i, candidate := range state.Messages {
+		if reflect.DeepEqual(candidate, message) {
+			messageIndex = i
+			break
+		}
+	}
+	if messageIndex < 0 {
+		return ""
+	}
+	projection := s.SessionManager.BuildSessionProjection()
+	projectedIndex := 0
+	for _, entry := range projection.Entries {
+		for range entry.Messages {
+			if projectedIndex == messageIndex {
+				s.mu.Lock()
+				s.entryIDsByMessage[key] = entry.SourceEntry.Base().ID
+				s.mu.Unlock()
+				return entry.SourceEntry.Base().ID
+			}
+			projectedIndex++
+		}
+	}
+	return ""
+}
+
+// omitRecoveryAttempt durably omits a failed/truncated attempt from the
+// model projection via context edits while keeping it in raw history (pi:
+// _omitRecoveryAttempt, v0.87.0).
+func (s *AgentSession) omitRecoveryAttempt(ctx context.Context, message *types.AssistantMessage, toolResults []agent.AgentMessage) error {
+	targets := make([]agent.AgentMessage, 0, len(toolResults)+1)
+	if message != nil {
+		targets = append(targets, *message)
+	}
+	targets = append(targets, toolResults...)
+	targetIDs := make([]string, len(targets))
+	unresolvedProjectedTarget := false
+	state := s.Agent.State()
+	for i, target := range targets {
+		targetIDs[i] = s.findPersistedMessageEntryID(target)
+		if targetIDs[i] == "" && agentMessagesContain(state.Messages, target) {
+			unresolvedProjectedTarget = true
+		}
+	}
+	if unresolvedProjectedTarget {
+		return errors.New("Cannot persist recovery omission because a projected message has no source entry")
+	}
+	for _, targetID := range targetIDs {
+		if targetID == "" {
+			continue
+		}
+		editID, err := s.SessionManager.AppendContextEdit(targetID, nil)
+		if err != nil {
+			return err
+		}
+		if entry := s.SessionManager.GetEntry(editID); entry != nil {
+			s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventEntryAppended}, Entry: entry})
+		}
+	}
+	s.refreshFinalizedContext()
+	return nil
 }
 
 // findLastAssistantMessage finds the last assistant message in agent state
@@ -1280,18 +1772,25 @@ func (s *AgentSession) emitExtensionEvent(ctx context.Context, event agent.Agent
 		s.mu.Unlock()
 		_, _ = s.extensionRunner.Emit(ctx, &TurnStartEvent{Type: "turn_start", TurnIndex: turnIndex, Timestamp: time.Now().UnixMilli()})
 	case agent.AgentEventTurnEnd:
+		// The normal path dispatches the boundary from the finishTurn hook,
+		// which marks the message as dispatched; this fallback covers turns
+		// that reach turn_end without the hook having run (pi v0.87.0:
+		// _boundaryDispatchedMessages.delete probe).
+		if event.Message.MessageRole() == types.RoleAssistant {
+			if assistant, ok := event.Message.(types.AssistantMessage); ok {
+				key := agentMessageIdentityKey(assistant)
+				s.mu.Lock()
+				_, dispatched := s.boundaryDispatchedMessages[key]
+				delete(s.boundaryDispatchedMessages, key)
+				s.mu.Unlock()
+				if !dispatched {
+					s.dispatchTurnEndBoundary(ctx, assistant, event.ToolResults)
+				}
+			}
+		}
 		s.mu.Lock()
-		turnIndex := s.turnIndex
 		s.turnIndex++
 		s.mu.Unlock()
-		_, _ = s.extensionRunner.Emit(ctx, &TurnEndEvent{Type: "turn_end", TurnIndex: turnIndex, Message: event.Message, ToolResults: event.ToolResults})
-		// A turn ends after its assistant message and every tool result has
-		// been appended, so this is the first point in the run where a
-		// context-only custom message can be inserted without landing between
-		// a tool call and its result. Flushing after the extension and
-		// listener dispatch above also picks up messages that turn_end
-		// handlers queued (pi, v0.85.1).
-		s.flushPendingCustomMessages()
 	case agent.AgentEventMessageStart:
 		_, _ = s.extensionRunner.Emit(ctx, &MessageStartEvent{Type: "message_start", Message: event.Message})
 	case agent.AgentEventMessageUpdate:
@@ -1399,6 +1898,12 @@ func (s *AgentSession) Dispose() {
 // ============================================================================
 // Read-only State Access
 // ============================================================================
+
+// RefreshContext rebuilds the public finalized transcript from the canonical
+// session projection (pi: refreshContext, v0.87.0).
+func (s *AgentSession) RefreshContext() {
+	s.refreshFinalizedContext()
+}
 
 // State returns the full agent state (pi: get state).
 func (s *AgentSession) State() *agent.AgentState {
@@ -1754,18 +2259,29 @@ func (s *AgentSession) runAgentPrompt(ctx context.Context, messages []agent.Agen
 	if err := s.Agent.Prompt(ctx, messages...); err != nil {
 		return err
 	}
-	for {
+	for !s.agentRunAbortRequestedLocked() {
 		shouldContinue, err := s.handlePostAgentRun(ctx)
 		if err != nil {
 			return err
 		}
-		if !shouldContinue {
-			break
+		if shouldContinue {
+			if s.agentRunAbortRequestedLocked() {
+				break
+			}
+			if err := s.Agent.Continue(ctx); err != nil {
+				return err
+			}
+			continue
 		}
-		s.mu.Lock()
-		aborted := s.agentRunAbortRequested
-		s.mu.Unlock()
-		if aborted {
+		// The low-level loop drains both queues before agent_end, so a false
+		// post-run result reaches the pre-settlement boundary. Messages
+		// queued by agent_end handlers require a fresh run before those
+		// handlers fire (pi v0.87.0).
+		shouldContinue, err = s.runBeforeSettleBoundary(ctx)
+		if err != nil {
+			return err
+		}
+		if s.agentRunAbortRequestedLocked() || !shouldContinue {
 			break
 		}
 		if err := s.Agent.Continue(ctx); err != nil {
@@ -1777,12 +2293,21 @@ func (s *AgentSession) runAgentPrompt(ctx context.Context, messages []agent.Agen
 	return nil
 }
 
+// agentRunAbortRequestedLocked reads the abort flag (pig-only helper).
+func (s *AgentSession) agentRunAbortRequestedLocked() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.agentRunAbortRequested
+}
+
 // handlePostAgentRun decides whether the post-run loop should continue (pi:
 // _handlePostAgentRun).
 func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 	s.mu.Lock()
-	msg := s.lastAssistantMessage
+	message := s.lastAssistantMessage
 	s.lastAssistantMessage = nil
+	toolResults := s.lastAssistantToolResults
+	s.lastAssistantToolResults = nil
 	s.mu.Unlock()
 
 	// pi v0.86.0: an abort request ends the post-run loop immediately; the
@@ -1796,12 +2321,12 @@ func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 		s.finishCancelledRetry()
 		return false, nil
 	}
-	if msg == nil {
-		return false, nil
+	if message == nil {
+		return s.Agent.HasQueuedMessages(), nil
 	}
 
-	if s.isRetryableError(msg) {
-		shouldRetry, err := s.prepareRetry(ctx, msg)
+	if s.isRetryableError(message) {
+		shouldRetry, err := s.prepareRetry(ctx, message)
 		if err != nil {
 			return false, err
 		}
@@ -1821,19 +2346,19 @@ func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 	s.mu.Lock()
 	retryAttempt := s.retryAttempt
 	s.mu.Unlock()
-	if msg.StopReason == types.StopReasonError && retryAttempt > 0 {
+	if message.StopReason == types.StopReasonError && retryAttempt > 0 {
 		s.emit(&AgentSessionEvent{
 			AgentEvent: agent.AgentEvent{Type: AgentSessionEventAutoRetryEnd},
 			Success:    false,
 			Attempt:    retryAttempt,
-			FinalError: msg.ErrorMessage,
+			FinalError: message.ErrorMessage,
 		})
 		s.mu.Lock()
 		s.retryAttempt = 0
 		s.mu.Unlock()
 	}
 
-	shouldCompact, err := s.checkCompaction(ctx, msg, true)
+	shouldCompact, err := s.checkCompaction(ctx, message, true, toolResults)
 	if err != nil {
 		return false, err
 	}
@@ -1841,12 +2366,67 @@ func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 		return !checkAbort(), nil
 	}
 
-	// The agent loop drains both queues before emitting agent_end. Any messages
-	// here were queued by agent_end extension handlers and need a continuation.
+	// The low-level loop drains both queues before agent_end. Messages queued
+	// by agent_end handlers require a fresh run before pre-settlement
+	// handlers fire.
 	s.mu.Lock()
 	aborted := s.agentRunAbortRequested
 	s.mu.Unlock()
 	return !aborted && s.Agent.HasQueuedMessages(), nil
+}
+
+// runBeforeSettleBoundary runs the agent_before_settle boundary after the
+// post-run handling declines to continue (pi: _runBeforeSettleBoundary,
+// v0.87.0). Returns whether the boundary or queued input requests exactly
+// one more request.
+func (s *AgentSession) runBeforeSettleBoundary(ctx context.Context) (bool, error) {
+	if !s.extensionRunner.HasHandlers("agent_before_settle") {
+		return s.Agent.HasQueuedMessages(), nil
+	}
+	s.mu.Lock()
+	s.isBeforeSettle = true
+	s.abortDuringBeforeSettle = false
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.isBeforeSettle = false
+		s.mu.Unlock()
+	}()
+	result, err := s.extensionRunner.EmitBoundary(ctx,
+		&AgentBeforeSettleEvent{Type: "agent_before_settle", Outcome: s.lastActivityOutcomeRead()},
+		func(entries []SessionBoundaryDraft) (BoundaryContextPreview, error) {
+			return s.buildBoundaryContext(entries, "agent_before_settle")
+		})
+	if err != nil {
+		return false, err
+	}
+	s.commitBoundaryDrafts(result.Entries)
+	s.flushPendingCustomMessages()
+	finalContext, buildErr := s.buildBoundaryContext(nil, "agent_before_settle")
+	if buildErr != nil {
+		return false, buildErr
+	}
+	s.mu.Lock()
+	abortedDuring := s.abortDuringBeforeSettle
+	s.mu.Unlock()
+	if abortedDuring {
+		return false, nil
+	}
+	shouldContinue := result.Continue || s.Agent.HasQueuedMessages()
+	if shouldContinue && !finalContext.CanContinue {
+		if result.Continue {
+			s.reportInvalidBoundaryContinuation("agent_before_settle")
+		}
+		return false, nil
+	}
+	return shouldContinue, nil
+}
+
+// lastActivityOutcomeRead reads the last turn outcome (pig-only helper).
+func (s *AgentSession) lastActivityOutcomeRead() AgentActivityOutcome {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastActivityOutcome
 }
 
 // Prompt sends a prompt to the agent (pi: prompt). It handles extension
@@ -1855,6 +2435,18 @@ func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 // Steer/FollowUp during streaming based on the StreamingBehavior option, and
 // validates model and API key before sending (when not streaming).
 func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptOptions) error {
+	// Runs started by agent_settled handlers wait until every settled handler
+	// completes (pi: _isEmittingAgentSettled guard, v0.87.0).
+	s.mu.Lock()
+	if s.isEmittingAgentSettled {
+		s.deferredSettledActions = append(s.deferredSettledActions, func(ctx context.Context) error {
+			return s.Prompt(ctx, text, options)
+		})
+		s.mu.Unlock()
+		return nil
+	}
+	s.mu.Unlock()
+
 	expandPromptTemplates := true
 	if options != nil && options.ExpandPromptTemplates != nil {
 		expandPromptTemplates = *options.ExpandPromptTemplates
@@ -1972,34 +2564,14 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 		// Check if we need to compact before sending (catches aborted responses).
 		// The user's new prompt is sent below, so do not call agent.continue() here.
 		if lastAssistant := s.findLastAssistantMessage(); lastAssistant != nil {
-			if _, err := s.checkCompaction(ctx, lastAssistant, false); err != nil {
+			if _, err := s.checkCompaction(ctx, lastAssistant, false, nil); err != nil {
 				return err
 			}
 		}
 
-		// Build messages array (custom message if any, then user message)
-		messages = []agent.AgentMessage{}
-
-		// Add user message
-		userContent := types.UserContent{Parts: []types.Content{types.NewTextContent(expandedText)}}
-		for _, image := range currentImages {
-			userContent.Parts = append(userContent.Parts, image)
-		}
-		messages = append(messages, types.UserMessage{
-			Role:      types.RoleUser,
-			Content:   userContent,
-			Timestamp: time.Now().UnixMilli(),
-		})
-
-		// Inject any pending "nextTurn" messages as context alongside the user message
-		s.mu.Lock()
-		for _, msg := range s.pendingNextTurnMessages {
-			messages = append(messages, msg)
-		}
-		s.pendingNextTurnMessages = nil
-		s.mu.Unlock()
-
-		// Emit before_agent_start extension event
+		// Emit before_agent_start before normalizing images so extension-driven
+		// model selection determines the resize profile used for the request
+		// and history (pi v0.87.0 reorder).
 		s.mu.Lock()
 		selectedToolsBefore := append([]string{}, s.baseSystemPromptOptions.SelectedTools...)
 		s.mu.Unlock()
@@ -2023,6 +2595,37 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 		if !handlerEditedTools {
 			result.SystemPromptOptions.SelectedTools = s.GetActiveToolNames()
 		}
+
+		normalizedImages, hints := s.normalizePromptImages(currentImages)
+		userText := expandedText
+		if len(hints) > 0 {
+			userText = fmt.Sprintf("%s\n\n%s", expandedText, strings.Join(hints, "\n"))
+		}
+		currentImages = normalizedImages
+
+		// Build messages only after hooks and image normalization have
+		// completed (pi v0.87.0).
+		messages = []agent.AgentMessage{}
+
+		// Add user message
+		userContent := types.UserContent{Parts: []types.Content{types.NewTextContent(userText)}}
+		for _, image := range currentImages {
+			userContent.Parts = append(userContent.Parts, image)
+		}
+		messages = append(messages, types.UserMessage{
+			Role:      types.RoleUser,
+			Content:   userContent,
+			Timestamp: time.Now().UnixMilli(),
+		})
+
+		// Inject any pending "nextTurn" messages as context alongside the user message
+		s.mu.Lock()
+		for _, msg := range s.pendingNextTurnMessages {
+			messages = append(messages, msg)
+		}
+		s.pendingNextTurnMessages = nil
+		s.mu.Unlock()
+
 		for _, msg := range result.Messages {
 			messages = append(messages, harness.CustomMessage{
 				Role:       "custom",
@@ -2073,6 +2676,39 @@ func (s *AgentSession) baseSystemPromptOptionsSnapshot() BuildSystemPromptOption
 type processedInput struct {
 	text   string
 	images []types.ImageContent
+}
+
+// normalizePromptImages runs prompt images through ProcessImage before they
+// enter the session (pi: _normalizePromptImages, v0.87.0 image input limits).
+// Failed images are dropped from the context and their reason joins the hints
+// so the model can see why an image is missing or changed. The per-provider
+// resize profile (pi: this.model?.inputLimits?.images?.resize) arrives with
+// S8-6's Model.InputLimits; until then the default resize behavior applies.
+func (s *AgentSession) normalizePromptImages(images []types.ImageContent) ([]types.ImageContent, []string) {
+	if len(images) == 0 {
+		return nil, nil
+	}
+	normalizedImages := make([]types.ImageContent, 0, len(images))
+	var hints []string
+	autoResize := s.SettingsManager.GetImageAutoResize()
+	for _, image := range images {
+		data, err := base64.StdEncoding.DecodeString(image.Data)
+		if err != nil {
+			// pi's Buffer.from(str, "base64") is lenient; mirror that by
+			// feeding the raw string bytes and letting ProcessImage validate.
+			data = []byte(image.Data)
+		}
+		processed := utils.ProcessImage(data, image.MimeType, &utils.ProcessImageOptions{
+			AutoResizeImages: lo.ToPtr(autoResize),
+		})
+		if !processed.OK {
+			hints = append(hints, processed.Message)
+			continue
+		}
+		normalizedImages = append(normalizedImages, types.ImageContent{Kind: types.KindImage, Data: processed.Data, MimeType: processed.MimeType})
+		hints = append(hints, processed.Hints...)
+	}
+	return normalizedImages, hints
 }
 
 // runInputHandlers runs the input extension handler chain (pi:
@@ -2504,6 +3140,17 @@ func (s *AgentSession) SendCustomMessage(ctx context.Context, message *CustomMes
 		return nil
 	}
 	if triggerTurn {
+		s.mu.Lock()
+		if s.isEmittingAgentSettled {
+			// Runs started by agent_settled handlers wait until every settled
+			// handler completes (pi v0.87.0).
+			s.deferredSettledActions = append(s.deferredSettledActions, func(ctx context.Context) error {
+				return s.runAgentPrompt(ctx, []agent.AgentMessage{appMessage})
+			})
+			s.mu.Unlock()
+			return nil
+		}
+		s.mu.Unlock()
 		return s.runAgentPrompt(ctx, []agent.AgentMessage{appMessage})
 	}
 	if s.IsStreaming() {
@@ -2521,13 +3168,14 @@ func (s *AgentSession) SendCustomMessage(ctx context.Context, message *CustomMes
 	return nil
 }
 
-// appendCustomMessage appends a custom message to agent state and the
-// session tree, emitting message_start/message_end (pi: _appendCustomMessage).
+// appendCustomMessage appends a custom message to the canonical session and
+// refreshes the finalized context from the projection, emitting
+// message_start/message_end (pi: _appendCustomMessage, v0.87.0 — the direct
+// agent.state.messages push moved into the projection refresh).
 func (s *AgentSession) appendCustomMessage(appMessage agent.AgentMessage) {
-	state := s.Agent.State()
-	state.Messages = append(state.Messages, appMessage)
 	custom := appMessage.(harness.CustomMessage)
 	_, _ = s.SessionManager.AppendCustomMessageEntry(custom.CustomType, custom.Content, custom.Display, custom.Details)
+	s.refreshFinalizedContext()
 	s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: agent.AgentEventMessageStart, Message: appMessage}})
 	s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: agent.AgentEventMessageEnd, Message: appMessage}})
 }
@@ -2653,6 +3301,9 @@ func (s *AgentSession) Abort(ctx context.Context) error {
 	s.mu.Lock()
 	if s.isAgentRunActive {
 		s.agentRunAbortRequested = true
+	}
+	if s.isBeforeSettle {
+		s.abortDuringBeforeSettle = true
 	}
 	s.mu.Unlock()
 	s.AbortRetry()
@@ -3268,7 +3919,7 @@ func (s *AgentSession) AbortBranchSummary() {
 // skipAbortedCheck=false includes aborted messages (for the pre-prompt check).
 // Returns whether the post-run loop should call agent.Continue for overflow
 // recovery or queued messages.
-func (s *AgentSession) checkCompaction(ctx context.Context, assistantMessage *types.AssistantMessage, skipAbortedCheck bool) (bool, error) {
+func (s *AgentSession) checkCompaction(ctx context.Context, assistantMessage *types.AssistantMessage, skipAbortedCheck bool, toolResults []agent.AgentMessage) (bool, error) {
 	// pi: getCompactionSettings(this.model) throws on invalid settings; the
 	// error propagates to the prompt caller like pi's rejection.
 	settings, err := s.SettingsManager.GetCompactionSettings(s.Model())
@@ -3313,8 +3964,56 @@ func (s *AgentSession) checkCompaction(ctx context.Context, assistantMessage *ty
 	if model != nil {
 		maxTokens = model.MaxTokens
 	}
-	contextOverflow := sameModel && aiutils.IsContextOverflow(assistantMessage, contextWindow)
-	recoverableLength := sameModel && aiutils.IsRecoverableLength(assistantMessage, maxTokens)
+
+	// v0.87.0: the recovery gates now consult the canonical projection — a
+	// boundary (context_edit/compaction) placed after the assistant changes
+	// what the usage still describes.
+	currentProjection := s.SessionManager.BuildSessionProjection()
+	assistantEntryID := s.findPersistedMessageEntryID(*assistantMessage)
+	assistantIsProjected := assistantEntryID == "" ||
+		slices.ContainsFunc(currentProjection.Entries, func(entry ProjectedSessionEntry) bool {
+			if entry.SourceEntry.Base().ID != assistantEntryID {
+				return false
+			}
+			return slices.ContainsFunc(entry.Messages, func(message agent.AgentMessage) bool {
+				return message.MessageRole() == types.RoleAssistant
+			})
+		})
+	branch := s.SessionManager.GetBranch("")
+	assistantIndex := -1
+	if assistantEntryID != "" {
+		for i, entry := range branch {
+			if entry.Base().ID == assistantEntryID {
+				assistantIndex = i
+				break
+			}
+		}
+	}
+	var entriesAfterAssistant []SessionEntry
+	if assistantIndex >= 0 {
+		entriesAfterAssistant = branch[assistantIndex+1:]
+	}
+	hasPostAssistantContextEdit := slices.ContainsFunc(entriesAfterAssistant, func(entry SessionEntry) bool {
+		return entry.EntryType() == "context_edit"
+	})
+	var latestAssistantEdit *ContextEditEntry
+	for _, entry := range entriesAfterAssistant {
+		if edit, ok := entry.(*ContextEditEntry); ok && edit.TargetID == assistantEntryID {
+			latestAssistantEdit = edit
+		}
+	}
+	assistantRetainedForExplicitRecovery := assistantEntryID == "" ||
+		(!slices.ContainsFunc(entriesAfterAssistant, func(entry SessionEntry) bool {
+			return entry.EntryType() == "compaction"
+		}) && (latestAssistantEdit == nil || latestAssistantEdit.Replacement != nil))
+	assistantUsageMatchesProjection := assistantIsProjected && !hasPostAssistantContextEdit
+	// pi: isContextOverflow(assistantMessage) without a window — error
+	// message patterns only (pig: contextWindow 0 skips the usage cases).
+	explicitOverflow := assistantMessage.StopReason == types.StopReasonError && aiutils.IsContextOverflow(assistantMessage, 0)
+	contextOverflow := sameModel &&
+		((explicitOverflow && assistantRetainedForExplicitRecovery) ||
+			(assistantUsageMatchesProjection && aiutils.IsContextOverflow(assistantMessage, contextWindow)))
+	recoverableLength := sameModel && assistantIsProjected && aiutils.IsRecoverableLength(assistantMessage, maxTokens)
 	if contextOverflow || recoverableLength {
 		willRetry := assistantMessage.StopReason != types.StopReasonStop
 
@@ -3345,14 +4044,15 @@ func (s *AgentSession) checkCompaction(ctx context.Context, assistantMessage *ty
 			return false, nil
 		}
 
-		// Case 1: remove the failed or truncated message from agent state, compact, and
-		// retry once. The message remains in session history but is excluded from retry context.
+		// Case 1: durably omit the failed or truncated attempt from the model
+		// projection (it remains in raw session history), compact, and retry
+		// once (pi v0.87.0: _omitRecoveryAttempt replaces the agent-state
+		// truncation).
 		s.mu.Lock()
 		s.overflowRecoveryAttempted = true
 		s.mu.Unlock()
-		state := s.Agent.State()
-		if len(state.Messages) > 0 && state.Messages[len(state.Messages)-1].MessageRole() == types.RoleAssistant {
-			s.Agent.SetMessages(state.Messages[:len(state.Messages)-1])
+		if err := s.omitRecoveryAttempt(ctx, assistantMessage, toolResults); err != nil {
+			return false, err
 		}
 		return s.runAutoCompactionChecked(ctx, "overflow", willRetry)
 	}
@@ -3362,8 +4062,15 @@ func (s *AgentSession) checkCompaction(ctx context.Context, assistantMessage *ty
 	// This ensures sessions that hit persistent API errors (e.g. 529) or malformed zero-usage
 	// responses can still compact and do not reset context accounting.
 	var contextTokens int64
+	hasContextEdits := slices.ContainsFunc(currentProjection.Entries, func(entry ProjectedSessionEntry) bool {
+		return entry.SourceEntry.EntryType() == "context_edit"
+	})
 	directContextTokens := CalculateContextTokens(&assistantMessage.Usage)
-	if assistantMessage.StopReason == types.StopReasonError || directContextTokens == 0 {
+	if hasContextEdits {
+		// v0.87.0: usage captured before a boundary edit no longer describes
+		// the projected context; estimate from it instead.
+		contextTokens = EstimateProjectedContextTokens(currentProjection, branch).Tokens
+	} else if assistantMessage.StopReason == types.StopReasonError || directContextTokens == 0 {
 		messages := s.Agent.State().Messages
 		estimate := EstimateContextTokens(messages)
 		// Without provider usage, estimate.tokens is the pure message-size estimate.
@@ -3556,9 +4263,8 @@ func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, wil
 		return fail(err)
 	}
 	newEntries := s.SessionManager.GetEntries()
-	sessionContext := s.SessionManager.BuildSessionContext()
-	s.Agent.SetMessages(sessionContext.Messages)
-	estimatedTokensAfter := estimateMessagesTokens(sessionContext.Messages)
+	s.refreshFinalizedContext()
+	estimatedTokensAfter := estimateMessagesTokens(s.SessionManager.BuildSessionProjection().Messages)
 
 	// Get the saved compaction entry for the extension event
 	var savedCompactionEntry *CompactionEntry
@@ -3595,17 +4301,10 @@ func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, wil
 	})
 
 	if willRetry {
-		messages := s.Agent.State().Messages
-		if len(messages) > 0 {
-			if lastMsg, ok := messages[len(messages)-1].(types.AssistantMessage); ok &&
-				(lastMsg.StopReason == types.StopReasonError || lastMsg.StopReason == types.StopReasonLength) {
-				// The overflow response was persisted on message_end before checkCompaction() removed it
-				// from agent state. Rebuilding state from the new compaction can restore that kept entry,
-				// leaving an assistant as the final message. agent.continue() rejects that state, so remove
-				// the retriable error or truncated-length response again before continuing the interrupted turn.
-				s.Agent.SetMessages(messages[:len(messages)-1])
-			}
-		}
+		// pi v0.87.0: the overflow response is durably omitted from the
+		// projection before the recovery compaction, so the rebuilt context
+		// can no longer end on the retriable assistant attempt — no
+		// post-compaction trimming needed.
 		return true, nil
 	}
 
@@ -4279,10 +4978,10 @@ func (s *AgentSession) prepareRetry(ctx context.Context, message *types.Assistan
 		FinalError:  firstNonEmpty(message.ErrorMessage, "Unknown error"),
 	})
 
-	// Remove error message from agent state (keep in session for history)
-	state := s.Agent.State()
-	if len(state.Messages) > 0 && state.Messages[len(state.Messages)-1].MessageRole() == types.RoleAssistant {
-		s.Agent.SetMessages(state.Messages[:len(state.Messages)-1])
+	// Keep the failed attempt in raw history while durably omitting it from
+	// model projection (pi v0.87.0).
+	if err := s.omitRecoveryAttempt(ctx, message, nil); err != nil {
+		return false, err
 	}
 
 	// Wait with exponential backoff (abortable)
@@ -4461,12 +5160,9 @@ func (s *AgentSession) RecordBashResult(command string, result BashResult, exclu
 		s.mu.Unlock()
 		return
 	}
-	// Add to agent state immediately
-	state := s.Agent.State()
-	state.Messages = append(state.Messages, bashMessage)
-
-	// Save to session
+	// Add to agent state immediately via the canonical projection refresh
 	_, _ = s.SessionManager.AppendMessage(bashMessage)
+	s.refreshFinalizedContext()
 }
 
 // AbortBash cancels running bash commands (pi: abortBash).
@@ -4511,13 +5207,11 @@ func (s *AgentSession) flushPendingBashMessages() {
 	}
 
 	for _, bashMessage := range pending {
-		// Add to agent state
-		state := s.Agent.State()
-		state.Messages = append(state.Messages, *bashMessage)
-
-		// Save to session
+		// Save to session; the finalized context refreshes once below (pi:
+		// each appendMessage then one refreshFinalizedContext after the loop).
 		_, _ = s.SessionManager.AppendMessage(*bashMessage)
 	}
+	s.refreshFinalizedContext()
 }
 
 // ============================================================================
@@ -4784,9 +5478,9 @@ func (s *AgentSession) NavigateTree(ctx context.Context, targetID string, option
 		_, _ = s.SessionManager.AppendLabelChange(targetID, &label)
 	}
 
-	// Update agent state
-	sessionContext := s.SessionManager.BuildSessionContext()
-	s.Agent.SetMessages(sessionContext.Messages)
+	// Update finalized context from the canonical session projection
+	// (pi v0.87.0: _refreshFinalizedContext).
+	s.refreshFinalizedContext()
 	// pi v0.86.0: restore the tool loadout declared by the target branch.
 	s.restoreToolsFromTranscript()
 
@@ -4974,40 +5668,50 @@ func (s *AgentSession) GetContextUsage() *ContextUsage {
 	// After compaction, the last assistant usage reflects pre-compaction context size.
 	// We can only trust usage from an assistant that responded after the latest compaction.
 	// If no such assistant exists, context token count is unknown until the next LLM response.
-	branchEntries := s.SessionManager.GetBranch("")
-	latestCompaction := GetLatestCompactionEntry(branchEntries)
+	// (pi v0.87.0: the post-compaction usage check runs against the
+	// projection, so boundary-edited assistants no longer count.)
+	projection := s.SessionManager.BuildSessionProjection()
+	branch := s.SessionManager.GetBranch("")
+	latestCompaction := GetLatestCompactionEntry(branch)
 
 	if latestCompaction != nil {
 		// Check if there's a valid assistant usage after the compaction boundary
+		projectedAssistants := map[string]bool{}
+		for _, entry := range projection.Entries {
+			for _, message := range entry.Messages {
+				assistant, isAssistant := message.(types.AssistantMessage)
+				if !isAssistant {
+					continue
+				}
+				if assistant.StopReason == types.StopReasonAborted || assistant.StopReason == types.StopReasonError {
+					continue
+				}
+				if CalculateContextTokens(&assistant.Usage) > 0 {
+					projectedAssistants[entry.SourceEntry.Base().ID] = true
+					break
+				}
+			}
+		}
 		compactionIndex := -1
-		for i := len(branchEntries) - 1; i >= 0; i-- {
-			if branchEntries[i] == SessionEntry(latestCompaction) {
+		for i, entry := range branch {
+			if entry.Base().ID == latestCompaction.ID {
 				compactionIndex = i
 				break
 			}
 		}
 		hasPostCompactionUsage := false
-		for i := len(branchEntries) - 1; i > compactionIndex; i-- {
-			entry := branchEntries[i]
-			if messageEntry, ok := entry.(*SessionMessageEntry); ok {
-				if assistant, isAssistant := messageEntry.Message.(types.AssistantMessage); isAssistant {
-					if assistant.StopReason != types.StopReasonAborted && assistant.StopReason != types.StopReasonError {
-						contextTokens := CalculateContextTokens(&assistant.Usage)
-						if contextTokens > 0 {
-							hasPostCompactionUsage = true
-							break
-						}
-					}
-				}
+		for _, entry := range branch[compactionIndex+1:] {
+			if projectedAssistants[entry.Base().ID] {
+				hasPostCompactionUsage = true
+				break
 			}
 		}
-
 		if !hasPostCompactionUsage {
 			return &ContextUsage{Tokens: nil, ContextWindow: contextWindow, Percent: nil}
 		}
 	}
 
-	estimate := EstimateContextTokens(s.Messages())
+	estimate := EstimateProjectedContextTokens(projection, branch)
 	percent := (float64(estimate.Tokens) / float64(contextWindow)) * 100
 
 	return &ContextUsage{

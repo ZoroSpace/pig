@@ -424,6 +424,14 @@ type ExtensionContext struct {
 	// GetSystemPrompt returns the current effective system prompt (pi:
 	// getSystemPrompt).
 	GetSystemPrompt func() string
+	// SendMessage sends a custom message to the session (pi: sendMessage;
+	// bound by bindCore, panics when the runtime is not initialized — pi's
+	// throwing stub).
+	SendMessage func(ctx context.Context, message *CustomMessagePayload, options *SendMessageOptions)
+	// SendUserMessage sends a user message to the agent (pi:
+	// sendUserMessage; bound by bindCore, panics when the runtime is not
+	// initialized — pi's throwing stub).
+	SendUserMessage func(ctx context.Context, content string, options *SendUserMessageOptions)
 }
 
 // ExtensionCommandContext is the extended context for command handlers (pi:
@@ -859,6 +867,109 @@ type AgentEndEvent struct {
 
 func (e *AgentEndEvent) EventType() string { return e.Type }
 
+// AgentActivityOutcome classifies the outcome of an agent run (pi:
+// AgentActivityOutcome, v0.87.0).
+type AgentActivityOutcome string
+
+const (
+	AgentActivityCompleted AgentActivityOutcome = "completed"
+	AgentActivityAborted   AgentActivityOutcome = "aborted"
+	AgentActivityError     AgentActivityOutcome = "error"
+)
+
+// CustomEntryDraft proposes a custom entry (pi: CustomEntryDraft, v0.87.0).
+type CustomEntryDraft struct {
+	Type       string `json:"type"`
+	CustomType string `json:"customType"`
+	// Data is the entry payload; nil = pi's omitted optional key.
+	Data any `json:"data,omitempty"`
+}
+
+func (e *CustomEntryDraft) draftType() string { return "custom" }
+
+// CustomMessageEntryDraft proposes a custom message entry (pi:
+// CustomMessageEntryDraft, v0.87.0).
+type CustomMessageEntryDraft struct {
+	Type       string `json:"type"`
+	CustomType string `json:"customType"`
+	// Content is a string or a (TextContent | ImageContent)[] (pi union).
+	Content any  `json:"content"`
+	Display bool `json:"display"`
+	// Details is the entry payload; nil = pi's omitted optional key.
+	Details any `json:"details,omitempty"`
+}
+
+func (e *CustomMessageEntryDraft) draftType() string { return "custom_message" }
+
+// ContextEditEntryDraft proposes a context edit (pi: ContextEditEntryDraft,
+// v0.87.0).
+type ContextEditEntryDraft struct {
+	Type     string `json:"type"`
+	TargetID string `json:"targetId"`
+	// Replacement nil (pi: null) omits the target from model context; a value
+	// replaces only its content.
+	Replacement *ContextEditReplacement `json:"replacement"`
+}
+
+func (e *ContextEditEntryDraft) draftType() string { return "context_edit" }
+
+// CompactionEntryDraft proposes a compaction (pi: CompactionEntryDraft,
+// v0.87.0).
+type CompactionEntryDraft struct {
+	Type    string `json:"type"`
+	Summary string `json:"summary"`
+	// FirstKeptEntryID nil creates a self-retaining compaction that keeps no
+	// preceding entries (pi: firstKeptEntryId: string | null).
+	FirstKeptEntryID *string      `json:"firstKeptEntryId"`
+	Details          any          `json:"details,omitempty"`
+	Usage            *types.Usage `json:"usage,omitempty"`
+}
+
+func (e *CompactionEntryDraft) draftType() string { return "compaction" }
+
+// SessionBoundaryDraft is one proposed session entry (pi:
+// SessionBoundaryDraft = CustomEntryDraft | CustomMessageEntryDraft |
+// ContextEditEntryDraft | CompactionEntryDraft, v0.87.0).
+type SessionBoundaryDraft interface{ draftType() string }
+
+// BoundaryContextPreview is the would-be model context for the proposed
+// drafts (pi: BoundaryContextPreview, v0.87.0).
+type BoundaryContextPreview struct {
+	ContextEntries  []ProjectedSessionEntry `json:"contextEntries"`
+	ContextMessages []agent.AgentMessage    `json:"contextMessages"`
+	LLMMessages     []types.Message         `json:"llmMessages"`
+	PendingMessages []agent.AgentMessage    `json:"pendingMessages"`
+	CanContinue     bool                    `json:"canContinue"`
+}
+
+// BoundaryState is the shared state carried by turn_end and
+// agent_before_settle (pi: BoundaryState, v0.87.0).
+type BoundaryState struct {
+	Entries  []SessionBoundaryDraft `json:"entries"`
+	Continue bool                   `json:"continue"`
+	Context  BoundaryContextPreview `json:"context"`
+}
+
+// BoundaryResult is the handler result for boundary events (pi:
+// BoundaryResult, v0.87.0). nil Entries keeps the proposed draft list; nil
+// Continue leaves the continuation unspecified.
+type BoundaryResult struct {
+	Entries  []SessionBoundaryDraft `json:"entries,omitempty"`
+	Continue *bool                  `json:"continue,omitempty"`
+}
+
+// AgentBeforeSettleEvent fires before final settlement; handlers may append
+// entries and request one continuation (pi: AgentBeforeSettleEvent,
+// v0.87.0).
+type AgentBeforeSettleEvent struct {
+	Type string `json:"type"`
+	// Outcome classifies the activity being settled.
+	Outcome AgentActivityOutcome `json:"outcome"`
+	BoundaryState
+}
+
+func (e *AgentBeforeSettleEvent) EventType() string { return e.Type }
+
 // AgentSettledEvent fires after an agent run has fully settled (pi:
 // AgentSettledEvent).
 type AgentSettledEvent struct {
@@ -911,12 +1022,24 @@ type TurnStartEvent struct {
 
 func (e *TurnStartEvent) EventType() string { return e.Type }
 
-// TurnEndEvent fires at the end of each turn (pi: TurnEndEvent).
+// TurnEndEvent fires at the end of each turn (pi: TurnEndEvent, v0.87.0
+// boundary shape). Handlers may append entries via a BoundaryResult and
+// request one continuation.
 type TurnEndEvent struct {
-	Type        string                    `json:"type"`
-	TurnIndex   int                       `json:"turnIndex"`
-	Message     agent.AgentMessage        `json:"message"`
+	Type      string             `json:"type"`
+	TurnIndex int                `json:"turnIndex"`
+	Message   agent.AgentMessage `json:"message"`
+	// ToolResults are the turn's tool result messages (empty when the turn
+	// had no tool calls).
 	ToolResults []types.ToolResultMessage `json:"toolResults"`
+	// MessageEntryID is the persisted session entry of the assistant message.
+	MessageEntryID string `json:"messageEntryId"`
+	// ToolResultEntryIDs are the persisted session entries of ToolResults,
+	// in order (pi flatMaps unresolved IDs out).
+	ToolResultEntryIDs []string `json:"toolResultEntryIds"`
+	// Outcome classifies the completed turn.
+	Outcome AgentActivityOutcome `json:"outcome"`
+	BoundaryState
 }
 
 func (e *TurnEndEvent) EventType() string { return e.Type }
@@ -1289,11 +1412,29 @@ type ContextEvent struct {
 
 func (e *ContextEvent) EventType() string { return e.Type }
 
-// ContextEventResult is the handler result of context (pi:
-// ContextEventResult).
+// ContextEventResult is the handler result of context and
+// context_with_system (pi: ContextEventResult).
 type ContextEventResult struct {
 	Messages []agent.AgentMessage `json:"messages"`
 }
+
+// ContextWithSystemEvent fires before each LLM call after every context
+// handler has run and Pi has restored the prompt and tool state; the result
+// is sent as returned (pi: ContextWithSystemEvent, v0.87.0).
+type ContextWithSystemEvent struct {
+	Type     string               `json:"type"`
+	Messages []agent.AgentMessage `json:"messages"`
+}
+
+func (e *ContextWithSystemEvent) EventType() string { return e.Type }
+
+// TurnEndEventResult and AgentBeforeSettleEventResult are the boundary
+// handler results (pi: TurnEndEventResult / AgentBeforeSettleEventResult,
+// v0.87.0).
+type (
+	TurnEndEventResult           = BoundaryResult
+	AgentBeforeSettleEventResult = BoundaryResult
+)
 
 // BeforeProviderRequestEvent fires before a provider request is sent; can
 // replace the payload (pi: BeforeProviderRequestEvent).
