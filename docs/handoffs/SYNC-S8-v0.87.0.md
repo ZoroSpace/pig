@@ -1,7 +1,34 @@
-# S8：pi v0.86.1 → v0.87.0 基线同步计划（⏳ 计划定稿，未开工）
+# S8：pi v0.86.1 → v0.87.0 基线同步计划（✅ 全部收口，2026-09-23）
 
-**状态**：计划批。spec 基线从 v0.86.1（S7 收口态）推进到 v0.87.0（16787ad5b，18 commits，+7526/-810）。
+**状态**：✅ **全部收口**。spec 基线从 v0.86.1（S7 收口态）推进到 v0.87.0（16787ad5b，18 commits，+7526/-810）。
 **范围裁决（用户已拍板）**：chord（10d1ad621 transactional replicated state + pico3/chord.ts）**不迁**；experimental/services 四文件**不迁**；各包 CHANGELOG/README/docs 不迁。其余全部消化。
+
+## 0.1 实际交付（收尾批后终稿，2026-09-23）
+
+| 批次 | 状态 | handoff |
+|---|---|---|
+| S8-1 agent 回调面重构 | ✅ | `S8-1.md` |
+| S8-2 session-manager projection + context_edit | ✅ | `S8-2.md` |
+| S8-3 compaction projection 化 | ✅ | `S8-3.md` |
+| S8-4 agent-session boundaries + extensions 事件面 | ✅ | `S8-4.md` |
+| S8-5 interactive + UI + export-html + crash-log | ✅ | `S8-5.md` |
+| S8-6 ai/catalog strict 翻转 + image limits | ✅ | `S8-6.md` |
+| S8-7 杂项小修（frontmatter 诊断/cache-warmer deadline/bug offline/GIF/jump-to-end） | ✅ | `S8-7.md` |
+| 收尾（Version bump + 双向兼容 4 门 + 文档） | ✅ | 本节 |
+
+### 收尾批交付明细
+
+1. **Version bump 0.86.1→0.87.0**（`codingagent/config.go` + `config_test.go` 期望 tag 同步，`TestVersionTracksPiBaseline` 绿）。
+2. **双向兼容实测（v3 层四向全通，隔离目录 `/tmp/s8-final` + 本地 mock OpenAI 端点 + 独立安装的 `@earendil-works/pi-coding-agent@0.87.0` dist）**：
+   - pig 读 pi v0.87.0 写的真实 v3 会话（`-p` 真跑落盘）→ ListSessions/OpenSession/8 类条目/GetBranch/BuildSessionProjection 全通；pi 的 user content 是 blocks 数组形态，pig 解入 UserContent.Parts 正常；
+   - pi v0.87.0 读 pig 写的 v3 会话：node API `SessionManager.open + getEntries + buildSessionProjection` 全对，且 **pi CLI `--continue -p` 真跑把 pig 的历史带进模型上下文**（mock 捕获请求实证），pi 追加的条目 pig 再读全通；
+   - **context_edit 专项双向**：pig 写（replacement blocks + null omit）→ pi v0.87.0 dist 读回投影语义一致；pi 写（replacement string 归一为 text block + null）→ pig 读回投影语义一致；
+   - **v4 门（harness jsonl）声明沿用 S1 实测**：`packages/agent/src/harness/session/jsonl/{codec,types}.ts` 在 v0.85.1..v0.87.0 零 diff、pig v4 写入器（冻结区）零改动，线格式不变 ⇒ S1 的真实代码互操作结论对 v0.87.0 成立。
+3. **全 catalog 对照**：S8-6 已做同刻逐字段对照（41 家 0 diff），S8-7 未碰 catalog，结论有效；residential golden 由 `TestBuiltinCatalogMatchesPiData` 在全量回归内持续锁定。
+4. **实验教训（门 4 首跑误报）**：pi `continueRecent` 按 cwd 子目录（`sessions/<encoded-cwd>/`）找最近会话——在 `~/Projects/pig` cwd 下跑 pi `--continue` 找的是 `--home-lee-Projects-pig--/` 而非隔离目录里的会话；必须与被续会话同 cwd 运行。pig 同语义（两侧 1:1）。
+5. 探针不留文件：driver/备份/mock 已删（S1 先例）；pi@0.87.0 独立安装在 `/tmp`（临时）。
+
+**验收**：全量 `-race -count=1 -timeout 600s` 单次 rc=0（29 包，`/tmp/pig-test-out-s8-final.log`）。**S8 至此全部收口**。
 
 ## 0. 增量盘点（18 commits → pig 工作项）
 
