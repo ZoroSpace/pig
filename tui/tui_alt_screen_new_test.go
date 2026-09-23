@@ -418,3 +418,127 @@ func (c *countingMouseComponent) HandleMouse(event *TuiMouseEvent) *TuiMouseEven
 	}
 	return nil
 }
+
+// pi: "keeps the jump-to-end indicator centered as the auto scrollbar hides
+// and reappears" — regression test for #9136 / #9842: auto scrollbar
+// visibility must not move the indicator.
+//
+// pi drives this with scrollbarHideDelayMs: 0 — its 0ms hide timer fires
+// after the render (microtask/mactotask order), so the visible frame is
+// observable. pig's hide timer is a real time.AfterFunc racing the render
+// goroutine, so the test uses a 50ms delay and asserts the visible flag
+// synchronously right after SendInput (input dispatch is synchronous on the
+// caller's goroutine). pi locates the label via indexOf(label); pig's
+// VirtualTerminal trims trailing default-attribute cells (the label's
+// trailing space would break the match), so the painted column is located
+// via the arrow glyph = label column + 1 (leading space).
+func TestTuiAltScreenKeepsTheJumpToEndIndicatorCenteredAsTheAutoScrollbarHidesAndReappears(t *testing.T) {
+	terminal := NewVirtualTerminal(80, 6)
+	tui := NewTuiAltScreen(terminal, nil, "", &TuiAltScreenOptions{
+		ScrollToEndIndicator: func() string { return " ↓ Jump to latest message · End " },
+	})
+	transcript := NewScrollView(
+		NewText(altTestLines(20), 0, 0),
+		&ScrollViewOptions{
+			Follow:               "end",
+			Primary:              true,
+			Scrollbar:            ScrollViewScrollbarAuto,
+			ScrollbarHideDelayMs: lo.ToPtr(50),
+		},
+	)
+	tui.SetLayoutRoot(transcript)
+	tui.Start()
+	terminal.WaitForRender()
+
+	indicatorColumn := func() int {
+		if got := strings.Index(terminal.GetViewport()[5], "↓"); got >= 0 {
+			return got - 1 // arrow sits one cell right of the label column
+		}
+		return -1
+	}
+	assertColumn := func(want int, phase string) {
+		t.Helper()
+		if got := indicatorColumn(); got != want {
+			t.Fatalf("%s: indicator column = %d, want %d (row %q)", phase, got, want, terminal.GetViewport()[5])
+		}
+		if tui.scrollToEndIndicatorRect == nil || tui.scrollToEndIndicatorRect.column != want {
+			t.Fatalf("%s: indicator rect = %+v, want column %d", phase, tui.scrollToEndIndicatorRect, want)
+		}
+	}
+
+	// Scrolling over the track keeps the scrollbar visible until the pointer leaves.
+	terminal.SendInput("\x1b[<64;80;1M")
+	if !transcript.IsScrollbarVisible() {
+		t.Fatal("expected scrollbar visible over the track")
+	}
+	if transcript.IsFollowingEnd() {
+		t.Fatal("expected transcript scrolled away from end")
+	}
+	scrollTop := transcript.ScrollTop()
+	terminal.WaitForRender()
+	assertColumn(24, "visible")
+
+	// Leaving the track lets the auto-hide timer expire without changing the content.
+	terminal.SendInput("\x1b[<35;79;1M")
+	deadline := time.Now().Add(2 * time.Second)
+	for transcript.IsScrollbarVisible() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	terminal.WaitForRender()
+	if transcript.IsScrollbarVisible() {
+		t.Fatal("expected scrollbar hidden after leaving the track")
+	}
+	if transcript.ScrollTop() != scrollTop {
+		t.Fatalf("scrollTop = %d, want %d", transcript.ScrollTop(), scrollTop)
+	}
+	assertColumn(24, "hidden")
+
+	terminal.SendInput("\x1b[<35;80;1M")
+	terminal.WaitForRender()
+	if !transcript.IsScrollbarVisible() {
+		t.Fatal("expected scrollbar revealed over the track")
+	}
+	if transcript.ScrollTop() != scrollTop {
+		t.Fatalf("scrollTop = %d, want %d", transcript.ScrollTop(), scrollTop)
+	}
+	assertColumn(24, "revealed")
+	tui.Stop(nil)
+}
+
+// pi: "leaves the scrollbar visible and clickable when the jump-to-end
+// indicator spans the transcript" — S4 gap closed with the #9842 follow-up
+// assertion that the label clips before the scrollbar column.
+func TestTuiAltScreenLeavesTheScrollbarVisibleAndClickableWhenTheJumpToEndIndicatorSpansTheTranscript(t *testing.T) {
+	terminal := NewVirtualTerminal(30, 6)
+	tui := NewTuiAltScreen(terminal, nil, "", &TuiAltScreenOptions{
+		ScrollToEndIndicator: func() string { return strings.Repeat("↓", 30) },
+	})
+	transcript := NewScrollView(
+		NewText(altTestLines(12), 0, 0),
+		&ScrollViewOptions{Follow: "end", Primary: true, Scrollbar: ScrollViewScrollbarAlways},
+	)
+	tui.SetLayoutRoot(NewVStack([]StackChild{
+		StackEntryOf(transcript, &StackEntryOptions{Basis: 0, Grow: 1, MinSize: 1}),
+		StackEntryOf(NewText("editor\nfooter", 0, 0), &StackEntryOptions{MinSize: 1}),
+	}, nil))
+	tui.Start()
+	terminal.WaitForRender()
+
+	terminal.SendInput("\x1b[<64;1;1M")
+	terminal.WaitForRender()
+	if transcript.IsFollowingEnd() {
+		t.Fatal("expected transcript scrolled away from end")
+	}
+
+	// The indicator must not intercept a press on the scrollbar's last column.
+	if got := terminal.GetViewport()[3]; got != strings.Repeat("↓", 29)+"┃" {
+		t.Fatalf("indicator row = %q, want %q", got, strings.Repeat("↓", 29)+"┃")
+	}
+	terminal.SendInput("\x1b[<0;30;4M")
+	terminal.SendInput("\x1b[<0;30;4m")
+	terminal.WaitForRender()
+	if transcript.IsFollowingEnd() {
+		t.Fatal("scrollbar press must not jump to end")
+	}
+	tui.Stop(nil)
+}

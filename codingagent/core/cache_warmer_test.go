@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -669,5 +670,60 @@ func TestExtensionRunnerEmitCacheWarmingDecisionUsesLastOverride(t *testing.T) {
 	})
 	if action != CacheWarmingActionStop {
 		t.Fatalf("action = %v, want stop", action)
+	}
+}
+
+// pi: "does not issue refreshes after their safe deadline" — a timer can run
+// late after sleep or event-loop blockage; the late refresh is skipped and
+// the run stopped (3390bd936).
+func TestCacheWarmingSkipsLateRefreshes(t *testing.T) {
+	warmModelFixtures()
+	var now atomic.Int64
+	f := newFakeWarmRuntime(t, nil, "", nil, nil)
+	f.warmer.nowFn = func() time.Time { return time.UnixMilli(now.Load()) }
+	f.warmer.Start(warmRequest(&warmAdaptiveModel, nil), currentTrue)
+	run := f.warmer.run
+	if run == nil {
+		t.Fatal("expected an active cache-warming run")
+	}
+
+	// A five-minute cache is scheduled for 4m30s and retains 15 seconds of
+	// the 30-second expiry margin. Simulate a timer delayed by sleep.
+	now.Store(285_001)
+	f.warmer.refresh(run)
+
+	if calls := fakeCount(&f.mu, &f.calls); calls != 0 {
+		t.Fatalf("calls = %d, want 0", calls)
+	}
+	status := f.warmer.GetStatus()
+	if status.State != "inactive" || status.Reason != "cache refresh deadline missed" {
+		t.Fatalf("status = %+v, want inactive / cache refresh deadline missed", status)
+	}
+}
+
+// pi: "rechecks the deadline after an extension decision" — the extension
+// callback can itself burn time; the post-decision deadline check catches it.
+func TestCacheWarmingRechecksDeadlineAfterExtensionDecision(t *testing.T) {
+	warmModelFixtures()
+	var now atomic.Int64
+	f := newFakeWarmRuntime(t, nil, "", nil, func(event *CacheWarmingDecisionEvent) CacheWarmingAction {
+		now.Store(285_001)
+		return CacheWarmingActionWarm
+	})
+	f.warmer.nowFn = func() time.Time { return time.UnixMilli(now.Load()) }
+	f.warmer.Start(warmRequest(&warmAdaptiveModel, nil), currentTrue)
+	run := f.warmer.run
+	if run == nil {
+		t.Fatal("expected an active cache-warming run")
+	}
+
+	f.warmer.refresh(run)
+
+	if calls := fakeCount(&f.mu, &f.calls); calls != 0 {
+		t.Fatalf("calls = %d, want 0", calls)
+	}
+	status := f.warmer.GetStatus()
+	if status.State != "inactive" || status.Reason != "cache refresh deadline missed" {
+		t.Fatalf("status = %+v, want inactive / cache refresh deadline missed", status)
 	}
 }

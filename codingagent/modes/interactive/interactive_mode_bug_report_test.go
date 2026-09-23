@@ -188,3 +188,112 @@ func TestBugReportPreservesMultilineDescription(t *testing.T) {
 
 // The seam containers are accessed from the single test goroutine plus the
 // mutateUI closures only, so plain polling is race-safe under -race.
+
+// pi c7cdb460a + 1e0fe2049: only the upload delivery is rejected offline
+// (#9841); zip export proceeds. pi ships no test for either branch; this
+// locks the upload branch (the zip branch is the one-line delivery condition
+// and stays covered by the zip flow).
+func TestBugReportUploadRejectedOffline(t *testing.T) {
+	t.Setenv("PI_OFFLINE", "1")
+	initTestTheme(t)
+	session := createInteractiveTestSession(t, &fixtureResourceLoader{}, nil)
+	m := newSeamTestMode(session, nil)
+	focusTUI := &bugReportFocusTUI{}
+	m.ui = focusTUI
+	m.editor = components.NewCustomEditor(&stubRequestRenderTUI{}, theme.GetEditorTheme(), core.CreateKeybindingsManager(""), nil)
+
+	var errMu sync.Mutex
+	var errorMessages []string
+	bc := bugReportContext{
+		session:         session,
+		showStatus:      func(string) {},
+		showError:       func(message string) { errMu.Lock(); errorMessages = append(errorMessages, message); errMu.Unlock() },
+		editorContainer: m.editorContainer,
+		editor:          m.editor,
+		keybindings:     core.CreateKeybindingsManager(""),
+		ui:              focusTUI,
+	}
+	sync := func(fn func()) {
+		focusTUI.mu.Lock()
+		defer focusTUI.mu.Unlock()
+		fn()
+	}
+	countChildren := func() int {
+		n := 0
+		sync(func() { n = len(m.editorContainer.Children) })
+		return n
+	}
+	childAt := func(i int) tui.Component {
+		var child tui.Component
+		sync(func() {
+			if len(m.editorContainer.Children) > i {
+				child = m.editorContainer.Children[i]
+			}
+		})
+		return child
+	}
+	isSelector := func() bool {
+		_, ok := childAt(0).(*components.ExtensionSelectorComponent)
+		return ok
+	}
+	handleInput := func(c tui.Component, key string) {
+		handler, ok := c.(tui.InputHandler)
+		if !ok {
+			t.Fatalf("component %T cannot handle input", c)
+		}
+		sync(func() { handler.HandleInput(key) })
+	}
+
+	done := make(chan struct{})
+	go func() {
+		m.reportBug(context.Background(), bc, "")
+		close(done)
+	}()
+
+	// Description prompt: submit a one-line description.
+	bugReportWait(t, func() bool { return countChildren() > 0 }, "description editor never appeared")
+	descriptionEditor, ok := childAt(0).(*components.ExtensionEditorComponent)
+	if !ok {
+		t.Fatalf("description prompt = %T, want ExtensionEditorComponent", childAt(0))
+	}
+	handleInput(descriptionEditor, "\x1b[200~it broke\x1b[201~")
+	handleInput(descriptionEditor, "\r")
+
+	// Transcript: No. Summary: No.
+	bugReportWait(t, isSelector, "transcript selector never appeared")
+	transcriptSelector := childAt(0).(*components.ExtensionSelectorComponent)
+	handleInput(transcriptSelector, "j")
+	handleInput(transcriptSelector, "\r")
+	bugReportWait(t, func() bool {
+		return isSelector() && childAt(0) != tui.Component(transcriptSelector)
+	}, "summary selector never appeared")
+	summarySelector := childAt(0).(*components.ExtensionSelectorComponent)
+	handleInput(summarySelector, "j")
+	handleInput(summarySelector, "\r")
+
+	// Delivery: Upload Report (first item) — must be rejected offline.
+	bugReportWait(t, func() bool {
+		return isSelector() && childAt(0) != tui.Component(summarySelector)
+	}, "delivery selector never appeared")
+	handleInput(childAt(0), "\r")
+
+	bugReportWait(t, func() bool {
+		errMu.Lock()
+		defer errMu.Unlock()
+		return len(errorMessages) > 0
+	}, "offline upload rejection never surfaced")
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reportBug did not return after the offline rejection")
+	}
+	errMu.Lock()
+	firstError := ""
+	if len(errorMessages) > 0 {
+		firstError = errorMessages[0]
+	}
+	errMu.Unlock()
+	if firstError != "Uploading bug reports requires online mode. Use Export as Zip instead." {
+		t.Fatalf("error = %q", firstError)
+	}
+}

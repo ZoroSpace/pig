@@ -68,6 +68,14 @@ func (m *InteractiveMode) reportBug(ctx context.Context, bc bugReportContext, in
 		bc.showStatus("Bug report cancelled")
 		return
 	}
+	// pi: only the upload delivery is rejected offline; zip export works
+	// offline (#9841). pig reads PI_OFFLINE like the rest of the codebase
+	// (8 call sites; no PIG_OFFLINE variant exists — env name decided this
+	// batch).
+	if options.delivery == "upload" && os.Getenv("PI_OFFLINE") != "" {
+		bc.showError("Uploading bug reports requires online mode. Use Export as Zip instead.")
+		return
+	}
 
 	summary := ""
 	if options.includeSummary {

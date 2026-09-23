@@ -1004,3 +1004,20 @@ func splitLinesKeepingEndings(content string) []string {
 	}
 	return lines
 }
+
+// pi: "detects the complete %s signature" — GIF87a/GIF89a are required; a
+// bare "GIF" prefix no longer classifies as an image (#9755, 47a18e37b).
+func TestDetectSupportedImageMimeTypeRequiresCompleteGifSignature(t *testing.T) {
+	for _, signature := range []string{"GIF87a", "GIF89a"} {
+		if got := DetectSupportedImageMimeType([]byte(signature)); got != "image/gif" {
+			t.Fatalf("DetectSupportedImageMimeType(%q) = %q, want image/gif", signature, got)
+		}
+	}
+	// pig-only: pins the #9755 regression itself — pi's it.each positives
+	// pass under the old bare-"GIF" prefix check too.
+	for _, prefix := range []string{"GIF", "GIF89", "GIF87x"} {
+		if got := DetectSupportedImageMimeType([]byte(prefix)); got != "" {
+			t.Fatalf("DetectSupportedImageMimeType(%q) = %q, want empty", prefix, got)
+		}
+	}
+}

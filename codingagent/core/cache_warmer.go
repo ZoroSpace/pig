@@ -236,13 +236,17 @@ type cacheWarmActiveRun struct {
 	ctx context.Context
 	// isCurrent reports whether the session's model or messages still match
 	// the request.
-	isCurrent  func() bool
-	delayMs    int64
-	startedAt  int64
-	cancel     context.CancelFunc
-	phase      string // "streaming" | "idle"
-	nextWarmAt int64
-	timer      *time.Timer
+	isCurrent func() bool
+	ttlMs     int64
+	delayMs   int64
+	// refreshDeadlineAt is the latest safe time to send this refresh,
+	// leaving half the original expiry margin (pi: refreshDeadlineAt).
+	refreshDeadlineAt int64
+	startedAt         int64
+	cancel            context.CancelFunc
+	phase             string // "streaming" | "idle"
+	nextWarmAt        int64
+	timer             *time.Timer
 	// extensionOverride is set while a refresh that an extension forced is
 	// in flight.
 	extensionOverride bool
@@ -375,13 +379,15 @@ func (w *CacheWarmer) Start(request CacheWarmRequest, isCurrent func() bool) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	run := &cacheWarmActiveRun{
-		CacheWarmRequest: request,
-		ctx:              ctx,
-		isCurrent:        isCurrent,
-		delayMs:          delayMs,
-		startedAt:        w.nowFn().UnixMilli(),
-		cancel:           cancel,
-		phase:            "streaming",
+		CacheWarmRequest:  request,
+		ctx:               ctx,
+		isCurrent:         isCurrent,
+		ttlMs:             ttlMs,
+		delayMs:           delayMs,
+		refreshDeadlineAt: 0,
+		startedAt:         w.nowFn().UnixMilli(),
+		cancel:            cancel,
+		phase:             "streaming",
 	}
 	w.run = run
 	w.mu.Unlock()
@@ -475,6 +481,10 @@ func (w *CacheWarmer) schedule(run *cacheWarmActiveRun) {
 	}
 	run.extensionOverride = false
 	run.nextWarmAt = w.nowFn().UnixMilli() + run.delayMs
+	// A timer can run late after sleep or event-loop blockage. Keep half of
+	// the planned pre-expiry margin for that delay and request dispatch; a
+	// late refresh is likely a full-price cache write, not a cache warm.
+	run.refreshDeadlineAt = run.nextWarmAt + (run.ttlMs-run.delayMs)/2
 	deadline := run.startedAt
 	if run.phase == "idle" {
 		deadline += maxIdleWarmingAgeMs
@@ -501,8 +511,12 @@ func (w *CacheWarmer) refresh(run *cacheWarmActiveRun) {
 	w.mu.Lock()
 	run.timer = nil
 	valid := w.validateRunLocked(run)
+	var deadlineMissed bool
+	if valid {
+		deadlineMissed = w.refreshDeadlineMissedLocked(run)
+	}
 	w.mu.Unlock()
-	if !valid {
+	if !valid || deadlineMissed {
 		return
 	}
 
@@ -523,8 +537,11 @@ func (w *CacheWarmer) refresh(run *cacheWarmActiveRun) {
 
 	w.mu.Lock()
 	valid = w.validateRunLocked(run)
+	if valid {
+		deadlineMissed = w.refreshDeadlineMissedLocked(run)
+	}
 	w.mu.Unlock()
-	if !valid {
+	if !valid || deadlineMissed {
 		return
 	}
 	extensionOverride := action != decision.Action
@@ -582,6 +599,17 @@ func (w *CacheWarmer) refresh(run *cacheWarmActiveRun) {
 	if stillCurrent {
 		w.schedule(run)
 	}
+}
+
+// refreshDeadlineMissed reports whether the current time passed the run's
+// refresh deadline, stopping the run when it has (pi:
+// refreshDeadlineMissed). Callers must hold w.mu.
+func (w *CacheWarmer) refreshDeadlineMissedLocked(run *cacheWarmActiveRun) bool {
+	if w.nowFn().UnixMilli() <= run.refreshDeadlineAt {
+		return false
+	}
+	w.stopLocked("cache refresh deadline missed", nil, false)
+	return true
 }
 
 // validateRunLocked stops a stale run (pi: validateRun). Callers must hold

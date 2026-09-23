@@ -285,7 +285,7 @@ You are given one or more GitHub PR URLs: $@`)
 			AgentDir:        "",
 			PromptPaths:     []string{testDir},
 			IncludeDefaults: false,
-		})
+		}).Templates
 
 		pr := findTemplate(templates, "pr")
 		if pr == nil {
@@ -312,7 +312,7 @@ Wrap it. Additional instructions: $ARGUMENTS`)
 			AgentDir:        "",
 			PromptPaths:     []string{testDir},
 			IncludeDefaults: false,
-		})
+		}).Templates
 
 		wr := findTemplate(templates, "wr")
 		if wr == nil {
@@ -335,7 +335,7 @@ Audit changelog entries for all commits since the last release.`)
 			AgentDir:        "",
 			PromptPaths:     []string{testDir},
 			IncludeDefaults: false,
-		})
+		}).Templates
 
 		cl := findTemplate(templates, "cl")
 		if cl == nil {
@@ -359,7 +359,7 @@ Do something`)
 			AgentDir:        "",
 			PromptPaths:     []string{testDir},
 			IncludeDefaults: false,
-		})
+		}).Templates
 
 		tmpl := findTemplate(templates, "empty-hint")
 		if tmpl == nil {
@@ -383,7 +383,7 @@ Analyze GitHub issue(s): $ARGUMENTS`)
 			AgentDir:        "",
 			PromptPaths:     []string{testDir},
 			IncludeDefaults: false,
-		})
+		}).Templates
 
 		is := findTemplate(templates, "is")
 		if is == nil {
@@ -391,6 +391,74 @@ Analyze GitHub issue(s): $ARGUMENTS`)
 		}
 		if is.ArgumentHint != "<issue>" {
 			t.Fatalf("argumentHint = %q", is.ArgumentHint)
+		}
+	})
+}
+
+// pi: "reports invalid YAML frontmatter and keeps valid siblings" —
+// regression test for #9354 / #9830.
+func TestLoadPromptTemplatesReportsInvalidFrontmatter(t *testing.T) {
+	t.Run("reports invalid frontmatter and keeps valid siblings", func(t *testing.T) {
+		testDir := t.TempDir()
+		invalidPromptPath := filepath.Join(testDir, "invalid.md")
+		if err := os.WriteFile(invalidPromptPath, []byte("---\ndescription: Broken: unquoted colon\n---\nDo something.\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(testDir, "valid.md"), []byte("Valid prompt content."), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		result := LoadPromptTemplates(LoadPromptTemplatesOptions{
+			Cwd:             mustGetwdForPrompt(),
+			AgentDir:        "",
+			PromptPaths:     []string{testDir},
+			IncludeDefaults: false,
+		})
+
+		names := []string{}
+		for _, template := range result.Templates {
+			names = append(names, template.Name)
+		}
+		if len(names) != 1 || names[0] != "valid" {
+			t.Fatalf("template names = %q, want [valid]", names)
+		}
+		if len(result.Diagnostics) != 1 {
+			t.Fatalf("diagnostics = %+v, want exactly one", result.Diagnostics)
+		}
+		diagnostic := result.Diagnostics[0]
+		if diagnostic.Type != "warning" {
+			t.Fatalf("diagnostic type = %q, want warning", diagnostic.Type)
+		}
+		if diagnostic.Path != invalidPromptPath {
+			t.Fatalf("diagnostic path = %q, want %q", diagnostic.Path, invalidPromptPath)
+		}
+		// pi asserts message contains "line 1, column 14" (npm yaml position
+		// format); yaml.v3's scanner error for this shape carries no
+		// position, so pig pins the yaml-flavored substring instead.
+		if !strings.Contains(diagnostic.Message, "mapping values") {
+			t.Fatalf("diagnostic message = %q, want a frontmatter parse error", diagnostic.Message)
+		}
+	})
+
+	// pig-only: locks the new stat-failure diagnostic branch for explicit
+	// prompt paths (pi reports it too but has no test for that branch).
+	t.Run("reports a warning for a missing explicit prompt path", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "missing.md")
+		result := LoadPromptTemplates(LoadPromptTemplatesOptions{
+			Cwd:             mustGetwdForPrompt(),
+			AgentDir:        "",
+			PromptPaths:     []string{missing},
+			IncludeDefaults: false,
+		})
+		if len(result.Templates) != 0 {
+			t.Fatalf("templates = %v, want none", result.Templates)
+		}
+		if len(result.Diagnostics) != 1 {
+			t.Fatalf("diagnostics = %+v, want exactly one", result.Diagnostics)
+		}
+		diagnostic := result.Diagnostics[0]
+		if diagnostic.Type != "warning" || diagnostic.Path != missing {
+			t.Fatalf("diagnostic = %+v, want warning for %q", diagnostic, missing)
 		}
 	})
 }

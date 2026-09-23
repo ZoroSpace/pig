@@ -32,7 +32,9 @@ func DetectSupportedImageMimeType(buffer []byte) string {
 		}
 		return ""
 	}
-	if startsWithAscii(buffer, 0, "GIF") {
+	// pi: GIF87a/GIF89a — a bare "GIF" prefix misclassifies text files
+	// beginning with GIF as images (#9755).
+	if startsWithAscii(buffer, 0, "GIF87a") || startsWithAscii(buffer, 0, "GIF89a") {
 		return "image/gif"
 	}
 	if startsWithAscii(buffer, 0, "RIFF") && startsWithAscii(buffer, 8, "WEBP") {

@@ -616,13 +616,19 @@ func (l *DefaultResourceLoader) updatePromptsFromPaths(promptPaths []string, met
 	if l.noPromptTemplates && len(promptPaths) == 0 {
 		promptsResult = PromptLoaderResult{Prompts: []PromptTemplate{}, Diagnostics: []ResourceDiagnostic{}}
 	} else {
-		allPrompts := LoadPromptTemplates(LoadPromptTemplatesOptions{
+		loaded := LoadPromptTemplates(LoadPromptTemplatesOptions{
 			Cwd:             l.cwd,
 			AgentDir:        l.agentDir,
 			PromptPaths:     promptPaths,
 			IncludeDefaults: false,
 		})
-		promptsResult = l.dedupePrompts(allPrompts)
+		// pi: loading diagnostics come first, then the dedupe collision
+		// diagnostics (#9830).
+		deduped := l.dedupePrompts(loaded.Templates)
+		promptsResult = PromptLoaderResult{
+			Prompts:     deduped.Prompts,
+			Diagnostics: append(append([]ResourceDiagnostic{}, loaded.Diagnostics...), deduped.Diagnostics...),
+		}
 	}
 	if l.promptsOverride != nil {
 		promptsResult = l.promptsOverride(promptsResult)

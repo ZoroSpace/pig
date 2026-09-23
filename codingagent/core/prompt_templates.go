@@ -186,15 +186,19 @@ func SubstituteArgs(content string, args []string) string {
 }
 
 // loadTemplateFromFile loads one prompt template file (pi:
-// loadTemplateFromFile); nil on read/parse failure.
-func loadTemplateFromFile(filePath string, sourceInfo SourceInfo) *PromptTemplate {
+// loadTemplateFromFile); the template is nil on read/parse failure and the
+// failure is reported as a warning diagnostic (pi #9830 / #9354).
+func loadTemplateFromFile(filePath string, sourceInfo SourceInfo) (*PromptTemplate, []ResourceDiagnostic) {
+	var diagnostics []ResourceDiagnostic
 	rawContent, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil
+		diagnostics = append(diagnostics, ResourceDiagnostic{Type: "warning", Message: err.Error(), Path: filePath})
+		return nil, diagnostics
 	}
 	frontmatter, body, err := utils.ParseFrontmatter(string(rawContent))
 	if err != nil {
-		return nil
+		diagnostics = append(diagnostics, ResourceDiagnostic{Type: "warning", Message: err.Error(), Path: filePath})
+		return nil, diagnostics
 	}
 
 	name := strings.TrimSuffix(filepath.Base(filePath), ".md")
@@ -231,21 +235,22 @@ func loadTemplateFromFile(filePath string, sourceInfo SourceInfo) *PromptTemplat
 	if hint, ok := frontmatter["argument-hint"].(string); ok && hint != "" {
 		template.ArgumentHint = hint
 	}
-	return template
+	return template, diagnostics
 }
 
 // loadTemplatesFromDir scans a directory for .md files (non-recursive) and
 // loads them as prompt templates (pi: loadTemplatesFromDir).
-func loadTemplatesFromDir(dir string, getSourceInfo func(filePath string) SourceInfo) []PromptTemplate {
+func loadTemplatesFromDir(dir string, getSourceInfo func(filePath string) SourceInfo) ([]PromptTemplate, []ResourceDiagnostic) {
 	var templates []PromptTemplate
+	var diagnostics []ResourceDiagnostic
 
 	if _, err := os.Stat(dir); err != nil {
-		return templates
+		return templates, diagnostics
 	}
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return templates
+		return templates, diagnostics
 	}
 
 	for _, entry := range entries {
@@ -263,14 +268,15 @@ func loadTemplatesFromDir(dir string, getSourceInfo func(filePath string) Source
 		}
 
 		if isFile && strings.HasSuffix(entry.Name(), ".md") {
-			template := loadTemplateFromFile(fullPath, getSourceInfo(fullPath))
+			template, templateDiagnostics := loadTemplateFromFile(fullPath, getSourceInfo(fullPath))
 			if template != nil {
 				templates = append(templates, *template)
 			}
+			diagnostics = append(diagnostics, templateDiagnostics...)
 		}
 	}
 
-	return templates
+	return templates, diagnostics
 }
 
 // LoadPromptTemplatesOptions carries the loadPromptTemplates options (pi:
@@ -286,19 +292,31 @@ type LoadPromptTemplatesOptions struct {
 	IncludeDefaults bool
 }
 
+// LoadPromptTemplatesResult bundles the loaded templates with diagnostics
+// (pi: LoadPromptTemplatesResult, #9830).
+type LoadPromptTemplatesResult struct {
+	Templates   []PromptTemplate
+	Diagnostics []ResourceDiagnostic
+}
+
 // LoadPromptTemplates loads all prompt templates from:
 //  1. Global: agentDir/prompts/
 //  2. Project: cwd/{CONFIG_DIR_NAME}/prompts/
 //  3. Explicit prompt paths
 //
 // (pi: loadPromptTemplates.)
-func LoadPromptTemplates(options LoadPromptTemplatesOptions) []PromptTemplate {
+func LoadPromptTemplates(options LoadPromptTemplatesOptions) LoadPromptTemplatesResult {
 	resolvedCwd := resolveAgainstProcessCwd(options.Cwd)
 	resolvedAgentDir := resolveAgainstProcessCwd(options.AgentDir)
 	promptPaths := options.PromptPaths
 	includeDefaults := options.IncludeDefaults
 
 	var templates []PromptTemplate
+	var diagnostics []ResourceDiagnostic
+	addResult := func(result LoadPromptTemplatesResult) {
+		templates = append(templates, result.Templates...)
+		diagnostics = append(diagnostics, result.Diagnostics...)
+	}
 
 	globalPromptsDir := filepath.Join(resolvedAgentDir, "prompts")
 	projectPromptsDir := filepath.Join(resolvedCwd, codingagent.ConfigDirName, "prompts")
@@ -341,33 +359,35 @@ func LoadPromptTemplates(options LoadPromptTemplatesOptions) []PromptTemplate {
 	}
 
 	if includeDefaults {
-		templates = append(templates, loadTemplatesFromDir(globalPromptsDir, getSourceInfo)...)
-		templates = append(templates, loadTemplatesFromDir(projectPromptsDir, getSourceInfo)...)
+		gt, gd := loadTemplatesFromDir(globalPromptsDir, getSourceInfo)
+		addResult(LoadPromptTemplatesResult{Templates: gt, Diagnostics: gd})
+		pt, pd := loadTemplatesFromDir(projectPromptsDir, getSourceInfo)
+		addResult(LoadPromptTemplatesResult{Templates: pt, Diagnostics: pd})
 	}
 
 	// 3. Load explicit prompt paths
 	for _, rawPath := range promptPaths {
 		resolvedPath := utils.ResolvePath(rawPath, resolvedCwd, &utils.PathInputOptions{Trim: lo.ToPtr(true)})
-		if _, err := os.Stat(resolvedPath); err != nil {
-			continue
-		}
-
 		stats, err := os.Stat(resolvedPath)
 		if err != nil {
-			// Ignore read failures
+			// pi: statSync failures report a warning diagnostic (#9830);
+			// they were silently ignored before.
+			diagnostics = append(diagnostics, ResourceDiagnostic{Type: "warning", Message: err.Error(), Path: resolvedPath})
 			continue
 		}
 		if stats.IsDir() {
-			templates = append(templates, loadTemplatesFromDir(resolvedPath, getSourceInfo)...)
+			dt, dd := loadTemplatesFromDir(resolvedPath, getSourceInfo)
+			addResult(LoadPromptTemplatesResult{Templates: dt, Diagnostics: dd})
 		} else if stats.Mode().IsRegular() && strings.HasSuffix(resolvedPath, ".md") {
-			template := loadTemplateFromFile(resolvedPath, getSourceInfo(resolvedPath))
+			template, templateDiagnostics := loadTemplateFromFile(resolvedPath, getSourceInfo(resolvedPath))
 			if template != nil {
 				templates = append(templates, *template)
 			}
+			diagnostics = append(diagnostics, templateDiagnostics...)
 		}
 	}
 
-	return templates
+	return LoadPromptTemplatesResult{Templates: templates, Diagnostics: diagnostics}
 }
 
 // expandPromptTemplatePattern splits "/name args" (pi:

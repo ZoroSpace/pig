@@ -2348,18 +2348,22 @@ func (t *TuiAltScreen) compositeScrollToEndIndicator(screen []string, layout *La
 			scrollbarColumn = geometry.Column
 		}
 	}
-	availableWidth := 0
+	// Center the label independently of scrollbar visibility so it does not
+	// shift when the auto scrollbar hides or reappears (#9842), then clip
+	// both drawing and click bounds before the scrollbar column.
+	label := TruncateToWidth(t.scrollToEndIndicator(), clip.Width, "", false)
+	labelWidth := VisibleWidth(label)
+	column := clip.X + (clip.Width-labelWidth)/2
+	rightEdge := clip.X + clip.Width
 	if scrollbarColumn >= 0 {
-		availableWidth = maxInt(0, scrollbarColumn-clip.X)
-	} else {
-		availableWidth = maxInt(0, clip.X+clip.Width-clip.X)
+		rightEdge = scrollbarColumn
 	}
-	text := TruncateToWidth(t.scrollToEndIndicator(), availableWidth, "", false)
+	availableWidth := maxInt(0, rightEdge-column)
+	text := TruncateToWidth(label, availableWidth, "", false)
 	textWidth := VisibleWidth(text)
 	if textWidth == 0 {
 		return screen
 	}
-	column := clip.X + (availableWidth-textWidth)/2
 	result := make([]string, len(screen))
 	copy(result, screen)
 	result[row] = CompositeTuiLine(sliceOrEmpty(result, row), text, column, textWidth, width)
