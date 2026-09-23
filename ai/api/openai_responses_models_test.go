@@ -254,6 +254,42 @@ var openAIResponsesModelSpecs = map[string]responsesModelSpec{
 			SupportsExplicitPromptCacheMode: loBoolPtr(true),
 		}),
 	},
+	// pi db91e0331: GPT-6 Sol/Luna catalog entries (fixtures mirror the
+	// generated catalog).
+	"openai|gpt-6-sol": {
+		provider: "openai", id: "gpt-6-sol", name: "GPT-6 Sol", baseURL: openAIResponsesBaseURL,
+		reasoning: true, input: []types.ModelInput{types.ModelInputText, types.ModelInputImage},
+		cost:          responsesModelCost(2, 10, 0.2, 2.5, responsesTier(272000, 4, 15, 0.4, 5)),
+		contextWindow: 272000, maxTokens: 128000,
+		tlm: responsesTLM(map[types.ModelThinkingLevel]*string{
+			types.ModelThinkingOff: responsesStrPtr("none"), types.ModelThinkingMinimal: responsesNullPtr(),
+			types.ModelThinkingLow: responsesStrPtr("low"), types.ModelThinkingMedium: responsesStrPtr("medium"),
+			types.ModelThinkingHigh: responsesStrPtr("high"), types.ModelThinkingXHigh: responsesStrPtr("xhigh"),
+			types.ModelThinkingMax: responsesStrPtr("max"),
+		}),
+		compat: responsesCompat(&types.OpenAIResponsesCompat{
+			SupportsStrictMode: loBoolPtr(true), SupportsOpenAIGrammarTools: loBoolPtr(true),
+			SupportsAdditionalTools: loBoolPtr(true), SupportsToolSearch: loBoolPtr(true),
+			SupportsExplicitPromptCacheMode: loBoolPtr(true),
+		}),
+	},
+	"openai|gpt-6-luna": {
+		provider: "openai", id: "gpt-6-luna", name: "GPT-6 Luna", baseURL: openAIResponsesBaseURL,
+		reasoning: true, input: []types.ModelInput{types.ModelInputText, types.ModelInputImage},
+		cost:          responsesModelCost(0.1, 0.5, 0.01, 0.125, responsesTier(272000, 0.2, 0.75, 0.02, 0.25)),
+		contextWindow: 272000, maxTokens: 128000,
+		tlm: responsesTLM(map[types.ModelThinkingLevel]*string{
+			types.ModelThinkingOff: responsesStrPtr("none"), types.ModelThinkingMinimal: responsesNullPtr(),
+			types.ModelThinkingLow: responsesStrPtr("low"), types.ModelThinkingMedium: responsesStrPtr("medium"),
+			types.ModelThinkingHigh: responsesStrPtr("high"), types.ModelThinkingXHigh: responsesStrPtr("xhigh"),
+			types.ModelThinkingMax: responsesStrPtr("max"),
+		}),
+		compat: responsesCompat(&types.OpenAIResponsesCompat{
+			SupportsStrictMode: loBoolPtr(true), SupportsOpenAIGrammarTools: loBoolPtr(true),
+			SupportsAdditionalTools: loBoolPtr(true), SupportsToolSearch: loBoolPtr(true),
+			SupportsExplicitPromptCacheMode: loBoolPtr(true),
+		}),
+	},
 	"openai|gpt-5": {
 		provider: "openai", id: "gpt-5", name: "GPT-5", baseURL: openAIResponsesBaseURL,
 		reasoning: true, input: []types.ModelInput{types.ModelInputText, types.ModelInputImage},

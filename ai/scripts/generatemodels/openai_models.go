@@ -12,23 +12,27 @@ const openAILongContextInputThreshold = 272000
 // short-context pricing tier by default (pi:
 // OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS).
 var openAIShortContextCappedModelIds = stringSet(
-	"gpt-5.4", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra",
+	"gpt-5.4", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
 )
 
 // openAILongContextPricingModelIds lists the models carrying long-context
 // tier pricing (pi: OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS).
 var openAILongContextPricingModelIds = stringSet(
 	"gpt-5.4", "gpt-5.4-pro", "gpt-5.5", "gpt-5.5-pro", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
-	"gpt-6-astra",
+	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
 )
 
-// openAIGpt56StandardCosts keeps the authoritative GPT-5.6 standard prices
-// until models.dev and passthrough catalogs catch up (pi:
-// OPENAI_GPT_56_STANDARD_COSTS). OpenAI reduced GPT-5.6 Terra and Luna
-// prices on 2026-07-30. https://developers.openai.com/api/docs/pricing
-var openAIGpt56StandardCosts = map[string]ai.ModelCost{
+// openAIStandardCosts keeps the current OpenAI prices authoritative until
+// models.dev and passthrough catalogs catch up (pi:
+// OPENAI_STANDARD_COSTS — renamed from OPENAI_GPT_56_STANDARD_COSTS by
+// db91e0331). https://developers.openai.com/api/docs/pricing
+var openAIStandardCosts = map[string]ai.ModelCost{
 	"gpt-5.6-luna":  {ModelCostRates: ai.ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25}},
+	"gpt-5.6-sol":   {ModelCostRates: ai.ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
 	"gpt-5.6-terra": {ModelCostRates: ai.ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 2.5}},
+	"gpt-6-astra":   {ModelCostRates: ai.ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
+	"gpt-6-luna":    {ModelCostRates: ai.ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}},
+	"gpt-6-sol":     {ModelCostRates: ai.ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
 }
 
 // withOpenAiLongContextPricing appends the long-context tier to a cost (pi:
@@ -56,14 +60,28 @@ func missingOpenAiModels() []*ai.Model {
 			ID: "gpt-6-astra", Name: "GPT-6 Astra",
 			API: ai.ApiOpenAIResponses, Provider: ai.ProviderOpenAI, BaseURL: "https://api.openai.com/v1",
 			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
-			Cost:          withOpenAiLongContextPricing(ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}}),
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6-astra")),
+			ContextWindow: openAILongContextInputThreshold, MaxTokens: 128000,
+		},
+		{
+			ID: "gpt-6-sol", Name: "GPT-6 Sol",
+			API: ai.ApiOpenAIResponses, Provider: ai.ProviderOpenAI, BaseURL: "https://api.openai.com/v1",
+			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6-sol")),
+			ContextWindow: openAILongContextInputThreshold, MaxTokens: 128000,
+		},
+		{
+			ID: "gpt-6-luna", Name: "GPT-6 Luna",
+			API: ai.ApiOpenAIResponses, Provider: ai.ProviderOpenAI, BaseURL: "https://api.openai.com/v1",
+			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6-luna")),
 			ContextWindow: openAILongContextInputThreshold, MaxTokens: 128000,
 		},
 		{
 			ID: "gpt-5.6-sol", Name: "GPT-5.6 Sol",
 			API: ai.ApiOpenAIResponses, Provider: ai.ProviderOpenAI, BaseURL: "https://api.openai.com/v1",
 			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
-			Cost:          withOpenAiLongContextPricing(ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 6.25}}),
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-5.6-sol")),
 			ContextWindow: openAILongContextInputThreshold, MaxTokens: 128000,
 		},
 		{
@@ -90,10 +108,10 @@ func missingOpenAiModels() []*ai.Model {
 	}
 }
 
-// mustStandardCost looks up OPENAI_GPT_56_STANDARD_COSTS (pi indexes the
-// record directly).
+// mustStandardCost looks up OPENAI_STANDARD_COSTS (pi indexes the record
+// directly).
 func mustStandardCost(modelID string) ai.ModelCost {
-	cost, ok := openAIGpt56StandardCosts[modelID]
+	cost, ok := openAIStandardCosts[modelID]
 	if !ok {
 		panic("missing OPENAI_GPT_56_STANDARD_COSTS entry: " + modelID)
 	}

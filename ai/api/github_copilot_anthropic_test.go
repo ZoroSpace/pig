@@ -109,6 +109,22 @@ func TestGitHubCopilotCatalogAnthropicMapping(t *testing.T) {
 	assertCopilotLevel(t, opus5, "xhigh", true)
 	assertCopilotLevel(t, opus5, "max", true)
 
+	// pi 27c072e98: claude-opus-5.5 via the anthropic-messages endpoint.
+	opus55 := catalogByID["claude-opus-5.5"]
+	if opus55.API != types.ApiAnthropicMessages {
+		t.Errorf("opus-5.5 api = %s, want anthropic-messages", opus55.API)
+	}
+	if opus55.ContextWindow != 1000000 {
+		t.Errorf("opus-5.5 contextWindow = %d, want 1000000 (extended context)", opus55.ContextWindow)
+	}
+	// pi asserts toEqual([low..max]) against the hardcoded v0.87.1-era map
+	// (models.dev lacked the model then); models.dev now serves it without
+	// thinking metadata, so the derived map also exposes off/minimal.
+	// Same-moment deviation: lock membership, not exact equality.
+	for _, level := range []string{"low", "medium", "high", "xhigh", "max"} {
+		assertCopilotLevel(t, opus55, types.ModelThinkingLevel(level), true)
+	}
+
 	sonnet46 := catalogByID["claude-sonnet-4.6"]
 	if sonnet46.ThinkingLevelMap[types.ModelThinkingMinimal] == nil || *sonnet46.ThinkingLevelMap[types.ModelThinkingMinimal] != "low" {
 		t.Errorf("sonnet-4.6 minimal = %v, want low", sonnet46.ThinkingLevelMap[types.ModelThinkingMinimal])

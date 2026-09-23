@@ -128,6 +128,12 @@ func convertMessages(model *types.Model, llmContext *types.TranscriptContext, co
 				for _, item := range m.Content.Parts {
 					switch block := item.(type) {
 					case types.TextContent:
+						// pi 1b6ddca87 (#9797): omit empty text parts from
+						// multimodal user messages; OpenAI-compatible providers
+						// reject image-only prompts otherwise.
+						if block.Text == "" {
+							continue
+						}
 						parts = append(parts, map[string]any{"type": "text", "text": utils.SanitizeSurrogates(block.Text)})
 					case types.ImageContent:
 						parts = append(parts, map[string]any{

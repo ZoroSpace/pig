@@ -646,7 +646,7 @@ func TestDefaultModelSelection(t *testing.T) {
 	})
 
 	t.Run("xai default tracks current model", func(t *testing.T) {
-		if DefaultModelPerProvider["xai"] != "grok-4.6" {
+		if DefaultModelPerProvider["xai"] != "grok-4.7" {
 			t.Fatalf("xai default = %q", DefaultModelPerProvider["xai"])
 		}
 	})

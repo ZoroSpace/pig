@@ -1167,21 +1167,23 @@ func PrepareCompaction(pathEntries []SessionEntry, settings CompactionSettingsVa
 // ============================================================================
 
 // turnPrefixSummarizationPrompt summarizes the kept-prefix of an oversized
-// turn (pi: TURN_PREFIX_SUMMARIZATION_PROMPT).
-const turnPrefixSummarizationPrompt = `This is the PREFIX of a turn that was too large to keep. The SUFFIX (recent work) is retained.
+// turn (pi: TURN_PREFIX_SUMMARIZATION_PROMPT; d192bd6dc reworded to
+// continuation-oriented guidance to avoid Fable split-turn summary refusals,
+// #9652/#9908).
+const turnPrefixSummarizationPrompt = `The messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.
 
-Summarize the prefix to provide context for the retained suffix:
+Create a concise checkpoint of the user's request and the progress shown above. This checkpoint will be placed before the later messages so the conversation can continue with the necessary context.
 
 ## Original Request
-[What did the user ask for in this turn?]
+[What did the user ask for?]
 
-## Early Progress
-- [Key decisions and work done in the prefix]
+## Progress So Far
+- [Key decisions and work completed in these messages]
 
-## Context for Suffix
-- [Information needed to understand the retained recent work]
+## Context Needed to Continue
+- [Information from these messages needed to understand the later work]
 
-Be concise. Focus on what's needed to understand the kept suffix.`
+Only summarize information explicitly present above. Do not infer or recreate later messages.`
 
 // Compact generates summaries for compaction using prepared data; the
 // returned CompactionResult is persisted by SessionManager, which adds
@@ -1331,7 +1333,7 @@ func generateTurnPrefixSummary(
 	} // Smaller budget for turn prefix
 	llmMessages := harness.ConvertToLlm(messages)
 	conversationText := SerializeConversation(llmMessages)
-	promptText := fmt.Sprintf("<conversation>\n%s\n</conversation>\n\n%s", conversationText, turnPrefixSummarizationPrompt)
+	promptText := fmt.Sprintf("# Conversation\n%s\n\n# Instructions\n%s", conversationText, turnPrefixSummarizationPrompt)
 
 	response, err := CompleteSummarization(
 		ctx,

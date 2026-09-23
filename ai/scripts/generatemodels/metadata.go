@@ -99,19 +99,21 @@ var verifiedAnthropicMidConvoEffortProviders = stringSet("anthropic", "openroute
 var midConvoEffortUnsupportedAnthropicModels = stringSet("openrouter:anthropic/claude-opus-5")
 
 // supportsAnthropicMidConvoEffort (pi: supportsAnthropicMidConvoEffort,
-// v0.86.0 — narrowed to the models with a verified effort transport).
+// v0.86.0 — narrowed to the models with a verified effort transport; v0.87.1
+// b4588f26a extends opus to 5[.-]5).
 func supportsAnthropicMidConvoEffort(modelID string) bool {
 	id := strings.ToLower(modelID)
 	id = regexp.MustCompile(`^~?anthropic/`).ReplaceAllString(id, "")
-	return regexp.MustCompile(`^claude-opus-5(?:-\\d{8})?$`).MatchString(id) ||
-		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\\d{8})?$`).MatchString(id)
+	return regexp.MustCompile(`^claude-opus-(?:5|5[.-]5)(?:-\d{8})?$`).MatchString(id) ||
+		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`).MatchString(id)
 }
 
 // supportsAnthropicMidConvoSystemMessages reports whether the exact model id
 // accepts system messages mid-conversation (pi:
-// supportsAnthropicMidConvoSystemMessages, v0.86.0).
+// supportsAnthropicMidConvoSystemMessages, v0.86.0; v0.87.1 b4588f26a extends
+// opus 5 to 5[.-]5).
 func supportsAnthropicMidConvoSystemMessages(modelID string) bool {
-	return regexp.MustCompile(`^claude-opus-(?:4[.-]8|5)(?:-\d{8})?$`).MatchString(modelID) ||
+	return regexp.MustCompile(`^claude-opus-(?:4[.-]8|5(?:[.-]5)?)(?:-\d{8})?$`).MatchString(modelID) ||
 		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)?(?:-\d{8})?$`).MatchString(modelID)
 }
 
@@ -863,7 +865,7 @@ var openAIGrammarToolGptRe = regexp.MustCompile(`^gpt-(\d+)`)
 // (pi: OPENAI_TOOL_SEARCH_MODEL_IDS).
 var openAIToolSearchModelIDs = stringSet(
 	"gpt-5.4", "gpt-5.4-mini", "gpt-5.4-pro", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
-	"gpt-6-astra",
+	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
 )
 
 // openAIAdditionalToolsModelIDs is pi's OPENAI_ADDITIONAL_TOOLS_MODEL_IDS
@@ -879,7 +881,7 @@ var openAIMidConvoSystemMessageModelIDs = openAIToolSearchModelIDs
 // OPENAI_CODEX_ADDITIONAL_TOOLS_MODEL_IDS (the codex branch stays inert
 // until the codex adapter lands).
 var openAICodexAdditionalToolsModelIDs = stringSet(
-	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra",
+	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
 )
 
 // applyOpenAIToolSearchMetadata (pi: applyOpenAIToolSearchMetadata).
@@ -1098,12 +1100,12 @@ func supportsOpenAiXhigh(modelID string) bool {
 		strings.Contains(modelID, "gpt-5.4") ||
 		strings.Contains(modelID, "gpt-5.5") ||
 		strings.Contains(modelID, "gpt-5.6") ||
-		strings.Contains(modelID, "gpt-6-astra")
+		strings.Contains(modelID, "gpt-6")
 }
 
 // supportsOpenAiMax (pi).
 func supportsOpenAiMax(model *ai.Model) bool {
-	return (strings.Contains(model.ID, "gpt-5.6") || strings.Contains(model.ID, "gpt-6-astra")) &&
+	return (strings.Contains(model.ID, "gpt-5.6") || strings.Contains(model.ID, "gpt-6")) &&
 		(model.API == ai.ApiOpenAIResponses ||
 			model.API == ai.ApiAzureOpenAIResponses ||
 			model.API == ai.Api("openai-codex-responses") ||
@@ -1115,7 +1117,7 @@ func supportsOpenAiMax(model *ai.Model) bool {
 // OPENAI_RESPONSES_NONE_REASONING_MODELS).
 var openAIResponsesNoneReasoningModels = stringSet(
 	"gpt-5.1", "gpt-5.2", "gpt-5.3-codex", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano",
-	"gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+	"gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-sol", "gpt-6-luna",
 )
 
 // isAnthropicAdaptiveThinkingModel (pi).
@@ -1162,17 +1164,25 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 		strings.HasPrefix(model.ID, "gpt-5") {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil})
 	}
-	if model.ID == "gpt-6-astra" &&
-		(model.API == ai.ApiOpenAIResponses || model.API == ai.ApiAzureOpenAIResponses || model.API == ai.Api("openai-codex-responses")) {
-		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{
-			ai.ModelThinkingOff:     nil,
-			ai.ModelThinkingMinimal: nil,
-			ai.ModelThinkingLow:     lo.ToPtr("low"),
-			ai.ModelThinkingMedium:  lo.ToPtr("medium"),
-			ai.ModelThinkingHigh:    lo.ToPtr("high"),
-			ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-			ai.ModelThinkingMax:     lo.ToPtr("max"),
-		})
+	if model.ID == "gpt-6-astra" || model.ID == "gpt-6-sol" || model.ID == "gpt-6-luna" {
+		if model.API == ai.ApiOpenAIResponses || model.API == ai.ApiAzureOpenAIResponses || model.API == ai.Api("openai-codex-responses") {
+			// pi db91e0331: Astra rejects an explicit off effort (null), Sol/Luna
+			// accept the provider-native "none".
+			merge := ai.ThinkingLevelMap{
+				ai.ModelThinkingMinimal: nil,
+				ai.ModelThinkingLow:     lo.ToPtr("low"),
+				ai.ModelThinkingMedium:  lo.ToPtr("medium"),
+				ai.ModelThinkingHigh:    lo.ToPtr("high"),
+				ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ai.ModelThinkingMax:     lo.ToPtr("max"),
+			}
+			if model.ID == "gpt-6-astra" {
+				merge[ai.ModelThinkingOff] = nil
+			} else {
+				merge[ai.ModelThinkingOff] = lo.ToPtr("none")
+			}
+			mergeThinkingLevelMap(model, merge)
+		}
 	}
 	// pi: github-copilot gpt-5* models map minimal to the provider-native
 	// "low" effort.

@@ -94,6 +94,11 @@ func TestXaiRoutesEveryBuiltInModelThroughResponses(t *testing.T) {
 	if want := []string{"low", "medium", "high", "xhigh"}; !equalLevels(levels, want) {
 		t.Fatalf("grok-4.6 levels = %v, want %v", levels, want)
 	}
+	grok47 := models["grok-4.7"]
+	levels = ai.GetSupportedThinkingLevels(&grok47)
+	if want := []string{"low", "medium", "high", "xhigh"}; !equalLevels(levels, want) {
+		t.Fatalf("grok-4.7 levels = %v, want %v", levels, want)
+	}
 	grok43 := models["grok-4.3"]
 	levels = ai.GetSupportedThinkingLevels(&grok43)
 	if want := []string{"off", "low", "medium", "high"}; !equalLevels(levels, want) {
@@ -113,10 +118,49 @@ func equalLevels(levels []ai.ModelThinkingLevel, want []string) bool {
 	return true
 }
 
+func TestXaiGrok47CapabilitiesAndLongContextPricing(t *testing.T) {
+	// pi: "includes Grok 4.7 capabilities and long-context pricing".
+	models := xaiModels(t)
+	grok47, ok := models["grok-4.7"]
+	if !ok {
+		t.Fatal("grok-4.7 not in catalog")
+	}
+	if grok47.API != types.ApiOpenAIResponses || !grok47.Reasoning ||
+		grok47.ContextWindow != 500000 || grok47.MaxTokens != 500000 {
+		t.Fatalf("grok-4.7 core fields = api:%s reasoning:%v ctx:%d max:%d",
+			grok47.API, grok47.Reasoning, grok47.ContextWindow, grok47.MaxTokens)
+	}
+	if want := []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage}; !equalModelInputs(grok47.Input, want) {
+		t.Fatalf("grok-4.7 input = %v", grok47.Input)
+	}
+	if grok47.Cost.Input != 2 || grok47.Cost.Output != 6 || grok47.Cost.CacheRead != 0.5 || grok47.Cost.CacheWrite != 0 {
+		t.Fatalf("grok-4.7 cost rates = %+v", grok47.Cost.ModelCostRates)
+	}
+	if len(grok47.Cost.Tiers) != 1 {
+		t.Fatalf("grok-4.7 cost tiers = %d, want 1", len(grok47.Cost.Tiers))
+	}
+	tier := grok47.Cost.Tiers[0]
+	if tier.InputTokensAbove != 200000 || tier.Input != 4 || tier.Output != 12 || tier.CacheRead != 1 || tier.CacheWrite != 0 {
+		t.Fatalf("grok-4.7 long-context tier = %+v", tier)
+	}
+}
+
+// equalModelInputs compares a model's input modalities against a literal set.
+func equalModelInputs(inputs []ai.ModelInput, want []ai.ModelInput) bool {
+	if len(inputs) != len(want) {
+		return false
+	}
+	for i, input := range inputs {
+		if input != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestXaiResponsesRequestShape(t *testing.T) {
 	models := xaiModels(t)
 	grok45 := models["grok-4.5"]
-	grok46 := models["grok-4.6"]
 	grok43 := models["grok-4.3"]
 
 	t.Run("uses /responses with bearer auth and xAI-compatible request fields", func(t *testing.T) {
@@ -209,10 +253,10 @@ func TestXaiResponsesRequestShape(t *testing.T) {
 		}
 	})
 
-	t.Run("uses /responses for Grok 4.6 with xhigh effort and encrypted reasoning", func(t *testing.T) {
+	t.Run("uses /responses for Grok 4.7 with xhigh effort and encrypted reasoning", func(t *testing.T) {
 		// pi passes reasoningEffort via the typed options; through the
 		// provider dispatch pig uses StreamSimple's reasoning level.
-		grok46 := grok46
+		grok47 := models["grok-4.7"]
 		var captured capturedXaiRequest
 		options := &types.SimpleStreamOptions{}
 		options.APIKey = "xai-test-token"
@@ -230,7 +274,7 @@ func TestXaiResponsesRequestShape(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(responsesCompletedBody)),
 			}, nil
 		}
-		result := XaiProvider().StreamSimple(context.Background(), &grok46, utils.NormalizeContext(&types.Context{
+		result := XaiProvider().StreamSimple(context.Background(), &grok47, utils.NormalizeContext(&types.Context{
 			SystemPrompt: "You are a careful coding assistant.",
 			Messages:     []types.Message{userMessageAt("hello", 1)},
 		}), options).Result()
@@ -241,7 +285,7 @@ func TestXaiResponsesRequestShape(t *testing.T) {
 		if captured.url != "https://api.x.ai/v1/responses" {
 			t.Fatalf("url = %s", captured.url)
 		}
-		if captured.body["model"] != "grok-4.6" || captured.body["store"] != false || captured.body["stream"] != true {
+		if captured.body["model"] != "grok-4.7" || captured.body["store"] != false || captured.body["stream"] != true {
 			t.Fatalf("body base fields = %v", captured.body)
 		}
 		reasoning, ok := captured.body["reasoning"].(map[string]any)

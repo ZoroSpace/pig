@@ -106,10 +106,53 @@ func generateModels(ctx context.Context) error {
 	// and the opencode gpt-5.3-codex-spark alias here.
 	allModels := combineModels(modelsDevModels, openRouterModels, aiGatewayModels)
 
+	// Add Claude Opus 5.5 until models.dev includes it (pi b4588f26a).
+	// https://platform.claude.com/docs/en/models/opus-5-5/overview
+	if !hasProviderModel(allModels, ai.ProviderAnthropic, "claude-opus-5-5") {
+		allModels = append(allModels, &ai.Model{
+			ID: "claude-opus-5-5", Name: "Claude Opus 5.5",
+			API: ai.ApiAnthropicMessages, Provider: ai.ProviderAnthropic, BaseURL: "https://api.anthropic.com",
+			Reasoning: true,
+			ThinkingLevelMap: ai.ThinkingLevelMap{
+				ai.ModelThinkingOff:     nil,
+				ai.ModelThinkingMinimal: nil,
+				ai.ModelThinkingLow:     lo.ToPtr("low"),
+				ai.ModelThinkingMedium:  lo.ToPtr("medium"),
+				ai.ModelThinkingHigh:    lo.ToPtr("high"),
+				ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ai.ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 4, Output: 20, CacheRead: 0.2, CacheWrite: 5}},
+			ContextWindow: 1000000, MaxTokens: 128000,
+		})
+	}
+
+	// The authenticated Copilot catalog advertised these models on
+	// 2026-09-22, but models.dev did not include them yet (pi 27c072e98).
+	for _, model := range missingCopilotModels() {
+		if !hasProviderModel(allModels, model.Provider, model.ID) {
+			allModels = append(allModels, model)
+		}
+	}
+
 	// Temporary overrides until upstream model metadata is corrected (pi).
 	for _, candidate := range allModels {
 		if candidate.Provider == ai.ProviderGithubCopilot && githubCopilotExtendedContextModels[candidate.ID] {
 			candidate.ContextWindow = 1000000
+		}
+		// models.dev may list Opus 5.5 before its effort metadata is complete
+		// (pi b7f4b05c7).
+		if candidate.Provider == ai.ProviderAnthropic && candidate.ID == "claude-opus-5-5" {
+			mergeThinkingLevelMap(candidate, ai.ThinkingLevelMap{
+				ai.ModelThinkingOff:     nil,
+				ai.ModelThinkingMinimal: nil,
+				ai.ModelThinkingLow:     lo.ToPtr("low"),
+				ai.ModelThinkingMedium:  lo.ToPtr("medium"),
+				ai.ModelThinkingHigh:    lo.ToPtr("high"),
+				ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ai.ModelThinkingMax:     lo.ToPtr("max"),
+			})
 		}
 		if (candidate.Provider == ai.ProviderAnthropic || candidate.Provider == ai.ProviderOpenCode || candidate.Provider == ai.ProviderOpenCodeGo) &&
 			(candidate.ID == "claude-opus-4-6" ||
@@ -136,7 +179,7 @@ func generateModels(ctx context.Context) error {
 			candidate.MaxTokens = 128000
 		}
 		if candidate.Provider == ai.ProviderOpenAI && openAILongContextPricingModelIds[candidate.ID] {
-			standardCost, hasStandard := openAIGpt56StandardCosts[candidate.ID]
+			standardCost, hasStandard := openAIStandardCosts[candidate.ID]
 			if hasStandard {
 				candidate.Cost = withOpenAiLongContextPricing(standardCost)
 			} else {
@@ -145,7 +188,7 @@ func generateModels(ctx context.Context) error {
 		}
 		// Cloudflare AI Gateway passes OpenAI usage through at OpenAI list prices.
 		if candidate.Provider == ai.ProviderCloudflareAIGateway {
-			if standardCost, hasStandard := openAIGpt56StandardCosts[candidate.ID]; hasStandard {
+			if standardCost, hasStandard := openAIStandardCosts[candidate.ID]; hasStandard {
 				candidate.Cost = withOpenAiLongContextPricing(standardCost)
 			}
 		}
@@ -277,6 +320,17 @@ func filterAnthropicFallback(models []*ai.Model) []*ai.Model {
 		}
 	}
 	return out
+}
+
+// hasProviderModel reports whether the catalog already holds provider/id
+// (pi: allModels.some(...) guards on the push blocks).
+func hasProviderModel(models []*ai.Model, provider ai.ProviderID, id string) bool {
+	for _, model := range models {
+		if model.Provider == provider && model.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // deepseekCompat is pi's deepseekCompat (openai-completions thinking format).

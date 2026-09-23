@@ -1,6 +1,6 @@
 // pi: generate-models.ts — the codexModels block (ChatGPT Codex / OAuth
 // openai-codex-responses models, hardcoded outside models.dev). Older model
-// limits are based on observed server behavior; GPT-5.6 and GPT-6 Astra use
+// limits are based on observed server behavior; GPT-5.6 and GPT-6 use
 // Codex's 272k default catalog limit.
 package main
 
@@ -21,7 +21,21 @@ func codexModels() []*ai.Model {
 			ID: "gpt-6-astra", Name: "GPT-6 Astra",
 			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
 			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
-			Cost:          withOpenAiLongContextPricing(ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}}),
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6-astra")),
+			ContextWindow: codexContext, MaxTokens: codexMaxTokens,
+		},
+		{
+			ID: "gpt-6-sol", Name: "GPT-6 Sol",
+			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
+			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6-sol")),
+			ContextWindow: codexContext, MaxTokens: codexMaxTokens,
+		},
+		{
+			ID: "gpt-6-luna", Name: "GPT-6 Luna",
+			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
+			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6-luna")),
 			ContextWindow: codexContext, MaxTokens: codexMaxTokens,
 		},
 		{
@@ -49,7 +63,7 @@ func codexModels() []*ai.Model {
 			ID: "gpt-5.6-sol", Name: "GPT-5.6 Sol",
 			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
 			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
-			Cost:          withOpenAiLongContextPricing(ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 6.25}}),
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-5.6-sol")),
 			ContextWindow: codexGpt56Context, MaxTokens: codexMaxTokens,
 		},
 		{

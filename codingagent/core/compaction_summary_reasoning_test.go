@@ -254,11 +254,13 @@ func TestPreservesPreviousSummaryWithoutEmptyHistoryRequestForSplitTurn(t *testi
 		t.Fatalf("expected user message, got %T", mock.contexts[0].Messages[0])
 	}
 	prompt := ai.ContentText(userMsg.Content.Parts, "")
-	if !strings.Contains(prompt, "This is the PREFIX of a turn that was too large to keep") {
-		t.Fatalf("missing turn prefix prompt: %s", prompt)
+	// Regression test for #9652: clear boundaries and continuation wording
+	// avoid the reasoning-extraction false positive (pi d192bd6dc / #9908).
+	if !strings.Contains(prompt, "# Conversation\n[User]: Summarize this.") {
+		t.Fatalf("missing conversation boundary: %s", prompt)
 	}
-	if !strings.Contains(prompt, "<conversation>") {
-		t.Fatalf("missing conversation tags: %s", prompt)
+	if !strings.Contains(prompt, "# Instructions\nThe messages above are earlier context from an ongoing conversation.") {
+		t.Fatalf("missing continuation instructions: %s", prompt)
 	}
 }
 

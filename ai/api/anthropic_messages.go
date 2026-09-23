@@ -209,7 +209,7 @@ func getCacheControl(model *types.Model, cacheRetention types.CacheRetention, en
 }
 
 // Stealth mode: Mimic Claude Code's tool naming exactly.
-const claudeCodeVersion = "2.1.251"
+const claudeCodeVersion = "2.1.280"
 
 // Claude Code 2.x tool names (canonical casing).
 // Source: https://cchistory.mariozechner.at/data/prompts-2.1.11.md

@@ -224,7 +224,8 @@ func processOpenAIModels(data ModelsDevCatalog) []*ai.Model {
 }
 
 // processXaiModels (pi: loadModelsDevData xai block — the openai-responses
-// catalog).
+// catalog). pi 1a584a7a5 switched the cost mapping from flat rates to
+// getModelsDevCost so models.dev context tiers (grok-4.7) survive.
 func processXaiModels(data ModelsDevCatalog) []*ai.Model {
 	provider := data["xai"]
 	if provider == nil || provider.Models == nil {
@@ -244,7 +245,7 @@ func processXaiModels(data ModelsDevCatalog) []*ai.Model {
 			Compat:        copyOpenAIResponsesCompat(xaiResponsesCompat),
 			Reasoning:     boolVal(m.Reasoning),
 			Input:         inputOf(m),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		})
@@ -1056,11 +1057,15 @@ var githubCopilotExtendedContextModels = stringSet(
 	"claude-opus-4.7",
 	"claude-opus-4.8",
 	"claude-opus-5",
+	"claude-opus-5.5",
 	"claude-sonnet-4.6",
 	"claude-sonnet-5",
 	"gpt-5.3-codex",
 	"gpt-5.4",
 	"gpt-5.5",
+	"gpt-6-astra",
+	"gpt-6-luna",
+	"gpt-6-sol",
 )
 
 // githubCopilotThinkingLevelOverrides narrows models.dev metadata over the
@@ -1071,6 +1076,47 @@ var githubCopilotThinkingLevelOverrides = map[string]ai.ThinkingLevelMap{
 	"claude-opus-4.8":   {ai.ModelThinkingMinimal: lo.ToPtr("low")},
 	"claude-opus-5":     {ai.ModelThinkingMinimal: lo.ToPtr("low")},
 	"claude-sonnet-4.6": {ai.ModelThinkingMinimal: lo.ToPtr("low"), ai.ModelThinkingMax: lo.ToPtr("max")},
+}
+
+// missingCopilotModels is pi's missingCopilotModels (27c07e98): Copilot
+// catalog entries advertised 2026-09-22 but absent from models.dev.
+func missingCopilotModels() []*ai.Model {
+	models := []*ai.Model{
+		{
+			ID: "claude-opus-5.5", Name: "Claude Opus 5.5",
+			API: ai.ApiAnthropicMessages, Provider: ai.ProviderGithubCopilot, BaseURL: "https://api.individual.githubcopilot.com",
+			Reasoning: true,
+			ThinkingLevelMap: ai.ThinkingLevelMap{
+				ai.ModelThinkingOff:     nil,
+				ai.ModelThinkingMinimal: nil,
+				ai.ModelThinkingLow:     lo.ToPtr("low"),
+				ai.ModelThinkingMedium:  lo.ToPtr("medium"),
+				ai.ModelThinkingHigh:    lo.ToPtr("high"),
+				ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ai.ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 4, Output: 20, CacheRead: 0.2, CacheWrite: 5}},
+			ContextWindow: 1000000, MaxTokens: 128000,
+			Headers: maps.Clone(copilotStaticHeaders),
+		},
+	}
+	for _, id := range []string{"gpt-6-sol", "gpt-6-luna"} {
+		name := "GPT-6 Sol"
+		if id == "gpt-6-luna" {
+			name = "GPT-6 Luna"
+		}
+		models = append(models, &ai.Model{
+			ID: id, Name: name,
+			API: ai.ApiOpenAIResponses, Provider: ai.ProviderGithubCopilot, BaseURL: "https://api.individual.githubcopilot.com",
+			Reasoning:     true,
+			Input:         []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          withOpenAiLongContextPricing(mustStandardCost(id)),
+			ContextWindow: 1000000, MaxTokens: 128000,
+			Headers: maps.Clone(copilotStaticHeaders),
+		})
+	}
+	return models
 }
 
 // processCloudflareModels handles Workers AI and AI Gateway (pi:

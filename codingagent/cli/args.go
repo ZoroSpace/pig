@@ -133,13 +133,23 @@ func ParseArgs(args []string) Args {
 			result.Help = boolPtr(true)
 		case arg == "--version" || arg == "-v":
 			result.Version = boolPtr(true)
-		case arg == "--mode" && i+1 < len(args):
+		case arg == "--mode":
+			// pi e40126f57 (#9045): reject invalid --mode values instead of
+			// silently ignoring them. A missing or flag-like value reports the
+			// reminder diagnostic without consuming the next argument; an
+			// invalid value is consumed and reported.
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				pushDiagnostic(ArgDiagnosticError, "--mode requires text, json, or rpc")
+				break
+			}
 			i++
 			mode := args[i]
-			if mode == "text" || mode == "json" || mode == "rpc" {
-				m := Mode(mode)
-				result.Mode = &m
+			if mode != "text" && mode != "json" && mode != "rpc" {
+				pushDiagnostic(ArgDiagnosticError, fmt.Sprintf("Invalid mode \"%s\". Valid values: text, json, rpc", mode))
+				break
 			}
+			m := Mode(mode)
+			result.Mode = &m
 		case arg == "--continue" || arg == "-c":
 			result.Continue = boolPtr(true)
 		case arg == "--resume" || arg == "-r":
