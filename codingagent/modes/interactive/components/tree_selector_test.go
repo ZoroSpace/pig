@@ -202,6 +202,29 @@ func TestTreeSelectorInitialSelectionWithMetadataEntries(t *testing.T) {
 		}
 	})
 
+	t.Run("hides context edits by default and labels them in all mode", func(t *testing.T) {
+		entries := []core.SessionEntry{
+			treeTestUserMessage("user-1", nil, "hello"),
+			treeTestAssistantMessage("asst-1", strPtr("user-1"), "hi"),
+			&core.ContextEditEntry{
+				EntryBase: core.EntryBase{Type: "context_edit", ID: "edit-1", ParentID: strPtr("asst-1"), Timestamp: time.Now().UTC().Format(time.RFC3339)},
+				TargetID:  "asst-1",
+			},
+		}
+		tree := treeTestBuildTree(entries)
+
+		defaultSelector := NewTreeSelectorComponent(tree, "edit-1", 24, func(string) {}, func() {}, nil, "", "")
+		if got := treeTestSelectedID(defaultSelector); got != "asst-1" {
+			t.Fatalf("selected = %q, want asst-1", got)
+		}
+
+		allSelector := NewTreeSelectorComponent(tree, "edit-1", 24, func(string) {}, func() {}, nil, "", FilterModeAll)
+		rendered := strings.Join(allSelector.GetTreeList().Render(200), "\n")
+		if !strings.Contains(stripVT(t, rendered), "[context omit: asst-1]") {
+			t.Fatalf("rendered missing [context omit: asst-1], got %q", stripVT(t, rendered))
+		}
+	})
+
 	t.Run("focuses nearest visible ancestor when currentLeafId is a thinking_level_change entry", func(t *testing.T) {
 		entries := []core.SessionEntry{
 			treeTestUserMessage("user-1", nil, "hello"),

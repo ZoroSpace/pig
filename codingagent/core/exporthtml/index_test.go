@@ -216,3 +216,19 @@ func TestGenerateHtmlEmptySession(t *testing.T) {
 		t.Fatalf("empty session payload = %s, want %s", decoded, want)
 	}
 }
+
+// TestTemplateJsContextEdit canaries the v0.87.0 template.js context_edit
+// hunks (search parts, settings-entry filter, tree-muted label; pi
+// 466db0fec) so a future template resync cannot silently drop them.
+func TestTemplateJsContextEdit(t *testing.T) {
+	for _, fragment := range []string{
+		"case 'context_edit':",
+		"parts.push('context edit', entry.replacement === null ? 'omit' : 'replace', entry.targetId);",
+		"['label', 'custom', 'context_edit', 'model_change', 'thinking_level_change']",
+		"[context ${entry.replacement === null ? 'omit' : 'replace'}: ${escapeHtml(entry.targetId)}]",
+	} {
+		if !strings.Contains(templateJS, fragment) {
+			t.Fatalf("template.js missing context_edit fragment: %q", fragment)
+		}
+	}
+}

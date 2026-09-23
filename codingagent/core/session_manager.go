@@ -1322,6 +1322,10 @@ func isoToMillis(s string) int64 {
 	return t.UnixMilli()
 }
 
+// IsoToMillis is the exported form of isoToMillis for consumers outside
+// core (pig-only export; pi inlines new Date(str).getTime() at call sites).
+func IsoToMillis(s string) int64 { return isoToMillis(s) }
+
 // parseTimestamp parses an ISO timestamp (pi: new Date(str).getTime(); ok
 // =false = NaN).
 func parseTimestamp(s string) (time.Time, bool) {

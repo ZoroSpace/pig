@@ -498,6 +498,7 @@ func (l *treeList) applyFilter() {
 		passesFilter := true
 		// Entry types hidden in default view (settings/bookkeeping)
 		isSettingsEntry := entry.EntryType() == "label" ||
+			entry.EntryType() == "context_edit" ||
 			entry.EntryType() == "custom" ||
 			entry.EntryType() == "model_change" ||
 			entry.EntryType() == "thinking_level_change" ||
@@ -768,6 +769,15 @@ func (l *treeList) getSearchableText(node *core.SessionTreeNode) string {
 		parts = append(parts, "thinking", e.ThinkingLevel)
 	case *core.CustomEntry:
 		parts = append(parts, "custom", e.CustomType)
+	case *core.ContextEditEntry:
+		// pi: entry.replacement === null ? "omit" : "replace" — a hand-edited
+		// entry without the replacement key decodes to nil ("omit") where pi's
+		// undefined would read "replace"; pi's own writer always emits the key.
+		replacement := "replace"
+		if e.Replacement == nil {
+			replacement = "omit"
+		}
+		parts = append(parts, "context edit", replacement, e.TargetID)
 	case *core.LabelEntry:
 		label := ""
 		if e.Label != nil {
@@ -1070,6 +1080,12 @@ func (l *treeList) getEntryDisplayText(node *core.SessionTreeNode, isSelected bo
 		result = theme.Fg("dim", fmt.Sprintf("[thinking: %s]", e.ThinkingLevel))
 	case *core.CustomEntry:
 		result = theme.Fg("dim", fmt.Sprintf("[custom: %s]", e.CustomType))
+	case *core.ContextEditEntry:
+		replacement := "replace"
+		if e.Replacement == nil {
+			replacement = "omit"
+		}
+		result = theme.Fg("dim", fmt.Sprintf("[context %s: %s]", replacement, e.TargetID))
 	case *core.LabelEntry:
 		label := "(cleared)"
 		if e.Label != nil {

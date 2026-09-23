@@ -27,6 +27,17 @@ func TestMaybeSuggestBugReport(t *testing.T) {
 		return newSeamTestMode(session, nil)
 	}
 
+	t.Run("identifies extensions with frames in a crash stack", func(t *testing.T) {
+		got := FormatCrashExtensionHint([]string{"npm:pi-observational-memory"})
+		want := "A stack frame came from loaded extension `npm:pi-observational-memory`, which may be involved. Try disabling it with `pig config`, or run `pig -ne` to confirm."
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+		if got := FormatCrashExtensionHint(nil); got != "" {
+			t.Fatalf("got %q, want empty", got)
+		}
+	})
+
 	t.Run("does not suggest reports for retryable provider failures", func(t *testing.T) {
 		m := newHintContext(t)
 		failures := []string{

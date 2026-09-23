@@ -156,6 +156,39 @@ func isDeadTerminalError(err error) bool {
 	return code != "" && deadTerminalErrorCodes[code]
 }
 
+// FormatCrashExtensionHint renders the extension-attribution hint for a
+// crash (pi: formatCrashExtensionHint; v0.87.0). "" = no hint (pi:
+// undefined).
+func FormatCrashExtensionHint(extensionMatches []string) string {
+	var matches []string
+	for _, match := range extensionMatches {
+		if match != "" {
+			matches = append(matches, match)
+		}
+	}
+	if len(matches) == 0 {
+		return ""
+	}
+	quoted := make([]string, len(matches))
+	for i, match := range matches {
+		quoted[i] = "`" + match + "`"
+	}
+	var labels string
+	switch len(quoted) {
+	case 1:
+		labels = quoted[0]
+	case 2:
+		labels = quoted[0] + " and " + quoted[1]
+	default:
+		labels = strings.Join(quoted[:len(quoted)-1], ", ") + ", and " + quoted[len(quoted)-1]
+	}
+	noun, pronoun := "extensions", "them"
+	if len(matches) == 1 {
+		noun, pronoun = "extension", "it"
+	}
+	return fmt.Sprintf("A stack frame came from loaded %s %s, which may be involved. Try disabling %s with `%s config`, or run `%s -ne` to confirm.", noun, labels, pronoun, codingagent.AppName, codingagent.AppName)
+}
+
 // expandable is the setExpanded capability (pi: Expandable interface).
 type expandable interface {
 	SetExpanded(expanded bool)
@@ -300,8 +333,12 @@ type InteractiveMode struct {
 
 	// Streaming message tracking
 	streamingComponent *components.AssistantMessageComponent
-	streamingMessage   *types.AssistantMessage
-	streamingMu        sync.Mutex
+	// entriesRenderedByBoundaryCompaction holds entry ids already rendered by
+	// a boundary-compaction rebuild; their own entry_appended events skip
+	// re-rendering (pi: entriesRenderedByBoundaryCompaction; v0.87.0).
+	entriesRenderedByBoundaryCompaction map[string]bool
+	streamingMessage                    *types.AssistantMessage
+	streamingMu                         sync.Mutex
 
 	// Tool execution tracking: toolCallId -> component
 	pendingTools map[string]*components.ToolExecutionComponent
@@ -455,14 +492,15 @@ func (g *userInputGate) wait() string {
 // NewInteractiveMode builds the mode (pi: constructor).
 func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options InteractiveModeOptions) *InteractiveMode {
 	m := &InteractiveMode{
-		runtimeHost:          runtimeHost,
-		version:              codingagent.Version,
-		pendingTools:         map[string]*components.ToolExecutionComponent{},
-		options:              options,
-		autoTrustOnReloadCwd: options.AutoTrustOnReloadCwd,
-		submitCh:             make(chan string, 64),
-		submitDone:           make(chan struct{}),
-		skillCommands:        map[string]string{},
+		runtimeHost:                         runtimeHost,
+		version:                             codingagent.Version,
+		pendingTools:                        map[string]*components.ToolExecutionComponent{},
+		entriesRenderedByBoundaryCompaction: map[string]bool{},
+		options:                             options,
+		autoTrustOnReloadCwd:                options.AutoTrustOnReloadCwd,
+		submitCh:                            make(chan string, 64),
+		submitDone:                          make(chan struct{}),
+		skillCommands:                       map[string]string{},
 	}
 	m.defaultWorkingMessage = "Working"
 	// Session replacement hooks (pi: constructor's setBeforeSessionInvalidate
@@ -1771,11 +1809,85 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 		m.ui.RequestRender(false)
 
 	case core.AgentSessionEventEntryAppended:
+		if m.entriesRenderedByBoundaryCompaction[event.Entry.Base().ID] {
+			delete(m.entriesRenderedByBoundaryCompaction, event.Entry.Base().ID)
+			break
+		}
 		if entry, ok := event.Entry.(*core.CustomEntry); ok {
 			m.addCustomEntryToChat(entry)
 			m.ui.RequestRender(false)
 		} else if entry, ok := event.Entry.(*core.UsageEntry); ok && entry.Kind == "cache_warm" {
 			m.addCacheWarmingUsage(entry)
+			m.ui.RequestRender(false)
+		} else if entry, ok := event.Entry.(*core.CustomMessageEntry); ok && entry.Display {
+			m.addMessageToChat(harness.CreateCustomMessage(
+				entry.CustomType,
+				entry.Content,
+				entry.Display,
+				entry.Details,
+				core.IsoToMillis(entry.Timestamp),
+			), nil)
+			m.ui.RequestRender(false)
+		} else if entry, ok := event.Entry.(*core.CompactionEntry); ok {
+			// Boundary compaction (pi v0.87.0): the compaction entry is
+			// prepended for model context, so rebuild the chat around it —
+			// retained entries before the boundary, the summary, then entries
+			// appended after it, whose own entry_appended events are already
+			// covered and get skipped via the set above.
+			entries := m.sessionManager().BuildContextEntries()
+			if len(entries) == 0 || entries[0].Base().ID != entry.Base().ID {
+				break
+			}
+			m.chatContainer.Clear()
+			branch := m.sessionManager().GetBranch("")
+			compactionIndex := -1
+			for i, branchEntry := range branch {
+				if branchEntry.Base().ID == entry.Base().ID {
+					compactionIndex = i
+					break
+				}
+			}
+			// pi: branch.slice(compactionIndex + 1) — not-found (-1) yields
+			// the whole branch.
+			entriesAfter := branch
+			if compactionIndex >= 0 {
+				entriesAfter = branch[compactionIndex+1:]
+			}
+			entriesAfterCompaction := make(map[string]bool, len(entriesAfter))
+			for _, branchEntry := range entriesAfter {
+				entriesAfterCompaction[branchEntry.Base().ID] = true
+			}
+			retainedEntries := entries[1:]
+			var entriesBefore, entriesRenderedAfter []core.SessionEntry
+			for _, branchEntry := range retainedEntries {
+				if entriesAfterCompaction[branchEntry.Base().ID] {
+					entriesRenderedAfter = append(entriesRenderedAfter, branchEntry)
+				} else {
+					entriesBefore = append(entriesBefore, branchEntry)
+				}
+			}
+			m.renderSessionEntries(entriesBefore, nil)
+			m.addMessageToChat(harness.CreateCompactionSummaryMessage(
+				entry.Summary,
+				entry.TokensBefore,
+				core.IsoToMillis(entry.Timestamp),
+			), nil)
+			if entry.Usage != nil {
+				m.addCompactionCostNotice(&CompactionCostNotice{
+					Kind:  "compaction",
+					Usage: *entry.Usage,
+				})
+			}
+			m.renderSessionEntries(entriesRenderedAfter, nil)
+			// pi initializes the set as a field initializer; pig also lazily
+			// allocates here so struct literals (test seams) behave the same.
+			if m.entriesRenderedByBoundaryCompaction == nil {
+				m.entriesRenderedByBoundaryCompaction = map[string]bool{}
+			}
+			for entryID := range entriesAfterCompaction {
+				m.entriesRenderedByBoundaryCompaction[entryID] = true
+			}
+			m.footer.Invalidate()
 			m.ui.RequestRender(false)
 		}
 
@@ -2268,9 +2380,16 @@ func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *
 		m.chatContainer.AddChild(component)
 
 	case harness.RoleCustomMessage:
+		// Value/pointer double form (09-11 fix convention): session entries
+		// convert via harness.CreateCustomMessage (value), live events may
+		// carry either.
 		custom, ok := message.(*harness.CustomMessage)
 		if !ok {
-			return
+			v, ok := message.(harness.CustomMessage)
+			if !ok {
+				return
+			}
+			custom = &v
 		}
 		if !custom.Display {
 			return
@@ -2283,7 +2402,11 @@ func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *
 	case harness.RoleCompactionSummary:
 		summary, ok := message.(*harness.CompactionSummaryMessage)
 		if !ok {
-			return
+			v, ok := message.(harness.CompactionSummaryMessage)
+			if !ok {
+				return
+			}
+			summary = &v
 		}
 		m.chatContainer.AddChild(tui.NewSpacer(1))
 		component := components.NewCompactionSummaryMessageComponent(summary, lo.ToPtr(m.getMarkdownThemeWithSettings()))
@@ -2293,7 +2416,11 @@ func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *
 	case harness.RoleBranchSummary:
 		summary, ok := message.(*harness.BranchSummaryMessage)
 		if !ok {
-			return
+			v, ok := message.(harness.BranchSummaryMessage)
+			if !ok {
+				return
+			}
+			summary = &v
 		}
 		m.chatContainer.AddChild(tui.NewSpacer(1))
 		component := components.NewBranchSummaryMessageComponent(summary, lo.ToPtr(m.getMarkdownThemeWithSettings()))
@@ -2769,6 +2896,9 @@ func (m *InteractiveMode) uncaughtCrash(err error) {
 	}()
 	fmt.Fprintf(os.Stderr, "%s exiting due to uncaughtException:\n", codingagent.AppName)
 	fmt.Fprintln(os.Stderr, err)
+	if extensionHint := m.getCrashExtensionHint(err); extensionHint != "" {
+		fmt.Fprintf(os.Stderr, "\n%s\n", extensionHint)
+	}
 	if m.recordCrash(core.CrashKindUncaughtException, err, "") {
 		fmt.Fprintf(os.Stderr, "\n%s\n", m.crashReportInstructions())
 	}
@@ -8195,6 +8325,9 @@ func (m *InteractiveMode) handleResumeSession(ctx context.Context, sessionPath s
 func (m *InteractiveMode) handleFatalRuntimeError(prefix string, err error) error {
 	message := errorMessageOf(err)
 	m.ShowError(fmt.Sprintf("%s: %s", prefix, message))
+	if extensionHint := m.getCrashExtensionHint(err); extensionHint != "" {
+		m.chatContainer.AddChild(tui.NewText(theme.Current().Fg("warning", extensionHint), m.outputPad, 0))
+	}
 	if m.recordCrash(core.CrashKindFatalError, err, "") {
 		m.chatContainer.AddChild(tui.NewText(theme.Current().Fg("muted", m.crashReportInstructions()), m.outputPad, 0))
 	}
@@ -8213,6 +8346,33 @@ func (m *InteractiveMode) recordCrash(kind core.CrashRecordKind, err error, stac
 		Cwd:         m.sessionManager().GetCwd(),
 		Stack:       stack,
 	}, "") != nil
+}
+
+// getCrashExtensionHint returns the extension-attribution hint for a crash
+// (pi: getCrashExtensionHint(error); v0.87.0). pi reads error.stack off
+// Error objects; Go errors carry no stack, so the optional StackTrace()
+// string interface (pkg/errors convention) is the carrier and plain errors
+// match nothing (pi: non-Error values → undefined). Mirrors pi's try/catch
+// with a full recover — crash paths must never panic.
+func (m *InteractiveMode) getCrashExtensionHint(err error) (hint string) {
+	defer func() {
+		if recover() != nil {
+			hint = ""
+		}
+	}()
+	stack := ""
+	if carrier, ok := err.(interface{ StackTrace() string }); ok {
+		stack = carrier.StackTrace()
+	}
+	loader := m.session().GetResourceLoader()
+	if loader == nil {
+		return ""
+	}
+	extensions := loader.GetExtensions()
+	if extensions == nil {
+		return ""
+	}
+	return FormatCrashExtensionHint(core.FindExtensionStackMatches(stack, extensions.Extensions))
 }
 
 // crashReportInstructions is the /bug follow-up hint (pi:
