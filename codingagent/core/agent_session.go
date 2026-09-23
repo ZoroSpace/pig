@@ -890,9 +890,11 @@ func (s *AgentSession) installAgentToolHooks() {
 			content = []types.Content{}
 		}
 		// Runs after the extension hook so images injected or replaced by
-		// extensions are normalized too.
-		normalizedContent, err := utils.NormalizeToolResultImages(content, &utils.NormalizeToolResultImagesOptions{
+		// extensions are normalized too. The resize profile comes from the
+		// current model (pi v0.87.0: this.model?.inputLimits?.images?.resize).
+		normalizedContent, err := normalizeToolResultImagesFn(content, &utils.NormalizeToolResultImagesOptions{
 			AutoResizeImages: lo.ToPtr(s.SettingsManager.GetImageAutoResize()),
+			ResizeOptions:    modelImageResizeProfile(s.Model()),
 		})
 		if err != nil {
 			return nil, err
@@ -918,6 +920,20 @@ func (s *AgentSession) installAgentToolHooks() {
 		}
 		return result, nil
 	}
+}
+
+// normalizeToolResultImagesFn is the NormalizeToolResultImages entry used by
+// the after-tool-call hook; package-level var for tests (pig-only seam; pi
+// replaces the module function via vi.mock).
+var normalizeToolResultImagesFn = utils.NormalizeToolResultImages
+
+// modelImageResizeProfile extracts the model's resize profile (pi:
+// model?.inputLimits?.images?.resize); nil when the model carries none.
+func modelImageResizeProfile(model *types.Model) *types.ModelImageResizeOptions {
+	if model == nil || model.InputLimits == nil || model.InputLimits.Images == nil {
+		return nil
+	}
+	return model.InputLimits.Images.Resize
 }
 
 // contentEqual compares two content values structurally (pi: `===` on the
@@ -2678,12 +2694,18 @@ type processedInput struct {
 	images []types.ImageContent
 }
 
+// processImageFn is the ProcessImage entry used by prompt image
+// normalization; package-level var for tests (pig-only seam; pi replaces the
+// module function via vi.mock).
+var processImageFn = utils.ProcessImage
+
 // normalizePromptImages runs prompt images through ProcessImage before they
 // enter the session (pi: _normalizePromptImages, v0.87.0 image input limits).
 // Failed images are dropped from the context and their reason joins the hints
-// so the model can see why an image is missing or changed. The per-provider
-// resize profile (pi: this.model?.inputLimits?.images?.resize) arrives with
-// S8-6's Model.InputLimits; until then the default resize behavior applies.
+// so the model can see why an image is missing or changed. The resize
+// profile comes from the selected model (pi:
+// this.model?.inputLimits?.images?.resize) — read after before_agent_start so
+// extension-driven model selection determines the profile.
 func (s *AgentSession) normalizePromptImages(images []types.ImageContent) ([]types.ImageContent, []string) {
 	if len(images) == 0 {
 		return nil, nil
@@ -2691,6 +2713,10 @@ func (s *AgentSession) normalizePromptImages(images []types.ImageContent) ([]typ
 	normalizedImages := make([]types.ImageContent, 0, len(images))
 	var hints []string
 	autoResize := s.SettingsManager.GetImageAutoResize()
+	var resizeOptions *utils.ImageResizeOptions
+	if model := s.Model(); model != nil && model.InputLimits != nil && model.InputLimits.Images != nil {
+		resizeOptions = utils.ResizeOptionsFromModel(model.InputLimits.Images.Resize)
+	}
 	for _, image := range images {
 		data, err := base64.StdEncoding.DecodeString(image.Data)
 		if err != nil {
@@ -2698,8 +2724,9 @@ func (s *AgentSession) normalizePromptImages(images []types.ImageContent) ([]typ
 			// feeding the raw string bytes and letting ProcessImage validate.
 			data = []byte(image.Data)
 		}
-		processed := utils.ProcessImage(data, image.MimeType, &utils.ProcessImageOptions{
+		processed := processImageFn(data, image.MimeType, &utils.ProcessImageOptions{
 			AutoResizeImages: lo.ToPtr(autoResize),
+			ResizeOptions:    resizeOptions,
 		})
 		if !processed.OK {
 			hints = append(hints, processed.Message)
@@ -4604,6 +4631,7 @@ func (s *AgentSession) bindExtensionCore(runner *ExtensionRunner) {
 						Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: model.Cost.Input, Output: model.Cost.Output, CacheRead: model.Cost.CacheRead, CacheWrite: model.Cost.CacheWrite}},
 						ContextWindow: model.ContextWindow,
 						MaxTokens:     model.MaxTokens,
+						InputLimits:   model.InputLimits,
 					})
 				}
 				_ = s.modelRuntime.RegisterProvider(name, input)

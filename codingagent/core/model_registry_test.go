@@ -812,7 +812,7 @@ func TestModelRegistryModelOverrideAppliesToASingleBuiltinModel(t *testing.T) {
 	if sonnet.Name != "Custom Sonnet Name" {
 		t.Fatalf("sonnet name = %q", sonnet.Name)
 	}
-	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4" })
+	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4.1" })
 	if opus.ID != "" && opus.Name == "Custom Sonnet Name" {
 		t.Fatal("override leaked to opus")
 	}
@@ -848,7 +848,7 @@ func TestModelRegistryCustomModelAndModelOverrideCarrySamplingParams(t *testing.
 	if len(sonnet.SamplingParams) != 1 || sonnet.SamplingParams["top_p"] != 0.9 {
 		t.Fatalf("sonnet samplingParams = %+v", sonnet.SamplingParams)
 	}
-	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4" })
+	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4.1" })
 	if opus.SamplingParams != nil {
 		t.Fatalf("opus samplingParams = %+v, want unset", opus.SamplingParams)
 	}
@@ -1004,7 +1004,7 @@ func TestModelRegistryModelOverrideCombinedWithBaseURLOverride(t *testing.T) {
 	if sonnet.BaseURL != "https://my-proxy.example.com/v1" || sonnet.Name != "Proxied Sonnet" {
 		t.Fatalf("sonnet = %+v", sonnet)
 	}
-	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4" })
+	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4.1" })
 	if opus.BaseURL != "https://my-proxy.example.com/v1" {
 		t.Fatalf("opus baseUrl = %q", opus.BaseURL)
 	}
@@ -2261,7 +2261,7 @@ func TestModelRegistryCustomModelAndOverrideCarryPromptCacheLifetimes(t *testing
 	if overridden.PromptCache[ai.CacheRetentionShort] != 300 || len(overridden.PromptCache) != 1 {
 		t.Fatalf("override promptCache = %+v", overridden.PromptCache)
 	}
-	untouched := lo.FindOrElse(openrouter, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4" })
+	untouched := lo.FindOrElse(openrouter, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4.1" })
 	if len(untouched.PromptCache) != 0 {
 		t.Fatalf("untouched promptCache = %+v, want unset", untouched.PromptCache)
 	}

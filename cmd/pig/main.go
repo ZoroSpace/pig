@@ -1059,8 +1059,7 @@ func Main(args []string) int {
 	}
 	core.Time("readPipedStdin", core.TimingMain)
 
-	autoResizeImages := settingsManager.GetImageAutoResize()
-	initialMessage, initialImages := prepareInitialMessage(&parsed, autoResizeImages, stdinContent)
+	initialMessage, initialImages := prepareInitialMessage(&parsed, stdinContent)
 	core.Time("prepareInitialMessage", core.TimingMain)
 	// pi calls initTheme(...) here (main-level, before the deprecation
 	// warnings); pig initializes the theme inside InteractiveMode, so the
@@ -1147,15 +1146,18 @@ func Main(args []string) int {
 }
 
 // prepareInitialMessage combines stdin, @file args, and the first CLI
-// message (pi: prepareInitialMessage).
-func prepareInitialMessage(parsed *cli.Args, autoResizeImages bool, stdinContent *string) (*string, []ai.ImageContent) {
+// message (pi: prepareInitialMessage). pi's signature lost the
+// autoResizeImages parameter in v0.87.0 (#9631): AgentSession resizes these
+// after extension hooks select the request model, so @file attachments defer
+// resizing to the prompt path.
+func prepareInitialMessage(parsed *cli.Args, stdinContent *string) (*string, []ai.ImageContent) {
 	if len(parsed.FileArgs) == 0 {
 		return cli.BuildInitialMessage(cli.InitialMessageInput{
 			Parsed:       parsed,
 			StdinContent: stdinContent,
 		}).InitialMessage, nil
 	}
-	processed := cli.ProcessFileArguments(parsed.FileArgs, &cli.ProcessFileOptions{AutoResizeImages: lo.ToPtr(autoResizeImages)})
+	processed := cli.ProcessFileArguments(parsed.FileArgs, &cli.ProcessFileOptions{AutoResizeImages: lo.ToPtr(false)})
 	result := cli.BuildInitialMessage(cli.InitialMessageInput{
 		Parsed:       parsed,
 		FileText:     processed.Text,

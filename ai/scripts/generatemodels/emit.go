@@ -97,6 +97,11 @@ func writeModel(b *strings.Builder, model *ai.Model, indent string) {
 	if model.Input != nil {
 		writeInput(b, model.Input, indent)
 	}
+	// InputLimits is applied post-construction (applyImageInputMetadata,
+	// v0.87.0 #9631), mirroring pi's runtime assignment order.
+	if model.InputLimits != nil {
+		writeInputLimits(b, model.InputLimits, indent)
+	}
 	writeCost(b, model.Cost, indent)
 	writeField(b, indent, "ContextWindow", strconv.FormatInt(model.ContextWindow, 10))
 	writeField(b, indent, "MaxTokens", strconv.FormatInt(model.MaxTokens, 10))
@@ -175,6 +180,51 @@ func writeInput(b *strings.Builder, input []ai.ModelInput, indent string) {
 		parts[i] = modelInputConstName(m)
 	}
 	b.WriteString(strings.Join(parts, ", "))
+	b.WriteString("},\n")
+}
+
+// writeInputLimits emits the inputLimits block (pi: inputLimits on the model
+// JSON; zero int64 fields mean "unset" and are skipped like undefined keys).
+func writeInputLimits(b *strings.Builder, limits *ai.ModelInputLimits, indent string) {
+	b.WriteString(indent)
+	b.WriteString("InputLimits: &ModelInputLimits{\n")
+	inner := indent + "\t"
+	if limits.MaxRequestBytes != 0 {
+		writeField(b, inner, "MaxRequestBytes", strconv.FormatInt(limits.MaxRequestBytes, 10))
+	}
+	if limits.Images != nil {
+		b.WriteString(inner)
+		b.WriteString("Images: &ModelImageInputLimits{\n")
+		inner2 := inner + "\t"
+		if limits.Images.MaxPerMessage != 0 {
+			writeField(b, inner2, "MaxPerMessage", strconv.FormatInt(limits.Images.MaxPerMessage, 10))
+		}
+		if limits.Images.MaxPerRequest != 0 {
+			writeField(b, inner2, "MaxPerRequest", strconv.FormatInt(limits.Images.MaxPerRequest, 10))
+		}
+		if limits.Images.Resize != nil {
+			b.WriteString(inner2)
+			b.WriteString("Resize: &ModelImageResizeOptions{\n")
+			inner3 := inner2 + "\t"
+			if limits.Images.Resize.MaxWidth != 0 {
+				writeField(b, inner3, "MaxWidth", strconv.FormatInt(limits.Images.Resize.MaxWidth, 10))
+			}
+			if limits.Images.Resize.MaxHeight != 0 {
+				writeField(b, inner3, "MaxHeight", strconv.FormatInt(limits.Images.Resize.MaxHeight, 10))
+			}
+			if limits.Images.Resize.MaxBytes != 0 {
+				writeField(b, inner3, "MaxBytes", strconv.FormatInt(limits.Images.Resize.MaxBytes, 10))
+			}
+			if limits.Images.Resize.JpegQuality != 0 {
+				writeField(b, inner3, "JpegQuality", strconv.FormatInt(limits.Images.Resize.JpegQuality, 10))
+			}
+			b.WriteString(inner2)
+			b.WriteString("},\n")
+		}
+		b.WriteString(inner)
+		b.WriteString("},\n")
+	}
+	b.WriteString(indent)
 	b.WriteString("},\n")
 }
 

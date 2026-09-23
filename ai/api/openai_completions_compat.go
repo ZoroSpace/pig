@@ -279,14 +279,16 @@ func detectCompat(model *types.Model) *resolvedOpenAICompletionsCompat {
 		zaiToolStream:                               false,
 		supportsThinkingTokenBudget:                 false,
 		thinkingTokenBudgetField:                    nil,
-		supportsStrictMode:                          !isMoonshot && !isTogether && !isCloudflareAIGateway && !isNvidia && !isCerebras,
-		supportsOpenAIGrammarTools:                  false,
-		supportsMidConvoSystemMessages:              false,
-		supportsMidConvoToolAdditions:               false,
-		cacheControlFormat:                          cacheControlFormat,
-		sendSessionAffinityHeaders:                  false,
-		sessionAffinityFormat:                       sessionAffinityFormat,
-		supportsLongCacheRetention:                  supportsLongCacheRetention,
+		// OpenAI compatibility alone does not imply strict JSON-schema tool
+		// support (pi #9816).
+		supportsStrictMode:             false,
+		supportsOpenAIGrammarTools:     false,
+		supportsMidConvoSystemMessages: false,
+		supportsMidConvoToolAdditions:  false,
+		cacheControlFormat:             cacheControlFormat,
+		sendSessionAffinityHeaders:     false,
+		sessionAffinityFormat:          sessionAffinityFormat,
+		supportsLongCacheRetention:     supportsLongCacheRetention,
 	}
 }
 

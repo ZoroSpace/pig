@@ -99,8 +99,12 @@ func defaultReadOperations() ReadOperations {
 
 // ReadToolOptions parameterize the read tool (pi: ReadToolOptions).
 type ReadToolOptions struct {
-	// AutoResizeImages auto-resizes images to 2000x2000 max. Default: true.
+	// AutoResizeImages auto-resizes images to the inline provider limits.
+	// Default: true.
 	AutoResizeImages *bool
+	// ResizeOptions is the fallback resize profile when the execution
+	// context has no model metadata (pi: resizeOptions?). nil = unset.
+	ResizeOptions *types.ModelImageResizeOptions
 	// Operations customizes file reading. Default: local filesystem.
 	Operations *ReadOperations
 }
@@ -123,6 +127,10 @@ func getNonVisionImageNote(model *types.Model) string {
 // createReadToolDefinition).
 func CreateReadToolDefinition(cwd string, options *ReadToolOptions) *ToolDefinition {
 	autoResizeImages := options == nil || options.AutoResizeImages == nil || *options.AutoResizeImages
+	var fallbackResizeOptions *types.ModelImageResizeOptions
+	if options != nil {
+		fallbackResizeOptions = options.ResizeOptions
+	}
 	ops := defaultReadOperations()
 	if options != nil && options.Operations != nil {
 		ops = *options.Operations
@@ -174,7 +182,21 @@ func CreateReadToolDefinition(cwd string, options *ReadToolOptions) *ToolDefinit
 				if err != nil {
 					return agent.AgentToolResult{}, err
 				}
-				processed := utils.ProcessImage(buffer, mimeType, &utils.ProcessImageOptions{AutoResizeImages: &autoResizeImages})
+				// pi: ctx?.model?.inputLimits?.images?.resize ??
+				// fallbackResizeOptions.
+				var resizeProfile *types.ModelImageResizeOptions
+				if toolCtx != nil {
+					if model := toolCtx.GetModel(); model != nil && model.InputLimits != nil && model.InputLimits.Images != nil {
+						resizeProfile = model.InputLimits.Images.Resize
+					}
+				}
+				if resizeProfile == nil {
+					resizeProfile = fallbackResizeOptions
+				}
+				processed := utils.ProcessImage(buffer, mimeType, &utils.ProcessImageOptions{
+					AutoResizeImages: &autoResizeImages,
+					ResizeOptions:    utils.ResizeOptionsFromModel(resizeProfile),
+				})
 				if !processed.OK {
 					textNote := fmt.Sprintf("Read image file [%s]\n%s", mimeType, processed.Message)
 					if nonVisionImageNote != "" {

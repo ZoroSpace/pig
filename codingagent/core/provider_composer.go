@@ -55,7 +55,10 @@ type ProviderConfigInputModel struct {
 	Reasoning        bool
 	ThinkingLevelMap types.ThinkingLevelMap
 	Input            []ai.ModelInput
-	Cost             ai.ModelCost
+	// InputLimits carries the provider input limits and image resize profile
+	// (pi: inputLimits, v0.87.0 #9631).
+	InputLimits *types.ModelInputLimits
+	Cost        ai.ModelCost
 	// PromptCache is the best-effort prompt cache lifetime per retention
 	// tier (pi: promptCache).
 	PromptCache    types.ModelPromptCache
@@ -177,6 +180,93 @@ func decodeCompat(api ai.Api, data map[string]any) (ai.ModelCompat, error) {
 	return compat, nil
 }
 
+// inputLimitsFromJSON converts a models.json inputLimits object (pi:
+// definition.inputLimits — ModelInputLimitsSchema).
+func inputLimitsFromJSON(limits *ModelsJsonInputLimits) *types.ModelInputLimits {
+	if limits == nil {
+		return nil
+	}
+	out := &types.ModelInputLimits{}
+	if limits.MaxRequestBytes != nil {
+		out.MaxRequestBytes = int64(*limits.MaxRequestBytes)
+	}
+	if limits.Images != nil {
+		images := &types.ModelImageInputLimits{}
+		if limits.Images.MaxPerMessage != nil {
+			images.MaxPerMessage = int64(*limits.Images.MaxPerMessage)
+		}
+		if limits.Images.MaxPerRequest != nil {
+			images.MaxPerRequest = int64(*limits.Images.MaxPerRequest)
+		}
+		if limits.Images.Resize != nil {
+			images.Resize = &types.ModelImageResizeOptions{
+				MaxWidth:    floatToInt64(limits.Images.Resize.MaxWidth),
+				MaxHeight:   floatToInt64(limits.Images.Resize.MaxHeight),
+				MaxBytes:    floatToInt64(limits.Images.Resize.MaxBytes),
+				JpegQuality: floatToInt64(limits.Images.Resize.JpegQuality),
+			}
+		}
+		out.Images = images
+	}
+	return out
+}
+
+func floatToInt64(value *float64) int64 {
+	if value == nil {
+		return 0
+	}
+	return int64(*value)
+}
+
+// mergeInputLimits deep-merges a models.json inputLimits override over the
+// model's limits (pi: mergeInputLimits, v0.87.0 #9631): top-level keys and
+// images keys merge per field; the resize profile merges per field too.
+func mergeInputLimits(base *types.ModelInputLimits, override *ModelsJsonInputLimits) *types.ModelInputLimits {
+	if override == nil {
+		return base
+	}
+	merged := &types.ModelInputLimits{}
+	if base != nil {
+		*merged = *base
+	}
+	if override.MaxRequestBytes != nil {
+		merged.MaxRequestBytes = int64(*override.MaxRequestBytes)
+	}
+	if override.Images != nil {
+		images := &types.ModelImageInputLimits{}
+		if base != nil && base.Images != nil {
+			*images = *base.Images
+		}
+		if override.Images.MaxPerMessage != nil {
+			images.MaxPerMessage = int64(*override.Images.MaxPerMessage)
+		}
+		if override.Images.MaxPerRequest != nil {
+			images.MaxPerRequest = int64(*override.Images.MaxPerRequest)
+		}
+		if override.Images.Resize != nil {
+			resize := &types.ModelImageResizeOptions{}
+			if base != nil && base.Images != nil && base.Images.Resize != nil {
+				*resize = *base.Images.Resize
+			}
+			if override.Images.Resize.MaxWidth != nil {
+				resize.MaxWidth = int64(*override.Images.Resize.MaxWidth)
+			}
+			if override.Images.Resize.MaxHeight != nil {
+				resize.MaxHeight = int64(*override.Images.Resize.MaxHeight)
+			}
+			if override.Images.Resize.MaxBytes != nil {
+				resize.MaxBytes = int64(*override.Images.Resize.MaxBytes)
+			}
+			if override.Images.Resize.JpegQuality != nil {
+				resize.JpegQuality = int64(*override.Images.Resize.JpegQuality)
+			}
+			images.Resize = resize
+		}
+		merged.Images = images
+	}
+	return merged
+}
+
 // applyModelOverride applies one models.json model override to a model (pi:
 // applyModelOverride).
 func applyModelOverride(model ai.Model, override *ModelsJsonModelOverride) ai.Model {
@@ -199,6 +289,7 @@ func applyModelOverride(model ai.Model, override *ModelsJsonModelOverride) ai.Mo
 	if override.Input != nil {
 		model.Input = inputFromJSON(override.Input)
 	}
+	model.InputLimits = mergeInputLimits(model.InputLimits, override.InputLimits)
 	if override.Cost != nil {
 		if override.Cost.Input != nil {
 			model.Cost.Input = *override.Cost.Input
@@ -406,6 +497,7 @@ func modelFromJSON(providerID string, definition *ModelsJsonModel, providerConfi
 		Reasoning:        reasoning,
 		ThinkingLevelMap: thinkingLevelMapFromJSON(definition.ThinkingLevelMap),
 		Input:            input,
+		InputLimits:      inputLimitsFromJSON(definition.InputLimits),
 		Cost:             cost,
 		PromptCache:      promptCacheFromJSON(definition.PromptCache),
 		ContextWindow:    contextWindow,
@@ -558,6 +650,7 @@ func applyExtension(providerID string, models []ai.Model, config *ProviderConfig
 			Reasoning:        definition.Reasoning,
 			ThinkingLevelMap: definition.ThinkingLevelMap,
 			Input:            definition.Input,
+			InputLimits:      definition.InputLimits,
 			Cost:             definition.Cost,
 			PromptCache:      definition.PromptCache,
 			ContextWindow:    definition.ContextWindow,

@@ -22,7 +22,7 @@
 //   - Decode failures pass the original bytes through unchanged instead of
 //     returning null→omitted (pi's resizeImage contract): a file the read
 //     tool sniffed as an image is more useful to the model untouched than
-//     silently dropped. Only the explicit MaxEncodedBytes contract path
+//     silently dropped. Only the explicit MaxBytes contract path
 //     returns null (→ "[Image omitted: could not be resized ...]"), matching
 //     pi.
 //   - WebP has no Go encoder (x/image/webp is decode-only), so a resized
@@ -44,6 +44,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/samber/lo"
+
+	"github.com/ZoroSpace/pig/ai/types"
 	xbmp "golang.org/x/image/bmp"
 	xdraw "golang.org/x/image/draw"
 	xtiff "golang.org/x/image/tiff"
@@ -54,16 +57,19 @@ import (
 // than imported from the harness tools layer).
 var pngMagic = []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}
 
-// Resize/re-encode defaults (pi: resizeImage defaults — inline provider
-// limits).
+// Resize/re-encode defaults (pi: DEFAULT_OPTIONS in image-resize-core.ts —
+// inline provider limits).
 const (
 	defaultResizeMaxWidth  = 2000
 	defaultResizeMaxHeight = 2000
-	// jpegEncodeQuality is the re-encode quality for JPEG output (pi:
-	// photon encode quality 80).
-	jpegEncodeQuality = 80
-	// jpegRetryQuality is the single reduced-quality retry applied when an
-	// explicit MaxEncodedBytes budget is still exceeded.
+	// defaultResizeMaxBytes is 4.5MB of base64 payload (4718592), headroom
+	// below Anthropic's 5MB limit (pi: DEFAULT_MAX_BYTES = 4.5 * 1024 * 1024).
+	defaultResizeMaxBytes = 4718592
+	// defaultJpegQuality is the re-encode quality for JPEG output (pi:
+	// DEFAULT_OPTIONS.jpegQuality 80).
+	defaultJpegQuality = 80
+	// jpegRetryQuality is the single reduced-quality retry applied when the
+	// MaxBytes budget is still exceeded.
 	jpegRetryQuality = 55
 )
 
@@ -87,16 +93,22 @@ type ProcessImageResult struct {
 	Message  string
 }
 
-// ImageResizeOptions carries the resize overrides (pi: ImageResizeOptions).
+// ImageResizeOptions carries the resize overrides (pi: ImageResizeOptions in
+// image-resize-core.ts).
 type ImageResizeOptions struct {
 	MaxWidth  *int
 	MaxHeight *int
-	// MaxEncodedBytes is the encoded file size budget. 0/unset = unlimited.
-	MaxEncodedBytes *int
+	// MaxBytes is the maximum base64-encoded payload size in bytes (pi:
+	// maxBytes; 0/unset = the defaultResizeMaxBytes budget).
+	MaxBytes *int
+	// JpegQuality is the re-encode quality for JPEG output. 0/unset =
+	// defaultJpegQuality.
+	JpegQuality *int
 }
 
-// resizedImage mirrors pi's ResizedImage.
-type resizedImage struct {
+// ResizedImage is the resize outcome (pi: ResizedImage, exported for the
+// test seam).
+type ResizedImage struct {
 	Data           string
 	MimeType       string
 	OriginalWidth  int
@@ -242,28 +254,60 @@ func conversionHint(from string, to string) string {
 
 // passThroughImage mirrors the previous no-op path: original bytes,
 // WasResized=false, no hints.
-func passThroughImage(inputBytes []byte, mimeType string) *resizedImage {
-	return &resizedImage{
+func passThroughImage(inputBytes []byte, mimeType string) *ResizedImage {
+	return &ResizedImage{
 		Data:     base64.StdEncoding.EncodeToString(inputBytes),
 		MimeType: mimeType,
 	}
 }
 
+// ResizeOptionsFromModel maps a model's catalog resize profile onto the
+// processing options (pi: ModelImageResizeOptions — pi passes it straight
+// into processImage thanks to TS structural typing; Go needs the explicit
+// mapping). nil profile → nil options (resizeImage defaults apply).
+func ResizeOptionsFromModel(profile *types.ModelImageResizeOptions) *ImageResizeOptions {
+	if profile == nil {
+		return nil
+	}
+	out := &ImageResizeOptions{}
+	if profile.MaxWidth != 0 {
+		out.MaxWidth = lo.ToPtr(int(profile.MaxWidth))
+	}
+	if profile.MaxHeight != 0 {
+		out.MaxHeight = lo.ToPtr(int(profile.MaxHeight))
+	}
+	if profile.MaxBytes != 0 {
+		out.MaxBytes = lo.ToPtr(int(profile.MaxBytes))
+	}
+	if profile.JpegQuality != 0 {
+		out.JpegQuality = lo.ToPtr(int(profile.JpegQuality))
+	}
+	return out
+}
+
 // resizeImage resizes an image to fit within the inline limits (pi:
-// resizeImage). Downscale-only: images already within the limits are passed
-// through byte-identical (no re-encode, matching pi's early return). Decode
-// failures pass through unchanged (see header deviations); an explicit
-// MaxEncodedBytes budget that cannot be met returns nil → the caller emits
-// pi's "[Image omitted: could not be resized below the inline image size
-// limit.]".
-func resizeImage(inputBytes []byte, mimeType string, options *ImageResizeOptions) *resizedImage {
+// resizeImage / resizeImageInProcess). Downscale-only: images already within
+// the limits (dimensions AND base64 payload size) are passed through
+// byte-identical (no re-encode, matching pi's early return). Decode failures
+// pass through unchanged (see header deviations); an explicit MaxBytes
+// budget that cannot be met returns nil → the caller emits pi's "[Image
+// omitted: could not be resized below the inline image size limit.]".
+func resizeImage(inputBytes []byte, mimeType string, options *ImageResizeOptions) *ResizedImage {
 	maxWidth, maxHeight := defaultResizeMaxWidth, defaultResizeMaxHeight
+	maxBytes := defaultResizeMaxBytes
+	jpegQuality := defaultJpegQuality
 	if options != nil {
 		if options.MaxWidth != nil && *options.MaxWidth > 0 {
 			maxWidth = *options.MaxWidth
 		}
 		if options.MaxHeight != nil && *options.MaxHeight > 0 {
 			maxHeight = *options.MaxHeight
+		}
+		if options.MaxBytes != nil && *options.MaxBytes > 0 {
+			maxBytes = *options.MaxBytes
+		}
+		if options.JpegQuality != nil && *options.JpegQuality > 0 {
+			jpegQuality = *options.JpegQuality
 		}
 	}
 
@@ -276,7 +320,9 @@ func resizeImage(inputBytes []byte, mimeType string, options *ImageResizeOptions
 	if width <= 0 || height <= 0 {
 		return passThroughImage(inputBytes, mimeType)
 	}
-	if width <= maxWidth && height <= maxHeight {
+	// pi: already within all limits — dimensions AND encoded (base64) size —
+	// pass through unchanged.
+	if width <= maxWidth && height <= maxHeight && base64.StdEncoding.EncodedLen(len(inputBytes)) < maxBytes {
 		return passThroughImage(inputBytes, mimeType)
 	}
 
@@ -314,23 +360,23 @@ func resizeImage(inputBytes []byte, mimeType string, options *ImageResizeOptions
 		return buf.Bytes(), true
 	}
 
-	encoded, ok := encode(jpegEncodeQuality)
+	encoded, ok := encode(jpegQuality)
 	if !ok {
 		return passThroughImage(inputBytes, mimeType)
 	}
-	if options != nil && options.MaxEncodedBytes != nil && *options.MaxEncodedBytes > 0 && len(encoded) > *options.MaxEncodedBytes {
+	if base64.StdEncoding.EncodedLen(len(encoded)) > maxBytes {
 		if mimeType == "image/jpeg" {
 			// One reduced-quality retry within the explicit budget.
 			encoded, ok = encode(jpegRetryQuality)
 		} else {
 			ok = false
 		}
-		if !ok || len(encoded) > *options.MaxEncodedBytes {
+		if !ok || base64.StdEncoding.EncodedLen(len(encoded)) > maxBytes {
 			return nil
 		}
 	}
 
-	return &resizedImage{
+	return &ResizedImage{
 		Data:           base64.StdEncoding.EncodeToString(encoded),
 		MimeType:       outMimeType,
 		OriginalWidth:  width,
@@ -343,7 +389,7 @@ func resizeImage(inputBytes []byte, mimeType string, options *ImageResizeOptions
 
 // FormatDimensionNote formats the coordinate-mapping note for resized images
 // (pi: formatDimensionNote).
-func FormatDimensionNote(result *resizedImage) string {
+func FormatDimensionNote(result *ResizedImage) string {
 	if !result.WasResized {
 		return ""
 	}
@@ -351,6 +397,11 @@ func FormatDimensionNote(result *resizedImage) string {
 	return fmt.Sprintf("[Image: original %dx%d, displayed at %dx%d. Multiply coordinates by %s to map to original image.]",
 		result.OriginalWidth, result.OriginalHeight, result.Width, result.Height, strconv.FormatFloat(scale, 'f', 2, 64))
 }
+
+// ResizeImageFn is the resizeImage entry used by ProcessImage; package-level
+// var for tests (pig-only seam; pi mocks the image-resize module via
+// vi.mock).
+var ResizeImageFn = resizeImage
 
 // ProcessImage normalizes and optionally resizes an image for inline use
 // (pi: processImage).
@@ -364,7 +415,7 @@ func ProcessImage(data []byte, mimeType string, options *ProcessImageOptions) Pr
 	}
 
 	if autoResizeImages {
-		resized := resizeImage(normalized.bytes, normalized.mimeType, func() *ImageResizeOptions {
+		resized := ResizeImageFn(normalized.bytes, normalized.mimeType, func() *ImageResizeOptions {
 			if options == nil {
 				return nil
 			}

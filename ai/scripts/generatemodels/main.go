@@ -236,6 +236,7 @@ func generateModels(ctx context.Context) error {
 		applyOpenAIResponsesTranscriptMetadata(model)
 		applyOpenAIExplicitPromptCacheMetadata(model)
 		applyPromptCacheMetadata(model)
+		applyImageInputMetadata(model)
 	}
 	applyAnthropicAllowedFallbackModelMetadata(filterAnthropicFallback(allModels))
 

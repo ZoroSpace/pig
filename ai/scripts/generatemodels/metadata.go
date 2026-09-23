@@ -136,7 +136,7 @@ var openAICompletionsDefaultCompat = openAICompletionsResolvedCompat{
 	requiresReasoningContentOnAssistantMessages: false,
 	thinkingFormat:                              ai.ThinkingFormatOpenAI,
 	zaiToolStream:                               false,
-	supportsStrictMode:                          true,
+	supportsStrictMode:                          false,
 	supportsOpenAIGrammarTools:                  false,
 	sendSessionAffinityHeaders:                  false,
 	supportsLongCacheRetention:                  true,
@@ -221,10 +221,12 @@ func detectOpenAICompletionsCompat(model *ai.Model) openAICompletionsResolvedCom
 		requiresReasoningContentOnAssistantMessages: isDeepSeek,
 		thinkingFormat:                              ai.ThinkingFormatOpenAI,
 		zaiToolStream:                               false,
-		supportsStrictMode:                          !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia && !isCerebras,
-		supportsOpenAIGrammarTools:                  false,
-		sendSessionAffinityHeaders:                  isOpenRouter,
-		supportsLongCacheRetention:                  !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway || isNvidia || isAntLing),
+		// Preserve built-in behavior as explicit metadata against the
+		// conservative runtime default (pi #9816).
+		supportsStrictMode:         !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia && !isCerebras,
+		supportsOpenAIGrammarTools: false,
+		sendSessionAffinityHeaders: isOpenRouter,
+		supportsLongCacheRetention: !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway || isNvidia || isAntLing),
 	}
 	if useMaxTokens {
 		compat.maxTokensField = ai.MaxTokensPlain
@@ -970,6 +972,108 @@ func applyPromptCacheMetadata(model *ai.Model) {
 	if model.Provider == ai.ProviderAnthropic && model.API == ai.ApiAnthropicMessages {
 		model.PromptCache = anthropicPromptCache
 	}
+}
+
+// defaultImageResize is the fallback resize profile for vision models (pi:
+// DEFAULT_IMAGE_RESIZE in generate-models.ts, v0.87.0 #9631). Keep the
+// generated default no less restrictive than coding-agent's historical image
+// preprocessing: provider limits can narrow this profile, but unknown
+// providers retain the cache-safe 2000px / 4.5 MiB behavior.
+var defaultImageResize = ai.ModelImageResizeOptions{
+	MaxWidth:    2000,
+	MaxHeight:   2000,
+	MaxBytes:    4.5 * 1024 * 1024,
+	JpegQuality: 80,
+}
+
+// applyImageInputMetadata (pi: applyImageInputMetadata, v0.87.0 #9631).
+// Every vision model gets the default resize profile; known direct providers
+// additionally record their request-size and image-count limits.
+func applyImageInputMetadata(model *ai.Model) {
+	hasImage := false
+	for _, input := range model.Input {
+		if input == ai.ModelInputImage {
+			hasImage = true
+			break
+		}
+	}
+	if !hasImage {
+		return
+	}
+
+	var providerLimits *ai.ModelInputLimits
+	switch model.Provider {
+	case ai.ProviderAnthropic:
+		maxPerRequest := int64(600)
+		if model.ContextWindow == 200000 {
+			maxPerRequest = 100
+		}
+		providerLimits = &ai.ModelInputLimits{
+			MaxRequestBytes: 32 * 1024 * 1024,
+			Images:          &ai.ModelImageInputLimits{MaxPerRequest: maxPerRequest},
+		}
+	case ai.ProviderAmazonBedrock:
+		providerLimits = &ai.ModelInputLimits{
+			Images: &ai.ModelImageInputLimits{MaxPerMessage: 20},
+		}
+	case ai.ProviderOpenAI:
+		providerLimits = &ai.ModelInputLimits{
+			MaxRequestBytes: 512 * 1024 * 1024,
+			Images:          &ai.ModelImageInputLimits{MaxPerRequest: 1500},
+		}
+	case ai.ProviderGoogle:
+		providerLimits = &ai.ModelInputLimits{
+			MaxRequestBytes: 20 * 1024 * 1024,
+			Images:          &ai.ModelImageInputLimits{MaxPerRequest: 3600},
+		}
+	}
+	configured := model.InputLimits
+
+	// pi: model.inputLimits = { ...providerLimits, ...model.inputLimits,
+	// images: { ...providerLimits?.images, ...configuredImages,
+	// resize: { ...DEFAULT_IMAGE_RESIZE, ...configuredImages?.resize } } }.
+	// Zero int64 fields mean "unset" (schema minimum is 1), so per-field
+	// zero checks reproduce the TS spread semantics.
+	merged := &ai.ModelInputLimits{}
+	if providerLimits != nil {
+		merged.MaxRequestBytes = providerLimits.MaxRequestBytes
+	}
+	if configured != nil && configured.MaxRequestBytes != 0 {
+		merged.MaxRequestBytes = configured.MaxRequestBytes
+	}
+	images := &ai.ModelImageInputLimits{}
+	if providerLimits != nil && providerLimits.Images != nil {
+		images.MaxPerMessage = providerLimits.Images.MaxPerMessage
+		images.MaxPerRequest = providerLimits.Images.MaxPerRequest
+	}
+	var configuredResize *ai.ModelImageResizeOptions
+	if configured != nil && configured.Images != nil {
+		if configured.Images.MaxPerMessage != 0 {
+			images.MaxPerMessage = configured.Images.MaxPerMessage
+		}
+		if configured.Images.MaxPerRequest != 0 {
+			images.MaxPerRequest = configured.Images.MaxPerRequest
+		}
+		configuredResize = configured.Images.Resize
+	}
+	resize := defaultImageResize
+	if configuredResize != nil {
+		if configuredResize.MaxWidth != 0 {
+			resize.MaxWidth = configuredResize.MaxWidth
+		}
+		if configuredResize.MaxHeight != 0 {
+			resize.MaxHeight = configuredResize.MaxHeight
+		}
+		if configuredResize.MaxBytes != 0 {
+			resize.MaxBytes = configuredResize.MaxBytes
+		}
+		if configuredResize.JpegQuality != 0 {
+			resize.JpegQuality = configuredResize.JpegQuality
+		}
+	}
+	images.Resize = &resize
+	merged.Images = images
+	model.InputLimits = merged
 }
 
 // applyOpenAIExplicitPromptCacheMetadata (pi:

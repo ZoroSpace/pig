@@ -641,6 +641,11 @@ type ProviderModelConfig struct {
 		CacheRead  float64 `json:"cacheRead"`
 		CacheWrite float64 `json:"cacheWrite"`
 	} `json:"cost"`
+	// InputLimits is the provider input limits and cache-safe image
+	// preprocessing metadata (pi: inputLimits, v0.87.0 #9631). pig's
+	// registration surface stays slim (input/thinkingLevelMap remain
+	// unported); this field rides through to the model record.
+	InputLimits *types.ModelInputLimits `json:"inputLimits,omitempty"`
 }
 
 // ============================================================================

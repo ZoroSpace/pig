@@ -21,6 +21,10 @@ type NormalizeToolResultImagesOptions struct {
 	// AutoResizeImages resizes oversized images to inline provider limits.
 	// Defaults to true; nil = default (pi: autoResizeImages?).
 	AutoResizeImages *bool
+	// ResizeOptions is the model-specific resize profile (pi:
+	// resizeOptions?); the conservative built-in defaults apply when
+	// omitted. nil = unset.
+	ResizeOptions *types.ModelImageResizeOptions
 }
 
 // NormalizeToolResultImages normalizes image blocks returned by tool
@@ -41,6 +45,10 @@ func NormalizeToolResultImages(content []types.Content, options *NormalizeToolRe
 	autoResizeImages := true
 	if options != nil && options.AutoResizeImages != nil {
 		autoResizeImages = *options.AutoResizeImages
+	}
+	var resizeOptions *ImageResizeOptions
+	if options != nil {
+		resizeOptions = ResizeOptionsFromModel(options.ResizeOptions)
 	}
 	normalized := make([]types.Content, 0, len(content))
 	changed := false
@@ -67,7 +75,10 @@ func NormalizeToolResultImages(content []types.Content, options *NormalizeToolRe
 			normalized = append(normalized, block)
 			continue
 		}
-		processed := ProcessImage(data, image.MimeType, &ProcessImageOptions{AutoResizeImages: &autoResizeImages})
+		processed := ProcessImage(data, image.MimeType, &ProcessImageOptions{
+			AutoResizeImages: &autoResizeImages,
+			ResizeOptions:    resizeOptions,
+		})
 		if !processed.OK {
 			// Unlike `read`, keep the original block (see above; pi's
 			// comment applies to the not-ok path too).

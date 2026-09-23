@@ -352,6 +352,9 @@ type (
 	ModelCostRates                = types.ModelCostRates
 	ModelCostTier                 = types.ModelCostTier
 	ModelCost                     = types.ModelCost
+	ModelImageResizeOptions       = types.ModelImageResizeOptions
+	ModelImageInputLimits         = types.ModelImageInputLimits
+	ModelInputLimits              = types.ModelInputLimits
 	ModelInput                    = types.ModelInput
 	Model                         = types.Model
 )

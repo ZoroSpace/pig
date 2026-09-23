@@ -160,6 +160,30 @@ type ModelsJsonPromptCache struct {
 	Long  *float64 `json:"long,omitempty"`
 }
 
+// ModelsJsonInputLimits is the models.json inputLimits object (pi:
+// ModelInputLimitsSchema, v0.87.0 #9631).
+type ModelsJsonInputLimits struct {
+	MaxRequestBytes *float64               `json:"maxRequestBytes,omitempty"`
+	Images          *ModelsJsonImageLimits `json:"images,omitempty"`
+}
+
+// ModelsJsonImageLimits is the models.json inputLimits.images object (pi:
+// the nested images schema).
+type ModelsJsonImageLimits struct {
+	Resize        *ModelsJsonImageResize `json:"resize,omitempty"`
+	MaxPerMessage *float64               `json:"maxPerMessage,omitempty"`
+	MaxPerRequest *float64               `json:"maxPerRequest,omitempty"`
+}
+
+// ModelsJsonImageResize is the models.json resize profile (pi:
+// ImageResizeSchema).
+type ModelsJsonImageResize struct {
+	MaxWidth    *float64 `json:"maxWidth,omitempty"`
+	MaxHeight   *float64 `json:"maxHeight,omitempty"`
+	MaxBytes    *float64 `json:"maxBytes,omitempty"`
+	JpegQuality *float64 `json:"jpegQuality,omitempty"`
+}
+
 // ModelsJsonModel is one model definition (pi: ModelDefinitionSchema).
 type ModelsJsonModel struct {
 	ID               string                      `json:"id"`
@@ -169,6 +193,7 @@ type ModelsJsonModel struct {
 	Reasoning        *bool                       `json:"reasoning,omitempty"`
 	ThinkingLevelMap *ModelsJsonThinkingLevelMap `json:"thinkingLevelMap,omitempty"`
 	Input            []string                    `json:"input,omitempty"` // "text" | "image"
+	InputLimits      *ModelsJsonInputLimits      `json:"inputLimits,omitempty"`
 	Cost             *ModelsJsonCost             `json:"cost,omitempty"`
 	PromptCache      *ModelsJsonPromptCache      `json:"promptCache,omitempty"`
 	ContextWindow    *float64                    `json:"contextWindow,omitempty"`
@@ -185,6 +210,7 @@ type ModelsJsonModelOverride struct {
 	Reasoning        *bool                       `json:"reasoning,omitempty"`
 	ThinkingLevelMap *ModelsJsonThinkingLevelMap `json:"thinkingLevelMap,omitempty"`
 	Input            []string                    `json:"input,omitempty"`
+	InputLimits      *ModelsJsonInputLimits      `json:"inputLimits,omitempty"`
 	Cost             *ModelsJsonOverrideCost     `json:"cost,omitempty"`
 	PromptCache      *ModelsJsonPromptCache      `json:"promptCache,omitempty"`
 	ContextWindow    *float64                    `json:"contextWindow,omitempty"`
@@ -233,6 +259,26 @@ func expectBool(value any, path string, errs *[]schemaError) {
 func expectNumber(value any, path string, errs *[]schemaError) {
 	if _, ok := value.(float64); !ok {
 		*errs = append(*errs, schemaError{path: path, message: "expected number"})
+	}
+}
+
+// expectInteger mirrors pi's Type.Integer({minimum, maximum}) for the
+// inputLimits schema fields (v0.87.0 #9631); maximum 0 = no maximum.
+func expectInteger(value any, path string, minimum int, maximum int, errs *[]schemaError) {
+	number, ok := value.(float64)
+	if !ok {
+		*errs = append(*errs, schemaError{path: path, message: "expected number"})
+		return
+	}
+	if number != float64(int(number)) {
+		*errs = append(*errs, schemaError{path: path, message: "expected integer"})
+		return
+	}
+	if int(number) < minimum {
+		*errs = append(*errs, schemaError{path: path, message: fmt.Sprintf("expected integer >= %d", minimum)})
+	}
+	if maximum != 0 && int(number) > maximum {
+		*errs = append(*errs, schemaError{path: path, message: fmt.Sprintf("expected integer <= %d", maximum)})
 	}
 }
 
@@ -653,6 +699,51 @@ func validateCostTiers(value any, path string, errs *[]schemaError) {
 
 // validatePromptCache checks the prompt cache lifetime object (pi:
 // ModelPromptCacheSchema; exclusiveMinimum 0 for each tier).
+// validateInputLimits validates the models.json inputLimits object (pi:
+// ModelInputLimitsSchema, v0.87.0 #9631).
+func validateInputLimits(value any, path string, errs *[]schemaError) {
+	limits, ok := value.(map[string]any)
+	if !ok {
+		*errs = append(*errs, schemaError{path: path, message: "expected object"})
+		return
+	}
+	if entry, present := limits["maxRequestBytes"]; present {
+		expectInteger(entry, path+".maxRequestBytes", 1, 0, errs)
+	}
+	if entry, present := limits["images"]; present {
+		images, ok := entry.(map[string]any)
+		if !ok {
+			*errs = append(*errs, schemaError{path: path + ".images", message: "expected object"})
+			return
+		}
+		if item, present := images["maxPerMessage"]; present {
+			expectInteger(item, path+".images.maxPerMessage", 1, 0, errs)
+		}
+		if item, present := images["maxPerRequest"]; present {
+			expectInteger(item, path+".images.maxPerRequest", 1, 0, errs)
+		}
+		if item, present := images["resize"]; present {
+			resize, ok := item.(map[string]any)
+			if !ok {
+				*errs = append(*errs, schemaError{path: path + ".images.resize", message: "expected object"})
+				return
+			}
+			if field, present := resize["maxWidth"]; present {
+				expectInteger(field, path+".images.resize.maxWidth", 1, 0, errs)
+			}
+			if field, present := resize["maxHeight"]; present {
+				expectInteger(field, path+".images.resize.maxHeight", 1, 0, errs)
+			}
+			if field, present := resize["maxBytes"]; present {
+				expectInteger(field, path+".images.resize.maxBytes", 1, 0, errs)
+			}
+			if field, present := resize["jpegQuality"]; present {
+				expectInteger(field, path+".images.resize.jpegQuality", 1, 100, errs)
+			}
+		}
+	}
+}
+
 func validatePromptCache(value any, path string, errs *[]schemaError) {
 	promptCache, ok := value.(map[string]any)
 	if !ok {
@@ -709,6 +800,9 @@ func validateModelDefinition(value any, path string, errs *[]schemaError) {
 	if entry, present := model["input"]; present {
 		expectInputArray(entry, path+".input", errs)
 	}
+	if entry, present := model["inputLimits"]; present {
+		validateInputLimits(entry, path+".inputLimits", errs)
+	}
 	if entry, present := model["cost"]; present {
 		validateCostRequired(entry, path+".cost", errs)
 	}
@@ -745,6 +839,9 @@ func validateModelOverride(value any, path string, errs *[]schemaError) {
 	}
 	if entry, present := override["input"]; present {
 		expectInputArray(entry, path+".input", errs)
+	}
+	if entry, present := override["inputLimits"]; present {
+		validateInputLimits(entry, path+".inputLimits", errs)
 	}
 	if entry, present := override["cost"]; present {
 		validateCostOptional(entry, path+".cost", errs)

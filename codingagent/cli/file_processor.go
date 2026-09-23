@@ -24,7 +24,8 @@ type ProcessedFiles struct {
 // ProcessFileOptions carries the @file processing switches (pi:
 // ProcessFileOptions).
 type ProcessFileOptions struct {
-	// AutoResizeImages resizes images to 2000x2000 max. Default: true
+	// AutoResizeImages resizes images to the inline provider limits.
+	// Default: true.
 	AutoResizeImages *bool
 }
 

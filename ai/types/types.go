@@ -1359,7 +1359,8 @@ type OpenAICompletionsCompat struct {
 	// catalog enables it for capable models.
 	SupportsMidConvoToolAdditions *bool `json:"supportsMidConvoToolAdditions,omitempty"`
 	// SupportsStrictMode: whether the provider supports the strict field in
-	// tool definitions. Default: true.
+	// tool definitions. Default: false; generated capable models enable it
+	// explicitly (pi #9816).
 	SupportsStrictMode *bool `json:"supportsStrictMode,omitempty"`
 	// CacheControlFormat selects the prompt-caching convention. anthropic
 	// applies Anthropic-style cache_control markers to the system prompt,
@@ -1588,6 +1589,41 @@ type ModelCost struct {
 	Tiers []ModelCostTier `json:"tiers,omitempty"`
 }
 
+// ModelImageResizeOptions is a per-model image resize profile (pi:
+// ModelImageResizeOptions, v0.87.0 image input limits #9631). All fields are
+// optional integers with minimum 1 (jpegQuality maximum 100) per the
+// models.json schema, so the zero value safely means "unset" and plain
+// int64 carries the optionality without pointers.
+type ModelImageResizeOptions struct {
+	MaxWidth  int64 `json:"maxWidth,omitempty"`
+	MaxHeight int64 `json:"maxHeight,omitempty"`
+	// MaxBytes is the maximum base64-encoded payload size in bytes.
+	MaxBytes    int64 `json:"maxBytes,omitempty"`
+	JpegQuality int64 `json:"jpegQuality,omitempty"`
+}
+
+// ModelImageInputLimits scopes the input limits to images (pi:
+// ModelImageInputLimits).
+type ModelImageInputLimits struct {
+	// Resize is the cache-safe resize profile applied before a new image
+	// enters conversation history.
+	Resize *ModelImageResizeOptions `json:"resize,omitempty"`
+	// MaxPerMessage is the maximum images accepted in one provider message.
+	MaxPerMessage int64 `json:"maxPerMessage,omitempty"`
+	// MaxPerRequest is the maximum images accepted across one provider
+	// request.
+	MaxPerRequest int64 `json:"maxPerRequest,omitempty"`
+}
+
+// ModelInputLimits carries the provider request-level input limits (pi:
+// ModelInputLimits).
+type ModelInputLimits struct {
+	// MaxRequestBytes is the maximum serialized provider request size in
+	// bytes.
+	MaxRequestBytes int64                  `json:"maxRequestBytes,omitempty"`
+	Images          *ModelImageInputLimits `json:"images,omitempty"`
+}
+
 // Model describes one callable model. API selects the wire protocol; Compat
 // holds that API's compatibility settings (decoded by Model.UnmarshalJSON
 // according to API).
@@ -1603,7 +1639,10 @@ type Model struct {
 	// unsupported.
 	ThinkingLevelMap ThinkingLevelMap `json:"thinkingLevelMap,omitempty"`
 	Input            []ModelInput     `json:"input"`
-	Cost             ModelCost        `json:"cost"`
+	// InputLimits holds the provider input limits and cache-safe image
+	// preprocessing metadata (pi: Model.inputLimits, v0.87.0 #9631).
+	InputLimits *ModelInputLimits `json:"inputLimits,omitempty"`
+	Cost        ModelCost         `json:"cost"`
 	// PromptCache holds prompt cache lifetimes per retention tier. Unset
 	// when the provider's cache behavior is unknown (pi: Model.promptCache;
 	// consumed by coding-agent prompt cache warming).

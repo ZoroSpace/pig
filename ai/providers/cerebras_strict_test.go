@@ -26,9 +26,13 @@ func TestCerebrasStrictModeOmitted(t *testing.T) {
 			if !ok {
 				t.Fatalf("cerebras model %q missing from catalog", modelID)
 			}
+			// pi #9816 flipped the supportsStrictMode default to false, so the
+			// generated catalog omits the field for cerebras (pi 8bfef4de8:
+			// toBe(false) → toBeUndefined()); the runtime default is
+			// conservative either way.
 			compat, cast := model.Compat.(*ai.OpenAICompletionsCompat)
-			if !cast || compat == nil || compat.SupportsStrictMode == nil || *compat.SupportsStrictMode {
-				t.Fatalf("cerebras %s supportsStrictMode should be false, got %+v", modelID, model.Compat)
+			if !cast || compat == nil || compat.SupportsStrictMode != nil {
+				t.Fatalf("cerebras %s supportsStrictMode should be omitted, got %+v", modelID, model.Compat)
 			}
 			assertNoStrictField(t, captureBodyWithTools(t, model, strictTestTools()))
 		})

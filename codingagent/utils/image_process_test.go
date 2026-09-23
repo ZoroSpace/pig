@@ -206,7 +206,7 @@ func TestProcessImageOmitsWhenMaxEncodedBytesBudgetUnreachable(t *testing.T) {
 
 	result := ProcessImage(input, "image/jpeg", &ProcessImageOptions{
 		AutoResizeImages: boolPtr(true),
-		ResizeOptions:    &ImageResizeOptions{MaxEncodedBytes: &budget},
+		ResizeOptions:    &ImageResizeOptions{MaxBytes: &budget},
 	})
 	if result.OK {
 		t.Fatal("expected not-OK when the MaxEncodedBytes budget is unreachable")
