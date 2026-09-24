@@ -63,9 +63,9 @@
 		"toolDiffContext": "mediumGray",
 
 		"syntaxComment": "#008000",
-		"syntaxKeyword": "#0000FF",
+		"syntaxKeyword": "#4f95db",
 		"syntaxFunction": "#795E26",
-		"syntaxVariable": "#001080",
+		"syntaxVariable": "#87afd7",
 		"syntaxString": "#A31515",
 		"syntaxNumber": "#098658",
 		"syntaxType": "#267F99",

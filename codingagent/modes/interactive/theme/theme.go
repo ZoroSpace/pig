@@ -23,6 +23,19 @@
 //   - Broken built-in theme JSON surfaces as a panic in InitTheme/SetTheme
 //     fallback paths, matching pi's synchronous throw out of the catch
 //     block (both are fatal at startup).
+//   - pig-only palette tweaks (user decisions 2026-09-24): light.json's
+//     syntaxVariable is #87afd7 and syntaxKeyword is #4f95db (user-
+//     specified; hue 210°) — replacing pi's #001080 / #0000FF.
+//     syntaxVariable #87afd7 is an exact xterm-256 palette entry (110);
+//     #4f95db quantizes to xterm 68 (#5f87d7) on 256-color terminals —
+//     same blue family, so truecolor and 256-color terminals both read as
+//     plain blue; earlier attempts #4763a8 quantized to xterm 61
+//     (indigo/purple) and was rejected by the user, and 67 was too dark.
+//     Note chroma's CSS lexer emits property names and units
+//     (margin-left, px) as Keyword family → the keyword palette key, not
+//     attr. Keep assets/theme/*.json and testdata/theme/*.json in sync
+//     (the testdata copy is the builtin-theme fixture; only known diff is
+//     the pig-only imagePlaceholder key).
 package theme
 
 import (
