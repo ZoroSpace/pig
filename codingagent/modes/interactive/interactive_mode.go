@@ -341,7 +341,20 @@ type InteractiveMode struct {
 	streamingMu                         sync.Mutex
 
 	// Tool execution tracking: toolCallId -> component
+	//
+	// pig concurrency: pi mutates this on the single-threaded event loop;
+	// pig's parallel tool batch emits tool_execution_update from each tool's
+	// own goroutine (see agent_loop.go executePreparedToolCall: "settled
+	// tools' onUpdate may be invoked from another goroutine") while the main
+	// loop goroutine writes on start/end — the read/write pair triggered a
+	// fatal concurrent map read/write in dogfooding 2026-09-23. Every access
+	// to the field/map must hold pendingToolsMu.
 	pendingTools map[string]*components.ToolExecutionComponent
+
+	// pendingToolsMu guards pendingTools (field + map) across the agent
+	// event goroutines (pig addition; pi has no equivalent). Lock order:
+	// streamingMu → pendingToolsMu, never reversed.
+	pendingToolsMu sync.Mutex
 
 	// Tool output expansion state
 	toolOutputExpanded bool
@@ -1778,7 +1791,9 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 
 	switch event.Type {
 	case agent.AgentEventAgentStart:
+		m.pendingToolsMu.Lock()
 		m.pendingTools = map[string]*components.ToolExecutionComponent{}
+		m.pendingToolsMu.Unlock()
 		// Restore main escape handler if retry handler is still active
 		// (retry success event fires later, but we need the main handler
 		// now). Progress + working indicator moved to turn_start (v0.85.1)
@@ -1945,6 +1960,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 		m.streamingMessage = assistant
 		m.streamingComponent.UpdateContent(m.streamingMessage, true)
 
+		m.pendingToolsMu.Lock()
 		for _, content := range m.streamingMessage.Content {
 			if toolCall, ok := content.(types.ToolCall); ok {
 				if _, exists := m.pendingTools[toolCall.ID]; !exists {
@@ -1968,6 +1984,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 				}
 			}
 		}
+		m.pendingToolsMu.Unlock()
 		m.streamingMu.Unlock()
 		m.ui.RequestRender(false)
 
@@ -2001,6 +2018,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 						errorMessage = "Error"
 					}
 				}
+				m.pendingToolsMu.Lock()
 				for _, component := range m.pendingTools {
 					component.UpdateResult(components.ToolExecutionResult{
 						Content: []types.Content{types.TextContent{Kind: types.KindText, Text: errorMessage}},
@@ -2008,15 +2026,18 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 					}, false)
 				}
 				m.pendingTools = map[string]*components.ToolExecutionComponent{}
+				m.pendingToolsMu.Unlock()
 				if m.streamingMessage.StopReason == types.StopReasonError {
 					m.maybeSuggestBugReport(m.streamingMessage)
 				}
 			} else {
 				// Args are now complete - trigger diff computation for edit
 				// tools
+				m.pendingToolsMu.Lock()
 				for _, component := range m.pendingTools {
 					component.SetArgsComplete()
 				}
+				m.pendingToolsMu.Unlock()
 				m.maybeShowThinkingDropNotice(m.streamingMessage)
 				m.maybeShowCacheMissNotice(m.streamingMessage)
 			}
@@ -2032,6 +2053,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 		break
 
 	case agent.AgentEventToolExecutionStart:
+		m.pendingToolsMu.Lock()
 		component := m.pendingTools[event.ToolCallID]
 		if component == nil {
 			component = components.NewToolExecutionComponent(
@@ -2050,11 +2072,15 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 			m.chatContainer.AddChild(component)
 			m.pendingTools[event.ToolCallID] = component
 		}
+		m.pendingToolsMu.Unlock()
 		component.MarkExecutionStarted()
 		m.ui.RequestRender(false)
 
 	case agent.AgentEventToolExecutionUpdate:
-		if component := m.pendingTools[event.ToolCallID]; component != nil {
+		m.pendingToolsMu.Lock()
+		component := m.pendingTools[event.ToolCallID]
+		m.pendingToolsMu.Unlock()
+		if component != nil {
 			// pi spreads event.partialResult into updateResult (isError:
 			// false) — content AND details must surface (interactive-mode.ts:3351).
 			component.UpdateResult(resultToComponentResult(event.PartialResult, false), true)
@@ -2062,9 +2088,14 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 		}
 
 	case agent.AgentEventToolExecutionEnd:
-		if component := m.pendingTools[event.ToolCallID]; component != nil {
-			component.UpdateResult(resultToComponentResult(event.Result, event.IsError), false)
+		m.pendingToolsMu.Lock()
+		component := m.pendingTools[event.ToolCallID]
+		if component != nil {
 			delete(m.pendingTools, event.ToolCallID)
+		}
+		m.pendingToolsMu.Unlock()
+		if component != nil {
+			component.UpdateResult(resultToComponentResult(event.Result, event.IsError), false)
 			m.ui.RequestRender(false)
 		}
 
@@ -2080,7 +2111,9 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 			m.streamingMessage = nil
 		}
 		m.streamingMu.Unlock()
+		m.pendingToolsMu.Lock()
 		m.pendingTools = map[string]*components.ToolExecutionComponent{}
+		m.pendingToolsMu.Unlock()
 
 		m.ui.RequestRender(false)
 
@@ -2481,7 +2514,9 @@ func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *
 
 // renderSessionItems renders transcript items (pi: renderSessionItems).
 func (m *InteractiveMode) renderSessionItems(items []renderSessionItem, options *renderSessionOptions) {
+	m.pendingToolsMu.Lock()
 	m.pendingTools = map[string]*components.ToolExecutionComponent{}
+	m.pendingToolsMu.Unlock()
 	renderedPendingTools := map[string]*components.ToolExecutionComponent{}
 	var renderedPendingOrder []string
 	// Cache-miss notices are not persisted; re-derive them from the full
@@ -2582,11 +2617,13 @@ func (m *InteractiveMode) renderSessionItems(items []renderSessionItem, options 
 		}
 	}
 
+	m.pendingToolsMu.Lock()
 	for _, toolCallID := range renderedPendingOrder {
 		if component, ok := renderedPendingTools[toolCallID]; ok {
 			m.pendingTools[toolCallID] = component
 		}
 	}
+	m.pendingToolsMu.Unlock()
 	m.ui.RequestRender(false)
 }
 
@@ -8457,7 +8494,9 @@ func (m *InteractiveMode) renderCurrentSessionState() {
 	m.compactionQueuedMessages = nil
 	m.streamingComponent = nil
 	m.streamingMessage = nil
+	m.pendingToolsMu.Lock()
 	m.pendingTools = map[string]*components.ToolExecutionComponent{}
+	m.pendingToolsMu.Unlock()
 	m.renderInitialMessages()
 }
 
