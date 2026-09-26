@@ -218,7 +218,9 @@ func TestGitHubCopilotRefreshDoesNotRetryCatalogThrottling(t *testing.T) {
 		}
 		if requestURL == testCopilotModelsURL {
 			catalogRequests++
-			return copilotTestJSONResponse(429, `{"error":"too many requests"}`), nil
+			response := copilotTestJSONResponse(429, `{"error":"too many requests"}`)
+			response.Header.Set("Retry-After", "0") // pi: jsonResponse(..., 429, { "Retry-After": "0" })
+			return response, nil
 		}
 		return nil, fmt.Errorf("unexpected fetch URL: %s", requestURL)
 	})
@@ -344,7 +346,15 @@ func TestGitHubCopilotLoginRetriesThrottledPolicyAfterRetryAfter(t *testing.T) {
 	}, func(string) (*http.Response, error) {
 		policyRequests++
 		if policyRequests == 1 {
-			return copilotTestJSONResponse(429, `{"error":"too many requests"}`), nil
+			// pi: jsonResponse(..., 429, { "Retry-After": "1" }). The header is
+			// load-bearing: without it the default 500ms backoff fires inside
+			// the 999ms advance below, releasing the login goroutine while the
+			// test reads policyRequests unsynchronized (2026-09-24 CI data
+			// race; with the 1000ms timer the goroutine stays parked in
+			// deviceCodeSleep and the sleepCalls send orders every read).
+			response := copilotTestJSONResponse(429, `{"error":"too many requests"}`)
+			response.Header.Set("Retry-After", "1")
+			return response, nil
 		}
 		return copilotTestEmptyResponse(200), nil
 	})
