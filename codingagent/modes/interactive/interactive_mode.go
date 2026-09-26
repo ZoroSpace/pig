@@ -7668,18 +7668,25 @@ func (m *InteractiveMode) completeProviderAuthentication(ctx context.Context, pr
 		refreshCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		result := modelRuntimeRefreshFn(refreshCtx, session.GetModelRuntime(), &ai.ModelsRefreshOptions{Providers: []string{providerID}})
-		if result.Aborted {
-			m.ShowWarning(fmt.Sprintf("%s, but its model catalog refresh timed out; using cached models.", actionLabel))
-		} else if len(result.Errors) > 0 {
-			m.ShowWarning(fmt.Sprintf("%s, but its model catalog could not be refreshed; using cached models.", actionLabel))
-		}
-		// Do not replace a model or session selected while the refresh was
-		// running.
-		if deferSelection && m.session() == session && session.Model() == previousModel {
-			finishAuthentication()
-		}
-		m.updateAvailableProviderCount()
-		m.footer.Invalidate()
+		// pig-only: pi's async continuation runs on the single-threaded event
+		// loop, so its UI mutations never overlap the renderer; this goroutine
+		// must serialize them via mutateUI instead (2026-09-26 data race:
+		// ShowWarning's AddChild raced the render loop; RunExclusive is
+		// reentrant, and nothing below nests a second mutateUI anyway).
+		m.mutateUI(func() {
+			if result.Aborted {
+				m.ShowWarning(fmt.Sprintf("%s, but its model catalog refresh timed out; using cached models.", actionLabel))
+			} else if len(result.Errors) > 0 {
+				m.ShowWarning(fmt.Sprintf("%s, but its model catalog could not be refreshed; using cached models.", actionLabel))
+			}
+			// Do not replace a model or session selected while the refresh was
+			// running.
+			if deferSelection && m.session() == session && session.Model() == previousModel {
+				finishAuthentication()
+			}
+			m.updateAvailableProviderCount()
+			m.footer.Invalidate()
+		})
 		m.ui.RequestRender(false)
 	}()
 }

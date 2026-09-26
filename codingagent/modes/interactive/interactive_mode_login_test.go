@@ -160,9 +160,21 @@ func TestGetLoginProviderOptionsProjectsProviderAuthWithoutFiltering(t *testing.
 type countingRenderTUI struct {
 	tui.TUI
 	requests atomic.Int32
+	mu       sync.Mutex
 }
 
 func (s *countingRenderTUI) RequestRender(_ bool) { s.requests.Add(1) }
+
+// RunExclusive backs InteractiveMode.mutateUI in tests: background UI
+// goroutines (e.g. the post-login refresh goroutine) serialize with the
+// test's own renders here the way the real TuiBase serializes them in
+// production. Plain mutex — safe because nothing under these paths nests a
+// second mutateUI call (the real TuiBase.lock is reentrant; this one is not).
+func (s *countingRenderTUI) RunExclusive(fn func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn()
+}
 
 // stubModelRuntimeRefresh swaps the post-login refresh seam for the test.
 func stubModelRuntimeRefresh(t *testing.T, fn func(ctx context.Context, runtime *core.ModelRuntime, options *ai.ModelsRefreshOptions) ai.ModelsRefreshResult) {
@@ -267,7 +279,17 @@ func TestPostLoginDiscoverySelectsPreferredDefault(t *testing.T) {
 			if string(current.Provider) != "radius" {
 				t.Fatalf("selected provider = %q, want radius", current.Provider)
 			}
-			rendered := normalizeRenderedOutput(renderAllChildren(m.chatContainer, 200))
+			// The counter is not a reliable completion signal here (showStatus
+			// inside the goroutine's finishAuthentication also bumps it before
+			// the tail is done) — poll under mutateUI, which serializes the
+			// render with the goroutine's remaining mutations.
+			var rendered string
+			waitFor(t, 2*time.Second, "credentials status to render", func() bool {
+				m.mutateUI(func() {
+					rendered = normalizeRenderedOutput(renderAllChildren(m.chatContainer, 200))
+				})
+				return strings.Contains(rendered, "Credentials saved")
+			})
 			if !strings.Contains(rendered, "Credentials saved") {
 				t.Fatalf("missing credentials status, got:\n%s", rendered)
 			}
@@ -308,12 +330,17 @@ func TestPostLoginDiscoveryReportsEmptyCatalogOnlyAfterRefresh(t *testing.T) {
 		t.Fatalf("empty-catalog error shown before refresh resolved, got:\n%s", rendered)
 	}
 
-	baseline := counter.requests.Load()
 	close(release)
-	waitFor(t, 2*time.Second, "refresh goroutine to finish", func() bool {
-		return counter.requests.Load() > baseline
+	// The counter is not a reliable completion signal (showStatus inside the
+	// goroutine's finishAuthentication bumps it mid-tail) — poll under
+	// mutateUI, which serializes the render with the goroutine's mutations
+	// (2026-09-26 race: plain renderAllChildren raced its AddChild).
+	waitFor(t, 2*time.Second, "empty-catalog status to render", func() bool {
+		m.mutateUI(func() {
+			rendered = normalizeRenderedOutput(renderAllChildren(m.chatContainer, 200))
+		})
+		return strings.Contains(rendered, "no models are available")
 	})
-	rendered = normalizeRenderedOutput(renderAllChildren(m.chatContainer, 200))
 	if !strings.Contains(rendered, "no models are available") {
 		t.Fatalf("empty-catalog error missing after refresh, got:\n%s", rendered)
 	}
@@ -382,17 +409,24 @@ func TestPostLoginDiscoveryBoundsRefreshTo15Seconds(t *testing.T) {
 
 	// Baseline before the call: the goroutine's renders strictly follow the
 	// synchronous ones, so this cannot miss its completion signal.
-	baseline := counter.requests.Load()
 	m.completeProviderAuthentication(context.Background(), "stalled-login", "Stalled Login", auth.AuthTypeAPIKey, unknown)
 
 	delta := <-deadlineDelta
 	if delta < 14500*time.Millisecond || delta > 15500*time.Millisecond {
 		t.Fatalf("refresh deadline = %s, want ~15s", delta)
 	}
-	waitFor(t, 2*time.Second, "refresh goroutine to finish", func() bool {
-		return counter.requests.Load() > baseline
+	// The goroutine's ShowWarning lands after the stub returns, and the
+	// pre-goroutine showStatus already bumped the render counter, so the
+	// counter cannot serve as a completion signal here — poll under
+	// mutateUI, which serializes the render with the goroutine's AddChild
+	// calls (2026-09-26 race: plain renderAllChildren raced them).
+	var rendered string
+	waitFor(t, 2*time.Second, "timeout warning to render", func() bool {
+		m.mutateUI(func() {
+			rendered = normalizeRenderedOutput(renderAllChildren(m.chatContainer, 200))
+		})
+		return strings.Contains(rendered, "timed out; using cached models")
 	})
-	rendered := normalizeRenderedOutput(renderAllChildren(m.chatContainer, 200))
 	if !strings.Contains(rendered, "timed out; using cached models") {
 		t.Fatalf("timeout warning missing, got:\n%s", rendered)
 	}
