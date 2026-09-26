@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -867,6 +868,55 @@ func TestBashCoalescesUpdatesAndPersistsTruncatedFullOutput(t *testing.T) {
 	fullOutput := mustReadFile(t, testEnv, details.FullOutputPath)
 	if !strings.Contains(fullOutput, "line-1\nline-2") || !strings.Contains(fullOutput, "line-2999\nline-3000") {
 		t.Fatalf("full output = %q", fullOutput)
+	}
+}
+
+// TestBashUpdateThrottleNeverOverlapsOnUpdate pins the throttle's consumer
+// contract: onUpdate never overlaps itself. pi runs every emit site (direct
+// call, setTimeout callback) on one event loop, so TS consumers can never
+// observe concurrent onUpdate calls; the timer goroutine here is the
+// setTimeout equivalent and must serialize the same way. Regression lock for
+// docs/fix/2026-09-24-bash-update-throttle-onupdate-overlap.md (the S8-4/S9
+// recorded bash-coalescing flake). Semantic assertion — red without the fix
+// even without -race.
+func TestBashUpdateThrottleNeverOverlapsOnUpdate(t *testing.T) {
+	var inFlight, maxInFlight atomic.Int32
+	onUpdate := func(agent.AgentToolResult) {
+		n := inFlight.Add(1)
+		for {
+			current := maxInFlight.Load()
+			if n <= current || maxInFlight.CompareAndSwap(current, n) {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond) // widen the overlap window
+		inFlight.Add(-1)
+	}
+	throttle := &bashUpdateThrottle{
+		onUpdate:   onUpdate,
+		latest:     func() utils.ShellCaptureProgress { return utils.ShellCaptureProgress{} },
+		lastUpdate: time.Now().Add(-95 * time.Millisecond), // next timer delay ≈ 5ms
+	}
+
+	// Timer-path emission enters onUpdate (sleeps 50ms).
+	throttle.scheduleOutputUpdate()
+	deadline := time.Now().Add(2 * time.Second)
+	for inFlight.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if inFlight.Load() == 0 {
+		t.Fatal("timer emission never entered onUpdate")
+	}
+
+	// Direct-path emission while the timer emission is in flight: must wait
+	// for it instead of overlapping (scheduleOutputUpdate re-arms dirty so
+	// the direct emit passes the check).
+	throttle.scheduleOutputUpdate()
+	throttle.emitOutputUpdate()
+	throttle.clearUpdateTimer()
+
+	if max := maxInFlight.Load(); max != 1 {
+		t.Fatalf("onUpdate overlapped itself: max concurrency = %d, want 1", max)
 	}
 }
 

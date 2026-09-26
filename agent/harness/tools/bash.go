@@ -103,29 +103,42 @@ func isInf(f float64) bool {
 // bashUpdateThrottle coalesces streamed updates (pi: the closure state:
 // getLatestProgress/updateTimer/updateDirty/lastUpdateAt).
 type bashUpdateThrottle struct {
-	mu          sync.Mutex
-	onUpdate    agent.AgentToolUpdateCallback
-	latest      func() utils.ShellCaptureProgress
-	dirty       bool
-	lastUpdate  time.Time
-	timer       *time.Timer
-	timeCleared bool
+	mu         sync.Mutex
+	onUpdate   agent.AgentToolUpdateCallback
+	latest     func() utils.ShellCaptureProgress
+	dirty      bool
+	lastUpdate time.Time
+	timer      *time.Timer
+	// closed gates timer-originated emissions after clearUpdateTimer (pi:
+	// clearTimeout — a pending setTimeout callback never runs afterwards;
+	// time.AfterFunc can't un-fire an expired timer, so the callback checks
+	// this under mu instead).
+	closed bool
 }
 
 // emitOutputUpdate sends the current progress snapshot if dirty (pi:
-// emitOutputUpdate).
+// emitOutputUpdate). The mutex is held across the onUpdate invocation:
+// pi runs every emit site (direct call, timer callback) on one event
+// loop, so the consumer contract is that onUpdate never overlaps itself;
+// the timer goroutine here is the setTimeout equivalent and must
+// serialize the same way (2026-09-24 CI data race — the S8-4/S9 recorded
+// bash-coalescing flake: direct-path and timer-path emissions raced on
+// the consumer's callback state).
 func (t *bashUpdateThrottle) emitOutputUpdate() {
 	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.emitLocked()
+}
+
+// emitLocked is emitOutputUpdate's body; the caller holds t.mu.
+func (t *bashUpdateThrottle) emitLocked() {
 	if t.onUpdate == nil || !t.dirty || t.latest == nil {
-		t.mu.Unlock()
 		return
 	}
 	t.dirty = false
 	t.lastUpdate = time.Now()
 	progress := t.latest()
-	onUpdate := t.onUpdate
-	t.mu.Unlock()
-	onUpdate(agent.AgentToolResult{
+	t.onUpdate(agent.AgentToolResult{
 		Content: []types.Content{
 			&types.TextContent{Kind: types.KindText, Text: progress.Output},
 		},
@@ -147,6 +160,7 @@ func truncationOrNil(progress utils.ShellCaptureProgress) *utils.TruncationResul
 // clearUpdateTimer cancels a pending timer (pi: clearUpdateTimer).
 func (t *bashUpdateThrottle) clearUpdateTimer() {
 	t.mu.Lock()
+	t.closed = true
 	if t.timer != nil {
 		t.timer.Stop()
 		t.timer = nil
@@ -177,8 +191,10 @@ func (t *bashUpdateThrottle) scheduleOutputUpdate() {
 		t.timer = time.AfterFunc(time.Duration(delay)*time.Millisecond, func() {
 			t.mu.Lock()
 			t.timer = nil
+			if !t.closed {
+				t.emitLocked()
+			}
 			t.mu.Unlock()
-			t.emitOutputUpdate()
 		})
 	}
 	t.mu.Unlock()
