@@ -37,6 +37,7 @@ pig 与 pi 做到**行为规格级对齐**：pi 的 TypeScript 代码就是 pig 
 | 会话格式 | 与 pi JSONL 双向兼容（v3/v4 两代格式实测互读） |
 | Provider | 37 家内置、约 1200 个模型、7 种 API 协议适配器 |
 | 真实服务验证 | DeepSeek、火山方舟 Coding Plan、Google（部分；其余见[验证分层](#provider实现--验证要分开看)） |
+| MCP 客户端 | 内建（pi 无原生支持，走社区扩展 pi-mcp-adapter） |
 | 测试 | 1300+ 测试函数 · 28 个包 · `-race` 全绿 |
 | License | MIT |
 
@@ -139,6 +140,29 @@ pig 是纯 Go 实现，编译产物为**单个静态二进制**，拷到任何 L
 ./pig --tools read,grep,find,ls -p "只审查源码，不修改任何文件"
 ./pig --exclude-tools bash,write          # 禁用指定工具
 ```
+
+### 🔌 MCP：内建 Model Context Protocol 客户端
+
+pig 内置了原生 MCP 客户端——pi 需要装社区扩展（pi-mcp-adapter）才有此能力，pig 编译即得。配置就是生态标准的 `mcpServers` JSON，Claude Code / Cursor 的 `.mcp.json` 直接复用：
+
+```json
+{
+  "mcpServers": {
+    "fetch": { "command": "uvx", "args": ["mcp-server-fetch"] },
+    "linear": {
+      "url": "https://mcp.linear.app/sse",
+      "headers": { "Authorization": "Bearer $LINEAR_API_KEY" },
+      "lifecycle": "keep-alive"
+    }
+  }
+}
+```
+
+配置文件按 later-wins 合并：项目根 `.mcp.json` → 项目 `.pig/mcp.json` → 用户级 `~/.pig/agent/mcp.json` → 全局 `~/.config/mcp/mcp.json`（项目级文件受信任门控，未信任项目跳过并告警）。
+
+- **server 配置**：stdio（`command`/`args`/`env`/`cwd`）或 Streamable HTTP（`url`/`headers`，header 支持 `$ENV` 与 `!command` 连接时展开）；`lifecycle` 四档（lazy/eager/keep-alive/lazy-keep-alive）、空闲回收与请求超时、`includeTools`/`excludeTools` glob 过滤、`toolPrefix` 均可配
+- **上下文成本恒定**：无论接多少 server、多少工具，常驻提示词的只有一个 `mcp` 代理工具（约 300 tokens）——模型按 search → call 按需发现与调用，server 进程懒启动、空闲自动回收
+- **`/mcp` 面板**：交互模式随时查看 server 状态与工具清单——回车展开列工具（懒连接）、`Ctrl+R` 重连、`Ctrl+D` 启停（持久化写回配置文件）、`Ctrl+Y` 复制错误
 
 ### ⌨️ 交互体验：pi-tui 全量移植的终端手感
 
@@ -307,6 +331,7 @@ cp -a ~/.pi/agent ~/.pig/agent
 | 会话树 / 分支 / 压缩 / 导出 HTML | ✅ | ✅ |
 | TUI（编辑器、补全、主题、鼠标、搜索）与 Markdown / LaTeX / Mermaid | ✅ | ✅ pi-tui 全量移植 |
 | 中文分词与 CJK 渲染修复、macOS Ctrl+V 剪贴板贴图（粘贴显示 `[Image N]` 占位符） | — | ✅ pig 增强（pi 走 native addon，pig 用 osascript 零依赖实现） |
+| MCP 客户端（代理工具、`/mcp` 面板、配置链、启停持久化） | —（社区扩展 [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter)） | ✅ pig 内建，`.mcp.json` 生态格式直接复用 |
 | RPC 模式 / sqlite 会话后端 | ✅ | ⏳ 按需排期 |
 | 扩展系统（Node sidecar、包管理器） | ✅ | ⏳ 装配位已留，见 [EXTENSION-PLAN](docs/handoffs/EXTENSION-PLAN.md) |
 | 图像转码与缩放（read/贴图/工具结果：BMP/WebP/TIFF→PNG、2000px 自动缩放，Go 原生） | ✅ | ✅ pig 偏差：Go 原生实现替代 photon/WASM，见 [fix 文档](docs/fix/2026-09-22-image-tool-413-oversize-and-history-bloat.md) |
