@@ -12,7 +12,7 @@ cd "$root"
 
 # Default to the fully static release binary: CGO disabled (no libc
 # dependency, runs anywhere), reproducible paths, debug info stripped
-# (~28 MB; panic tracebacks stay readable either way).
+# (~38 MB; panic tracebacks stay readable either way).
 # -race requires cgo and cannot combine with CGO_ENABLED=0, so when the
 # caller passes -race fall back to a plain instrumented build.
 static_flags=(-trimpath -ldflags "-s -w")
