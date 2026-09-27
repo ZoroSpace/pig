@@ -1,6 +1,6 @@
 # MCP-2：/mcp 交互面板 + 启停持久化（✅ 收口终稿，2026-09-27）
 
-> 状态：**完成**。mcp 包启停面 + core 桥接 + components 面板 + interactive 接线 + 全量 -race + tmux 真 TTY 冒烟全部落地。feat 文档：`docs/feat/MCP.md` MCP-2 节。前置：MCP-1 已收口（355aa37）。
+> 状态：**完成**。（2026-09-27 追记：本文所述 `mcp/` 包已迁至 `integrations/mcp/`，准入规则见 AGENTS.md 仓库机制；路径按写作时点记录。）mcp 包启停面 + core 桥接 + components 面板 + interactive 接线 + 全量 -race + tmux 真 TTY 冒烟全部落地。feat 文档：`docs/feat/MCP.md` MCP-2 节。前置：MCP-1 已收口（355aa37）。
 
 ## 0. 收口摘要
 

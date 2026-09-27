@@ -52,7 +52,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	"github.com/ZoroSpace/pig/codingagent/utils"
-	"github.com/ZoroSpace/pig/mcp"
+	"github.com/ZoroSpace/pig/integrations/mcp"
 	pigutils "github.com/ZoroSpace/pig/utils"
 )
 

@@ -27,7 +27,7 @@ import (
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/codingagent"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
-	pigmcp "github.com/ZoroSpace/pig/mcp"
+	pigmcp "github.com/ZoroSpace/pig/integrations/mcp"
 )
 
 // mcpGlobalConfigSubpath is the ecosystem-standard global config location

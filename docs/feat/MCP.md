@@ -1,5 +1,7 @@
 # MCP：pig 原生 MCP 客户端层（feat 批 MCP-1，2026-09-27 收口）
 
+> 位置注记（2026-09-27）：`mcp/` 包已迁至 `integrations/mcp/`（顶层包恢复 pi `packages/*` 镜像不变量，准入规则见 AGENTS.md 仓库机制）；本文早于迁移的 `mcp/` 路径指一律按新位置读。
+
 - **日期**：2026-09-27
 - **状态**：✅ MCP-1 完成。mcp 包 12 测试 + core 桥接 5 测试全绿；全量 `-race` 单次 rc=0（30 包，`/tmp/pig-test-out-mcp1.log`）；print 模式 mock 冒烟 search→call 全链路通过
 - **动机**：用户决策 pig 原生实现 MCP（Model Context Protocol）客户端层。pi 无原生 MCP（pi-mcp-adapter 是 npm 扩展，pig 扩展系统在「不做清单」），故为 pig-only 面，无 pi 对齐物。配置文件键兼容生态（`mcpServers`），Claude Code / Cursor 的 `.mcp.json` 可直接复用
@@ -67,7 +69,8 @@
 
 1. **并发模型（组件侧）**：TUI 锁可重入（goroutine-local `lockOwner`），`HandleInput` 本就持锁——组件所有入口（HandleInput/refreshNow/后台回调落地）统一走 `p.mutate`（interactive 传 `m.mutateUI`=RunExclusive；HandleInput 内重入零成本，后台 goroutine 新取锁），内部方法全部假设已持锁（`*Locked` 命名），无组件级 mutex。ticker 回调只 `RequestRender(false)` 不嵌 TUI 锁（footer resource poller 同型）。
 2. **测试与 ticker**：组件测试传 `RefreshInterval: -1` 禁用 ticker goroutine（无 TUI 锁的测试环境里 ticker 与测试主 goroutine 竞态）；刷新路径经 `refreshNow()` 直接测。测试须 `tui.SetKeybindings(core.CreateKeybindingsManager("").KeybindingsManager)` 安装完整表——全局默认表只有 tui.*，app.mcp.* 键在纯 tui 表下不匹配（探针实证）。
-3. **测试键序列**：`MatchesKey` 匹配原始字节序列（``=ctrl+r、`[B`=down、``=enter），不是 `"ctrl+r"` 字符串——组件测试全部用原始序列。
+3. **测试键序列**：`MatchesKey` 匹配原始字节序列（``=ctrl+r、`[B`=down、`
+`=enter），不是 `"ctrl+r"` 字符串——组件测试全部用原始序列。
 4. **启停写胜者文件**：同名 server 多文件定义 later-wins，`Sources[name]` 记胜者，启停只写生效那份；另一份定义仍在（调整链序会复活——语义正确，文档声明）。
 5. **trust-blocked 边界**：未信任项目的配置根本进不了 manager（MCP-1 信任门控），面板无从展示其 server——不做合成行，声明边界。
 

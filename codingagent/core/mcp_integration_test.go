@@ -17,7 +17,7 @@ import (
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
-	pigmcp "github.com/ZoroSpace/pig/mcp"
+	pigmcp "github.com/ZoroSpace/pig/integrations/mcp"
 )
 
 // newMCPFakeServerManager builds a manager over an in-memory fake MCP server
