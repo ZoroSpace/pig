@@ -71,6 +71,11 @@ const (
 	AppKeybindingTreeFilterAll            = "app.tree.filter.all"
 	AppKeybindingTreeFilterCycleForward   = "app.tree.filter.cycleForward"
 	AppKeybindingTreeFilterCycleBackward  = "app.tree.filter.cycleBackward"
+
+	// pig-only: /mcp panel action keys (pi-mcp-adapter panel-keys semantics).
+	AppKeybindingMCPReconnect      = "app.mcp.reconnect"
+	AppKeybindingMCPToggleDisabled = "app.mcp.toggleDisabled"
+	AppKeybindingMCPCopyError      = "app.mcp.copyError"
 )
 
 // UseWindowsKeybindings reports whether Windows-flavoured defaults apply
@@ -251,6 +256,9 @@ var Keybindings = func() tui.KeybindingDefinitions {
 	defs["app.tree.filter.all"] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+a"), Description: "Tree filter: show all entries"}
 	defs["app.tree.filter.cycleForward"] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+o"), Description: "Tree filter: cycle forward"}
 	defs["app.tree.filter.cycleBackward"] = tui.KeybindingDefinition{DefaultKeys: keys("shift+ctrl+o"), Description: "Tree filter: cycle backward"}
+	defs[AppKeybindingMCPReconnect] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+r"), Description: "MCP panel: reconnect server"}
+	defs[AppKeybindingMCPToggleDisabled] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+d"), Description: "MCP panel: enable/disable server"}
+	defs[AppKeybindingMCPCopyError] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+y"), Description: "MCP panel: copy server error"}
 	return defs
 }()
 
@@ -433,6 +441,8 @@ var keybindingsOrder = []string{
 	"app.tree.filter.default", "app.tree.filter.noTools", "app.tree.filter.userOnly",
 	"app.tree.filter.labeledOnly", "app.tree.filter.all",
 	"app.tree.filter.cycleForward", "app.tree.filter.cycleBackward",
+	// pig-only panel keys.
+	"app.mcp.reconnect", "app.mcp.toggleDisabled", "app.mcp.copyError",
 }
 
 // loadRawConfig reads and parses a keybindings.json file (pi:

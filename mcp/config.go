@@ -23,6 +23,12 @@ import (
 // .mcp.json files work as-is.
 type Config struct {
 	MCPServers map[string]ServerConfig `json:"mcpServers"`
+
+	// Sources maps each merged server name to the file path of the winning
+	// definition (later-wins chain; pig-only, not serialized). Set only by
+	// LoadConfigFiles — the /mcp panel needs it to write `disabled` back to
+	// the file that actually owns the server.
+	Sources map[string]string `json:"-"`
 }
 
 // Lifecycle values for ServerConfig.
@@ -76,6 +82,11 @@ type ServerConfig struct {
 	// ToolPrefix is prepended to tool names for display (and accepted back on
 	// call). Empty = no prefix.
 	ToolPrefix string `json:"toolPrefix,omitempty"`
+
+	// Disabled turns the server off without deleting its entry (pig-only
+	// field; the /mcp panel toggles it and writes it back to the source
+	// file). Disabled servers never connect and contribute no tools.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // Diagnostic is a config-level problem. Severity is "warning" or "error";
@@ -125,7 +136,7 @@ func ParseConfigFile(path string) (*Config, []Diagnostic, error) {
 // merge). Invalid servers are dropped from the merged result but reported in
 // the returned diagnostics.
 func LoadConfigFiles(paths []string) (*Config, []Diagnostic, error) {
-	merged := &Config{MCPServers: map[string]ServerConfig{}}
+	merged := &Config{MCPServers: map[string]ServerConfig{}, Sources: map[string]string{}}
 	var diags []Diagnostic
 	for _, path := range paths {
 		if path == "" {
@@ -142,6 +153,7 @@ func LoadConfigFiles(paths []string) (*Config, []Diagnostic, error) {
 		}
 		for name, server := range config.MCPServers {
 			merged.MCPServers[name] = server
+			merged.Sources[name] = path
 		}
 	}
 	return merged, diags, nil

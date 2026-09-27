@@ -725,6 +725,13 @@ func (s *AgentSession) GetModelRuntime() *ModelRuntime {
 	return s.modelRuntime
 }
 
+// MCPManager returns the session's MCP manager (pig-only; pi has no native
+// MCP). nil when MCP is not configured — the /mcp panel surfaces that as
+// "no servers".
+func (s *AgentSession) MCPManager() *mcp.Manager {
+	return s.mcpManager
+}
+
 // ExportToJsonl exports the current branch to a JSONL file and returns the
 // written path (pi: exportToJsonl).
 func (s *AgentSession) ExportToJsonl(outputPath string) (string, error) {

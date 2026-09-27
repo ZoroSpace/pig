@@ -1203,6 +1203,11 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 		m.editor.SetText("")
 		_ = m.handleReloadCommand(ctx)
 		return
+	case text == "/mcp":
+		// pig-only (pi has no native MCP): the MCP servers panel.
+		m.editor.SetText("")
+		m.showMcpPanel()
+		return
 	case text == "/debug":
 		m.handleDebugCommand()
 		m.editor.SetText("")
@@ -6470,6 +6475,30 @@ func (m *InteractiveMode) showTrustSelector() {
 			},
 		})
 		return selectorComponent{component: selector, focus: selector}
+	})
+}
+
+// showMcpPanel mounts the /mcp panel (pig-only; pi has no native MCP —
+// panel semantics follow the pi-mcp-adapter panel). Panel lifetime is the
+// selector lifetime: the refresh ticker stops via the dispose hook.
+func (m *InteractiveMode) showMcpPanel() {
+	mcpManager := m.session().MCPManager()
+	if mcpManager == nil || !mcpManager.HasServers() {
+		m.showStatus("No MCP servers configured")
+		return
+	}
+	m.showSelector(func(done func()) selectorComponent {
+		panel := components.NewMCPPanelComponent(components.MCPPanelOptions{
+			Provider:        mcpManager,
+			Mutate:          m.mutateUI,
+			RequestRender:   func() { m.ui.RequestRender(false) },
+			CopyToClipboard: func(text string) error { return interactiveCopyToClipboard(text) },
+			OnCancel: func() {
+				done()
+				m.ui.RequestRender(false)
+			},
+		})
+		return selectorComponent{component: panel, focus: panel, dispose: panel.Dispose}
 	})
 }
 

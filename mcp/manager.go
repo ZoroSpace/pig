@@ -69,14 +69,16 @@ type ManagerOptions struct {
 // ServerStatus is a snapshot of one server's runtime state (for the `status`
 // action of the proxy tool and future /mcp UI).
 type ServerStatus struct {
-	Name      string `json:"name"`
-	Transport string `json:"transport"` // "stdio" | "http"
-	Lifecycle string `json:"lifecycle"`
-	Status    string `json:"status"` // "connected" | "disconnected" | "connecting" | "error"
-	ToolCount int    `json:"toolCount,omitempty"`
-	PID       int    `json:"pid,omitempty"`
-	LastError string `json:"lastError,omitempty"`
-	IdleMs    int64  `json:"idleMs,omitempty"` // ms since last use, when connected
+	Name       string `json:"name"`
+	Transport  string `json:"transport"` // "stdio" | "http"
+	Lifecycle  string `json:"lifecycle"`
+	Status     string `json:"status"` // "connected" | "disconnected" | "connecting" | "error" | "disabled"
+	ToolCount  int    `json:"toolCount,omitempty"`
+	PID        int    `json:"pid,omitempty"`
+	LastError  string `json:"lastError,omitempty"`
+	IdleMs     int64  `json:"idleMs,omitempty"` // ms since last use, when connected
+	Disabled   bool   `json:"disabled,omitempty"`
+	SourcePath string `json:"sourcePath,omitempty"` // winning config file (for the /mcp panel's write-back)
 }
 
 // ToolInfo describes one discovered tool, prefixed for display.
@@ -98,6 +100,10 @@ type ToolCallOutput struct {
 type serverState struct {
 	name string
 	cfg  ServerConfig
+	// sourcePath is the winning config file for this server (Config.Sources);
+	// empty when the manager was built without LoadConfigFiles (tests, direct
+	// construction) — SetServerDisabled then only flips the in-memory flag.
+	sourcePath string
 
 	mu       sync.Mutex
 	session  *mcp.ClientSession
@@ -115,6 +121,7 @@ const (
 	statusDisconnected = "disconnected"
 	statusConnecting   = "connecting"
 	statusError        = "error"
+	statusDisabled     = "disabled"
 )
 
 // NewManager creates a Manager for the given (already merged) config. It does
@@ -132,7 +139,12 @@ func NewManager(config *Config, opts ManagerOptions) *Manager {
 		reapDone: make(chan struct{}),
 	}
 	for _, name := range config.SortedServerNames() {
-		m.servers[name] = &serverState{name: name, cfg: config.MCPServers[name], status: statusDisconnected}
+		m.servers[name] = &serverState{
+			name:       name,
+			cfg:        config.MCPServers[name],
+			sourcePath: config.Sources[name],
+			status:     statusDisconnected,
+		}
 	}
 	// Always run the reaper: Close() waits on reapDone unconditionally, so a
 	// missing loop would hang an empty manager's shutdown (the idle ticker
@@ -157,6 +169,9 @@ func (m *Manager) StartEager() {
 		go func() {
 			st.mu.Lock()
 			defer st.mu.Unlock()
+			if st.cfg.Disabled {
+				return
+			}
 			// Background eager connect: unbounded context is bounded by the
 			// connect timeout inside connectLocked.
 			_, _ = m.connectLocked(context.Background(), st)
@@ -226,11 +241,16 @@ func (m *Manager) Status() []ServerStatus {
 		st.mu.Lock()
 		defer st.mu.Unlock()
 		s := ServerStatus{
-			Name:      st.name,
-			Lifecycle: st.cfg.Lifecycle,
-			Status:    st.status,
-			ToolCount: len(st.cachedTools),
-			LastError: st.toolErr,
+			Name:       st.name,
+			Lifecycle:  st.cfg.Lifecycle,
+			Status:     st.status,
+			ToolCount:  len(st.cachedTools),
+			LastError:  st.toolErr,
+			Disabled:   st.cfg.Disabled,
+			SourcePath: st.sourcePath,
+		}
+		if st.cfg.Disabled {
+			s.Status = statusDisabled
 		}
 		if st.cfg.Command != "" {
 			s.Transport = "stdio"
@@ -255,6 +275,9 @@ func (m *Manager) Status() []ServerStatus {
 func (m *Manager) SearchTools(ctx context.Context, query string, limit int) ([]ToolMatch, error) {
 	var candidates []ToolInfo
 	for _, name := range m.ServerNames() {
+		if m.isDisabled(name) {
+			continue
+		}
 		tools, err := m.listServerTools(ctx, name)
 		if err != nil {
 			// A broken server must not hide the other servers' tools.
@@ -424,10 +447,81 @@ func (m *Manager) listServerTools(ctx context.Context, name string) ([]ToolInfo,
 	return slices.Clone(st.cachedTools), nil
 }
 
+// ListServerTools returns the filtered tool list of one server, connecting it
+// first if needed (lazy semantics unchanged). Disabled servers error. The
+// result is a copy. (pig-only: the /mcp panel lists tools on expand.)
+func (m *Manager) ListServerTools(ctx context.Context, name string) ([]ToolInfo, error) {
+	return m.listServerTools(ctx, name)
+}
+
+// isDisabled reports whether the named server is configured disabled.
+func (m *Manager) isDisabled(name string) bool {
+	m.mu.Lock()
+	st := m.servers[name]
+	m.mu.Unlock()
+	if st == nil {
+		return false
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return st.cfg.Disabled
+}
+
+// Reconnect drops the server's current session (if any) and connects afresh.
+// Connect errors are returned as-is for the caller to surface (the /mcp
+// panel shows them on the server row). Disabled servers are never connected.
+// (pig-only: pi-mcp-adapter's ctrl+r.)
+func (m *Manager) Reconnect(ctx context.Context, name string) error {
+	st, err := m.server(name)
+	if err != nil {
+		return err
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	m.closeSessionLocked(st)
+	if _, err := m.connectLocked(ctx, st); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SetServerDisabled flips a server's disabled flag in memory and writes it
+// back to the server's winning config file (JSON surgery on mcpServers[name]
+// only — sibling servers and unknown fields are preserved; enabling deletes
+// the key instead of writing false). A disabled server is torn down; a
+// re-enabled one goes back to disconnected and reconnects lazily. When the
+// manager was built without a source path, only the in-memory flag changes.
+// (pig-only: pi-mcp-adapter keeps an overlay state file; pig persists to the
+// source mcp.json per user decision.)
+func (m *Manager) SetServerDisabled(name string, disabled bool) error {
+	st, err := m.server(name)
+	if err != nil {
+		return err
+	}
+	st.mu.Lock()
+	st.cfg.Disabled = disabled
+	if disabled {
+		m.closeSessionLocked(st)
+		st.status = statusDisabled
+	} else {
+		st.status = statusDisconnected
+	}
+	sourcePath := st.sourcePath
+	st.mu.Unlock()
+	if sourcePath == "" {
+		return nil
+	}
+	return setServerDisabledInFile(sourcePath, name, disabled)
+}
+
 // connectLocked connects st. st.mu must be held.
 func (m *Manager) connectLocked(ctx context.Context, st *serverState) (*mcp.ClientSession, error) {
 	if st.session != nil {
 		return st.session, nil
+	}
+	if st.cfg.Disabled {
+		st.status = statusDisabled
+		return nil, fmt.Errorf("mcp server %q is disabled", st.name)
 	}
 	m.mu.Lock()
 	if m.closed {
