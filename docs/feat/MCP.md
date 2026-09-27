@@ -84,3 +84,18 @@
 
 - build/vet/gofmt 干净；全量 `go test ./... -race -count=1 -timeout 600s` **只跑一次** rc=0，30 包全 ok（`/tmp/pig-test-out-mcp2.log`）。
 - **tmux 真 TTY 冒烟**（`mcp.test` helper-process 手法 + `--approve` 信任 + 独立 `PIG_CODING_AGENT_DIR`）：/mcp 面板打开（helper disconnected，**打开零连接副作用**）→ enter 展开懒连（`▾ ● helper (stdio) · 1 tools  connected · idle 6s` + `helper_echo — echo helper` 工具行）→ ctrl+d 禁用（面板翻转 `disabled` + **`.mcp.json` 落盘 `"disabled": true`**，未知结构零损伤）→ ctrl+d 重新启用（键删除、回 disconnected）→ ctrl+r 重连（`reconnected helper` + connected）→ esc 关面板。
+
+# 代理工具 call 行渲染器（用户插入小改，2026-09-27）
+
+**问题**：MCP-1 的声明偏差（代理工具渲染函数留 nil、走 tool-execution fallback）在真机使用中暴露为可用性缺陷——call 行只有粗体 `mcp` 标签，**具体调用了哪个 MCP server 的哪个工具在界面上完全不可见**（工具名只存在于发给模型的 args JSON 里，而 fallback call 行根本不渲染参数）；结果行倒是正常显示 JSON 内容。
+
+**修复**：`codingagent/core/mcp_integration.go` 新增 pig-only `mcpRenderCall` + `formatMCPProxyCall`，挂到 ToolDefinition.RenderCall（RenderResult 仍留 nil，fallback 的文本预览 + expand/collapse 即目标形态）。标题格式：粗体 `mcp` + 具体 action——
+
+- tool action：`mcp maps_geo (amap-maps)`（`server__tool` 拆分；裸名无 server 后缀）
+- search：`mcp search "weather"`；空串 `mcp search (all tools)`
+- describe：`mcp describe maps_geo`；status：`mcp status`
+- 空/残缺/非 map 参数（流式期间字段未到齐）退化为裸 `mcp`，不 panic
+
+组件复用遵循 ls 渲染器先例（LastComponent 为 *tui.Text 时原位 SetText）。
+
+**回归测试**（`codingagent/core/mcp_integration_test.go`，新增 3 函数）：`TestMCPProxyRenderCallShowsToolAndServer`（六 action 形态）、`TestMCPProxyRenderCallDegradesGracefully`（空 map/nil/字符串/数字 → 裸标签）、`TestMCPProxyRenderCallReusesLastComponent`（渲染槽复用）。全量 `go test ./... -race -count=1` 单次 rc=0，30 包（/tmp/pig-test-out-mcp-render.log）。

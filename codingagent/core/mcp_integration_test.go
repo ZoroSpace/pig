@@ -17,7 +17,9 @@ import (
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	pigmcp "github.com/ZoroSpace/pig/integrations/mcp"
+	"github.com/ZoroSpace/pig/tui"
 )
 
 // newMCPFakeServerManager builds a manager over an in-memory fake MCP server
@@ -321,4 +323,79 @@ func resultText(result agent.AgentToolResult) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// ---- proxy tool call-row renderer (pig-only) ----
+
+// mcpIdentityTheme is a UITheme fake that returns text unstyled, so title
+// assertions are plain substring checks.
+type mcpIdentityTheme struct{}
+
+func (mcpIdentityTheme) Fg(color string, text string) string { return text }
+func (mcpIdentityTheme) Bg(color string, text string) string { return text }
+func (mcpIdentityTheme) Bold(text string) string             { return text }
+func (mcpIdentityTheme) Italic(text string) string           { return text }
+func (mcpIdentityTheme) Underline(text string) string        { return text }
+func (mcpIdentityTheme) Inverse(text string) string          { return text }
+func (mcpIdentityTheme) Strikethrough(text string) string    { return text }
+func (mcpIdentityTheme) GetFgAnsi(color string) string       { return "" }
+func (mcpIdentityTheme) GetBgAnsi(color string) string       { return "" }
+
+func TestMCPProxyRenderCallShowsToolAndServer(t *testing.T) {
+	theme := mcpIdentityTheme{}
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{"server__tool full form", map[string]any{"tool": "amap-maps__maps_geo"}, "maps_geo (amap-maps)"},
+		{"bare tool name", map[string]any{"tool": "maps_geo"}, "maps_geo"},
+		{"search with query", map[string]any{"search": "weather"}, `search "weather"`},
+		{"search empty lists all", map[string]any{"search": ""}, "search (all tools)"},
+		{"describe", map[string]any{"describe": "maps_geo"}, "describe maps_geo"},
+		{"status", map[string]any{"status": true}, "status"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			component := mcpRenderCall(tc.args, theme, tools.ToolRenderContext{})
+			text, ok := component.(*tui.Text)
+			if !ok {
+				t.Fatalf("expected *tui.Text, got %T", component)
+			}
+			got := strings.Join(text.Render(200), "\n")
+			if !strings.Contains(got, "mcp") {
+				t.Fatalf("title missing proxy label %q:\n%s", "mcp", got)
+			}
+			if !strings.Contains(got, tc.want) {
+				t.Fatalf("title missing %q:\n%s", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestMCPProxyRenderCallDegradesGracefully(t *testing.T) {
+	theme := mcpIdentityTheme{}
+	// Streaming may deliver partial args (no action fields yet) or
+	// non-map garbage; the renderer must not panic and must keep the bare
+	// "mcp" label (fallback parity).
+	for _, args := range []any{map[string]any{}, nil, "garbage", 42} {
+		component := mcpRenderCall(args, theme, tools.ToolRenderContext{})
+		text, ok := component.(*tui.Text)
+		if !ok {
+			t.Fatalf("expected *tui.Text, got %T", component)
+		}
+		got := strings.Join(text.Render(200), "\n")
+		if strings.TrimSpace(got) != "mcp" {
+			t.Fatalf("args %#v: want bare label, got %q", args, got)
+		}
+	}
+}
+
+func TestMCPProxyRenderCallReusesLastComponent(t *testing.T) {
+	theme := mcpIdentityTheme{}
+	last := tui.NewText("old", 0, 0)
+	component := mcpRenderCall(map[string]any{"tool": "amap-maps__maps_weather"}, theme, tools.ToolRenderContext{LastComponent: last})
+	if component != tui.Component(last) {
+		t.Fatalf("renderer must reuse the LastComponent render slot")
+	}
 }

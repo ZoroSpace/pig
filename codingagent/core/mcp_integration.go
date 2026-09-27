@@ -28,6 +28,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	pigmcp "github.com/ZoroSpace/pig/integrations/mcp"
+	"github.com/ZoroSpace/pig/tui"
 )
 
 // mcpGlobalConfigSubpath is the ecosystem-standard global config location
@@ -178,9 +179,11 @@ type mcpProxyToolInput struct {
 }
 
 // createMCPProxyToolDefinition builds the "mcp" proxy tool backed by the
-// manager. Render functions stay nil: tool-execution's fallback rendering
-// covers the call/result rows (declared pig deviation from pi-mcp-adapter,
-// which ships its own renderers).
+// manager. RenderCall surfaces the specific action/server/tool name in the
+// call row (pig-only; the original nil-renderer fallback showed only the
+// bold "mcp" label, hiding which MCP tool a call targeted). RenderResult
+// stays nil: tool-execution's fallback result preview (text content with
+// expand/collapse) is the desired shape.
 func createMCPProxyToolDefinition(manager *pigmcp.Manager) *tools.ToolDefinition {
 	return &tools.ToolDefinition{
 		Name:  mcpProxyToolName,
@@ -190,6 +193,7 @@ func createMCPProxyToolDefinition(manager *pigmcp.Manager) *tools.ToolDefinition
 			"describe for a tool's full schema, or tool (+args) to invoke one.",
 		PromptSnippet: "Call MCP server tools via this proxy: search first ({\"search\": \"query\"}), then invoke ({\"tool\": \"server__tool\", \"args\": {...}}).",
 		Parameters:    json.RawMessage(mcpProxyToolSchema),
+		RenderCall:    mcpRenderCall,
 		Execute: func(ctx context.Context, _ string, params any, _ agent.AgentToolUpdateCallback, _ tools.ToolExecuteContext) (agent.AgentToolResult, error) {
 			input, err := decodeMCPProxyParams(params)
 			if err != nil {
@@ -221,6 +225,56 @@ func decodeMCPProxyParams(params any) (mcpProxyToolInput, error) {
 		return input, fmt.Errorf("invalid mcp tool arguments: %w", err)
 	}
 	return input, nil
+}
+
+// mcpRenderCall is the proxy tool's call-row renderer (pig-only; pi has no
+// native MCP). Follows the ls-renderer component-reuse pattern: mutate the
+// previous *tui.Text when the render slot carries one.
+func mcpRenderCall(args any, themeArg tools.UITheme, context tools.ToolRenderContext) tui.Component {
+	var text *tui.Text
+	if c, ok := context.LastComponent.(*tui.Text); ok {
+		text = c
+	} else {
+		text = tui.NewText("", 0, 0)
+	}
+	m, _ := args.(map[string]any)
+	if m == nil {
+		m = map[string]any{}
+	}
+	text.SetText(formatMCPProxyCall(themeArg, m))
+	return text
+}
+
+// formatMCPProxyCall builds the call-row title: the bold proxy label plus
+// the specific action — "status", "search \"query\"", "describe name", or
+// the invoked tool with its server ("amap-maps__maps_geo" →
+// "maps_geo (amap-maps)"). Unrecognized/partial input degrades to the bare
+// label (streaming may deliver the map before the action field lands).
+func formatMCPProxyCall(themeArg tools.UITheme, args map[string]any) string {
+	label := themeArg.Fg("toolTitle", themeArg.Bold("mcp"))
+	input, err := decodeMCPProxyParams(args)
+	if err != nil {
+		return label
+	}
+	switch {
+	case input.Status:
+		return label + " " + themeArg.Fg("toolTitle", "status")
+	case input.Search != nil:
+		if *input.Search == "" {
+			return label + " " + themeArg.Fg("toolTitle", "search (all tools)")
+		}
+		return label + " " + themeArg.Fg("toolTitle", "search \""+*input.Search+"\"")
+	case input.Describe != "":
+		return label + " " + themeArg.Fg("toolTitle", "describe "+input.Describe)
+	case input.Tool != "":
+		server, title, ok := strings.Cut(input.Tool, "__")
+		if !ok {
+			return label + " " + themeArg.Fg("toolTitle", input.Tool)
+		}
+		return label + " " + themeArg.Fg("toolTitle", title) + themeArg.Fg("muted", " ("+server+")")
+	default:
+		return label
+	}
 }
 
 func mcpStatusResult(manager *pigmcp.Manager) agent.AgentToolResult {
