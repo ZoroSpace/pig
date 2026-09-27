@@ -91,6 +91,10 @@ func volcenginePlanModels() []ai.Model {
 		newModel("glm-5.3", "glm-5.3", textOnly, 1048576, 128000, offUnsupported),
 		newModel("deepseek-v4-pro", "deepseek-v4-pro", textOnly, 1024000, 384000, nil),
 		newModel("deepseek-v4-flash", "deepseek-v4-flash", textOnly, 1024000, 384000, nil),
+		// Added 2026-09-27 per user report + Volcengine docs (not a registry
+		// resync): same 1M-context/384K-output spec as deepseek-v4-flash,
+		// dual thinking/non-thinking modes so off stays supported.
+		newModel("deepseek-v4.1-flash", "deepseek-v4.1-flash", textOnly, 1024000, 384000, nil),
 		newModel("kimi-k2.7-code", "kimi-k2.7-code", textImage, 256000, 32000, offUnsupported),
 		newModel("minimax-m3", "minimax-m3", textImage, 512000, 128000, nil),
 	}

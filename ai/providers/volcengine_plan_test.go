@@ -22,8 +22,8 @@ import (
 // Note the registry quirk: glm-5-3-flash has display name glm-5.3-flash.
 func TestVolcenginePlanModelsTable(t *testing.T) {
 	models := VolcenginePlanProvider().GetModels()
-	if len(models) != 9 {
-		t.Fatalf("GetModels() length = %d, want 9", len(models))
+	if len(models) != 10 {
+		t.Fatalf("GetModels() length = %d, want 10", len(models))
 	}
 	want := []struct {
 		id            string
@@ -39,6 +39,7 @@ func TestVolcenginePlanModelsTable(t *testing.T) {
 		{"glm-5.3", "glm-5.3", []types.ModelInput{types.ModelInputText}, 1048576, 128000},
 		{"deepseek-v4-pro", "deepseek-v4-pro", []types.ModelInput{types.ModelInputText}, 1024000, 384000},
 		{"deepseek-v4-flash", "deepseek-v4-flash", []types.ModelInput{types.ModelInputText}, 1024000, 384000},
+		{"deepseek-v4.1-flash", "deepseek-v4.1-flash", []types.ModelInput{types.ModelInputText}, 1024000, 384000},
 		{"kimi-k2.7-code", "kimi-k2.7-code", []types.ModelInput{types.ModelInputText, types.ModelInputImage}, 256000, 32000},
 		{"minimax-m3", "minimax-m3", []types.ModelInput{types.ModelInputText, types.ModelInputImage}, 512000, 128000},
 	}
