@@ -290,7 +290,9 @@ func CreateFindToolDefinition(cwd string, options *FindToolOptions) *ToolDefinit
 				return agent.AgentToolResult{}, fmt.Errorf("Failed to run fd: %s", err.Error())
 			}
 			stderr := ""
+			stderrDone := make(chan struct{})
 			go func() {
+				defer close(stderrDone)
 				scanner := bufio.NewScanner(pipes.StderrRead)
 				scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 				for scanner.Scan() {
@@ -323,6 +325,10 @@ func CreateFindToolDefinition(cwd string, options *FindToolOptions) *ToolDefinit
 				<-childDone
 				return agent.AgentToolResult{}, fmt.Errorf("Operation aborted")
 			}
+			// pi's child 'close' event fires only after both stdio streams
+			// have ended, so stderr is fully collected before it is read;
+			// join the stderr reader to reproduce that guarantee.
+			<-stderrDone
 			pipes.CloseReadEnds()
 
 			if err := abortErr(); err != nil {
