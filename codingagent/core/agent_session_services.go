@@ -18,6 +18,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/utils"
+	pigmcp "github.com/ZoroSpace/pig/mcp"
 	"github.com/samber/lo"
 )
 
@@ -83,6 +84,9 @@ type AgentSessionServices struct {
 	SettingsManager *SettingsManager
 	ResourceLoader  ResourceLoader
 	Diagnostics     []AgentSessionRuntimeDiagnostic
+	// MCPManager owns the configured MCP servers; nil = none configured
+	// (pig-only).
+	MCPManager *pigmcp.Manager
 }
 
 // applyExtensionFlagValues validates CLI flag values against the flags
@@ -202,6 +206,11 @@ func CreateAgentSessionServices(ctx context.Context, options CreateAgentSessionS
 	modelRuntime.Refresh(ctx, &ai.ModelsRefreshOptions{AllowNetwork: lo.ToPtr(false)})
 	diagnostics = append(diagnostics, applyExtensionFlagValues(resourceLoader, options.ExtensionFlagValues)...)
 
+	// pig: native MCP — build the session's MCP manager after Reload, when
+	// project trust is final (ResolveProjectTrust may have set it).
+	mcpManager, mcpDiagnostics := createMCPManager(cwd, agentDir, settingsManager.IsProjectTrusted())
+	diagnostics = append(diagnostics, mcpDiagnostics...)
+
 	return &AgentSessionServices{
 		Cwd:             cwd,
 		AgentDir:        agentDir,
@@ -209,6 +218,7 @@ func CreateAgentSessionServices(ctx context.Context, options CreateAgentSessionS
 		SettingsManager: settingsManager,
 		ResourceLoader:  resourceLoader,
 		Diagnostics:     diagnostics,
+		MCPManager:      mcpManager,
 	}, nil
 }
 
@@ -224,6 +234,7 @@ func CreateAgentSessionFromServices(ctx context.Context, options CreateAgentSess
 		ModelRuntime:      options.Services.ModelRuntime,
 		SettingsManager:   options.Services.SettingsManager,
 		ResourceLoader:    options.Services.ResourceLoader,
+		MCPManager:        options.Services.MCPManager,
 		SessionManager:    options.SessionManager,
 		Model:             options.Model,
 		ThinkingLevel:     options.ThinkingLevel,

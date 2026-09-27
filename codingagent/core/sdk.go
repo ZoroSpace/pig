@@ -16,6 +16,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/utils"
+	pigmcp "github.com/ZoroSpace/pig/mcp"
 	"github.com/samber/lo"
 )
 
@@ -79,6 +80,11 @@ type CreateAgentSessionOptions struct {
 	// CustomTools are custom tools to register (in addition to built-in
 	// tools).
 	CustomTools []*tools.ToolDefinition
+	// MCPManager is an explicit MCP manager override (pig-only; the
+	// services path passes the manager it built together with its
+	// diagnostics). nil = build one from the config file chain; no
+	// configured servers → no manager and no mcp tool.
+	MCPManager *pigmcp.Manager
 	// ResourceLoader supplies resources. When nil, DefaultResourceLoader is
 	// used.
 	ResourceLoader ResourceLoader
@@ -208,6 +214,14 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		}
 		Time("resourceLoader.reload", TimingMain)
 		resourceLoader = loader
+	}
+
+	// pig: native MCP — one manager per session. The services path injects
+	// its manager (with diagnostics merged there); the direct path builds
+	// its own (diagnostics have no channel here and are dropped).
+	mcpManager := options.MCPManager
+	if mcpManager == nil {
+		mcpManager, _ = createMCPManager(cwd, agentDir, settingsManager.IsProjectTrusted())
 	}
 
 	// Check if session has existing data to restore
@@ -407,6 +421,7 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		ScopedModels:           options.ScopedModels,
 		ResourceLoader:         resourceLoader,
 		CustomTools:            options.CustomTools,
+		MCPManager:             mcpManager,
 		ModelRuntime:           modelRuntime,
 		CacheWarmer:            cacheWarmer,
 		InitialActiveToolNames: initialActiveToolNames,
@@ -416,6 +431,12 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		SessionStartEvent:      options.SessionStartEvent,
 	})
 	extensionsResult := resourceLoader.GetExtensions()
+
+	if mcpManager != nil {
+		// Eager/keep-alive servers connect in the background; failures only
+		// mark server status.
+		go mcpManager.StartEager()
+	}
 
 	return &CreateAgentSessionResult{
 		Session:              session,

@@ -249,6 +249,12 @@ func GetSettingsPath() string {
 	return filepath.Join(GetAgentDir(), "settings.json")
 }
 
+// GetMCPPath returns the path to the user-level mcp.json (pig-only; pi has
+// no native MCP).
+func GetMCPPath() string {
+	return filepath.Join(GetAgentDir(), "mcp.json")
+}
+
 // GetToolsDir returns the path to the tools directory (pi: getToolsDir).
 func GetToolsDir() string {
 	return filepath.Join(GetAgentDir(), "tools")

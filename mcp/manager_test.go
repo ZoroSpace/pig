@@ -70,10 +70,17 @@ type echoInput struct {
 
 func newTestManager(t *testing.T, config *Config, opts ManagerOptions) *Manager {
 	t.Helper()
-	if opts.TransportFactory == nil && !config.IsEmpty() {
-		opts.TransportFactory = func(string, ServerConfig) (mcp.Transport, error) {
-			t.Error("transport factory must be installed for fake servers")
-			return nil, nil
+	if opts.TransportFactory == nil {
+		for _, cfg := range config.MCPServers {
+			if cfg.URL == "" {
+				// stdio fake config without a factory would shell out for
+				// real; fail loudly instead (error, not nil transport — nil
+				// segfaults inside the SDK).
+				opts.TransportFactory = func(server string, _ ServerConfig) (mcp.Transport, error) {
+					return nil, fmt.Errorf("test bug: no transport factory installed for server %q", server)
+				}
+				break
+			}
 		}
 	}
 	manager := NewManager(config, opts)
@@ -286,7 +293,6 @@ func TestRequestTimeout(t *testing.T) {
 }
 
 func TestBrokenServerDoesNotHideOthers(t *testing.T) {
-	broken := &fakeServer{name: "broken"}
 	working := &fakeServer{name: "working"}
 	config := &Config{MCPServers: map[string]ServerConfig{
 		"broken":  {Command: "/nonexistent/mcp-server-binary"},
@@ -295,13 +301,12 @@ func TestBrokenServerDoesNotHideOthers(t *testing.T) {
 	var logged []string
 	manager := newTestManager(t, config, ManagerOptions{
 		TransportFactory: func(server string, cfg ServerConfig) (mcp.Transport, error) {
-			switch server {
-			case "broken":
-				return broken.spawn(t.Context())("broken", cfg)
-			case "working":
-				return working.spawn(t.Context())("working", cfg)
+			if server == "broken" {
+				// Simulate a connect failure; the real stdio path surfaces
+				// the same shape via build/connect errors.
+				return nil, errors.New("dial tcp 127.0.0.1:9: connect: connection refused")
 			}
-			return nil, fmt.Errorf("unexpected server %q", server)
+			return working.spawn(t.Context())("working", cfg)
 		},
 		Logger: func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) },
 	})
@@ -454,10 +459,13 @@ func TestStreamableHTTPE2EWithHeaders(t *testing.T) {
 	})
 
 	var gotAuth atomic.Value
+	// One handler instance for the whole test: each instance keeps its own
+	// session store, so per-request construction loses the session.
+	httpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
 	handler := http.NewServeMux()
 	handler.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth.Store(r.Header.Get("Authorization"))
-		mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil).ServeHTTP(w, r)
+		httpHandler.ServeHTTP(w, r)
 	}))
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
@@ -488,12 +496,12 @@ func TestStreamableHTTPE2EWithHeaders(t *testing.T) {
 }
 
 func TestHeaderTransportRejectFailure(t *testing.T) {
-	fake := &fakeServer{name: "remote"}
 	config := &Config{MCPServers: map[string]ServerConfig{
 		"remote": {URL: "http://unused", Headers: map[string]string{"Authorization": "!exit-1"}},
 	}}
 	manager := newTestManager(t, config, ManagerOptions{
-		TransportFactory: fake.spawn(t.Context()),
+		// No TransportFactory: header resolution happens while building the
+		// HTTP transport, before any dialing, so `http://unused` is never hit.
 		ResolveHeaders: func(string, map[string]string) (map[string]string, error) {
 			return nil, errors.New("command failed: exit 1")
 		},

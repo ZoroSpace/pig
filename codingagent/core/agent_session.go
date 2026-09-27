@@ -52,6 +52,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	"github.com/ZoroSpace/pig/codingagent/utils"
+	"github.com/ZoroSpace/pig/mcp"
 	pigutils "github.com/ZoroSpace/pig/utils"
 )
 
@@ -332,6 +333,11 @@ type AgentSessionConfig struct {
 	// warm (pi: cacheWarmer; v0.86.0). pig takes the surface the session
 	// consumes (pi: Pick<CacheWarmer, ...>).
 	CacheWarmer CacheWarmerSurface
+	// MCPManager owns the configured MCP servers (pig-only; pi has no native
+	// MCP). When non-nil the session registers the "mcp" proxy tool as a
+	// custom tool (re-registered across reload via refreshToolRegistry) and
+	// closes the manager on Dispose.
+	MCPManager *mcp.Manager
 	// InitialActiveToolNames are the initial active built-in tool names.
 	// Default: [read, bash, edit, write].
 	InitialActiveToolNames []string
@@ -577,6 +583,7 @@ type AgentSession struct {
 
 	resourceLoader                 ResourceLoader
 	customTools                    []*tools.ToolDefinition
+	mcpManager                     *mcp.Manager
 	baseToolDefinitions            map[string]*tools.ToolDefinition
 	cwd                            string
 	extensionRunnerRef             *ExtensionRunnerRef
@@ -646,6 +653,13 @@ func NewAgentSession(config AgentSessionConfig) *AgentSession {
 		bashCancels:     map[int64]context.CancelFunc{},
 	}
 	s.extensionRunnerRef = config.ExtensionRunnerRef
+	if config.MCPManager != nil {
+		s.mcpManager = config.MCPManager
+		// The proxy tool rides the custom-tools registration path, so
+		// refreshToolRegistry re-mounts it after every rebuild (reload keeps
+		// the manager itself alive; Dispose closes it).
+		s.customTools = append(s.customTools, createMCPProxyToolDefinition(config.MCPManager))
+	}
 	s.initialActiveToolNames = config.InitialActiveToolNames
 	if config.AllowedToolNames != nil {
 		s.allowedToolNames = map[string]struct{}{}
@@ -1907,6 +1921,10 @@ func (s *AgentSession) Dispose() {
 		s.cacheWarmer.Cancel()
 	}
 	s.mu.Unlock()
+	if s.mcpManager != nil {
+		// Idempotent; closes sessions and kills the stdio process groups.
+		_ = s.mcpManager.Close()
+	}
 	// pi's dispose wraps this in try/catch already; errors are swallowed.
 	_ = ai.CleanupSessionResources(s.SessionID())
 }

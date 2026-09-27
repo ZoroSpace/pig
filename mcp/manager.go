@@ -134,9 +134,10 @@ func NewManager(config *Config, opts ManagerOptions) *Manager {
 	for _, name := range config.SortedServerNames() {
 		m.servers[name] = &serverState{name: name, cfg: config.MCPServers[name], status: statusDisconnected}
 	}
-	if len(m.servers) > 0 {
-		go m.reapLoop()
-	}
+	// Always run the reaper: Close() waits on reapDone unconditionally, so a
+	// missing loop would hang an empty manager's shutdown (the idle ticker
+	// with zero servers costs nothing).
+	go m.reapLoop()
 	return m
 }
 
@@ -208,13 +209,22 @@ func (m *Manager) Close() error {
 }
 
 // Status returns a snapshot of all servers' runtime state.
+//
+// m.mu is released before acquiring any st.mu: connectLocked takes m.mu
+// while holding st.mu, so the reverse order here would be an ABBA deadlock.
 func (m *Manager) Status() []ServerStatus {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]ServerStatus, 0, len(m.servers))
-	for _, name := range slices.Sorted(maps.Keys(m.servers)) {
-		st := m.servers[name]
+	names := slices.Sorted(maps.Keys(m.servers))
+	states := make([]*serverState, 0, len(names))
+	for _, name := range names {
+		states = append(states, m.servers[name])
+	}
+	m.mu.Unlock()
+
+	out := make([]ServerStatus, 0, len(states))
+	for _, st := range states {
 		st.mu.Lock()
+		defer st.mu.Unlock()
 		s := ServerStatus{
 			Name:      st.name,
 			Lifecycle: st.cfg.Lifecycle,
@@ -292,6 +302,8 @@ func (m *Manager) CallTool(ctx context.Context, server, tool string, args map[st
 			return nil, err
 		}
 	}
+	// Accept the full "server__tool" convention as well as display/raw names.
+	tool = strings.TrimPrefix(tool, server+"__")
 	rawName, ok := st.toolRawName(tool)
 	if !ok {
 		// Refresh the cache once in case the server added tools since connect.

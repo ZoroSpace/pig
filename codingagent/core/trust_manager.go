@@ -57,7 +57,9 @@ type ProjectTrustOption struct {
 type trustFile = map[string]*bool
 
 // trustRequiringProjectConfigResources lists the .pi entries that gate
-// project trust (pi: TRUST_REQUIRING_PROJECT_CONFIG_RESOURCES).
+// project trust (pi: TRUST_REQUIRING_PROJECT_CONFIG_RESOURCES). "mcp.json"
+// is a pig-only addition (native MCP layer; MCP servers run commands and
+// resolve `!command` headers, so they must not load in untrusted projects).
 var trustRequiringProjectConfigResources = []string{
 	"settings.json",
 	"extensions",
@@ -66,6 +68,7 @@ var trustRequiringProjectConfigResources = []string{
 	"themes",
 	"SYSTEM.md",
 	"APPEND_SYSTEM.md",
+	"mcp.json",
 }
 
 // normalizeTrustCwd canonicalizes the cwd for store keys (pi:
@@ -267,6 +270,12 @@ func HasTrustRequiringProjectResources(cwd string) bool {
 		if _, err := os.Stat(filepath.Join(configDir, entry)); err == nil {
 			return true
 		}
+	}
+
+	// pig-only: a root-level .mcp.json (ecosystem-standard mcpServers config,
+	// also read by Claude Code / Cursor) gates project trust like .pig/mcp.json.
+	if _, err := os.Stat(filepath.Join(currentDir, ".mcp.json")); err == nil {
+		return true
 	}
 
 	for {

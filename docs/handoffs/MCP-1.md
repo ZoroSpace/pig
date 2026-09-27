@@ -1,6 +1,14 @@
-# MCP-1：pig 原生 MCP 客户端层（进行中，未收批）
+# MCP-1：pig 原生 MCP 客户端层（✅ 收口终稿，2026-09-27）
 
-> 状态：**源码半成品，工作树未提交**。mcp 纯客户端包已写完且大部分测试绿；卡在一个诡异的 mutex 死锁（见 §4），core 集成面尚未开始。本文给下一个 agent 接手用。
+> 状态：**完成**。mcp/ 纯客户端包 + core 集成面 + 桥接测试 + 全量 -race + print mock 冒烟全部落地；偏差声明与 MCP-2 定义见 §7/§8。feat 文档：`docs/feat/MCP.md`。
+
+## 0. 收口摘要
+
+- **死锁悬案破案**：半成品卡在 `TestLazyConnectAndIdleReap`（两个等待者、栈上无持锁者），真相是 `Status()` 循环里 `st.mu.Lock()` 后**从未 Unlock**——持有者带着锁返回，自然不在任何栈上。handoff 里 TryLock/调度/starvation 猜想全部作废，修复为一行 `defer st.mu.Unlock()`。
+- 修复后全量重跑暴露并修复 **4 个初版测试/实现缺口**（§6），mcp 包 12 测试 + core 桥接 5 测试全绿。
+- core 集成面：`mcp_integration.go`（配置链/信任门控/代理工具）+ config/trust_manager/agent_session/services/sdk 五处小改。
+- 验收门：build/vet/gofmt 干净；**全量 `go test ./... -race -count=1 -timeout 600s` 只跑一次 rc=0，30 包全 ok**（`/tmp/pig-test-out-mcp1.log`）；print 模式 mock 冒烟 search→call 全链路通过（§5）。
+- 一处计划简化（机制核实后不需要）：原计划「buildRuntime 默认 active 追加 mcp」经核实**不需要**——`NewAgentSession`/`Reload` 的 buildRuntime 均带 `includeAllExtensionTools: true`，customTools 里的代理工具自动进 active 集，有回归测试锁定。
 
 ## 1. 批次目标与已批准的计划
 
@@ -19,82 +27,92 @@
    - stdio：`&mcp.CommandTransport{Command: exec.Cmd, TerminateDuration: 3s}`（自己建 exec.Cmd，方便设 Setpgid + stderr 捕获）
    - HTTP：`&mcp.StreamableClientTransport{Endpoint, HTTPClient}`；per-request header（bearer 等）SDK 不支持，用自定义 `http.RoundTripper` 注入（`headerTransport`，manager.go 底部）
    - 工具列举：`session.Tools(ctx, nil)` 迭代器（自带分页）；**返回按字母序**
-   - 工具调用：`session.CallTool(ctx, &mcp.CallToolParams{Name, Arguments})` → `*mcp.CallToolResult{Content []mcp.Content, StructuredContent, IsError}`
-   - **重要语义**：tool handler 的业务错误（如 "boom"）SDK 按 MCP 规范返回 `IsError=true` 的正常结果而非 Go error（error 只用于协议级失败）。core 侧 Execute 处理 IsError 时应把文本内容转成 Go error 返回，让 agent loop 走标准 IsError 工具结果路
+   - 工具调用：`session.CallTool(ctx, &mcp.CallToolParams{Name, Arguments})` → `*mcp.CallToolResult{Content, StructuredContent, IsError}`
+   - **重要语义**：tool handler 的业务错误（如 "boom"）SDK 按 MCP 规范返回 `IsError=true` 的正常结果而非 Go error（error 只用于协议级失败）。core 侧 Execute 处理 IsError 时把文本内容转成 Go error 返回，让 agent loop 走标准 IsError 工具结果路（已实现，回归测试锁定）
    - 测试：`mcp.NewInMemoryTransports()` 一对 transport，client 侧给 manager，server 侧 `go srv.Run(ctx, serverTransport)`
-2. **TransportFactory seam**（manager.go，`ManagerOptions.TransportFactory func(server string, cfg ServerConfig) (mcp.Transport, error)`）：测试注入 in-memory transport；将来 unix socket 也走这。pig 测试 seam 惯例（包级 var + t.Cleanup）在此不适用，用的是 options 注入，已声明是 pig-only seam。
-3. **Manager 并发模型**：`Manager.mu` 管 server map + closed；每个 `serverState` 自带 mutex 串行化该 server 的 connect/close/reap/call。锁序：`listServerTools` 是 st.mu 内套 m.mu（connectLocked 里查 closed）；`reapOnce`/`Close` 都是先放 m.mu 再拿 st.mu，无 ABBA。
-4. **配置链**（core 侧做，later-wins 整条覆盖）：项目根 `.mcp.json`（**必须信任门控**）→ 项目 `.pig/mcp.json` → 用户 `~/.pig/agent/mcp.json` → 全局 `~/.config/mcp/mcp.json`。Header 的 `!command`/`$env` 解析用 `core.ResolveHeadersOrThrow`，**连接时执行**（不是加载时），通过 `ManagerOptions.ResolveHeaders` 注入。
-5. **生命周期**：`NewManager` 不连接任何东西（lazy）；eager/keep-alive 用 `manager.StartEager()`（core 在会话装配后开 goroutine 调）；idle 回收默认 5min、keep-alive 豁免；`Close()` 幂等、关 session + 进程组 kill。
-6. **进程管理**：`mcp/proc_unix.go`（Setpgid + `kill(-pid, SIGKILL)`）/ `proc_windows.go`（taskkill /T /F），镜像 `codingagent/utils/shell_kill_*.go`。SDK Close 自己会 close stdin→SIGTERM，我们补进程组 SIGKILL 防孙进程。
-7. **代理工具名 `mcp`**（core 侧）：schema 五字段 `status/search/describe/tool/args`（对齐 pi-mcp-adapter 输入形状）；工具全名约定 `server__tool`（双下划线分隔，search 返回的显示名带 toolPrefix）；裸名若跨 server 唯一也可直接用（manager 已实现 resolve）。MCP 图片内容映射 `types.ImageContent`。
-8. **默认 active**：配置非空时 `buildRuntime` 默认 active 工具集追加 `"mcp"`；PromptSnippet 写「先 search 再 call」。
+2. **TransportFactory seam**（ManagerOptions 注入，pig-only seam）：测试注入 in-memory transport；将来 unix socket 也走这。
+3. **Manager 并发模型**：`Manager.mu` 管 server map + closed；每个 `serverState` 自带 mutex。**锁序：持 `st.mu` 可拿 `m.mu`（connectLocked 查 closed）；`Status()` 反例已修——先在 `m.mu` 下快照列表，放锁后再逐个拿 `st.mu`**。`Close`/`reapOnce` 先放 `m.mu` 再拿 `st.mu`。
+4. **配置链**（core 侧，later-wins per-server 整条覆盖）：项目根 `.mcp.json`（**信任门控**）→ 项目 `.pig/mcp.json`（**信任门控**）→ 用户 `agentDir/mcp.json` → 全局 `~/.config/mcp/mcp.json`。Header 的 `!command`/`$env` 经 `ManagerOptions.ResolveHeaders` → `core.ResolveHeadersOrThrow`，**连接时执行**（非加载时）。
+5. **生命周期**：`NewManager` 懒连接；eager/keep-alive 由 core 会话装配后 `go StartEager()`；idle 回收默认 5min、keep-alive 豁免；`Close()` 幂等、关 session + 进程组 kill。
+6. **进程管理**：`mcp/proc_unix.go`（Setpgid + `kill(-pid, SIGKILL)`）/ `proc_windows.go`（taskkill /T /F），镜像 `codingagent/utils/shell_kill_*.go`。
+7. **代理工具名 `mcp`**：schema 五字段 `status/search/describe/tool/args`（对齐 pi-mcp-adapter 输入形状）；工具全名 `server__tool`（CallTool 接受全名/display/raw 三形态）；裸名跨 server 歧义报错列候选（manager.resolveToolName）。MCP 图片内容映射 `types.ImageContent`；audio/resource 映射为描述文本（MCP-2 素材）。
+8. **默认 active**：代理工具走 customTools 注册路，`includeAllExtensionTools: true` 使其自动进 active 集；PromptSnippet「先 search 再 call」自动进系统提示（冒烟实证）。
 
-## 3. 当前文件清单（工作树全部未提交）
+## 3. 最终文件清单
 
 | 文件 | 状态 |
 |---|---|
-| `mcp/config.go` | ✅ 完整：Config/ServerConfig/Diagnostic + ParseConfigBytes/ParseConfigFile/LoadConfigFiles（校验失败的 server 丢弃并报诊断）|
-| `mcp/manager.go` | ✅ 完整：Manager 全量（懒连接/idle 回收/include-exclude glob/toolPrefix/请求超时 60s 默认/Close 幂等/stderr ring buffer 64KB/headerTransport/mergeEnv）+ `TransportFactory` seam |
-| `mcp/search.go` | ✅ 完整：打分（exact 1000/prefix 700/词边界 600/含 500/全词 450/描述 200/120）|
-| `mcp/proc_unix.go` / `proc_windows.go` | ✅ |
-| `mcp/config_test.go` | ✅ 8 个测试全绿 |
-| `mcp/manager_test.go` | 🔶 12 个测试：in-memory 系全绿；**`TestLazyConnectAndIdleReap` 卡死锁（§4）；`TestStdioTransportE2E`/`TestStreamableHTTPE2EWithHeaders`/`TestHeaderTransportRejectFailure`/`TestStartEagerConnects`/`TestKeepAliveNotReaped`/`TestRequestTimeout`/`TestBrokenServerDoesNotHideOthers`/`TestUnknownServerAndManagerClose` 未跑完验证（被死锁测试堵住）** |
-| `mcp/proc_unix_test.go` / `proc_windows_test.go` | ✅ processAliveOnce |
-| `go.mod`/`go.sum` | +SDK v1.8.0（tidy 过）|
-| `core/mcp_integration.go` 及 core 挂接 | ❌ 未开始 |
+| `mcp/config.go` | ✅ Config/ServerConfig/Diagnostic + ParseConfigBytes/ParseConfigFile/LoadConfigFiles（校验失败的 server 丢弃并报诊断）|
+| `mcp/manager.go` | ✅ Manager 全量（懒连接/idle 回收/include-exclude glob/toolPrefix/请求超时 60s 默认/Close 幂等/stderr ring buffer 64KB/headerTransport/mergeEnv）+ TransportFactory seam |
+| `mcp/search.go` | ✅ 打分（exact 1000/prefix 700/词边界 600/含 500/全词 450/描述 200/120）|
+| `mcp/proc_unix.go` / `proc_windows.go` | ✅ 进程组 kill |
+| `mcp/config_test.go` / `manager_test.go` / `proc_*_test.go` | ✅ 8 + 12 + 1 测试函数全绿 |
+| `codingagent/core/mcp_integration.go` | ✅ createMCPManager（文件链+信任门控+诊断）+ createMCPProxyToolDefinition（五 action 分派/IsError→Go error/内容映射）+ mcpGlobalConfigPathFn seam |
+| `codingagent/config.go` | ✅ `GetMCPPath()` |
+| `codingagent/core/trust_manager.go` | ✅ `.pig/mcp.json` 进 trustRequiringProjectConfigResources + 根 `.mcp.json` 单独 stat |
+| `codingagent/core/agent_session.go` | ✅ `AgentSessionConfig.MCPManager` + customTools 注入（跨 Reload 存活）+ `Dispose()` 关停 |
+| `codingagent/core/agent_session_services.go` | ✅ services 建 manager（Reload 后、trust 终局处）+ 诊断并入 `services.Diagnostics` + FromServices 透传 |
+| `codingagent/core/sdk.go` | ✅ `CreateAgentSessionOptions.MCPManager` + 直连路自动建 + `go StartEager()` + 传入 AgentSessionConfig |
+| `codingagent/core/mcp_integration_test.go` | ✅ 5 测试函数（桥接面） |
+| `go.mod`/`go.sum` | ✅ +SDK v1.8.0（tidy 过） |
 
-跑过且绿的命令：`go build ./mcp/ && go vet ./mcp/ && gofmt -l mcp/` 干净。
-注意 macOS 无 `timeout` 命令，用 go test 自带 `-timeout` 做硬超时（卡住会 dump goroutine）。
+## 4. 死锁破案记录（原 §4，存档）
 
-## 4. 当前卡点：TestLazyConnectAndIdleReap 死锁（先修这个）
+半成品现象：测试配置 `IdleTimeoutMs: 80`、`ReapInterval: 20ms`，`Status()`（disconnected）通过后 `SearchTools` 永久阻塞；dump 显示两个等待者锁地址相同、**全部 goroutine 栈上没有任何持锁者**。已排查排除：无 ABBA（当时的认知）、reapOnce 三条路径显式 Unlock、dump 无 SDK 痕迹。
 
-**现象**：测试配置 `IdleTimeoutMs: 80`、`ReapInterval: 20ms`，第一步 `Status()`（disconnected）通过，随后 `SearchTools` 永久阻塞，go test 10s 超时 dump：
+**真相**：`Status()` 的循环体里 `st.mu.Lock()` 之后没有任何 `st.mu.Unlock()`（函数只有 `defer m.mu.Unlock()`）。测试第一步 `Status()` 把 st.mu 永久带走并返回——持锁者不在任何栈上，因为持锁者已经不存在了。「锁的持有人在栈上不可见」的最朴素解释：持有人已带着锁退出作用域。
 
-- goroutine 5（测试）：`listServerTools` 的 `st.mu.Lock()`（manager.go:399）**等待中**
-- goroutine 6（reaper）：`reapOnce` 的 `st.mu.Lock()`（manager.go:654）**等待中**
-- **两个等待者锁地址相同（0xc0000005c8），但全部 4 个 goroutine 的栈上没有任何持锁者**——即锁的持有人在栈上不可见或错过唤醒
+**教训**：栈上无持锁者时，优先怀疑「持锁者已正常返回但漏 Unlock」（lock/unlock 不配对），其次才是调度玄学；`grep -A15 'func.*Status'` 级别的肉眼审查比 goroutine dump 分析更快。
 
-完整 dump 已存 `/tmp/mcp-reap-dump.log`。
+**连带修复**：修掉漏 Unlock 后暴露第二层真 ABBA——`Status()` 持 `m.mu` 拿 `st.mu` vs `connectLocked` 持 `st.mu` 拿 `m.mu`（TestStartEagerConnects 卡死现形）。锁序铁律已写入 manager.go 注释与 feat 文档。
 
-**已排查排除**：无 ABBA（锁序如 §2.3）；reapOnce 三条路径都显式 Unlock；`closeSessionLocked` 若阻塞栈上会显示；不是 Status/Close 的嵌套。dump 里只有 4 个 goroutine（TestMain/测试/reaper/alarm），**没有 SDK 内部 goroutine 持锁的痕迹**。
+## 5. 验收
 
-**下一个 agent 的排查建议（按性价比排序）**：
-1. 最可疑：in-memory transport 下 `client.Connect` 或某 SDK 调用在**持 st.mu 期间**同步回调进入 SDK，SDK 内部又等我们的什么（比如等待 `srv.Run(ctx, serverTransport)` 那个 goroutine 起来），而该 goroutine 因调度/starvation 没跑起来（-race 下 20ms 的 reaper tick 高频抢锁加剧）。先试**最小改动**：把 `listToolsLocked` 里的 `session.Tools()` 移出 st.mu？不行——要先解决连接本身。**建议先做实验**：把 ReapInterval 改大（比如 1s）看测试是否直接全绿（若是，就是持锁期间与 reaper 高频争锁的调度问题，而不是严格死锁）；再试 reaper 完全不碰 st.mu（改用 `st.mu.TryLock`，拿不到就跳过本轮）——**TryLock 跳过是合理终态**，回收不急这一轮。
-2. 次可疑：`m.logf` / ring buffer 竞争（可能性低）。
-3. 用 `-race` + 缩小 ReapInterval/IdleTimeout 参数做二分，或给 reapOnce 换 `TryLock` + 失败时 `runtime.Stack` 打点确认持锁者。
-4. 若是 SDK 内部在持锁期间需要"并发推进"（如 in-memory Connect 等对端 goroutine），终态修法可能是：**connect 时不要在持 st.mu 状态下同步等 Connect 完成**（先 TryLock 语义不适用则把 connect 的等待拆出去），或 reaper 用 TryLock。**倾向终态：reapOnce 改 `st.mu.TryLock()`（拿不到直接跳过，下轮再收）**——简单、语义正确、消除争抢窗口。
+- `go build ./... && go vet ./... && gofmt` 干净。
+- 全量 `go test ./... -race -count=1 -timeout 600s` **单次** rc=0，30 包全 ok（AGENTS.md 铁律：`out=$(…); rc=$?`，日志 `/tmp/pig-test-out-mcp1.log`）。
+- **print 模式 mock 冒烟（全链路）**：`go test -c ./mcp/ -o mcp.test` 的测试二进制以 `PIG_MCP_HELPER_PROCESS=1 -test.run=^$` 作真实 stdio MCP server（helper-process 手法）+ Python mock OpenAI SSE 端点（三回合脚本：search → call → final text）+ 项目 `.mcp.json` 指向该二进制 + `--approve` 信任。输出实证：
+  - `tool_execution_start {"search": ""}` → `tool_execution_end isError=false`：`1 MCP tool(s): - helper_echo (server "helper") echo helper`
+  - `tool_execution_start {"tool": "helper_echo", "args": {"message": "smoke"}}` → `helper: smoke` isError=false
+  - 系统提示 `<tools>` 段含 `mcp` 条目、描述与 PromptSnippet；agent_end 正常收尾（rc=0）。
+  - 过程细节：`--mode json` 事件流在 **stderr**（stdout 留空）；trust-requiring 项目必须 `--approve`（或预置 trust.json），否则 `.mcp.json` 被门控跳过——冒烟顺带实证了信任门控的生产行为。
 
-修好后按 §5 继续。
+## 6. 修复清单（半成品 → 收口）
 
-## 5. 下一步清单（按序）
+| # | 问题 | 修复 | 红→绿证据 |
+|---|---|---|---|
+| 1 | `Status()` 漏 `st.mu.Unlock()`（§4 悬案）| `defer st.mu.Unlock()` | TestLazyConnectAndIdleReap 卡死 → 全绿 |
+| 2 | `Status()` 持 `m.mu` 拿 `st.mu` 与 connectLocked 反序（真 ABBA）| m.mu 下快照、放锁后逐个拿 st.mu | TestStartEagerConnects 120s 卡死 → 全绿 |
+| 3 | `CallTool` 不剥 `server__` 全名前缀 | `strings.TrimPrefix(tool, server+"__")` | TestSearchAndCallInMemory 红 → 绿 |
+| 4 | 测试给 "broken" server 也建了可用 fake（意图是连接失败）| factory 对 broken 返回 error | TestBrokenServerDoesNotHideOthers 红 → 绿 |
+| 5 | `newTestManager` 防护 factory 拦截真 HTTP 测试且返回 nil transport（SDK 段错误）| 防护收窄到 stdio 配置 + 返回 error | TestStreamableHTTPE2EWithHeaders 段错误 → 绿 |
+| 6 | 测试里 `StreamableHTTPHandler` 每请求 new 一次（session store 丢失 → "session not found"）| handler 提到 handler func 外 | 同上（同批修复）|
+| 7 | header 解析失败测试注入 factory 走不到 HTTP header 路 | 去掉 factory，走真 HTTP transport 构建路（解析失败先于拨号）| TestHeaderTransportRejectFailure 红 → 绿 |
+| 8 | 空 config manager `Close()` 永阻（reapLoop 未启动但 Close 等 reapDone）| 恒启动 reaper | core 链测试卡死 → 绿 |
 
-1. **修 §4 死锁**，`go test ./mcp/ -race -count=1 -timeout 120s` 全绿（12 个测试全过，含三个 e2e：stdio helper-process、HTTP httptest + header 解析注入断言、header 解析失败路）
-2. `core/mcp_integration.go`：
-   - `loadMCPConfigFiles(cwd, agentDir)` 文件链（§2.4）+ 信任门控（未信任项目跳过 `.mcp.json` + warning 诊断）→ 返回 `*mcp.Manager` + `[]AgentSessionRuntimeDiagnostic`
-   - `createMCPProxyToolDefinition(mgr *mcp.Manager) *tools.ToolDefinition`：name `mcp`，五 action 分派；`IsError` 结果转 Go error；图片内容映射 `types.ImageContent`；轻量 RenderCall/RenderResult（tui.NewText 摘要 + 文本预览即可，或先 nil 走 fallback——fallback 渲染已存在，tool_execution.go createCallFallback/createResultFallback）
-   - `AgentToolResult` 构造参考 `core/tools/ls.go`（`resultOf`/`asTextContent` helper、`decodeToolParams[T]`）
-3. **core 挂接小改**（<100 行）：
-   - `codingagent/config.go`：`GetMCPPath()`（挨着 GetSettingsPath :248）
-   - `core/trust_manager.go:61`：`trustRequiringProjectResources` 追加 `"mcp.json"`
-   - `core/agent_session.go`：`AgentSessionConfig` + `MCPManager` 字段（cacheWarmer 同构 :618）；`NewAgentSession` 把代理工具塞 `s.customTools`（**manager 本体跨 Reload 存活，customTools 走 refreshToolRegistry 自动重挂**）；`Dispose()`（:1891）调 `mgr.Close()`；`buildRuntime` 默认 active（:4878）配置非空追加 `"mcp"`
-   - `core/sdk.go` CreateAgentSession：cwd/trusted 可得处构造（信任状态在 main.go createRuntimeFactory 的 resolveProjectTrusted 缓存里，确认穿进来；若 sdk.go 拿不到 trust，就在 services 层（`agent_session_services.go:159`）加参数）；诊断并入 services.Diagnostics
-   - 注意：`CreateAgentSession`（sdk.go :148）与 `CreateAgentSessionServices` 是两条装配路，别只接一条
-4. **core 桥接测试**（fake manager 注入）：工具注册/默认 active/system prompt snippet（PromptSnippet 会经 rebuildSystemPrompt :2183 自动进系统提示）/Dispose 关停/信任门控红绿（未信任项目 .mcp.json 不加载且出 warning）
-5. **验收门**：build/vet/gofmt 干净 + 全量 `go test ./... -race -count=1 -timeout 600s` **只跑一次**（AGENTS.md 铁律：输出存 `out=$(…); rc=$?` 后多处消费，严禁重跑提取）+ print 模式 mock 冒烟（本地起 fake MCP server，走 `mcp search → call` 全链路；可用 mcp 包的 helper-process 手法）
-6. **文档**：`docs/feat/MCP.md`（house 结构照 MAC-CLIPBOARD-IMAGE.md：日期/状态/动机/涉及文件 → 实现 → 边界 → 回归测试含 stash 验证 → 过程坑）+ 收批 `docs/handoffs/MCP-1.md` 终稿（表格 + 偏差声明 + 验收 + MCP-2 定义）+ AGENTS.md「已交付」段补一行 + 若改了 AGENTS.md 机制类规则才更新
+## 7. 已知偏差声明（pig-only 面，无 pi 对齐物）
 
-## 6. 已知偏差声明（写进 feat 文档的素材）
+- `mcpServers` 配置键兼容生态（Claude Code/Cursor `.mcp.json` 直接复用）；server 级字段名 pig 自定（`idleTimeoutMs`/`requestTimeoutMs`/`lifecycle` 取值对齐 pi-mcp-adapter 语义但命名 snake_case 自定）。
+- `!command` header 解析沿用 `core/resolve_config_value.go` 的**进程级缓存**语义（命令结果缓存）——token 轮换类 header 有过期窗口。
+- 工具搜索打分是 pig-only 简版（不 import tui/fuzzy，mcp 包保持纯叶子）。
+- call 的裸工具名歧义时报错列出候选（manager.resolveToolName），不做静默选择。
+- 代理工具的 MCP server 列举**触发懒连接**（与 pi-mcp-adapter 同语义：发现即连接）。
+- 代理工具渲染 nil，走 tool_execution 既有 fallback（pi-mcp-adapter 有自带渲染器，pig 声明偏差）。
+- 直连 `CreateAgentSession` 自动建 manager 时诊断无处落（该路仅测试消费；生产走 services 路，诊断并入 services.Diagnostics）。
+- audio/resource MCP 内容映射为描述性文本；图片正常映射 `types.ImageContent`。
 
-- `mcpServers` 配置键兼容生态（Claude Code/Cursor .mcp.json 可直接复用）；但 server 级字段名是 pig 自定（`idleTimeoutMs`/`requestTimeoutMs`/`lifecycle` 取值对齐 pi-mcp-adapter 语义但命名 snake_case 自定）——与 pi 无对齐物，属 pig-only 面
-- `!command` header 解析沿用 `core/resolve_config_value.go` 的**进程级缓存**语义（命令结果缓存）——对 token 轮换类 header 有过期语义，文档要写明
-- 工具搜索打分是 pig-only 简版（不 import tui/fuzzy，mcp 包保持纯叶子）
-- call 的裸工具名歧义时报错列出候选（manager.resolveToolName），不做静默选择
-- proxy tool 的 MCP server 列举会**触发懒连接**（与 pi-mcp-adapter 同语义：发现即连接）
+## 8. MCP-2 定义（下一批素材，全部现成）
 
-## 7. 探索期情报（接手者不必重查）
+- **/mcp 面板**：`Manager.Status()` 数据面已备好（含 PID/IdleMs/LastError/ToolCount）。
+- **resources/prompts**：SDK `ClientSession.GetPrompt/ListResources/ReadResource/Complete` 现成；代理工具可扩 describe 之外的 action 或独立工具。
+- **OAuth**：SDK 的 OAuth 在 `internal/authutil` 不导出，需自写（pig 已有 ai/auth OAuth 先例）。
+- **directTools 模式**：MCP 工具平铺注册（不做 proxy），注意工具名冲突与 include/exclude 语义。
+- **sampling/elicitation/Tasks**：SDK 客户端侧有对应 handler 注册点。
+- **config importer**：从 Claude Code/Cursor 配置导入（键已兼容，差路径发现）。
+- **服务端**：`mcp.NewStreamableHTTPHandler` 可把 pig 暴露为 MCP server（注意 §6#6 的 session store 陷阱）。
 
-- 工具注册面/执行面/渲染面完整地图：`ToolDefinition` 在 `codingagent/core/tools/tool_context.go:159`（Parameters 是 `json.RawMessage`）；`refreshToolRegistry` 在 agent_session.go:4669（customTools 插入序：base 先、custom 同名覆盖）；渲染 fallback 在 `components/tool_execution.go`（nil renderer 有兜底）；`WithBuiltInRenderers` 只认 8 个内置名
-- 配置/生命周期地图：`GetAgentDir()` config.go:219（PIG_CODING_AGENT_DIR）；`ResolveHeadersOrThrow` resolve_config_value.go:410；Dispose 链 `AgentSessionRuntime.teardownCurrent` 覆盖 /new /fork /resume /reload
-- 测试惯例：包级 var seam（t.Cleanup 恢复）、httptest 假后端（`ai/api/openai_completions_test.go:42` newMockSSEServer、bedrock e2e）、helper-process 先例（clipboard 五文件）
-- SDK 另有的能力（MCP-2 素材）：`ClientSession.GetPrompt/ListResources/ReadResource/Complete`、`mcp.NewStreamableHTTPHandler`（服务端）、OAuth 在 `internal/authutil`（不导出，MCP-2 OAuth 要自己写）
+## 9. 给下一个 agent 的备忘
+
+- mcp 包的锁序铁律改动前先读 manager.go 顶部注释；任何「持 m.mu 拿 st.mu」的新代码都是 ABBA 候选。
+- `mcp.test -test.run=^$` + `PIG_MCP_HELPER_PROCESS=1` 是现成的 stdio fake server，可复用于任何 pig MCP 冒烟。
+- darwin 无 `timeout` 命令；go test 用 `-timeout` 硬超时（卡住会 dump goroutine）。
+- 冒烟时 mock server 生命周期要干净（pkill 后确认端口释放），否则脚本化回合数会被残留进程吃掉（本次实证）。
