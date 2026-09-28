@@ -2,10 +2,8 @@
 // token stats, and context usage. Computes token/context stats from the
 // session; git branch and extension statuses come from the provider. When
 // the pig-only showResourceStats setting is on, the stats line also shows
-// process resource stats ("| CPU2%·MEM22MB·!G387…": a plain always-on CPU
-// rate and memory number, joined by "·"; the CPU item shows "CPU-%" until
-// the first window rate exists, and turns "!CPU" warning-colored while
-// its anomaly streak holds; G/FD surface only on anomaly — see
+// process resource stats ("| MEM22MB·!G387…": memory always on, joined by
+// "·"; the CPU item ("!CPU") and G/FD surface only on anomaly — see
 // resource_stats.go).
 //
 // Declared deviation: pi reads session.sessionManager/session.state
@@ -207,8 +205,7 @@ func (f *FooterComponent) SetShowResourceStats(enabled bool) {
 	if enabled {
 		if f.stopResourcePoller == nil {
 			// Sample once up front so the segment appears on the next
-			// render instead of one interval later (the CPU rate needs two
-			// ticks and starts at the "CPU-%" placeholder).
+			// render instead of one interval later.
 			f.res.sampleStatic()
 			// The poller notifies the render loop after each ticker sample:
 			// read ui under f.mu, release, then RequestRender — no lock
@@ -415,38 +412,26 @@ func (f *FooterComponent) Render(width int) []string {
 	}
 
 	// Resource segment (pig-only; pi has no counterpart): process stats
-	// separated from the usage stats by "|", items joined by "·". CPU is
-	// always on (user request, 2026-09-16) and renders before MEM: a
-	// "CPU-%" placeholder until the first window rate exists (a rate
-	// needs a denominator pair; a process-lifetime average is not
-	// representative of current activity, so no number is published
-	// before a full window lands), then plain "CPU2%" — warning-colored
-	// "!CPU" while the anomaly streak holds. MEM is one plain number by
-	// design — users don't need the RSS/heap distinction (the pairing
-	// rationale lives in the feat doc). The alert items (!G/!FD, warning
+	// separated from the usage stats by "|", items joined by "·". MEM is
+	// always on and one plain number by design — users don't need the
+	// RSS/heap distinction (the pairing rationale lives in the feat doc).
+	// CPU renders only on anomaly — warning-colored "!CPU" while the
+	// streak holds (user request, 2026-09-28: dropped the always-on
+	// plain rate and its "CPU-%" first-window placeholder; sampling
+	// continues so the alert can fire). The alert items (!G/!FD, warning
 	// color) surface only on anomaly — see resource_stats.go for the
 	// thresholds. Keep the alert prefix ASCII: an earlier draft used ⚠️
 	// (U+26A0+FE0F), whose cell width is decided by the terminal/font
 	// rather than pig — mismatched advances made the glyph overlap the
 	// following text (user-verified). Hidden until the sampler produced a
-	// value (0/invalid = not sampled / unsupported platform; the CPU item
-	// additionally requires cpuSupported, so stub platforms hide it
-	// entirely rather than showing a permanent placeholder).
+	// value (0 = not sampled / unsupported platform).
 	if showResourceStats {
 		var resParts []string
-		if f.res.cpuSupported.Load() {
-			if f.res.cpuValid.Load() {
-				if f.res.alertCPU.Load() {
-					resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!CPU%d%%", f.res.cpuPercent.Load())))
-				} else {
-					resParts = append(resParts, fmt.Sprintf("CPU%d%%", f.res.cpuPercent.Load()))
-				}
-			} else {
-				resParts = append(resParts, "CPU-%")
-			}
-		}
 		if memBytes := f.res.memBytes.Load(); memBytes > 0 {
 			resParts = append(resParts, "MEM"+FormatMemBytes(memBytes))
+		}
+		if f.res.alertCPU.Load() {
+			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!CPU%d%%", f.res.cpuPercent.Load())))
 		}
 		if f.res.alertG.Load() {
 			resParts = append(resParts, currentTheme.Fg("warning", fmt.Sprintf("!G%d", f.res.goroutines.Load())))

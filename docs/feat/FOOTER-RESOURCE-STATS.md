@@ -121,3 +121,19 @@ dogfooding 发现 footer `MEM44MB` 与活动监视器「内存」列 `24MB` 差 
 
 - **采样后主动唤醒渲染**：poller 每次 ticker 采样后经 `FooterTUI.RequestRender(false)`（窄接口，ModelSelectorTUI 先例；footer 经 `SetTUI` 注入，interactive 装配一行接线）触发重绘——TUI 是事件驱动的，空闲期无输入不重绘，否则新值（含 CPU 占位符→真实速率的替换）要等下一次按键才浮出；回调只读 ui 后释放锁再调 RequestRender，与 TUI 锁零嵌套；首个 tick（~5s）时 TUI 早已 Start，回调不落在启动前路径。`footerSampleInterval` 改包级 var 供测试缩短。
 - 回归测试：`TestFooterCPUPlaceholderBeforeFirstWindow` + `TestFooterCPUHiddenWhenUnsupported` + `TestStartResourcePollerCPUPlaceholderFirstSample` + `TestStartResourcePollerNotifiesOnSample` + `TestFooterResourceSampleTriggersRender`（新）+ `TestFooterAlertsShownWhenFlagsSet` / `TestFooterAlertsHiddenWhenFlagsFalse` / `TestResourcePollerCPUAlertStreak` 同步（cpuSupported/cpuValid 两态、CPU 位次与采样→渲染链路锁定）。
+
+## CPU 退回异常浮出 + 采样间隔 5s→10s（2026-09-28，本节为显示终态）
+
+用户要求推翻 2026-09-16 的「CPU 常驻」决策（当时已声明是推翻初版），本轮反向收敛：**CPU 恢复只在异常时浮出，MEM 单独常驻**；采样间隔 5s→10s。
+
+- **间隔**：`footerSampleInterval = 10 * time.Second`（用户指定；G 趋势 streak 10 窗口相应从 ~50s 变 ~100s、CPU streak 2 窗口从 ~10s 变 ~20s，阈值本身不变——异常发现变慢一倍属接受范围）。
+- **CPU 项只有 `!CPU` 一种形态**：异常 streak（≥30% 连续 2 窗口）期 warning 色浮出，非异常期完全不渲染——普通色 `CPU2%` 与首窗占位符 `CPU-%` 一并删除（占位符本来就只为常驻数字服务）。`cpuSupported`/`cpuValid` 两个门控字段随之删除（唯一消费者就是常驻渲染；无 CPU 读数的平台算不出速率 → 永不告警 → 项永不出现，无需显式门）。**采样与速率计算保留**：告警判定与 `!CPU` 数值仍依赖每窗口速率。
+- **MEM 常驻不变**；渲染序固定 MEM → !CPU → !G → !FD（`!` 项按异常浮出，CPU 回到告警族与 !G/!FD 并列）。
+- 当前显示形态：
+
+```
+↑181k ↓126k … 3.0%/1.0M (auto) | MEM60.2MB     ← 常态（唯一常驻项）
+↑181k ↓126k … 3.0%/1.0M (auto) | MEM60.2MB·!G387·!FD210·!CPU97%  ← 异常期（顺序 MEM → !G → !FD → !CPU，仅异常项出现）
+```
+
+- 测试同步：删除 `TestFooterCPUPlaceholderBeforeFirstWindow`；`TestFooterAlertsHiddenWhenFlagsFalse` 升级为「有效 CPU 速率 + 无异常 → 完全不渲染 CPU 项」；`TestStartResourcePollerCPUPlaceholderFirstSample` → `TestStartResourcePollerSeedsCPUBaseline`（首采样播种基线、发布速率为 0、不告警）；`TestResourcePollerCPUAlertStreak` 去 cpuSupported/cpuValid 断言改锁 cpuPercent=0 起步；`TestFooterAlertsShownWhenFlagsSet` / `TestFooterCPUHiddenWhenUnsupported` 同步。测试函数总数不变（19）。

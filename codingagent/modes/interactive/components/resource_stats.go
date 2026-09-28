@@ -24,14 +24,15 @@ import (
 // Sampling cadence and anomaly thresholds (pig-only).
 var (
 	// footerSampleInterval is how often the resource poller samples. Memory
-	// moves slowly (per-turn growth is ~100KB scale), so 5s is plenty
-	// responsive. A var (not const) so tests can shorten it.
-	footerSampleInterval = 5 * time.Second
+	// moves slowly (per-turn growth is ~100KB scale), so 10s is plenty
+	// responsive (user request, 2026-09-28: 5s → 10s). A var (not const)
+	// so tests can shorten it.
+	footerSampleInterval = 10 * time.Second
 )
 
 const (
 	// Goroutine leak signals. Trend beats thresholds: gLeakStreakTicks
-	// consecutive monotonic increases (~50s) catch a leak long before any
+	// consecutive monotonic increases (~100s) catch a leak long before any
 	// absolute level would, while gAbsolute catches an established leak
 	// that has plateaued (any non-increase resets the streak — a healthy
 	// session oscillates, a leak ratchets).
@@ -44,7 +45,7 @@ const (
 	fdThreshold = 200
 
 	// CPU alert requires cpuThresholdPercent sustained for
-	// cpuAlertStreakTicks consecutive windows (~10s): one window of heavy
+	// cpuAlertStreakTicks consecutive windows (~20s): one window of heavy
 	// streaming render is not an anomaly; a spinning event loop is.
 	cpuThresholdPercent = 30
 	cpuAlertStreakTicks = 2
@@ -53,12 +54,10 @@ const (
 // resourceStats is the poller's published state. All fields are atomic:
 // the poller goroutine writes, footer Render reads.
 type resourceStats struct {
-	memBytes     atomic.Int64 // memory charged to the process (darwin: phys_footprint, matching Activity Monitor's "Memory" column; linux: statm resident); 0 = unsampled/unsupported
-	goroutines   atomic.Int64
-	fdCount      atomic.Int64 // open descriptors; 0 = unavailable
-	cpuPercent   atomic.Int64 // last window's process CPU, rounded; 0 = no window yet (or genuinely idle)
-	cpuValid     atomic.Bool  // a window rate has been computed (second sample onward); gates the real number over the CPU placeholder
-	cpuSupported atomic.Bool  // the platform yields CPU readings; gates the always-on CPU item (windows stub hides it entirely)
+	memBytes   atomic.Int64 // memory charged to the process (darwin: phys_footprint, matching Activity Monitor's "Memory" column; linux: statm resident); 0 = unsampled/unsupported
+	goroutines atomic.Int64
+	fdCount    atomic.Int64 // open descriptors; 0 = unavailable
+	cpuPercent atomic.Int64 // last window's process CPU, rounded; 0 = no window yet (or genuinely idle); feeds the alert value only — the footer renders the CPU item exclusively on anomaly (user request, 2026-09-28)
 
 	alertG   atomic.Bool
 	alertFD  atomic.Bool
@@ -72,8 +71,6 @@ func (s *resourceStats) zero() {
 	s.goroutines.Store(0)
 	s.fdCount.Store(0)
 	s.cpuPercent.Store(0)
-	s.cpuValid.Store(false)
-	s.cpuSupported.Store(false)
 	s.alertG.Store(false)
 	s.alertFD.Store(false)
 	s.alertCPU.Store(false)
@@ -81,9 +78,7 @@ func (s *resourceStats) zero() {
 
 // sampleStatic fills the instantaneous values (everything except the CPU
 // window rate, which needs two samples). Used on segment enable so the
-// values appear on the next render instead of one interval later; the
-// CPU item renders its placeholder from this first sample (cpuSupported)
-// while the real rate waits for the second.
+// values appear on the next render instead of one interval later.
 func (s *resourceStats) sampleStatic() {
 	r, ok := readResourceSample()
 	if !ok {
@@ -92,7 +87,6 @@ func (s *resourceStats) sampleStatic() {
 	s.memBytes.Store(r.mem)
 	s.goroutines.Store(r.goroutines)
 	s.fdCount.Store(r.fds)
-	s.cpuSupported.Store(r.cpuOK)
 }
 
 // resourceReadings is one tick's raw readings (apply is pure over these,
@@ -142,23 +136,22 @@ func (p *resourcePoller) apply(r resourceReadings, elapsed time.Duration) {
 	s.fdCount.Store(r.fds)
 
 	// CPU rate over this window; the first sample has no denominator pair.
+	// The rate feeds the anomaly alert only — nothing renders until the
+	// streak fires, so a missing rate on unsupported platforms simply
+	// means the CPU item never surfaces.
 	if r.cpuOK {
-		s.cpuSupported.Store(true)
 		if p.haveCPU && elapsed > 0 {
 			percent := float64(r.cpuMicros-p.prevCPUMicros) / 1e6 / elapsed.Seconds() * 100
 			if percent < 0 {
 				percent = 0 // accounting can straddle two reads
 			}
 			s.cpuPercent.Store(int64(percent + 0.5))
-			s.cpuValid.Store(true) // a rate exists → the footer's real CPU number may render
 		}
 		p.prevCPUMicros = r.cpuMicros
 		p.haveCPU = true
 	} else {
 		p.haveCPU = false
 		s.cpuPercent.Store(0)
-		s.cpuValid.Store(false)
-		s.cpuSupported.Store(false)
 	}
 
 	// Goroutine trend: any non-increase resets the streak.
@@ -184,12 +177,11 @@ func (p *resourcePoller) apply(r resourceReadings, elapsed time.Duration) {
 // startResourcePoller samples on a ticker until the returned stop is
 // called (idempotent). Stops on sampler loss: all values zero, segment
 // hides. Samples once immediately before the first tick: that seed gives
-// the CPU rate its baseline at t0, so the first real number lands after
-// one interval (~5s); until then the footer shows the "CPU-%"
-// placeholder — a process-lifetime average is not representative of
+// the CPU rate its baseline at t0, so the first real rate lands after one
+// interval (~10s) — a process-lifetime average is not representative of
 // current activity, so no rate is published before a full window exists.
-// Callers additionally call resourceStats.sampleStatic so MEM and the
-// placeholder render before the goroutine runs.
+// Callers additionally call resourceStats.sampleStatic so MEM renders
+// before the goroutine runs.
 //
 // onSample fires after every ticker sample (not the immediate seed): the
 // TUI is event-driven and does not redraw while idle, so without this
