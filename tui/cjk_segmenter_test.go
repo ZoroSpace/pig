@@ -9,19 +9,41 @@ package tui
 import (
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
-// useCJKSegmenter swaps the process-wide segmenter for a fresh instance
-// pinned to mode and waits for dictionary backends to finish loading
-// (production never waits; tests need determinism). The previous instance
-// is restored via t.Cleanup — tests using this helper must not call
-// t.Parallel (they mutate package globals).
+// loadedCJKSegmenters memoizes one fully loaded instance per mode for the
+// whole test process. A dictionary parse costs ~6s under -race and a dozen
+// tests pin the same mode; the instance is read-only once loaded (mode
+// fixed, dictionary pointers published, cuts serialized by the instance
+// mutex), so sharing it changes nothing the tests can observe — only how
+// often the parse runs.
+var loadedCJKSegmenters sync.Map // cjkSegmenterMode -> *cjkSegmenter
+
+// useCJKSegmenter swaps the process-wide segmenter for an instance pinned to
+// mode and waits for dictionary backends to finish loading (production never
+// waits; tests need determinism). The previous instance is restored via
+// t.Cleanup — tests using this helper must not call t.Parallel (they mutate
+// package globals).
+//
+// The instance is cached per mode (loadedCJKSegmenters); a test that needs to
+// observe the loading path itself must build its own cjkSegmenter.
 func useCJKSegmenter(t *testing.T, mode cjkSegmenterMode) {
 	t.Helper()
 	saved := theCJKSegmenter
 	t.Cleanup(func() { theCJKSegmenter = saved })
+	theCJKSegmenter = loadCJKSegmenter(t, mode)
+}
+
+// loadCJKSegmenter returns the cached instance for mode, loading it on first
+// use and waiting for the backend to settle.
+func loadCJKSegmenter(t *testing.T, mode cjkSegmenterMode) *cjkSegmenter {
+	t.Helper()
+	if cached, ok := loadedCJKSegmenters.Load(mode); ok {
+		return cached.(*cjkSegmenter)
+	}
 	seg := &cjkSegmenter{}
 	seg.once.Do(func() {
 		seg.mode = mode
@@ -37,25 +59,26 @@ func useCJKSegmenter(t *testing.T, mode cjkSegmenterMode) {
 			t.Fatalf("unhandled test mode %d", mode)
 		}
 	})
-	theCJKSegmenter = seg
 	select {
-	case <-theCJKSegmenter.ready:
+	case <-seg.ready:
 	case <-time.After(120 * time.Second):
 		t.Fatal("cjk dictionary load timed out")
 	}
-	if theCJKSegmenter.loadFailed.Load() {
+	if seg.loadFailed.Load() {
 		t.Fatal("cjk dictionary failed to load")
 	}
 	switch mode {
 	case cjkModeSST:
-		if theCJKSegmenter.sstDict.Load() == nil {
+		if seg.sstDict.Load() == nil {
 			t.Fatal("sst dictionary not loaded")
 		}
 	case cjkModeGSE:
-		if theCJKSegmenter.gseSeg.Load() == nil {
+		if seg.gseSeg.Load() == nil {
 			t.Fatal("gse dictionary not loaded")
 		}
 	}
+	actual, _ := loadedCJKSegmenters.LoadOrStore(mode, seg)
+	return actual.(*cjkSegmenter)
 }
 
 // renderSegments formats segments as [seg]... with an Index contiguity check

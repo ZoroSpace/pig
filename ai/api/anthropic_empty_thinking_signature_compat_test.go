@@ -54,6 +54,10 @@ func captureSimplePayload(t *testing.T, model *types.Model, llmContext *types.Tr
 		options = &types.SimpleStreamOptions{}
 	}
 	options.APIKey = "fake-key"
+	// Payload capture never needs the response: these tests point BaseURL at an
+	// unreachable port, so the default retry policy would sit through
+	// connection-refused backoff (seconds per subtest) for nothing.
+	options.MaxRetries = lo.ToPtr(0)
 	options.OnPayload = func(payload any, model *types.Model) any {
 		if m, ok := payload.(map[string]any); ok {
 			captured = m

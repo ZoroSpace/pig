@@ -45,6 +45,7 @@ package core
 
 import (
 	bufio "bufio"
+	"bytes"
 	"context"
 	crand "crypto/rand"
 	"encoding/json"
@@ -1127,7 +1128,10 @@ func newSessionLineReader(f *os.File, bufSize int) *sessionLineReader {
 // next returns the next line (without the newline); ok=false at EOF.
 func (r *sessionLineReader) next() (string, bool) {
 	for {
-		if idx := indexByte(r.pending, '\n'); idx >= 0 {
+		// bytes.IndexByte (memchr) instead of a per-byte loop: the buffer is
+		// re-scanned from the start on every read, so a hand-rolled scan made
+		// long lines quadratic and cost ~35s on the 512MB fixture under -race.
+		if idx := bytes.IndexByte(r.pending, '\n'); idx >= 0 {
 			line := string(r.pending[:idx])
 			r.pending = r.pending[idx+1:]
 			return line, true
@@ -1148,15 +1152,6 @@ func (r *sessionLineReader) next() (string, bool) {
 			return "", false
 		}
 	}
-}
-
-func indexByte(b []byte, c byte) int {
-	for i, v := range b {
-		if v == c {
-			return i
-		}
-	}
-	return -1
 }
 
 // parseSessionHeaderCandidate inspects one line while searching for the
