@@ -8498,6 +8498,15 @@ func (m *InteractiveMode) rebindCurrentSession(renderBeforeBind bool) error {
 		m.unsubscribe = nil
 	}
 
+	// pi calls applyRuntimeSettings here (rebindCurrentSession's first step):
+	// it rebinds the footer to the replacement session (footer.setSession) and
+	// re-reads cwd / terminal capabilities / editor settings. pig dropped the
+	// call during the port, so after /resume (or /new, /fork, /import) the
+	// footer kept rendering the previous session — i.e. its model and stats
+	// stayed frozen while model switches applied to the live session (see
+	// docs/fix/2026-09-29-footer-stale-after-session-replacement.md).
+	m.applyRuntimeSettings()
+
 	if renderBeforeBind {
 		m.renderCurrentSessionState()
 		m.subscribeToAgent()

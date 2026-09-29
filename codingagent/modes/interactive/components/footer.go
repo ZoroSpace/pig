@@ -171,10 +171,26 @@ func NewFooterComponentWithView(session *core.AgentSession, view footerSessionVi
 }
 
 // SetSession rebinds the footer to a session (pi: setSession).
+//
+// pig deviation (2026-09-29): pi's render reads `this.session` directly, so
+// swapping the field is enough there. pig's Render reads through the
+// footerSessionView seam built once in the constructor, so the view must be
+// rebuilt here too — otherwise a session replacement (`/resume`, `/new`,
+// `/fork`, `/import`) left the footer bound to the previous session forever,
+// showing its model / tokens / context window while the live session was a
+// different one (user report: after /resume the footer kept the old model,
+// even though model switches actually applied).
+//
+// Callers that inject a stub view via NewFooterComponentWithView must not
+// call this with a session (the stub would be replaced by a real view); no
+// caller does.
 func (f *FooterComponent) SetSession(session *core.AgentSession) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.session = session
+	if session != nil {
+		f.view = newFooterSessionView(session)
+	}
 }
 
 // SetAutoCompactEnabled toggles the "(auto)" context indicator (pi:
