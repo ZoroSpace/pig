@@ -342,8 +342,15 @@ func (l *SettingsList) HandleInput(data string) {
 		} else {
 			l.selectedIndex++
 		}
+	// Space activates as well, but only once a search query is empty (pi:
+	// `data === " "`). pig deviation (2026-09-29): match it with
+	// MatchesKey(data, "space") instead of the raw byte so terminals that
+	// encode a plain space as Kitty CSI-u (\x1b[32u) or xterm
+	// modifyOtherKeys (\x1b[27;1;32~) also toggle rather than typing a space
+	// into the search box (which re-filters and snaps the cursor back to the
+	// first match).
 	case kb.Matches(data, "tui.select.confirm") ||
-		(data == " " && (!l.searchEnabled || l.searchInput.GetValue() == "")):
+		(MatchesKey(data, "space") && (!l.searchEnabled || l.searchInput.GetValue() == "")):
 		l.activateItem()
 	case kb.Matches(data, "tui.select.cancel"):
 		l.onCancel()
