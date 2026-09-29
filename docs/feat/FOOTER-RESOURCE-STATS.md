@@ -137,3 +137,11 @@ dogfooding 发现 footer `MEM44MB` 与活动监视器「内存」列 `24MB` 差 
 ```
 
 - 测试同步：删除 `TestFooterCPUPlaceholderBeforeFirstWindow`；`TestFooterAlertsHiddenWhenFlagsFalse` 升级为「有效 CPU 速率 + 无异常 → 完全不渲染 CPU 项」；`TestStartResourcePollerCPUPlaceholderFirstSample` → `TestStartResourcePollerSeedsCPUBaseline`（首采样播种基线、发布速率为 0、不告警）；`TestResourcePollerCPUAlertStreak` 去 cpuSupported/cpuValid 断言改锁 cpuPercent=0 起步；`TestFooterAlertsShownWhenFlagsSet` / `TestFooterCPUHiddenWhenUnsupported` 同步。测试函数总数不变（19）。
+
+## CPU 告警阈值 30%→70%（2026-09-29，本节为显示终态）
+
+用户报误报：footer 偶尔弹 `!CPU80%`/`!CPU90%`，但 1panel 整机 CPU 不高。排查确认公式无误（`Δ进程 CPU/Δ墙钟`，单核口径，探针与 `/proc/self/stat` 逐位一致），根因是阈值对多核机过低——详见 `docs/fix/2026-09-29-cpu-alert-threshold-false-positive.md`。
+
+- **阈值**：`cpuThresholdPercent` 30 → **70**（用户拍板区间 60~80 取中值）。`cpuAlertStreakTicks = 2` 不变。语义仍是「单核 70% 连续 2 窗口（~20s）」，只有事件循环真接近吃满一个核才告警，普通流式渲染高峰不再触发。
+- **不改口径**：不除以 `runtime.NumCPU()`（容器 cgroup 限额下 `NumCPU()` 不反映配额，改口径会引入新失真），只抬阈值。
+- **回归测试**：`TestResourcePollerCPUAlertStreak` 扩为三段——首窗播种无速率、60% 连续 2 窗不告警（新阈值行为锁）、70% 连续 2 窗告警（60% 段不得预热 streak）+ 冷却窗清除。原地改常量验证：30 → FAIL（`CPU alert fired at 60% sustained, below the 30% threshold`），70 → PASS。

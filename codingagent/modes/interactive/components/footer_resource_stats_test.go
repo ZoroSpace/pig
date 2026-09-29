@@ -329,11 +329,13 @@ func TestResourcePollerGoroutineStreak(t *testing.T) {
 
 // TestResourcePollerCPUAlertStreak: the alert needs cpuThresholdPercent for
 // cpuAlertStreakTicks consecutive windows; the first window has no rate.
+// The threshold is a single-core rate, so sustained ordinary load below it
+// must stay silent (2026-09-29: 30% → 70% killed the false positives).
 func TestResourcePollerCPUAlertStreak(t *testing.T) {
 	var stats resourceStats
 	p := resourcePoller{stats: &stats}
+	// Δ per 5s window → percent: 3_000_000µs = 60%, 3_500_000µs = 70%.
 	reading := func(micros int64) resourceReadings {
-		// Δ1_500_000µs per 5s window = 1.5s CPU / 5s = 30%.
 		return resourceReadings{mem: testMem, cpuMicros: micros, cpuOK: true}
 	}
 
@@ -344,18 +346,31 @@ func TestResourcePollerCPUAlertStreak(t *testing.T) {
 	if stats.cpuPercent.Load() != 0 {
 		t.Fatalf("cpuPercent = %d before any window rate existed", stats.cpuPercent.Load())
 	}
-	p.apply(reading(2_500_000), 5*time.Second) // 30%
-	if stats.cpuPercent.Load() != 30 {
-		t.Fatalf("cpuPercent = %d, want 30", stats.cpuPercent.Load())
+
+	// 60% for two straight windows: below the threshold, must not alert.
+	p.apply(reading(4_000_000), 5*time.Second) // 60%
+	if stats.cpuPercent.Load() != 60 {
+		t.Fatalf("cpuPercent = %d, want 60", stats.cpuPercent.Load())
+	}
+	p.apply(reading(7_000_000), 5*time.Second) // 60% again
+	if stats.alertCPU.Load() {
+		t.Fatalf("CPU alert fired at %d%% sustained, below the %d%% threshold", stats.cpuPercent.Load(), cpuThresholdPercent)
+	}
+
+	// 70% for two straight windows; the 60% pair must not have primed the
+	// streak, so the first 70% window is still only one.
+	p.apply(reading(10_500_000), 5*time.Second) // 70%
+	if stats.cpuPercent.Load() != 70 {
+		t.Fatalf("cpuPercent = %d, want 70", stats.cpuPercent.Load())
 	}
 	if stats.alertCPU.Load() {
 		t.Fatal("CPU alert fired after a single hot window")
 	}
-	p.apply(reading(4_000_000), 5*time.Second) // 30% again
+	p.apply(reading(14_000_000), 5*time.Second) // 70% again
 	if !stats.alertCPU.Load() {
 		t.Fatal("CPU alert did not fire after two consecutive hot windows")
 	}
-	p.apply(reading(4_500_000), 5*time.Second) // 10%: cool
+	p.apply(reading(14_500_000), 5*time.Second) // 10%: cool
 	if stats.alertCPU.Load() {
 		t.Fatal("CPU alert survived a cool window")
 	}

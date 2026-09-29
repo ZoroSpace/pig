@@ -47,7 +47,12 @@ const (
 	// CPU alert requires cpuThresholdPercent sustained for
 	// cpuAlertStreakTicks consecutive windows (~20s): one window of heavy
 	// streaming render is not an anomaly; a spinning event loop is.
-	cpuThresholdPercent = 30
+	//
+	// The rate is measured against a single core (100% = one core saturated),
+	// so this must sit high enough that ordinary multi-core machines do not
+	// flag normal render load: at 30% the alert read as a false positive next
+	// to a system-wide monitor such as 1panel (user report, 2026-09-29).
+	cpuThresholdPercent = 70
 	cpuAlertStreakTicks = 2
 )
 
