@@ -63,38 +63,18 @@ func TestSettingsListIncludesSpacesInAnActiveSearchInsteadOfChangingTheSelectedS
 	}
 }
 
-func TestSettingsListKeepsSpaceAsAChangeShortcutBeforeASearchQueryIsEntered(t *testing.T) {
-	var changes []altSettingsChange
-	list := NewSettingsList(
-		altSettingsItems(),
-		10,
-		altSettingsTestTheme(),
-		func(id, value string) { changes = append(changes, altSettingsChange{id: id, value: value}) },
-		func() {},
-		&SettingsListOptions{EnableSearch: true},
-	)
-
-	list.HandleInput(" ")
-
-	want := []altSettingsChange{{id: "tui-mode", value: "fullscreen"}}
-	if !reflect.DeepEqual(changes, want) {
-		t.Fatalf("changes = %v, want %v", changes, want)
-	}
-}
-
-// TestSettingsListSpaceShortcutAcceptsAllKeyEncodings: the same space key
-// arrives as a raw " " on legacy terminals, as a Kitty CSI-u sequence
-// (\x1b[32u) under the Kitty keyboard protocol, and as an xterm
-// modifyOtherKeys sequence (\x1b[27;1;32~) under pig's fallback — all three
-// must change the selected setting, not type a space into the search box
-// (which re-filters and snaps the cursor back to the first match).
-func TestSettingsListSpaceShortcutAcceptsAllKeyEncodings(t *testing.T) {
-	cases := []struct{ name, encoding string }{
+// TestSettingsListOnlyEnterChangesTheSetting locks the pig deviation
+// (2026-09-29): Enter is the only change shortcut, in every space encoding.
+// pi also lets a plain space change a value while the search query is empty;
+// pig routes every space to the search box so the behaviour does not depend
+// on whether a query happens to be active.
+func TestSettingsListOnlyEnterChangesTheSetting(t *testing.T) {
+	spaces := []struct{ name, data string }{
 		{"legacy", " "},
 		{"kitty-csi-u", "\x1b[32u"},
 		{"modify-other-keys", "\x1b[27;1;32~"},
 	}
-	for _, tc := range cases {
+	for _, tc := range spaces {
 		t.Run(tc.name, func(t *testing.T) {
 			var changes []altSettingsChange
 			list := NewSettingsList(
@@ -106,23 +86,62 @@ func TestSettingsListSpaceShortcutAcceptsAllKeyEncodings(t *testing.T) {
 				&SettingsListOptions{EnableSearch: true},
 			)
 
-			list.HandleInput(tc.encoding)
+			list.HandleInput(tc.data)
+			if len(changes) != 0 {
+				t.Fatalf("space changed a setting: %v", changes)
+			}
 
+			list.HandleInput("\r")
 			want := []altSettingsChange{{id: "tui-mode", value: "fullscreen"}}
 			if !reflect.DeepEqual(changes, want) {
-				t.Fatalf("changes = %v, want %v", changes, want)
-			}
-			if got := list.searchInput.GetValue(); got != "" {
-				t.Fatalf("search value = %q, want empty (a space shortcut must not reach the search input)", got)
+				t.Fatalf("changes after Enter = %v, want %v", changes, want)
 			}
 		})
 	}
 }
 
-// TestSettingsListSpaceWithActiveQueryDoesNotChangeTheSetting: once a
-// search query is present the space shortcut is disabled, so the space must
-// never toggle a setting in any encoding (pi semantics preserved by the
-// encoding-aware shortcut).
+// TestSettingsListSpaceWithEmptyQueryKeepsSelection: since space is always
+// search text now, pressing it on an unfiltered list must not yank the cursor
+// back to the first row (pi's applyFilter resets to 0 — the "selection jumps"
+// symptom).
+func TestSettingsListSpaceWithEmptyQueryKeepsSelection(t *testing.T) {
+	items := []*SettingItem{
+		{Id: "a", Label: "Alpha", CurrentValue: "x", Values: []string{"x", "y"}},
+		{Id: "b", Label: "Beta", CurrentValue: "x", Values: []string{"x", "y"}},
+		{Id: "c", Label: "Gamma", CurrentValue: "x", Values: []string{"x", "y"}},
+	}
+	var changes []altSettingsChange
+	list := NewSettingsList(
+		items,
+		10,
+		altSettingsTestTheme(),
+		func(id, value string) { changes = append(changes, altSettingsChange{id: id, value: value}) },
+		func() {},
+		&SettingsListOptions{EnableSearch: true},
+	)
+
+	list.HandleInput("\x1b[B") // down
+	list.HandleInput("\x1b[B") // down -> Gamma
+	if list.selectedIndex != 2 {
+		t.Fatalf("selectedIndex = %d, want 2", list.selectedIndex)
+	}
+
+	list.HandleInput(" ")
+
+	if len(changes) != 0 {
+		t.Fatalf("space changed a setting: %v", changes)
+	}
+	if list.selectedIndex != 2 {
+		t.Fatalf("space moved the selection to %d, want 2 (unchanged)", list.selectedIndex)
+	}
+	if items := list.displayItems(); len(items) != 3 {
+		t.Fatalf("display items = %d, want 3", len(items))
+	}
+}
+
+// TestSettingsListSpaceWithActiveQueryDoesNotChangeTheSetting: space is never
+// a change shortcut, so a space typed while searching must not toggle the
+// selected setting.
 func TestSettingsListSpaceWithActiveQueryDoesNotChangeTheSetting(t *testing.T) {
 	for _, encoding := range []string{" ", "\x1b[32u", "\x1b[27;1;32~"} {
 		var changes []altSettingsChange

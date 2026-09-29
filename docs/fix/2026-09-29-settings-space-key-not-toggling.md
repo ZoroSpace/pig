@@ -75,3 +75,24 @@ tmux + mock 端点真 TTY：下移到第 5 项「Show hardware cursor」，注�
 
 - 修复前：选中项跳回第 1 项（Auto-compact），设置未变（复现用户报告）；
 - 修复后：`Show hardware cursor` 原地 false→true，不跳项。
+
+## 后续决定：改为仅 Enter 切换（同日，本节为终态）
+
+上节的 `MatchesKey(data, "space")` 修好了「Kitty 编码的空格不生效」，但用户随即指出更根本的问题：**空格有二义性**——既可能是搜索词的一部分（多词模糊搜索 `auto compact`），也可能是「切换」这个动作，用户无法从界面上判断当前是哪种。上一节的修法只是让「查询为空时空格=切换」在更多终端上更稳定地成立，二义性本身没解决。
+
+**决定（用户拍板）：移除空格切换，Enter 成为唯一、与状态无关的切换键；空格一律进搜索框。**
+
+- `handleInput` 的激活分支收回到 `case kb.Matches(data, "tui.select.confirm")`，删掉空格分支（`MatchesKey` 相关的编码适配随之不再需要）。
+- 顺带修一个连带问题：空格现在总是搜索文本，而搜索框为空时输入一个空格会让 `applyFilter` 把 `selectedIndex` 归零（`FuzzyFilter` 对纯空白查询返回全部条目，条目集没变却把光标弹回第一项——即上节用户报的「跳回第一项」）。`applyFilter` 对纯空白查询改为保留光标位置（pig 相对 pi 的偏差，pi 恒归零）。
+- 提示文案 `Enter/Space to change` → `Enter to change`（搜索禁用与启用两种形态），与行为一致，消除「提示说能用空格但实际在打字」的误导。
+
+**影响**：`/settings` 面板与各 settings 子菜单（warnings 等）都只能 Enter 切换；`/settings` 里空格纯属搜索输入。
+
+**回归测试**（`tui/settings_list_test.go`）：
+
+- `TestSettingsListOnlyEnterChangesTheSetting`——三种空格编码（裸 `" "` / Kitty `\x1b[32u` / modifyOtherKeys `\x1b[27;1;32~`）都不得切换，Enter 必须切换。
+- `TestSettingsListSpaceWithEmptyQueryKeepsSelection`——下移到第 3 项后按空格：不改设置、光标不动（复现「跳回第一项」的原始症状）。
+- 原 `TestSettingsListKeepsSpaceAsAChangeShortcutBeforeASearchQueryIsEntered`（pi 用例）与 `TestSettingsListSpaceShortcutAcceptsAllKeyEncodings`（上节新增）随行为变更删除；`TestSettingsListIncludesSpacesInAnActiveSearchInsteadOfChangingTheSelectedSetting`（pi 用例）保留。
+- 红→绿验证：回退 `applyFilter` 空白守卫 → 选择测试 FAIL（`space moved the selection to 0, want 2`）；恢复空格切换 → Enter-only 测试三子测 FAIL（`space changed a setting`）。
+
+**真机验收**（tmux）：搜索 `stats` 后按空格不切换、按 Enter 切到 true（footer 立刻出现 `| MEM38.8MB`）；空查询下移到第 4 项按空格，选中项与值都不变（`(4/33)` 不动）。

@@ -17,7 +17,7 @@ type SettingItem struct {
 	Description string
 	// CurrentValue is the value to display (right side).
 	CurrentValue string
-	// Values cycle on Enter/Space when non-empty.
+	// Values cycle on Enter when non-empty.
 	Values []string
 	// Submenu opens a submenu on Enter when non-nil. The done callback
 	// accepts an optional selectedValue and an optional navigateTo id to
@@ -342,15 +342,14 @@ func (l *SettingsList) HandleInput(data string) {
 		} else {
 			l.selectedIndex++
 		}
-	// Space activates as well, but only once a search query is empty (pi:
-	// `data === " "`). pig deviation (2026-09-29): match it with
-	// MatchesKey(data, "space") instead of the raw byte so terminals that
-	// encode a plain space as Kitty CSI-u (\x1b[32u) or xterm
-	// modifyOtherKeys (\x1b[27;1;32~) also toggle rather than typing a space
-	// into the search box (which re-filters and snaps the cursor back to the
-	// first match).
-	case kb.Matches(data, "tui.select.confirm") ||
-		(MatchesKey(data, "space") && (!l.searchEnabled || l.searchInput.GetValue() == "")):
+	// Only Enter activates an item (pig deviation, 2026-09-29; pi also lets a
+	// plain space activate when the search query is empty). Space is
+	// ambiguous here: the list has an always-present search box, so a space
+	// is real query text ("auto compact") and users reading the
+	// "Enter/Space to change" hint tried it while a query was active and saw
+	// nothing happen. Enter is now the single, state-independent shortcut;
+	// space always goes to the search box below.
+	case kb.Matches(data, "tui.select.confirm"):
 		l.activateItem()
 	case kb.Matches(data, "tui.select.cancel"):
 		l.onCancel()
@@ -423,13 +422,24 @@ func (l *SettingsList) closeSubmenu() {
 
 func (l *SettingsList) applyFilter(query string) {
 	l.filteredItems = FuzzyFilter(l.items, query, func(item *SettingItem) string { return item.Label })
+	// A whitespace-only query does not change the item set (FuzzyFilter
+	// returns every item), so keep the cursor where it is. pi always resets to
+	// 0, which made a leading space in the search box look like the selection
+	// jumping back to the top (pig deviation, 2026-09-29) — and space is now
+	// always search text (see HandleInput).
+	if strings.TrimSpace(query) == "" {
+		if l.selectedIndex >= len(l.filteredItems) {
+			l.selectedIndex = 0
+		}
+		return
+	}
 	l.selectedIndex = 0
 }
 
 func (l *SettingsList) addHintLine(lines []string, width int) []string {
-	hint := "  Enter/Space to change · Esc to cancel"
+	hint := "  Enter to change · Esc to cancel"
 	if l.searchEnabled {
-		hint = "  Type to search · Enter/Space to change · Esc to cancel"
+		hint = "  Type to search · Enter to change · Esc to cancel"
 	}
 	lines = append(lines, "")
 	lines = append(lines, TruncateToWidth(l.theme.Hint(hint), width, "", false))
