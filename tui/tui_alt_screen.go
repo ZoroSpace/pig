@@ -1351,6 +1351,22 @@ func (t *TuiAltScreen) handleScrollToEndIndicatorMouseEvent(event altSgrMouseEve
 	return true
 }
 
+// ScrollToEndIndicatorRect returns a copy of the last rendered jump-to-end
+// indicator rect, or nil when the indicator is not currently composited (pig
+// test seam: compositeScrollToEndIndicator resets the field to nil at frame
+// start and re-assigns it mid-render, so an unsynchronized external read both
+// races with the render goroutine and can observe the transient nil).
+func (t *TuiAltScreen) ScrollToEndIndicatorRect() *altScrollToEndIndicatorRect {
+	var rect *altScrollToEndIndicatorRect
+	t.lock(func() {
+		if t.scrollToEndIndicatorRect != nil {
+			copied := *t.scrollToEndIndicatorRect
+			rect = &copied
+		}
+	})
+	return rect
+}
+
 var sgrWheelRegex = regexp.MustCompile(`^\x1b\[<(\d+);(\d+);(\d+)[Mm]$`)
 var sgrMouseRegex = regexp.MustCompile(`^\x1b\[<(\d+);(\d+);(\d+)([Mm])$`)
 

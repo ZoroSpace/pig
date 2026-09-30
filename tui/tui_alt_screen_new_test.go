@@ -461,8 +461,9 @@ func TestTuiAltScreenKeepsTheJumpToEndIndicatorCenteredAsTheAutoScrollbarHidesAn
 		if got := indicatorColumn(); got != want {
 			t.Fatalf("%s: indicator column = %d, want %d (row %q)", phase, got, want, terminal.GetViewport()[5])
 		}
-		if tui.scrollToEndIndicatorRect == nil || tui.scrollToEndIndicatorRect.column != want {
-			t.Fatalf("%s: indicator rect = %+v, want column %d", phase, tui.scrollToEndIndicatorRect, want)
+		rect := tui.ScrollToEndIndicatorRect()
+		if rect == nil || rect.column != want {
+			t.Fatalf("%s: indicator rect = %+v, want column %d", phase, rect, want)
 		}
 	}
 
