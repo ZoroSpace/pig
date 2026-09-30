@@ -54,10 +54,28 @@ const (
 	ApiMistralConversations Api = "mistral-conversations"
 )
 
-// ImagesApi identifies an image-generation wire protocol.
-type ImagesApi string
+// Image generation and classification reuse Api: image/classifier models live
+// in the unified Model catalog (pi v0.99.1 #9948) and Model.API carries their
+// wire protocol like any other entry. pi keeps separate ImageApi/ClassifierApi
+// string unions; Go has no union, so the Known* sets below are Api constants
+// (same pattern as ApiMistralConversations).
+const (
+	// ImageApiOpenRouter is the OpenRouter image-generation wire protocol
+	// (pi: KnownImageApi "openrouter-images").
+	ImageApiOpenRouter Api = "openrouter-images"
 
-const ImagesApiOpenRouter ImagesApi = "openrouter-images"
+	// ClassifierApiTypesafeSystemOne is the System One classification
+	// protocol used by the TypeSafe Jev models (pi: KnownClassifierApi
+	// "typesafe-system-one"; used by catalog entries only — pig does not
+	// port the classify() runtime).
+	ClassifierApiTypesafeSystemOne Api = "typesafe-system-one"
+	// ClassifierApiCloudflareWorkersAI is Cloudflare Workers AI's System One
+	// envelope (pi: "cloudflare-workers-ai-system-one").
+	ClassifierApiCloudflareWorkersAI Api = "cloudflare-workers-ai-system-one"
+	// ClassifierApiLlamaCpp is llama.cpp next-token classification (pi:
+	// "llama-cpp-classify"; pig has no llama.cpp provider).
+	ClassifierApiLlamaCpp Api = "llama-cpp-classify"
+)
 
 // ProviderID identifies a provider (openai, openrouter, a local vLLM, ...).
 // The type is open on purpose: custom gateways and local endpoints use
@@ -117,10 +135,8 @@ const (
 	ProviderVolcenginePlan ProviderID = "volcengine-plan"
 )
 
-// ImagesProviderID identifies an image-generation provider.
-type ImagesProviderID string
-
-const ImagesProviderOpenRouter ImagesProviderID = "openrouter"
+// Image-provider ids died with pi v0.99.1 #9948: image models live under the
+// regular ProviderID (openrouter for "openrouter-images" entries).
 
 type ToolChoice string
 
@@ -397,8 +413,11 @@ type DeferredStreamer interface {
 }
 
 // ProviderImages is the uniform contract of an image-generation API module.
+// pig defers the generateImages runtime (no consumers yet, S10-1 declared);
+// the contract targets image-typed Model entries (pi: generateImages(model:
+// ImageModel, ...)).
 type ProviderImages interface {
-	GenerateImages(model *ImagesModel, images *ImagesContext, options *ImagesOptions) (*AssistantImages, error)
+	GenerateImages(model *Model, images *ImagesContext, options *ImagesOptions) (*AssistantImages, error)
 }
 
 // ImagesOptions are the request options for image generation.
@@ -463,7 +482,7 @@ type SimpleStreamOptions struct {
 type StreamFunction func(ctx context.Context, model *Model, llmContext *Context, options *StreamOptions) *AssistantMessageEventStream
 
 // ImagesFunction generates images for one request.
-type ImagesFunction func(model *ImagesModel, images *ImagesContext, options *ImagesOptions) (*AssistantImages, error)
+type ImagesFunction func(model *Model, images *ImagesContext, options *ImagesOptions) (*AssistantImages, error)
 
 // ContentKind is the JSON "type" discriminator of content blocks.
 type ContentKind string
@@ -1067,8 +1086,8 @@ const (
 
 // AssistantImages is the result of one image-generation request.
 type AssistantImages struct {
-	API          ImagesApi        `json:"api"`
-	Provider     ImagesProviderID `json:"provider"`
+	API          Api              `json:"api"`
+	Provider     ProviderID       `json:"provider"`
 	Model        string           `json:"model"`
 	Output       []Content        `json:"output"`
 	ResponseID   string           `json:"responseId,omitempty"`
@@ -1624,21 +1643,50 @@ type ModelInputLimits struct {
 	Images          *ModelImageInputLimits `json:"images,omitempty"`
 }
 
-// Model describes one callable model. API selects the wire protocol; Compat
-// holds that API's compatibility settings (decoded by Model.UnmarshalJSON
-// according to API).
+// ModelType says what a catalog entry is for and which Models operation
+// accepts it (pi: ModelType = "chat" | "image" | "classifier").
+type ModelType string
+
+const (
+	ModelTypeChat       ModelType = "chat"
+	ModelTypeImage      ModelType = "image"
+	ModelTypeClassifier ModelType = "classifier"
+)
+
+// Model describes one catalog entry. Chat entries are callable with stream()
+// and friends; image entries (API ImageApiOpenRouter) with generateImages()
+// only; classifier entries (System One APIs) with classify() only — pig's
+// classify runtime is not ported, classifier entries exist for catalog parity
+// with pi data (S10-1 declared deviation).
+//
+// Go has no discriminated union, so pi's Model/ImageModel/ClassifierModel
+// collapse into one struct: Type discriminates, chat-specific fields
+// (Reasoning, ThinkingLevelMap, PromptCache, MaxTokens, Compat) are
+// image/classifier-relevant-free and zero on those entries, Output is
+// image-only, ContextWindow is shared by chat and classifier.
+//
+// API selects the wire protocol; Compat holds that API's compatibility
+// settings (decoded by Model.UnmarshalJSON according to API).
 type Model struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	API       Api        `json:"api"`
-	Provider  ProviderID `json:"provider"`
-	BaseURL   string     `json:"baseUrl"`
-	Reasoning bool       `json:"reasoning"`
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	API      Api        `json:"api"`
+	Provider ProviderID `json:"provider"`
+	BaseURL  string     `json:"baseUrl"`
+	// Type discriminates the entry. Chat is the default: zero value ("")
+	// decodes as chat so legacy models.json / stored catalogs without a type
+	// keep working (pi: `type?: "chat"`). Narrow mixed lists with
+	// IsModelType, never by comparing Type directly.
+	Type      ModelType `json:"type,omitempty"`
+	Reasoning bool      `json:"reasoning"`
 	// ThinkingLevelMap maps pi thinking levels to provider/model-specific
 	// values; missing keys use provider defaults, nil marks a level
 	// unsupported.
 	ThinkingLevelMap ThinkingLevelMap `json:"thinkingLevelMap,omitempty"`
 	Input            []ModelInput     `json:"input"`
+	// Output holds the output modalities; only image models set it and it
+	// always contains "image" (pi: ImageModel.output).
+	Output []ModelInput `json:"output,omitempty"`
 	// InputLimits holds the provider input limits and cache-safe image
 	// preprocessing metadata (pi: Model.inputLimits, v0.87.0 #9631).
 	InputLimits *ModelInputLimits `json:"inputLimits,omitempty"`
@@ -1656,6 +1704,21 @@ type Model struct {
 	// Compat holds per-API compatibility overrides; when unset, URL-based
 	// auto-detection applies.
 	Compat ModelCompat `json:"compat,omitempty"`
+}
+
+// GetModelType returns the entry's type; entries without a type are chat
+// models (pi: getModelType, `model.type ?? "chat"`).
+func (m *Model) GetModelType() ModelType {
+	if m.Type == "" {
+		return ModelTypeChat
+	}
+	return m.Type
+}
+
+// IsModelType reports whether the entry is of the given type, including
+// legacy chat entries without a Type field (pi: isModelType guard).
+func (m *Model) IsModelType(t ModelType) bool {
+	return m.GetModelType() == t
 }
 
 func (m *Model) UnmarshalJSON(data []byte) error {
@@ -1693,19 +1756,5 @@ func (m *Model) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ImagesModel describes one image-generation model (pi: ImagesModel): the
-// Model fields that apply to image generation, plus Output. pi's Omit also
-// retains thinkingLevelMap; pig drops it because thinking levels do not
-// apply to image generation.
-type ImagesModel struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	API            ImagesApi         `json:"api"`
-	Provider       ImagesProviderID  `json:"provider"`
-	BaseURL        string            `json:"baseUrl"`
-	Input          []ModelInput      `json:"input"`
-	Output         []ModelInput      `json:"output"`
-	Cost           ModelCost         `json:"cost"`
-	SamplingParams map[string]any    `json:"samplingParams,omitempty"`
-	Headers        map[string]string `json:"headers,omitempty"`
-}
+// ImagesModel died with pi v0.99.1 #9948: image-generation models are Model
+// entries with Type "image" (api "openrouter-images") in the unified catalog.

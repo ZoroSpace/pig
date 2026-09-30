@@ -586,7 +586,12 @@ func buildResponsesParams(model *types.Model, llmContext *types.TranscriptContex
 		}
 	}
 
-	// Last so custom keys override the named request fields.
+	// Last so custom keys override the named request fields. Model defaults
+	// apply first, per-request keys override them (pi: Object.assign(params,
+	// model.samplingParams, options?.samplingParams), #9506).
+	for key, value := range model.SamplingParams {
+		params[key] = value
+	}
 	for key, value := range options.SamplingParams {
 		params[key] = value
 	}
@@ -600,7 +605,9 @@ func getResponsesServiceTierCostMultiplier(model *types.Model, serviceTier strin
 	switch serviceTier {
 	case "flex":
 		return 0.5
-	case "priority":
+	// v0.99.1 #10034: GPT-6 models report Fast mode as service_tier "fast"
+	// and it is priced like priority.
+	case "priority", "fast":
 		if model.ID == "gpt-5.5" {
 			return 2.5
 		}

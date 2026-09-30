@@ -307,7 +307,7 @@ func TestImagesRoundtrip(t *testing.T) {
 	if err := json.Unmarshal(data, &in); err != nil {
 		t.Fatal(err)
 	}
-	if in.API != ImagesApiOpenRouter || in.Provider != ImagesProviderOpenRouter {
+	if in.API != ImageApiOpenRouter || in.Provider != "openrouter" {
 		t.Fatalf("%+v", in)
 	}
 	img, ok := in.Output[0].(ImageContent)

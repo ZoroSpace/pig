@@ -156,7 +156,9 @@ func TestBuiltinProvidersAssembled(t *testing.T) {
 		}
 		seen[p.ID()] = true
 		models := p.GetModels()
-		if p.ID() != string(ai.ProviderOpenAI) && len(models) == 0 {
+		// typesafe is classifier-only (S10-1): no chat catalog until the
+		// classify() runtime lands (pig declared deviation).
+		if p.ID() != string(ai.ProviderOpenAI) && p.ID() != "typesafe" && len(models) == 0 {
 			t.Fatalf("provider %s has no models", p.ID())
 		}
 		// openai-codex is OAuth-only (pi: auth oauth, no api key).

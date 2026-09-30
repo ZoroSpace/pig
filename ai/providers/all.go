@@ -64,6 +64,65 @@ func GetBuiltinModels(provider BuiltinProvider) []ai.Model {
 	return out
 }
 
+// GetBuiltinImageModels lists one provider's generated image catalog (pi:
+// getBuiltinImageModels, Object.values(IMAGE_MODELS[provider])). Sorted by
+// model id like GetBuiltinModels.
+func GetBuiltinImageModels(provider BuiltinProvider) []ai.Model {
+	models, ok := ai.IMAGE_MODELS[provider]
+	if !ok {
+		return nil
+	}
+	out := make([]ai.Model, 0, len(models))
+	for _, model := range models {
+		out = append(out, model)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// GetBuiltinImageModel reads one image model from the generated built-in
+// catalog (pi: getBuiltinImageModel).
+func GetBuiltinImageModel(provider BuiltinProvider, modelID string) (ai.Model, bool) {
+	models, ok := ai.IMAGE_MODELS[provider]
+	if !ok {
+		return ai.Model{}, false
+	}
+	model, ok := models[modelID]
+	return model, ok
+}
+
+// GetBuiltinClassifierModels lists one provider's generated classifier
+// catalog (pi: getBuiltinClassifierModels).
+func GetBuiltinClassifierModels(provider BuiltinProvider) []ai.Model {
+	models, ok := ai.CLASSIFIER_MODELS[provider]
+	if !ok {
+		return nil
+	}
+	out := make([]ai.Model, 0, len(models))
+	for _, model := range models {
+		out = append(out, model)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// GetBuiltinClassifierModel reads one classifier model from the generated
+// built-in catalog (pi: getBuiltinClassifierModel).
+func GetBuiltinClassifierModel(provider BuiltinProvider, modelID string) (ai.Model, bool) {
+	models, ok := ai.CLASSIFIER_MODELS[provider]
+	if !ok {
+		return ai.Model{}, false
+	}
+	model, ok := models[modelID]
+	return model, ok
+}
+
+// GetAllBuiltinModels lists one provider's catalog across every model type
+// (pi: getAllBuiltinModels).
+func GetAllBuiltinModels(provider BuiltinProvider) []ai.Model {
+	return append(append(GetBuiltinModels(provider), GetBuiltinImageModels(provider)...), GetBuiltinClassifierModels(provider)...)
+}
+
 // BuiltinProviders returns all built-in providers, freshly constructed (pi:
 // builtinProviders), in pi's alphabetical position order. The remaining
 // factories arrive with their adapters (README Phase 2):
@@ -110,6 +169,10 @@ func BuiltinProviders() []ai.Provider {
 		XaiProvider(),
 		ZaiProvider(),
 		ZaiCodingCNProvider(),
+		// Classifier-only provider (pi: typesafeProvider); no chat models and
+		// no stream adapter — pig defers the classify() runtime (S10-1
+		// declared deviation), so the provider is inert for requests.
+		TypesafeProvider(),
 	}
 }
 
@@ -123,8 +186,6 @@ func BuiltinModels(options *ai.CreateModelsOptions) ai.MutableModels {
 	return models
 }
 
-// builtinImagesProviders / builtinImagesModels (pi: all.ts tail) are missing
-// here by design: they need ImagesProvider/createImagesModels (pi:
-// images-models.ts), the openrouter-images adapter, and the generated image
-// model catalog (pi: image-models.generated.ts); they arrive with the images
-// chain.
+// builtinImagesProviders / builtinImagesModels died with pi v0.99.1 #9948:
+// image models are unified into the Model catalog (Type "image") and the
+// generateImages runtime is deferred in pig (S10-1 declared deviation).

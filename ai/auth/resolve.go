@@ -76,7 +76,8 @@ const (
 	defaultOAuthRefreshTimeoutMs  = 15_000
 )
 
-// ResolveProviderAuth resolves auth shared by the Models and ImagesModels
+// ResolveProviderAuth resolves auth shared by the Models and the (deferred)
+// image-generation chain
 // collections. A stored credential owns the provider: ambient/env is
 // consulted only when nothing is stored. No silent env fallback after a
 // failed refresh or for a credential type without a matching handler.

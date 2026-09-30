@@ -18,6 +18,13 @@ const (
 func codexModels() []*ai.Model {
 	return []*ai.Model{
 		{
+			ID: "gpt-6.1-sol", Name: "GPT-6.1 Sol",
+			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
+			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6.1-sol")),
+			ContextWindow: codexContext, MaxTokens: codexMaxTokens,
+		},
+		{
 			ID: "gpt-6-astra", Name: "GPT-6 Astra",
 			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
 			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},

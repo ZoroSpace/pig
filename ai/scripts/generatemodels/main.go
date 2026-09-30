@@ -85,26 +85,41 @@ func generateModels(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, "Failed to load models.dev data: %v\n", err)
 		modelsDevModels = nil
 	}
-	openRouterModels, err := fetchOpenRouterModels(ctx)
+	openRouterCatalog, err := fetchOpenRouterCatalog(ctx)
 	if err != nil {
 		if genOptions.strict {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "Failed to fetch OpenRouter models: %v\n", err)
-		openRouterModels = nil
+		openRouterCatalog = nil
 	}
-	aiGatewayModels, err := fetchAiGatewayModels(ctx)
+	aiGateway, err := fetchAiGatewayModels(ctx)
 	if err != nil {
 		if genOptions.strict {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "Failed to fetch Vercel AI Gateway models: %v\n", err)
-		aiGatewayModels = nil
+		aiGateway = nil
+	}
+	modelsDevClassifiers, err := loadModelsDevClassifierModels(ctx)
+	if err != nil {
+		if genOptions.strict {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Failed to load models.dev classifier data: %v\n", err)
+		modelsDevClassifiers = nil
 	}
 
-	// Combine models (models.dev has priority); pi filters xai retired ids
-	// and the opencode gpt-5.3-codex-spark alias here.
-	allModels := combineModels(modelsDevModels, openRouterModels, aiGatewayModels)
+	// Combine chat models (models.dev has priority); pi filters xai retired
+	// ids and the opencode gpt-5.3-codex-spark alias here.
+	var openRouterChat, aiGatewayChat []*ai.Model
+	if openRouterCatalog != nil {
+		openRouterChat = openRouterCatalog.chat
+	}
+	if aiGateway != nil {
+		aiGatewayChat = aiGateway.chat
+	}
+	allModels := combineModels(modelsDevModels, openRouterChat, aiGatewayChat)
 
 	// Add Claude Opus 5.5 until models.dev includes it (pi b4588f26a).
 	// https://platform.claude.com/docs/en/models/opus-5-5/overview
@@ -128,6 +143,28 @@ func generateModels(ctx context.Context) error {
 		})
 	}
 
+	// Add Claude Sonnet 5.5 until models.dev includes it (pi c90d9ea58).
+	// https://platform.claude.com/docs/en/models/sonnet-5-5/overview
+	if !hasProviderModel(allModels, ai.ProviderAnthropic, "claude-sonnet-5-5") {
+		allModels = append(allModels, &ai.Model{
+			ID: "claude-sonnet-5-5", Name: "Claude Sonnet 5.5",
+			API: ai.ApiAnthropicMessages, Provider: ai.ProviderAnthropic, BaseURL: "https://api.anthropic.com",
+			Reasoning: true,
+			ThinkingLevelMap: ai.ThinkingLevelMap{
+				ai.ModelThinkingOff:     nil,
+				ai.ModelThinkingMinimal: nil,
+				ai.ModelThinkingLow:     lo.ToPtr("low"),
+				ai.ModelThinkingMedium:  lo.ToPtr("medium"),
+				ai.ModelThinkingHigh:    lo.ToPtr("high"),
+				ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ai.ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			ContextWindow: 1000000, MaxTokens: 128000,
+		})
+	}
+
 	// The authenticated Copilot catalog advertised these models on
 	// 2026-09-22, but models.dev did not include them yet (pi 27c072e98).
 	for _, model := range missingCopilotModels() {
@@ -141,9 +178,12 @@ func generateModels(ctx context.Context) error {
 		if candidate.Provider == ai.ProviderGithubCopilot && githubCopilotExtendedContextModels[candidate.ID] {
 			candidate.ContextWindow = 1000000
 		}
-		// models.dev may list Opus 5.5 before its effort metadata is complete
-		// (pi b7f4b05c7).
-		if candidate.Provider == ai.ProviderAnthropic && candidate.ID == "claude-opus-5-5" {
+		// models.dev may list Opus 5.5 / Sonnet 5.5 before their effort
+		// metadata is complete (pi b7f4b05c7; v0.99.1 extends to Sonnet 5.5
+		// and GitHub Copilot Opus 5.5, c90d9ea58 + fde38ed7c).
+		if (candidate.Provider == ai.ProviderAnthropic &&
+			(candidate.ID == "claude-opus-5-5" || candidate.ID == "claude-sonnet-5-5")) ||
+			(candidate.Provider == ai.ProviderGithubCopilot && candidate.ID == "claude-opus-5.5") {
 			mergeThinkingLevelMap(candidate, ai.ThinkingLevelMap{
 				ai.ModelThinkingOff:     nil,
 				ai.ModelThinkingMinimal: nil,
@@ -283,15 +323,54 @@ func generateModels(ctx context.Context) error {
 	}
 	applyAnthropicAllowedFallbackModelMetadata(filterAnthropicFallback(allModels))
 
-	// Group by provider and deduplicate by model id; the first entry wins, so
-	// models.dev takes priority over OpenRouter/AI Gateway (pi).
-	providers := map[ai.ProviderID]map[string]*ai.Model{}
+	// Group by provider and deduplicate by id; the first entry wins, so
+	// models.dev takes priority over OpenRouter/AI Gateway (pi). Chat, image,
+	// and classifier catalogs stay separate so one upstream id can expose
+	// several operations with different implementations (pi: ProviderCatalog,
+	// v0.99.1 #9948).
+	classifierModels := append([]*ai.Model{}, modelsDevClassifiers...)
+	if openRouterCatalog != nil {
+		classifierModels = append(classifierModels, openRouterCatalog.classifiers...)
+	}
+	if aiGateway != nil {
+		classifierModels = append(classifierModels, aiGateway.classifiers...)
+	}
+	classifierModels = append(classifierModels, opencodeClassifierModels()...)
+	classifierModels = append(classifierModels, cloudflareWorkersAIClassifierModels()...)
+
+	providers := map[ai.ProviderID]*providerCatalog{}
 	for _, model := range allModels {
-		if providers[model.Provider] == nil {
-			providers[model.Provider] = map[string]*ai.Model{}
+		entry := providers[model.Provider]
+		if entry == nil {
+			entry = &providerCatalog{chat: map[string]*ai.Model{}, image: map[string]*ai.Model{}, classifier: map[string]*ai.Model{}}
+			providers[model.Provider] = entry
 		}
-		if providers[model.Provider][model.ID] == nil {
-			providers[model.Provider][model.ID] = model
+		model.Type = ai.ModelTypeChat
+		if _, ok := entry.chat[model.ID]; !ok {
+			entry.chat[model.ID] = model
+		}
+	}
+	if openRouterCatalog != nil {
+		for _, model := range openRouterCatalog.images {
+			applyImageInputMetadata(model)
+			entry := providers[model.Provider]
+			if entry == nil {
+				entry = &providerCatalog{chat: map[string]*ai.Model{}, image: map[string]*ai.Model{}, classifier: map[string]*ai.Model{}}
+				providers[model.Provider] = entry
+			}
+			if _, ok := entry.image[model.ID]; !ok {
+				entry.image[model.ID] = model
+			}
+		}
+	}
+	for _, model := range classifierModels {
+		entry := providers[model.Provider]
+		if entry == nil {
+			entry = &providerCatalog{chat: map[string]*ai.Model{}, image: map[string]*ai.Model{}, classifier: map[string]*ai.Model{}}
+			providers[model.Provider] = entry
+		}
+		if _, ok := entry.classifier[model.ID]; !ok {
+			entry.classifier[model.ID] = model
 		}
 	}
 
@@ -304,7 +383,8 @@ func generateModels(ctx context.Context) error {
 	if err := os.WriteFile(outPath, content, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", outPath, err)
 	}
-	fmt.Printf("Generated %s (%d providers, %d models)\n", outPath, len(providers), len(allModels))
+	fmt.Printf("Generated %s (%d providers, %d chat / %d image / %d classifier models)\n",
+		outPath, len(providers), len(allModels), catalogImageCount(providers), catalogClassifierCount(providers))
 
 	printStatistics(allModels, providers)
 	return nil
@@ -493,7 +573,7 @@ func sourceDir() string {
 	return filepath.Dir(filename)
 }
 
-func printStatistics(allModels []*ai.Model, providers map[ai.ProviderID]map[string]*ai.Model) {
+func printStatistics(allModels []*ai.Model, providers map[ai.ProviderID]*providerCatalog) {
 	totalModels := len(allModels)
 	reasoningModels := 0
 	for _, model := range allModels {
@@ -504,12 +584,94 @@ func printStatistics(allModels []*ai.Model, providers map[ai.ProviderID]map[stri
 	fmt.Printf("\nModel Statistics:\n")
 	fmt.Printf("  Total tool-capable models: %d\n", totalModels)
 	fmt.Printf("  Reasoning-capable models: %d\n", reasoningModels)
+	fmt.Printf("  Image models: %d\n", catalogImageCount(providers))
+	fmt.Printf("  Classifier models: %d\n", catalogClassifierCount(providers))
 	providerIDs := make([]string, 0, len(providers))
 	for providerID := range providers {
 		providerIDs = append(providerIDs, string(providerID))
 	}
 	sort.Strings(providerIDs)
 	for _, providerID := range providerIDs {
-		fmt.Printf("  %s: %d models\n", providerID, len(providers[ai.ProviderID(providerID)]))
+		entry := providers[ai.ProviderID(providerID)]
+		fmt.Printf("  %s: %d chat / %d image / %d classifier models\n",
+			providerID, len(entry.chat), len(entry.image), len(entry.classifier))
+	}
+}
+
+func catalogImageCount(providers map[ai.ProviderID]*providerCatalog) int {
+	n := 0
+	for _, entry := range providers {
+		n += len(entry.image)
+	}
+	return n
+}
+
+func catalogClassifierCount(providers map[ai.ProviderID]*providerCatalog) int {
+	n := 0
+	for _, entry := range providers {
+		n += len(entry.classifier)
+	}
+	return n
+}
+
+// providerCatalog keeps the three per-provider catalogs apart (pi:
+// ProviderCatalog in generate-models.ts).
+type providerCatalog struct {
+	chat       map[string]*ai.Model
+	image      map[string]*ai.Model
+	classifier map[string]*ai.Model
+}
+
+// opencodeClassifierModels are the hardcoded OpenCode Zen Jev classifiers
+// (pi: OPENCODE_CLASSIFIER_MODELS). Neither the /zen/v1/models listing nor
+// models.dev carries metadata for them.
+// https://opencode.ai/docs/zen
+func opencodeClassifierModels() []*ai.Model {
+	return []*ai.Model{
+		{
+			Type:          ai.ModelTypeClassifier,
+			ID:            "jev-1.13",
+			Name:          "Jev 1.13",
+			API:           ai.ClassifierApiTypesafeSystemOne,
+			Provider:      ai.ProviderOpenCode,
+			BaseURL:       "https://opencode.ai/zen/v1",
+			Input:         []ai.ModelInput{ai.ModelInputText},
+			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 0.042}},
+			ContextWindow: 32000,
+		},
+		{
+			Type:          ai.ModelTypeClassifier,
+			ID:            "jev-1.13-free",
+			Name:          "Jev 1.13 Free",
+			API:           ai.ClassifierApiTypesafeSystemOne,
+			Provider:      ai.ProviderOpenCode,
+			BaseURL:       "https://opencode.ai/zen/v1",
+			Input:         []ai.ModelInput{ai.ModelInputText},
+			Cost:          ai.ModelCost{},
+			ContextWindow: 32000,
+		},
+	}
+}
+
+// cloudflareWorkersAIClassifierModels are the hardcoded Workers AI System One
+// classifiers (pi: CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS). Workers AI has no
+// unauthenticated catalog and models.dev does not list its System One models
+// yet; Cloudflare publishes pricing only in the dashboard.
+// https://developers.cloudflare.com/ai/models/typesafe/jev/
+func cloudflareWorkersAIClassifierModels() []*ai.Model {
+	return []*ai.Model{
+		{
+			Type:     ai.ModelTypeClassifier,
+			ID:       "typesafe/jev",
+			Name:     "Jev",
+			API:      ai.ClassifierApiCloudflareWorkersAI,
+			Provider: ai.ProviderCloudflareWorkersAI,
+			// pi: CLOUDFLARE_WORKERS_AI_REST_BASE_URL — the System One
+			// envelope hangs off the REST base without the /v1 segment.
+			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai",
+			Input:         []ai.ModelInput{ai.ModelInputText},
+			Cost:          ai.ModelCost{},
+			ContextWindow: 32000,
+		},
 	}
 }

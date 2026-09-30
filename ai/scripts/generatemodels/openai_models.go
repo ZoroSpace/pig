@@ -13,13 +13,14 @@ const openAILongContextInputThreshold = 272000
 // OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS).
 var openAIShortContextCappedModelIds = stringSet(
 	"gpt-5.4", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
+	"gpt-6.1-sol",
 )
 
 // openAILongContextPricingModelIds lists the models carrying long-context
 // tier pricing (pi: OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS).
 var openAILongContextPricingModelIds = stringSet(
 	"gpt-5.4", "gpt-5.4-pro", "gpt-5.5", "gpt-5.5-pro", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
-	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
+	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol",
 )
 
 // openAIStandardCosts keeps the current OpenAI prices authoritative until
@@ -33,6 +34,7 @@ var openAIStandardCosts = map[string]ai.ModelCost{
 	"gpt-6-astra":   {ModelCostRates: ai.ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
 	"gpt-6-luna":    {ModelCostRates: ai.ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}},
 	"gpt-6-sol":     {ModelCostRates: ai.ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+	"gpt-6.1-sol":   {ModelCostRates: ai.ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
 }
 
 // withOpenAiLongContextPricing appends the long-context tier to a cost (pi:
@@ -56,6 +58,13 @@ func withOpenAiLongContextPricing(cost ai.ModelCost) ai.ModelCost {
 // from models.dev.
 func missingOpenAiModels() []*ai.Model {
 	return []*ai.Model{
+		{
+			ID: "gpt-6.1-sol", Name: "GPT-6.1 Sol",
+			API: ai.ApiOpenAIResponses, Provider: ai.ProviderOpenAI, BaseURL: "https://api.openai.com/v1",
+			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6.1-sol")),
+			ContextWindow: openAILongContextInputThreshold, MaxTokens: 128000,
+		},
 		{
 			ID: "gpt-6-astra", Name: "GPT-6 Astra",
 			API: ai.ApiOpenAIResponses, Provider: ai.ProviderOpenAI, BaseURL: "https://api.openai.com/v1",

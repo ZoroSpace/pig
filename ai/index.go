@@ -13,13 +13,12 @@ import (
 // Wire protocol and provider identity.
 type (
 	Api                = types.Api
-	ImagesApi          = types.ImagesApi
 	ProviderID         = types.ProviderID
-	ImagesProviderID   = types.ImagesProviderID
 	ToolChoice         = types.ToolChoice
 	ThinkingLevel      = types.ThinkingLevel
 	ModelThinkingLevel = types.ModelThinkingLevel
 	ThinkingLevelMap   = types.ThinkingLevelMap
+	ModelType          = types.ModelType
 )
 
 const (
@@ -31,7 +30,13 @@ const (
 	ApiOpenAICodexResponses  = types.ApiOpenAICodexResponses
 	ApiGoogleGenerativeAI    = types.ApiGoogleGenerativeAI
 	ApiGoogleVertex          = types.ApiGoogleVertex
-	ImagesApiOpenRouter      = types.ImagesApiOpenRouter
+	// Image and classifier wire protocols (pi: KnownImageApi /
+	// KnownClassifierApi); pig carries classifier entries in the catalog but
+	// does not port the classify() runtime (S10-1 declared).
+	ImageApiOpenRouter               = types.ImageApiOpenRouter
+	ClassifierApiTypesafeSystemOne   = types.ClassifierApiTypesafeSystemOne
+	ClassifierApiCloudflareWorkersAI = types.ClassifierApiCloudflareWorkersAI
+	ClassifierApiLlamaCpp            = types.ClassifierApiLlamaCpp
 )
 
 const (
@@ -79,9 +84,15 @@ const (
 )
 
 const (
-	ImagesProviderOpenRouter = types.ImagesProviderOpenRouter
-	ToolChoiceAuto           = types.ToolChoiceAuto
-	ToolChoiceNone           = types.ToolChoiceNone
+	ToolChoiceAuto = types.ToolChoiceAuto
+	ToolChoiceNone = types.ToolChoiceNone
+)
+
+// Model type discriminators (pi: ModelType).
+const (
+	ModelTypeChat       = types.ModelTypeChat
+	ModelTypeImage      = types.ModelTypeImage
+	ModelTypeClassifier = types.ModelTypeClassifier
 )
 
 const (
@@ -250,7 +261,6 @@ type (
 	ImagesContext       = types.ImagesContext
 	ImagesStopReason    = types.ImagesStopReason
 	AssistantImages     = types.AssistantImages
-	ImagesModel         = types.ImagesModel
 )
 
 const (

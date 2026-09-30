@@ -147,7 +147,53 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 		}
 	})
 
-	for _, modelID := range []string{"gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna"} {
+	t.Run("includes Claude Sonnet 5.5 with managed effort levels and official pricing", func(t *testing.T) {
+		model := supportsXhighModel(t, ProviderAnthropic, "claude-sonnet-5-5")
+		if model.Cost.Input != 2 || model.Cost.Output != 10 || model.Cost.CacheRead != 0.2 || model.Cost.CacheWrite != 2.5 {
+			t.Fatalf("sonnet-5-5 cost = %+v", model.Cost.ModelCostRates)
+		}
+		if model.ContextWindow != 1000000 || model.MaxTokens != 128000 {
+			t.Fatalf("sonnet-5-5 context = %d/%d", model.ContextWindow, model.MaxTokens)
+		}
+		compat, ok := model.Compat.(*AnthropicMessagesCompat)
+		if !ok || compat == nil {
+			t.Fatalf("sonnet-5-5 compat = %T", model.Compat)
+		}
+		if compat.ForceAdaptiveThinking == nil || !*compat.ForceAdaptiveThinking {
+			t.Error("sonnet-5-5 must force adaptive thinking")
+		}
+		if compat.SupportsMidConvoEffort == nil || !*compat.SupportsMidConvoEffort {
+			t.Error("sonnet-5-5 must support mid-convo effort")
+		}
+		if compat.SupportsMidConvoSystemMessages == nil || !*compat.SupportsMidConvoSystemMessages {
+			t.Error("sonnet-5-5 must support mid-convo system messages")
+		}
+		if compat.SupportsMidConvoToolChanges == nil || !*compat.SupportsMidConvoToolChanges {
+			t.Error("sonnet-5-5 must support mid-convo tool changes")
+		}
+		if compat.SupportsTemperature == nil || *compat.SupportsTemperature {
+			t.Error("sonnet-5-5 must not support temperature")
+		}
+		supportsXhighAssertLevels(t, model, "low", "medium", "high", "xhigh", "max")
+	})
+
+	t.Run("does not support off for GPT-6.1 Sol", func(t *testing.T) {
+		// OpenAI and Codex reject reasoning.effort "none" for GPT-6.1 Sol.
+		expected := map[ProviderID][]string{
+			ProviderOpenAI:      {"low", "medium", "high", "xhigh", "max"},
+			ProviderOpenAICodex: {"minimal", "low", "medium", "high", "xhigh", "max"},
+		}
+		for _, provider := range []ProviderID{ProviderOpenAI, ProviderOpenAICodex} {
+			model := supportsXhighModel(t, provider, "gpt-6.1-sol")
+			supportsXhighAssertLevels(t, model, expected[provider]...)
+			off, hasOff := model.ThinkingLevelMap[ModelThinkingOff]
+			if !hasOff || off != nil {
+				t.Errorf("gpt-6.1-sol/%s thinkingLevelMap.off = %#v, want null", provider, off)
+			}
+		}
+	})
+
+	for _, modelID := range []string{"gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"} {
 		modelID := modelID
 		t.Run("includes xhigh for openai-codex "+modelID, func(t *testing.T) {
 			model := supportsXhighModel(t, ProviderOpenAICodex, modelID)
@@ -170,6 +216,7 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 		cost ModelCostRates
 	}{
 		{"gpt-6-sol", ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+		{"gpt-6.1-sol", ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
 		{"gpt-6-luna", ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}},
 	} {
 		tc := tc
@@ -243,11 +290,6 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 	t.Run("preserves low/high/max metadata for DeepSeek V4.1 Flash on opencode-go", func(t *testing.T) {
 		model := supportsXhighModel(t, ProviderOpenCodeGo, "deepseek-v4.1-flash")
 		supportsXhighAssertLevels(t, model, "low", "high", "max")
-	})
-
-	t.Run("includes only high plus off for OpenCode Go Kimi K2.6", func(t *testing.T) {
-		model := supportsXhighModel(t, ProviderOpenCodeGo, "kimi-k2.6")
-		supportsXhighAssertLevels(t, model, "off", "high")
 	})
 
 	t.Run("excludes thinking off for Moonshot Kimi K2.7 Code models", func(t *testing.T) {

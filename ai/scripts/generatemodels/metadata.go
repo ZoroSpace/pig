@@ -105,6 +105,7 @@ func supportsAnthropicMidConvoEffort(modelID string) bool {
 	id := strings.ToLower(modelID)
 	id = regexp.MustCompile(`^~?anthropic/`).ReplaceAllString(id, "")
 	return regexp.MustCompile(`^claude-opus-(?:5|5[.-]5)(?:-\d{8})?$`).MatchString(id) ||
+		regexp.MustCompile(`^claude-sonnet-5[.-]5(?:-\d{8})?$`).MatchString(id) ||
 		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`).MatchString(id)
 }
 
@@ -114,6 +115,7 @@ func supportsAnthropicMidConvoEffort(modelID string) bool {
 // opus 5 to 5[.-]5).
 func supportsAnthropicMidConvoSystemMessages(modelID string) bool {
 	return regexp.MustCompile(`^claude-opus-(?:4[.-]8|5(?:[.-]5)?)(?:-\d{8})?$`).MatchString(modelID) ||
+		regexp.MustCompile(`^claude-sonnet-5[.-]5(?:-\d{8})?$`).MatchString(modelID) ||
 		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)?(?:-\d{8})?$`).MatchString(modelID)
 }
 
@@ -702,6 +704,12 @@ func getAnthropicMessagesCompat(provider, modelID string) *ai.AnthropicMessagesC
 		compat.AllowEmptySignature = lo.ToPtr(true)
 		hadField = true
 	}
+	// OpenCode Qwen 3.8 Flash emits and accepts thinking blocks with empty
+	// signatures (pi v0.99.1 c1449660c #10047).
+	if (provider == "opencode" || provider == "opencode-go") && modelID == "qwen3.8-flash" {
+		compat.AllowEmptySignature = lo.ToPtr(true)
+		hadField = true
+	}
 	if !hadField {
 		return nil
 	}
@@ -865,7 +873,7 @@ var openAIGrammarToolGptRe = regexp.MustCompile(`^gpt-(\d+)`)
 // (pi: OPENAI_TOOL_SEARCH_MODEL_IDS).
 var openAIToolSearchModelIDs = stringSet(
 	"gpt-5.4", "gpt-5.4-mini", "gpt-5.4-pro", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
-	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
+	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol",
 )
 
 // openAIAdditionalToolsModelIDs is pi's OPENAI_ADDITIONAL_TOOLS_MODEL_IDS
@@ -881,7 +889,7 @@ var openAIMidConvoSystemMessageModelIDs = openAIToolSearchModelIDs
 // OPENAI_CODEX_ADDITIONAL_TOOLS_MODEL_IDS (the codex branch stays inert
 // until the codex adapter lands).
 var openAICodexAdditionalToolsModelIDs = stringSet(
-	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
+	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol",
 )
 
 // applyOpenAIToolSearchMetadata (pi: applyOpenAIToolSearchMetadata).
@@ -1146,7 +1154,9 @@ func isAnthropicTemperatureUnsupportedModel(modelID string) bool {
 		strings.Contains(id, "opus-4-8") ||
 		strings.Contains(id, "opus-4.8") ||
 		strings.Contains(id, "opus-5") ||
-		strings.Contains(id, "opus.5")
+		strings.Contains(id, "opus.5") ||
+		strings.Contains(id, "sonnet-5-5") ||
+		strings.Contains(id, "sonnet-5.5")
 }
 
 // qwenTokenPlanProviderIds (pi: QWEN_TOKEN_PLAN_PROVIDER_IDS) — the deepseek
@@ -1164,10 +1174,11 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 		strings.HasPrefix(model.ID, "gpt-5") {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil})
 	}
-	if model.ID == "gpt-6-astra" || model.ID == "gpt-6-sol" || model.ID == "gpt-6-luna" {
+	if model.ID == "gpt-6-astra" || model.ID == "gpt-6-sol" || model.ID == "gpt-6-luna" || model.ID == "gpt-6.1-sol" {
 		if model.API == ai.ApiOpenAIResponses || model.API == ai.ApiAzureOpenAIResponses || model.API == ai.Api("openai-codex-responses") {
 			// pi db91e0331: Astra rejects an explicit off effort (null), Sol/Luna
-			// accept the provider-native "none".
+			// accept the provider-native "none". v0.99.1 12c416e1a: GPT-6.1 Sol
+			// joins Astra in rejecting effort "none".
 			merge := ai.ThinkingLevelMap{
 				ai.ModelThinkingMinimal: nil,
 				ai.ModelThinkingLow:     lo.ToPtr("low"),
@@ -1176,7 +1187,7 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 				ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ai.ModelThinkingMax:     lo.ToPtr("max"),
 			}
-			if model.ID == "gpt-6-astra" {
+			if model.ID == "gpt-6-astra" || model.ID == "gpt-6.1-sol" {
 				merge[ai.ModelThinkingOff] = nil
 			} else {
 				merge[ai.ModelThinkingOff] = lo.ToPtr("none")

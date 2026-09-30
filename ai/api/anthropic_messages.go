@@ -1010,6 +1010,12 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 							if parsed.CacheCreationInputTokens != nil {
 								output.Usage.CacheWrite = *parsed.CacheCreationInputTokens
 							}
+							// Vercel AI Gateway includes the TTL breakdown in
+							// deltas, though the SDK only types it on
+							// message_start (pi v0.99.1 667fc3dd3, #9210).
+							if parsed.CacheCreation != nil && parsed.CacheCreation.Ephemeral1hInputTokens != nil {
+								output.Usage.CacheWrite1h = lo.ToPtr(*parsed.CacheCreation.Ephemeral1hInputTokens)
+							}
 							// Anthropic reports reasoning tokens as a subset
 							// of output tokens.
 							if parsed.OutputTokensDetails != nil && parsed.OutputTokensDetails.ThinkingTokens != nil {

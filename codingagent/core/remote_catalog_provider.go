@@ -35,19 +35,34 @@ const remoteCatalogAttemptTimeoutMs = 4_000
 // before a refresh revalidates it (pi: REMOTE_CATALOG_REFRESH_INTERVAL_MS).
 const RemoteCatalogRefreshIntervalMs = 4 * 60 * 60 * 1000
 
+// remoteCatalogModelTypes lists the overlay entry types the client accepts;
+// entries of unknown types are ignored (pi: REMOTE_CATALOG_MODEL_TYPES /
+// isSupportedModelType, #9763).
+var remoteCatalogModelTypes = map[ai.ModelType]bool{
+	ai.ModelTypeChat:       true,
+	ai.ModelTypeImage:      true,
+	ai.ModelTypeClassifier: true,
+}
+
+// mergeModels overlays the dynamic catalog onto the baseline, keyed by
+// (model type, id) so one upstream id can expose chat and image entries
+// (pi: withRemoteCatalog merge key, v0.99.1 #9948).
 func mergeModels(baseline []ai.Model, dynamic []ai.Model) []ai.Model {
+	type modelKey struct {
+		modelType ai.ModelType
+		id        string
+	}
+	key := func(m ai.Model) modelKey { return modelKey{m.GetModelType(), m.ID} }
 	merged := append([]ai.Model(nil), baseline...)
+	index := make(map[modelKey]int, len(merged))
+	for i := range merged {
+		index[key(merged[i])] = i
+	}
 	for _, model := range dynamic {
-		index := -1
-		for i := range merged {
-			if merged[i].ID == model.ID {
-				index = i
-				break
-			}
-		}
-		if index >= 0 {
-			merged[index] = model
+		if i, ok := index[key(model)]; ok {
+			merged[i] = model
 		} else {
+			index[key(model)] = len(merged)
 			merged = append(merged, model)
 		}
 	}
@@ -73,6 +88,12 @@ func parseCatalog(providerID string, body []byte) ([]ai.Model, error) {
 		}
 		var model ai.Model
 		if err := json.Unmarshal(entry, &model); err != nil {
+			continue
+		}
+		// A missing type decodes as chat (zero value), so legacy chat-only
+		// shards keep working even when the server ignores the types=
+		// parameter; unknown type values are dropped (pi: isSupportedModelType).
+		if !remoteCatalogModelTypes[model.GetModelType()] {
 			continue
 		}
 		model.Provider = ai.ProviderID(providerID)
@@ -176,7 +197,24 @@ func (p *remoteCatalogProvider) dynamicModelsSnapshot() []ai.Model {
 }
 
 func (p *remoteCatalogProvider) GetModels() []ai.Model {
-	return mergeModels(p.Provider.GetModels(), p.dynamicModelsSnapshot())
+	// Chat-only overlay (pi: getModels only stacks chat entries).
+	var chatOverlay []ai.Model
+	for _, model := range p.dynamicModelsSnapshot() {
+		if model.IsModelType(ai.ModelTypeChat) {
+			chatOverlay = append(chatOverlay, model)
+		}
+	}
+	return mergeModels(p.Provider.GetModels(), chatOverlay)
+}
+
+// GetAllModels returns the baseline plus overlay across every model type (pi:
+// getAllModels stacks the full overlay).
+func (p *remoteCatalogProvider) GetAllModels() []ai.Model {
+	baseline := p.Provider.GetModels()
+	if all, ok := p.Provider.(ai.ProviderAllModels); ok {
+		baseline = all.GetAllModels()
+	}
+	return mergeModels(baseline, p.dynamicModelsSnapshot())
 }
 
 // RefreshModels refreshes the persisted catalog overlay (pi: refreshModels).
@@ -213,7 +251,10 @@ func (p *remoteCatalogProvider) RefreshModels(ctx context.Context, refreshCtx *a
 	if stored != nil && len(stored.Models) > 0 {
 		validator = stored.ETag
 	}
-	catalogURL := p.catalogBaseURL + "/api/models/providers/" + url.PathEscape(p.Provider.ID())
+	// types= asks for every supported model type; a server that ignores the
+	// parameter still answers with the legacy chat-only shard, which
+	// parseCatalog accepts (pi: ?types=chat,image,classifier, #9763).
+	catalogURL := p.catalogBaseURL + "/api/models/providers/" + url.PathEscape(p.Provider.ID()) + "?types=chat,image,classifier"
 	headers := map[string]string{
 		"accept":     "application/json",
 		"User-Agent": agentutils.GetPiUserAgent(codingagent.Version),

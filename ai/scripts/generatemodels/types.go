@@ -15,8 +15,11 @@ import (
 // ModelsDevModel is one models.dev catalog entry (pi: ModelsDevModel).
 // models.dev returns the catalog as { providerId: { models: { modelId: ... } } }.
 type ModelsDevModel struct {
-	ID               string                     `json:"id"`
-	Name             string                     `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Type marks non-chat entry kinds in models.dev responses ("decision",
+	// pi: metadata.type).
+	Type             string                     `json:"type"`
 	ToolCall         *bool                      `json:"tool_call"`
 	StructuredOutput *bool                      `json:"structured_output"`
 	Reasoning        *bool                      `json:"reasoning"`
@@ -100,6 +103,11 @@ type OpenRouterModel struct {
 // string, so the type is string-or-list to preserve both shapes.
 type OpenRouterArchitecture struct {
 	Modality stringOrList `json:"modality"`
+	// Input/OutputModalities are explicit lists present on the
+	// output_modalities=image and =decisions listings (pi:
+	// architecture.input_modalities / output_modalities).
+	InputModalities  []string `json:"input_modalities"`
+	OutputModalities []string `json:"output_modalities"`
 }
 
 // OpenRouterPricing is per-token USD as strings (pi: pricing).
@@ -156,8 +164,11 @@ type AIGatewayResponse struct {
 
 // AIGatewayModel is one Vercel AI Gateway model (pi: AiGatewayModel).
 type AIGatewayModel struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Type marks evaluation (classifier) models such as TypeSafe Jev
+	// (pi: model.type === "evaluation").
+	Type          string            `json:"type"`
 	ContextWindow *int64            `json:"context_window"`
 	MaxTokens     *int64            `json:"max_tokens"`
 	Tags          []string          `json:"tags"`

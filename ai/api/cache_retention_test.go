@@ -408,7 +408,6 @@ func TestCacheRetentionOpenAICompletionsOmitLongCacheForOpencode(t *testing.T) {
 		{"opencode", "kimi-k2.5"},
 		{"opencode", "kimi-k2.6"},
 		{"opencode", "minimax-m2.7"},
-		{"opencode-go", "kimi-k2.6"},
 	} {
 		model := maxThinkingCatalogModel(t, ai.ProviderID(spec.provider), spec.id)
 		compat, ok := model.Compat.(*types.OpenAICompletionsCompat)

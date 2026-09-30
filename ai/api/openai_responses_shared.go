@@ -1198,6 +1198,23 @@ func ProcessResponsesStream(events iter.Seq[*responsesStreamEvent], output *type
 	if !sawTerminalResponseEvent {
 		return fmt.Errorf("OpenAI Responses stream ended before a terminal response event")
 	}
+	// The agent runs every tool call in the final message. Refuse to hand
+	// over calls whose output_item.done never arrived: their arguments may
+	// be cut off or mixed up, e.g. when a non-compliant server omits
+	// output_index (pi v0.99.1 1b2aa0ca0, #9974). Finished calls have their
+	// scratch buffers removed.
+	if output.StopReason == types.StopReasonToolUse {
+		for _, block := range blocks {
+			toolCall, ok := block.(*responsesToolCallStreamBlock)
+			if !ok {
+				continue
+			}
+			if toolCall.hasPartialJSON || toolCall.customInput != nil {
+				return fmt.Errorf("OpenAI Responses stream completed with an unfinished tool call: %s (%s)",
+					toolCall.content.Name, toolCall.content.ID)
+			}
+		}
+	}
 	return nil
 }
 

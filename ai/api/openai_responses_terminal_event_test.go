@@ -79,6 +79,52 @@ func TestOpenAIResponsesTerminalEventHandling(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects completed streams whose tool call never received output_item.done", func(t *testing.T) {
+		model := newResponsesTerminalModel()
+		output := newResponsesTestOutput(model)
+		stream := types.NewAssistantMessageEventStream()
+
+		events := responsesEventSeq(
+			&responsesStreamEvent{Type: "response.output_item.added", OutputIndex: 0,
+				Item: &responsesOutputItem{Type: "function_call", ID: "fc_1", CallID: "call_1", Name: "bash"}},
+			&responsesStreamEvent{Type: "response.function_call_arguments.delta", OutputIndex: 0, ItemID: "fc_1",
+				Delta: `{"command":"rm -rf /tmp/build`},
+			&responsesStreamEvent{Type: "response.completed",
+				Response: &responsesResponseObject{ID: "resp_unfinished", Status: "completed"}},
+		)
+		err := ProcessResponsesStream(events, output, stream, model, nil)
+		if err == nil || !strings.Contains(err.Error(), "unfinished tool call: bash (call_1|fc_1)") {
+			t.Fatalf("err = %v, want unfinished tool call rejection", err)
+		}
+	})
+
+	t.Run("rejects parallel tool calls without output_index instead of running mixed-up calls", func(t *testing.T) {
+		// llama.cpp omits output_index from every event and sends both done
+		// events after all deltas (#9974): the slots collapse onto index 0,
+		// leaving scratch buffers behind, so the stream is rejected.
+		model := newResponsesTerminalModel()
+		output := newResponsesTestOutput(model)
+		stream := types.NewAssistantMessageEventStream()
+
+		call := func(n string) *responsesOutputItem {
+			return &responsesOutputItem{Type: "function_call", ID: "fc_" + n, CallID: "call_" + n, Name: "bash"}
+		}
+		events := responsesEventSeq(
+			&responsesStreamEvent{Type: "response.output_item.added", Item: call("a")},
+			&responsesStreamEvent{Type: "response.function_call_arguments.delta", ItemID: "fc_a", Delta: `{"command":"echo a"}`},
+			&responsesStreamEvent{Type: "response.output_item.added", Item: call("b")},
+			&responsesStreamEvent{Type: "response.function_call_arguments.delta", ItemID: "fc_b", Delta: `{"command":"echo b"}`},
+			&responsesStreamEvent{Type: "response.output_item.done", Item: &responsesOutputItem{Type: "function_call", ID: "fc_a", CallID: "call_a", Name: "bash", Arguments: `{"command":"echo a"}`}},
+			&responsesStreamEvent{Type: "response.output_item.done", Item: &responsesOutputItem{Type: "function_call", ID: "fc_b", CallID: "call_b", Name: "bash", Arguments: `{"command":"echo b"}`}},
+			&responsesStreamEvent{Type: "response.completed",
+				Response: &responsesResponseObject{ID: "resp_no_output_index", Status: "completed"}},
+		)
+		err := ProcessResponsesStream(events, output, stream, model, nil)
+		if err == nil || !strings.Contains(err.Error(), "unfinished tool call: bash (call_a|fc_a)") {
+			t.Fatalf("err = %v, want unfinished tool call rejection", err)
+		}
+	})
+
 	t.Run("emits an error final result when the wrapper stream ends before a terminal response event", func(t *testing.T) {
 		model := newResponsesTerminalModel()
 		llmContext := utils.NormalizeContext(&types.Context{

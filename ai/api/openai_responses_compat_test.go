@@ -398,17 +398,26 @@ func TestOpenAIResponsesProviderDefaults(t *testing.T) {
 	})
 
 	for _, tc := range []struct {
-		modelID    string
-		tier       string
-		multiplier float64
-	}{{"gpt-5.4", "priority", 2}, {"gpt-5.5", "priority", 2.5}, {"gpt-5.5", "flex", 0.5}} {
+		modelID             string
+		tier                string
+		responseServiceTier string
+		multiplier          float64
+	}{
+		{"gpt-5.4", "priority", "priority", 2},
+		{"gpt-5.5", "priority", "priority", 2.5},
+		{"gpt-5.5", "flex", "flex", 0.5},
+		// GPT-6 models report Fast mode as "fast" even when "priority" is
+		// requested (#10034).
+		{"gpt-6-luna", "priority", "fast", 2},
+		{"gpt-6-luna", "fast", "fast", 2},
+	} {
 		tc := tc
-		t.Run("applies "+tc.modelID+" "+tc.tier+" service-tier cost multiplier", func(t *testing.T) {
+		t.Run("applies "+tc.modelID+" cost multiplier for requested "+tc.tier+" and returned "+tc.responseServiceTier+" service tier", func(t *testing.T) {
 			model := responsesTestModel(t, "openai", tc.modelID)
 			tokenCount := int64(100000)
 			tokenScale := float64(tokenCount) / 1000000.0
 
-			completed := `{"type":"response.completed","response":{"status":"completed","service_tier":"` + tc.tier + `","usage":{"input_tokens":100000,"output_tokens":100000,"total_tokens":200000,"input_tokens_details":{"cached_tokens":0}}}}`
+			completed := `{"type":"response.completed","response":{"status":"completed","service_tier":"` + tc.responseServiceTier + `","usage":{"input_tokens":100000,"output_tokens":100000,"total_tokens":200000,"input_tokens_details":{"cached_tokens":0}}}}`
 			captured := &capturedResponsesRequest{}
 			opts := &OpenAIResponsesOptions{}
 			opts.APIKey = "test-key"
@@ -421,16 +430,18 @@ func TestOpenAIResponsesProviderDefaults(t *testing.T) {
 				t.Fatalf("stopReason = %v (%s), want stop", result.StopReason, result.ErrorMessage)
 			}
 
+			// JS multiplies in a different order than CalculateCost, so the
+			// expected values are compared with a float tolerance.
 			wantInput := model.Cost.Input * tc.multiplier * tokenScale
 			wantOutput := model.Cost.Output * tc.multiplier * tokenScale
 			wantTotal := (model.Cost.Input + model.Cost.Output) * tc.multiplier * tokenScale
-			if result.Usage.Cost.Input != wantInput {
+			if !nearlyEqual(result.Usage.Cost.Input, wantInput) {
 				t.Fatalf("cost.input = %v, want %v (events: %d)", result.Usage.Cost.Input, wantInput, len(events))
 			}
-			if result.Usage.Cost.Output != wantOutput {
+			if !nearlyEqual(result.Usage.Cost.Output, wantOutput) {
 				t.Fatalf("cost.output = %v, want %v", result.Usage.Cost.Output, wantOutput)
 			}
-			if result.Usage.Cost.Total != wantTotal {
+			if !nearlyEqual(result.Usage.Cost.Total, wantTotal) {
 				t.Fatalf("cost.total = %v, want %v", result.Usage.Cost.Total, wantTotal)
 			}
 		})
@@ -473,4 +484,23 @@ func TestOpenAIResponsesMaxOutputTokensCompat(t *testing.T) {
 			t.Fatalf("max_output_tokens = %v, want absent", captured.body["max_output_tokens"])
 		}
 	})
+}
+
+// nearlyEqual compares floats with a relative tolerance (1e-12).
+func nearlyEqual(a, b float64) bool {
+	if a == b {
+		return true
+	}
+	diff := a - b
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff <= 1e-12*(abs(a)+abs(b))
+}
+
+func abs(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
 }

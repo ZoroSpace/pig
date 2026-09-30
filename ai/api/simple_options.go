@@ -28,16 +28,11 @@ func ClampMaxTokensToContext(model *types.Model, context *types.TranscriptContex
 // full streams (pi: buildBaseOptions). signal is intentionally absent (Go
 // cancellation travels as context).
 func BuildBaseOptions(model *types.Model, context *types.TranscriptContext, options *types.SimpleStreamOptions, apiKey string) types.StreamOptions {
-	var samplingParams map[string]any
-	if model.SamplingParams != nil || options.SamplingParams != nil {
-		samplingParams = map[string]any{}
-		for k, v := range model.SamplingParams {
-			samplingParams[k] = v
-		}
-		for k, v := range options.SamplingParams {
-			samplingParams[k] = v
-		}
-	}
+	// v0.99.1 #9506: model-level samplingParams are applied in each adapter's
+	// buildParams (Object.assign(params, model.samplingParams,
+	// options.samplingParams)); merging them here as well would double-apply
+	// them past adapter-level request keys.
+	samplingParams := options.SamplingParams
 	maxTokens := options.MaxTokens
 	if maxTokens == nil {
 		maxTokens = &model.MaxTokens

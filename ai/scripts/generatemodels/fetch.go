@@ -131,78 +131,6 @@ func fetchNvidiaNimModelIds(ctx context.Context) (map[string]string, error) {
 	return modelIds, nil
 }
 
-// fetchOpenRouterModels returns tool-capable OpenRouter models as
-// openai-completions models (pi: fetchOpenRouterModels).
-func fetchOpenRouterModels(ctx context.Context) ([]*ai.Model, error) {
-	fmt.Println("Fetching models from OpenRouter API...")
-	var data OpenRouterResponse
-	if err := httpGetJSON(ctx, openRouterURL, &data); err != nil {
-		return nil, err
-	}
-
-	var models []*ai.Model
-	for i := range data.Data {
-		model := &data.Data[i]
-		if !containsString(model.SupportedParameters, "tools") {
-			continue
-		}
-
-		input := []ai.ModelInput{ai.ModelInputText}
-		if model.Architecture != nil && model.Architecture.Modality.includes("image") {
-			input = append(input, ai.ModelInputImage)
-		}
-
-		inputCost := roundCost(parseFloatDefault(model.Pricing, func(p *OpenRouterPricing) *string { return p.Prompt }) * 1_000_000)
-		outputCost := roundCost(parseFloatDefault(model.Pricing, func(p *OpenRouterPricing) *string { return p.Completion }) * 1_000_000)
-		cacheReadCost := roundCost(parseFloatDefault(model.Pricing, func(p *OpenRouterPricing) *string { return p.InputCacheRead }) * 1_000_000)
-		cacheWriteCost := roundCost(parseFloatDefault(model.Pricing, func(p *OpenRouterPricing) *string { return p.InputCacheWrite }) * 1_000_000)
-
-		contextWindow := int64(4096)
-		if model.TopProvider != nil && model.TopProvider.ContextLength != nil {
-			contextWindow = *model.TopProvider.ContextLength
-		} else if model.ContextLength != nil {
-			contextWindow = *model.ContextLength
-		}
-
-		maxTokens := int64(4096)
-		if model.TopProvider != nil && model.TopProvider.MaxCompletionTokens != nil {
-			maxTokens = *model.TopProvider.MaxCompletionTokens
-		}
-
-		thinkingLevelMap := getOpenRouterThinkingLevelMap(model.Reasoning)
-
-		// pi: anthropic/* models (except :batch aliases) are served by the
-		// Anthropic-compatible endpoint without the /v1 suffix.
-		useAnthropicMessages := anthropicPrefixRegexp.MatchString(model.ID) && !strings.HasSuffix(model.ID, ":batch")
-		baseURL := "https://openrouter.ai/api/v1"
-		api := ai.ApiOpenAICompletions
-		if useAnthropicMessages {
-			baseURL = "https://openrouter.ai/api"
-			api = ai.ApiAnthropicMessages
-		}
-
-		m := &ai.Model{
-			ID:            model.ID,
-			Name:          model.Name,
-			API:           api,
-			BaseURL:       baseURL,
-			Provider:      ai.ProviderOpenRouter,
-			Reasoning:     containsString(model.SupportedParameters, "reasoning"),
-			Input:         input,
-			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: inputCost, Output: outputCost, CacheRead: cacheReadCost, CacheWrite: cacheWriteCost}},
-			ContextWindow: contextWindow,
-			MaxTokens:     maxTokens,
-		}
-		if thinkingLevelMap != nil {
-			m.ThinkingLevelMap = *thinkingLevelMap
-		}
-		models = append(models, m)
-	}
-
-	fmt.Printf("Fetched %d tool-capable models from OpenRouter\n", len(models))
-	return models, nil
-}
-
 // parseFloatDefault parses pi's `parseFloat(model.pricing?.X || "0")`.
 func parseFloatDefault(p *OpenRouterPricing, get func(*OpenRouterPricing) *string) float64 {
 	if p == nil {
@@ -219,18 +147,50 @@ func parseFloatDefault(p *OpenRouterPricing, get func(*OpenRouterPricing) *strin
 	return f
 }
 
-// fetchAiGatewayModels returns tool-use Vercel AI Gateway models as
-// anthropic-messages models (pi: fetchAiGatewayModels).
-func fetchAiGatewayModels(ctx context.Context) ([]*ai.Model, error) {
+// aiGatewayCatalog splits the Vercel AI Gateway listing by operation (pi:
+// fetchAiGatewayModels return shape).
+type aiGatewayCatalog struct {
+	chat        []*ai.Model
+	classifiers []*ai.Model
+}
+
+// aiGatewayTypesafeBaseURL serves evaluation models such as TypeSafe's Jev
+// through the TypeSafe-compatible System One endpoint (pi:
+// AI_GATEWAY_TYPESAFE_BASE_URL).
+// https://vercel.com/docs/ai-gateway/sdks-and-apis/typesafe
+const aiGatewayTypesafeBaseURL = "https://ai-gateway.vercel.sh/typesafe/v1"
+
+// fetchAiGatewayModels returns tool-use Vercel AI Gateway chat models plus
+// evaluation classifier models (pi: fetchAiGatewayModels).
+func fetchAiGatewayModels(ctx context.Context) (*aiGatewayCatalog, error) {
 	fmt.Println("Fetching models from Vercel AI Gateway API...")
 	var data AIGatewayResponse
 	if err := httpGetJSON(ctx, aiGatewayModelsURL, &data); err != nil {
 		return nil, err
 	}
 
-	var models []*ai.Model
+	catalog := &aiGatewayCatalog{}
 	for i := range data.Data {
 		model := &data.Data[i]
+		// Evaluation models such as TypeSafe's Jev are served through the
+		// TypeSafe-compatible System One endpoint.
+		if model.Type == "evaluation" {
+			catalog.classifiers = append(catalog.classifiers, &ai.Model{
+				Type:     ai.ModelTypeClassifier,
+				ID:       model.ID,
+				Name:     orString(model.Name, model.ID),
+				API:      ai.ClassifierApiTypesafeSystemOne,
+				Provider: ai.ProviderVercelAIGateway,
+				BaseURL:  aiGatewayTypesafeBaseURL,
+				Input:    []ai.ModelInput{ai.ModelInputText},
+				Cost: ai.ModelCost{ModelCostRates: ai.ModelCostRates{
+					Input:  roundCost(gatewayNumber(model.Pricing, func(p *AIGatewayPricing) json.Number { return p.Input }) * 1_000_000),
+					Output: roundCost(gatewayNumber(model.Pricing, func(p *AIGatewayPricing) json.Number { return p.Output }) * 1_000_000),
+				}},
+				ContextWindow: int64Or(model.ContextWindow, 4096),
+			})
+			continue
+		}
 		if !containsString(model.Tags, "tool-use") {
 			continue
 		}
@@ -246,7 +206,7 @@ func fetchAiGatewayModels(ctx context.Context) ([]*ai.Model, error) {
 		cacheReadCost := roundCost(gatewayNumber(pricing, func(p *AIGatewayPricing) json.Number { return p.InputCacheRead }) * 1_000_000)
 		cacheWriteCost := roundCost(gatewayNumber(pricing, func(p *AIGatewayPricing) json.Number { return p.InputCacheWrite }) * 1_000_000)
 
-		models = append(models, &ai.Model{
+		catalog.chat = append(catalog.chat, &ai.Model{
 			ID:        model.ID,
 			Name:      orString(model.Name, model.ID),
 			API:       ai.ApiAnthropicMessages,
@@ -263,8 +223,49 @@ func fetchAiGatewayModels(ctx context.Context) ([]*ai.Model, error) {
 		})
 	}
 
-	fmt.Printf("Fetched %d tool-capable models from Vercel AI Gateway\n", len(models))
-	return models, nil
+	fmt.Printf("Fetched %d tool-capable and %d classifier models from Vercel AI Gateway\n", len(catalog.chat), len(catalog.classifiers))
+	return catalog, nil
+}
+
+// modelsDevClassifierURL lists models.dev decision (classifier) models (pi:
+// loadModelsDevClassifierModels).
+const modelsDevClassifierURL = "https://models.dev/models.json?type=decision"
+
+// loadModelsDevClassifierModels returns the direct TypeSafe Jev classifier
+// (pi: loadModelsDevClassifierModels). System One reports token usage, so
+// classify() results carry token counts but price them at zero — the
+// canonical models.dev entry has no direct-provider pricing.
+func loadModelsDevClassifierModels(ctx context.Context) ([]*ai.Model, error) {
+	fmt.Println("Fetching classifier models from models.dev API...")
+	// The response is a flat metadata record keyed by provider/model id (pi:
+	// Record<string, ModelsDevMetadata>, data["typesafe/jev-latest"]).
+	var data map[string]*ModelsDevModel
+	if err := httpGetJSON(ctx, modelsDevClassifierURL, &data); err != nil {
+		return nil, err
+	}
+	entry := data["typesafe/jev-latest"]
+	if entry == nil || entry.Type != "decision" {
+		return nil, fmt.Errorf("models.dev did not return decision model typesafe/jev-latest")
+	}
+	input := []ai.ModelInput{ai.ModelInputText}
+	if entry.Modalities != nil && containsString(entry.Modalities.Input, "image") {
+		input = append(input, ai.ModelInputImage)
+	}
+	contextWindow := int64(64000)
+	if entry.Limit != nil && entry.Limit.Context != nil {
+		contextWindow = *entry.Limit.Context
+	}
+	return []*ai.Model{{
+		Type:          ai.ModelTypeClassifier,
+		ID:            "jev-latest",
+		Name:          entry.Name,
+		API:           ai.ClassifierApiTypesafeSystemOne,
+		Provider:      "typesafe",
+		BaseURL:       "https://api.typesafe.ai/v1/",
+		Input:         input,
+		Cost:          ai.ModelCost{},
+		ContextWindow: contextWindow,
+	}}, nil
 }
 
 func gatewayNumber(p *AIGatewayPricing, get func(*AIGatewayPricing) json.Number) float64 {

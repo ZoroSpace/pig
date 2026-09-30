@@ -5,11 +5,11 @@ package ai
 
 import "github.com/samber/lo"
 
-// MODELS is the generated built-in catalog (pi: models.generated.ts MODELS):
-// provider id -> model id -> model. pi types the key set closed (keyof
-// typeof MODELS); pig keys by the open ProviderID. pi's per-provider
-// providers/*.models.ts files have no separate Go counterpart — the
-// generator emits one file.
+// MODELS is the generated built-in chat catalog (pi:
+// models.generated.ts MODELS): provider id -> model id -> model. pi types
+// the key set closed (keyof typeof MODELS); pig keys by the open
+// ProviderID. pi's per-provider providers/*.models.ts files have no
+// separate Go counterpart — the generator emits one file.
 var MODELS = map[ProviderID]map[string]Model{
 	ProviderID("amazon-bedrock"): {
 		"amazon.nova-2-lite-v1:0": {
@@ -18,6 +18,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -41,6 +42,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -64,6 +66,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.035, Output: 0.14, CacheRead: 0.00875, CacheWrite: 0.035}},
@@ -76,6 +79,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -99,6 +103,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -127,6 +132,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -155,6 +161,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -181,6 +188,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -204,6 +212,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -230,6 +239,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -259,6 +269,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -286,6 +297,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -313,6 +325,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -340,6 +353,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -366,6 +380,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -395,6 +410,35 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+				ModelThinkingMax:   lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+		},
+		"anthropic.claude-sonnet-5-5": {
+			ID:        "anthropic.claude-sonnet-5-5",
+			Name:      "Claude Sonnet 5.5",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -422,6 +466,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -445,6 +490,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.037, Output: 0.148, CacheRead: 0.00925, CacheWrite: 0.037}},
@@ -457,6 +503,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -480,6 +527,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -503,6 +551,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -529,6 +578,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -558,6 +608,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -585,6 +636,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -612,6 +664,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -639,6 +692,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -666,6 +720,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -692,6 +747,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -721,6 +777,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -748,6 +805,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -771,6 +829,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.58, Output: 1.68, CacheRead: 0, CacheWrite: 0}},
@@ -786,6 +845,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.62, Output: 1.85, CacheRead: 0, CacheWrite: 0}},
@@ -801,6 +861,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -824,6 +885,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -847,6 +909,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.16, CacheRead: 0.01, CacheWrite: 0.04}},
@@ -859,6 +922,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -882,6 +946,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -910,6 +975,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -936,6 +1002,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -962,6 +1029,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -991,6 +1059,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1018,6 +1087,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1045,6 +1115,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1072,6 +1143,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1099,6 +1171,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1122,6 +1195,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1148,6 +1222,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -1177,6 +1252,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1204,6 +1280,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.eu-central-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1227,6 +1304,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1250,6 +1328,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -1278,6 +1357,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -1306,6 +1386,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1332,6 +1413,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1358,6 +1440,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -1387,6 +1470,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1414,6 +1498,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1441,6 +1526,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1468,6 +1554,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1495,6 +1582,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1518,6 +1606,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1544,6 +1633,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -1573,6 +1663,35 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+				ModelThinkingMax:   lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+		},
+		"global.anthropic.claude-sonnet-5-5": {
+			ID:        "global.anthropic.claude-sonnet-5-5",
+			Name:      "Claude Sonnet 5.5 (Global)",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1600,6 +1719,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1615,7 +1735,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
 			ContextWindow: 1048576,
-			MaxTokens:     131072,
+			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -1626,6 +1746,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1655,6 +1776,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1681,6 +1803,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1707,6 +1830,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1736,6 +1860,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1765,6 +1890,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1794,6 +1920,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1811,12 +1938,40 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 500000,
 			MaxTokens:     500000,
 		},
+		"global.xai.grok-4.7": {
+			ID:        "global.xai.grok-4.7",
+			Name:      "Grok 4.7 (Global)",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0}},
+			ContextWindow: 500000,
+			MaxTokens:     500000,
+			Compat: &BedrockCompat{
+				SupportsStrictMode: lo.ToPtr(true),
+			},
+		},
 		"google.gemma-4-26b-a4b": {
 			ID:        "google.gemma-4-26b-a4b",
 			Name:      "Gemma 4 26B A4B IT",
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1843,6 +1998,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1869,6 +2025,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1895,6 +2052,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1924,6 +2082,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -1950,6 +2109,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1973,6 +2133,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -1999,6 +2160,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2026,6 +2188,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2053,6 +2216,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2080,6 +2244,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2107,6 +2272,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2133,6 +2299,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -2162,6 +2329,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2189,6 +2357,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.72, Output: 0.72, CacheRead: 0, CacheWrite: 0}},
@@ -2201,6 +2370,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.22, CacheRead: 0, CacheWrite: 0}},
@@ -2213,6 +2383,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.72, Output: 0.72, CacheRead: 0, CacheWrite: 0}},
@@ -2225,6 +2396,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2248,6 +2420,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2271,6 +2444,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
@@ -2286,10 +2460,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 204800,
+			ContextWindow: 196608,
 			MaxTokens:     131072,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -2301,6 +2476,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
@@ -2316,10 +2492,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 2, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 256000,
+			ContextWindow: 262144,
 			MaxTokens:     8192,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -2331,6 +2508,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2357,6 +2535,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2383,6 +2562,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2409,6 +2589,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2435,6 +2616,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2449,7 +2631,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.5, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 256000,
+			ContextWindow: 262144,
 			MaxTokens:     8192,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -2461,6 +2643,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2484,6 +2667,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.04, CacheRead: 0, CacheWrite: 0}},
@@ -2499,6 +2683,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.3, CacheRead: 0, CacheWrite: 0}},
@@ -2514,10 +2699,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.5, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262143,
+			ContextWindow: 262144,
 			MaxTokens:     16000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -2529,6 +2715,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2543,7 +2730,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 3, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262143,
+			ContextWindow: 262144,
 			MaxTokens:     16384,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -2555,6 +2742,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -2569,7 +2757,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 128000,
+			ContextWindow: 131072,
 			MaxTokens:     8192,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -2581,6 +2769,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.24, CacheRead: 0, CacheWrite: 0}},
@@ -2596,6 +2785,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.23, CacheRead: 0, CacheWrite: 0}},
@@ -2611,6 +2801,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.65, CacheRead: 0, CacheWrite: 0}},
@@ -2626,6 +2817,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2643,7 +2835,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.75, Output: 16.5, CacheRead: 0.275, CacheWrite: 0}},
-			ContextWindow: 272000,
+			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -2655,6 +2847,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2672,7 +2865,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 33, CacheRead: 0.55, CacheWrite: 0}},
-			ContextWindow: 272000,
+			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -2684,6 +2877,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2713,6 +2907,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2742,6 +2937,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2771,6 +2967,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -2794,17 +2991,78 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
 		},
+		"openai.gpt-6-luna": {
+			ID:        "openai.gpt-6-luna",
+			Name:      "GPT-6 Luna",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.11, Output: 0.55, CacheRead: 0.011, CacheWrite: 0.1375}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &BedrockCompat{
+				SupportsStrictMode: lo.ToPtr(true),
+			},
+		},
+		"openai.gpt-6-sol": {
+			ID:        "openai.gpt-6-sol",
+			Name:      "GPT-6 Sol",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &BedrockCompat{
+				SupportsStrictMode: lo.ToPtr(true),
+			},
+		},
 		"openai.gpt-oss-120b": {
 			ID:            "openai.gpt-oss-120b",
 			Name:          "gpt-oss-120b",
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 128000,
-			MaxTokens:     16384,
+			ContextWindow: 131072,
+			MaxTokens:     131072,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -2815,11 +3073,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 128000,
-			MaxTokens:     16384,
+			ContextWindow: 131072,
+			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -2830,11 +3089,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.3, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 128000,
-			MaxTokens:     16384,
+			ContextWindow: 131072,
+			MaxTokens:     131072,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -2845,11 +3105,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.3, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 128000,
-			MaxTokens:     16384,
+			ContextWindow: 131072,
+			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -2860,6 +3121,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
@@ -2875,6 +3137,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.2, CacheRead: 0, CacheWrite: 0}},
@@ -2890,6 +3153,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.88, CacheRead: 0, CacheWrite: 0}},
@@ -2905,6 +3169,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
@@ -2920,6 +3185,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
@@ -2935,6 +3201,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.45, Output: 1.8, CacheRead: 0, CacheWrite: 0}},
@@ -2950,6 +3217,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
@@ -2965,6 +3233,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
@@ -2980,6 +3249,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3006,6 +3276,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.18, Output: 0.72, CacheRead: 0, CacheWrite: 0}},
@@ -3021,6 +3292,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.084, Output: 0.36, CacheRead: 0, CacheWrite: 0}},
@@ -3036,6 +3308,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3059,6 +3332,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3082,6 +3356,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.035, Output: 0.14, CacheRead: 0.00875, CacheWrite: 0.035}},
@@ -3094,6 +3369,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3117,6 +3393,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3140,6 +3417,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -3168,6 +3446,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -3196,6 +3475,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3222,6 +3502,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3245,6 +3526,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3271,6 +3553,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -3300,6 +3583,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3327,6 +3611,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3354,6 +3639,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3381,6 +3667,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3408,6 +3695,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3431,6 +3719,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3457,6 +3746,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -3486,6 +3776,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3513,6 +3804,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.72, Output: 0.72, CacheRead: 0, CacheWrite: 0}},
@@ -3525,6 +3817,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.22, CacheRead: 0, CacheWrite: 0}},
@@ -3537,6 +3830,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.72, Output: 0.72, CacheRead: 0, CacheWrite: 0}},
@@ -3549,6 +3843,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3572,6 +3867,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3595,6 +3891,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3618,6 +3915,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3633,7 +3931,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3.3, Output: 16.5, CacheRead: 0.33, CacheWrite: 4.125}},
 			ContextWindow: 1048576,
-			MaxTokens:     131072,
+			MaxTokens:     128000,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
@@ -3644,6 +3942,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3673,6 +3972,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3699,6 +3999,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3725,6 +4026,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3754,6 +4056,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3783,6 +4086,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -3812,6 +4116,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 10, CacheRead: 0, CacheWrite: 0}},
@@ -3824,6 +4129,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 6, CacheRead: 0, CacheWrite: 0}},
@@ -3836,6 +4142,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3853,12 +4160,40 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 500000,
 			MaxTokens:     500000,
 		},
+		"us.xai.grok-4.7": {
+			ID:        "us.xai.grok-4.7",
+			Name:      "Grok 4.7 (US)",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 6.6, CacheRead: 0.55, CacheWrite: 0}},
+			ContextWindow: 500000,
+			MaxTokens:     500000,
+			Compat: &BedrockCompat{
+				SupportsStrictMode: lo.ToPtr(true),
+			},
+		},
 		"writer.palmyra-x4-v1:0": {
 			ID:            "writer.palmyra-x4-v1:0",
 			Name:          "Palmyra X4",
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 10, CacheRead: 0, CacheWrite: 0}},
@@ -3871,6 +4206,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 6, CacheRead: 0, CacheWrite: 0}},
@@ -3883,6 +4219,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3909,6 +4246,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("bedrock-converse-stream"),
 			Provider:  ProviderID("amazon-bedrock"),
 			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -3935,10 +4273,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 204800,
+			ContextWindow: 202752,
 			MaxTokens:     131072,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -3950,10 +4289,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 200000,
+			ContextWindow: 202752,
 			MaxTokens:     131072,
 			Compat: &BedrockCompat{
 				SupportsStrictMode: lo.ToPtr(true),
@@ -3965,6 +4305,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("bedrock-converse-stream"),
 			Provider:      ProviderID("amazon-bedrock"),
 			BaseURL:       "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 3.2, CacheRead: 0, CacheWrite: 0}},
@@ -3982,6 +4323,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderAntLing,
 			BaseURL:       "https://api.ant-ling.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.25, CacheRead: 0, CacheWrite: 0}},
@@ -4003,6 +4345,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderAntLing,
 			BaseURL:       "https://api.ant-ling.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.01, Output: 0.02, CacheRead: 0, CacheWrite: 0}},
@@ -4024,6 +4367,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderAntLing,
 			BaseURL:   "https://api.ant-ling.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -4055,6 +4399,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -4122,6 +4467,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -4162,6 +4508,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4193,6 +4540,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4224,6 +4572,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4255,6 +4604,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4286,6 +4636,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -4321,6 +4672,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -4358,6 +4710,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -4397,6 +4750,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -4438,6 +4792,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -4483,6 +4838,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4514,6 +4870,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4545,6 +4902,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -4580,6 +4938,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderAnthropic,
 			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -4610,6 +4969,52 @@ var MODELS = map[ProviderID]map[string]Model{
 				CacheRetentionLong:  3600,
 			},
 		},
+		"claude-sonnet-5-5": {
+			ID:        "claude-sonnet-5-5",
+			Name:      "Claude Sonnet 5.5",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderAnthropic,
+			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				MaxRequestBytes: 33554432,
+				Images: &ModelImageInputLimits{
+					MaxPerRequest: 600,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsStrictTools:            lo.ToPtr(true),
+				SupportsMidConvoEffort:         lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SupportsMidConvoToolChanges:    lo.ToPtr(true),
+			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
+			},
+		},
 	},
 	ProviderID("azure-openai-responses"): {
 		"gpt-4": {
@@ -4618,6 +5023,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("azure-openai-responses"),
 			Provider:      ProviderID("azure-openai-responses"),
 			BaseURL:       "",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 30, Output: 60, CacheRead: 0, CacheWrite: 0}},
@@ -4630,6 +5036,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4652,6 +5059,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4674,6 +5082,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4696,6 +5105,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4718,6 +5128,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4740,6 +5151,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4762,6 +5174,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4784,6 +5197,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4806,6 +5220,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -4828,6 +5243,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -4856,6 +5272,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -4884,6 +5301,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -4912,6 +5330,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -4940,6 +5359,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -4968,6 +5388,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -4996,6 +5417,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5025,6 +5447,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5054,6 +5477,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5083,6 +5507,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5112,6 +5537,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5141,6 +5567,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5170,6 +5597,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5199,6 +5627,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5228,6 +5657,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5257,6 +5687,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5286,6 +5717,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5315,6 +5747,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -5346,6 +5779,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5376,6 +5810,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5406,6 +5841,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -5436,6 +5872,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -5470,6 +5907,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -5504,6 +5942,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -5532,12 +5971,94 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
 			},
 		},
+		"gpt-6.1-sol": {
+			ID:        "gpt-6.1-sol",
+			Name:      "GPT-6.1 Sol",
+			API:       Api("azure-openai-responses"),
+			Provider:  ProviderID("azure-openai-responses"),
+			BaseURL:   "",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
+			ContextWindow: 272000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+			},
+		},
+		"gpt-daybreak-blue-latest": {
+			ID:        "gpt-daybreak-blue-latest",
+			Name:      "Daybreak Blue",
+			API:       Api("azure-openai-responses"),
+			Provider:  ProviderID("azure-openai-responses"),
+			BaseURL:   "",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+		},
+		"gpt-daybreak-red-latest": {
+			ID:        "gpt-daybreak-red-latest",
+			Name:      "Daybreak Red",
+			API:       Api("azure-openai-responses"),
+			Provider:  ProviderID("azure-openai-responses"),
+			BaseURL:   "",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 12.5, Output: 75, CacheRead: 1.25, CacheWrite: 15.625}},
+			ContextWindow: 400000,
+			MaxTokens:     128000,
+		},
 		"gpt-realtime-2.1": {
 			ID:        "gpt-realtime-2.1",
 			Name:      "GPT-Realtime-2.1",
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -5560,6 +6081,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -5582,6 +6104,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -5604,6 +6127,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -5626,6 +6150,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("azure-openai-responses"),
 			Provider:      ProviderID("azure-openai-responses"),
 			BaseURL:       "",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.1, Output: 4.4, CacheRead: 0.55, CacheWrite: 0}},
@@ -5638,6 +6163,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -5660,6 +6186,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("azure-openai-responses"),
 			Provider:  ProviderID("azure-openai-responses"),
 			BaseURL:   "",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -5684,6 +6211,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -5716,6 +6244,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -5748,6 +6277,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -5780,6 +6310,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -5816,12 +6347,56 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
+		"deepseek-ai/DeepSeek-V4.1-Flash-Fast": {
+			ID:        "deepseek-ai/DeepSeek-V4.1-Flash-Fast",
+			Name:      "deepseek-ai/DeepSeek-V4.1-Flash-Fast",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderBaseten,
+			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     32768,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:              lo.ToPtr(false),
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				SupportsReasoningEffort:    lo.ToPtr(true),
+				SupportsUsageInStreaming:   lo.ToPtr(true),
+				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+				SupportsLongCacheRetention: lo.ToPtr(false),
+			},
+		},
 		"moonshotai/Kimi-K2.5": {
 			ID:        "moonshotai/Kimi-K2.5",
 			Name:      "Kimi K2.5",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("off"),
@@ -5871,6 +6446,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("off"),
@@ -5920,6 +6496,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("off"),
@@ -5969,6 +6546,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -6011,6 +6589,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("off"),
@@ -6050,6 +6629,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("off"),
@@ -6089,6 +6669,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -6121,6 +6702,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -6163,6 +6745,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -6205,6 +6788,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("off"),
@@ -6244,6 +6828,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("off"),
@@ -6283,6 +6868,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("off"),
@@ -6322,6 +6908,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -6361,6 +6948,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -6400,6 +6988,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -6442,6 +7031,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -6484,6 +7074,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderBaseten,
 			BaseURL:   "https://inference.baseten.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -6528,6 +7119,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCerebras,
 			BaseURL:   "https://api.cerebras.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -6553,6 +7145,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCerebras,
 			BaseURL:   "https://api.cerebras.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -6574,9 +7167,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.99, Output: 1.49, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 65536,
-			MaxTokens:     32768,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.99, Output: 1.49, CacheRead: 0.99, CacheWrite: 0}},
+			ContextWindow: 131072,
+			MaxTokens:     40960,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:         lo.ToPtr(false),
 				SupportsDeveloperRole: lo.ToPtr(false),
@@ -6590,6 +7183,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -6621,6 +7215,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -6652,6 +7247,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -6677,6 +7273,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -6702,6 +7299,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -6731,6 +7329,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -6762,6 +7361,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -6793,6 +7393,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -6818,12 +7419,45 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking:      lo.ToPtr(true),
 			},
 		},
+		"claude-opus-5.5": {
+			ID:        "claude-opus-5.5",
+			Name:      "Claude Opus 5.5",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderCloudflareAIGateway,
+			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+				ModelThinkingMax:   lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.2, CacheWrite: 5}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+				SupportsTemperature:        lo.ToPtr(false),
+				ForceAdaptiveThinking:      lo.ToPtr(true),
+			},
+		},
 		"claude-sonnet-4.5": {
 			ID:        "claude-sonnet-4.5",
 			Name:      "Claude Sonnet 4.5 (latest)",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -6837,7 +7471,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
-			ContextWindow: 1000000,
+			ContextWindow: 200000,
 			MaxTokens:     64000,
 			Compat: &AnthropicMessagesCompat{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
@@ -6849,6 +7483,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -6878,6 +7513,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -6908,6 +7544,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -6933,6 +7570,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -6958,6 +7596,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -6983,6 +7622,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -7008,6 +7648,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -7033,6 +7674,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7068,6 +7710,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7103,6 +7746,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7138,6 +7782,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7173,6 +7818,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7208,6 +7854,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7243,6 +7890,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7278,6 +7926,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7313,6 +7962,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7348,6 +7998,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7383,6 +8034,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7423,6 +8075,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7463,6 +8116,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7503,6 +8157,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7537,12 +8192,95 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
 			},
 		},
+		"gpt-6-luna": {
+			ID:        "gpt-6-luna",
+			Name:      "GPT-6 Luna",
+			API:       Api("openai-responses"),
+			Provider:  ProviderCloudflareAIGateway,
+			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.75, CacheRead: 0.02, CacheWrite: 0.25}, InputTokensAbove: 272000},
+				},
+			},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsStrictMode:         lo.ToPtr(true),
+				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+			},
+		},
+		"gpt-6-sol": {
+			ID:        "gpt-6-sol",
+			Name:      "GPT-6 Sol",
+			API:       Api("openai-responses"),
+			Provider:  ProviderCloudflareAIGateway,
+			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4, Output: 15, CacheRead: 0.4, CacheWrite: 5}, InputTokensAbove: 272000},
+				},
+			},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsStrictMode:         lo.ToPtr(true),
+				SupportsOpenAIGrammarTools: lo.ToPtr(true),
+			},
+		},
 		"o3": {
 			ID:        "o3",
 			Name:      "o3",
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7577,6 +8315,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7601,6 +8340,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -7635,6 +8375,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -7645,7 +8386,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.44, Output: 1.32, CacheRead: 0.014, CacheWrite: 0}},
-			ContextWindow: 1310720,
+			ContextWindow: 1048576,
 			MaxTokens:     1048576,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:                               lo.ToPtr(false),
@@ -7664,6 +8405,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -7693,6 +8435,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -7723,6 +8466,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.017, Output: 0.112, CacheRead: 0, CacheWrite: 0}},
@@ -7743,6 +8487,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.293, Output: 2.253, CacheRead: 0, CacheWrite: 0}},
@@ -7763,6 +8508,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -7793,6 +8539,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.351, Output: 0.555, CacheRead: 0, CacheWrite: 0}},
@@ -7813,6 +8560,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -7843,6 +8591,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -7873,6 +8622,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.5, CacheRead: 0, CacheWrite: 0}},
@@ -7893,6 +8643,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.35, Output: 0.75, CacheRead: 0, CacheWrite: 0}},
@@ -7913,6 +8664,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.3, CacheRead: 0, CacheWrite: 0}},
@@ -7933,6 +8685,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0509, Output: 0.335, CacheRead: 0, CacheWrite: 0}},
@@ -7953,6 +8706,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -7983,6 +8737,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0605, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
@@ -8003,6 +8758,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
@@ -8023,10 +8779,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareAIGateway,
 			BaseURL:       "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
-			ContextWindow: 1310720,
+			ContextWindow: 1048576,
 			MaxTokens:     1048576,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
@@ -8043,6 +8800,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareAIGateway,
 			BaseURL:   "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -8056,7 +8814,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.5, CacheRead: 0.03, CacheWrite: 0}},
-			ContextWindow: 1310720,
+			ContextWindow: 1048576,
 			MaxTokens:     1048576,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
@@ -8075,6 +8833,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -8085,7 +8844,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.44, Output: 1.32, CacheRead: 0.014, CacheWrite: 0}},
-			ContextWindow: 1310720,
+			ContextWindow: 1048576,
 			MaxTokens:     1048576,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:         lo.ToPtr(false),
@@ -8103,6 +8862,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -8131,6 +8891,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -8169,6 +8930,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareWorkersAI,
 			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.017, Output: 0.112, CacheRead: 0, CacheWrite: 0}},
@@ -8188,6 +8950,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareWorkersAI,
 			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.293, Output: 2.253, CacheRead: 0, CacheWrite: 0}},
@@ -8207,6 +8970,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -8236,6 +9000,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareWorkersAI,
 			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.351, Output: 0.555, CacheRead: 0, CacheWrite: 0}},
@@ -8255,6 +9020,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -8293,6 +9059,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -8322,6 +9089,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -8350,6 +9118,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -8378,6 +9147,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -8406,6 +9176,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareWorkersAI,
 			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0509, Output: 0.335, CacheRead: 0, CacheWrite: 0}},
@@ -8425,6 +9196,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -8463,6 +9235,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderCloudflareWorkersAI,
 			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0605, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
@@ -8482,6 +9255,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -8510,6 +9284,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -8522,7 +9297,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
-			ContextWindow: 1310720,
+			ContextWindow: 1048576,
 			MaxTokens:     1048576,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
@@ -8538,6 +9313,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderCloudflareWorkersAI,
 			BaseURL:   "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -8560,7 +9336,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.5, CacheRead: 0.03, CacheWrite: 0}},
-			ContextWindow: 1310720,
+			ContextWindow: 1048576,
 			MaxTokens:     1048576,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
@@ -8578,6 +9354,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderDeepSeek,
 			BaseURL:   "https://api.deepseek.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -8615,6 +9392,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderDeepSeek,
 			BaseURL:   "https://api.deepseek.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -8639,138 +9417,13 @@ var MODELS = map[ProviderID]map[string]Model{
 		},
 	},
 	ProviderFireworks: {
-		"accounts/fireworks/models/deepseek-v4-flash-0731": {
-			ID:        "accounts/fireworks/models/deepseek-v4-flash-0731",
-			Name:      "DeepSeek V4 Flash 0731",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     384000,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				ForceAdaptiveThinking:           lo.ToPtr(true),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
-		"accounts/fireworks/models/deepseek-v4-flash-vision-exp": {
-			ID:        "accounts/fireworks/models/deepseek-v4-flash-vision-exp",
-			Name:      "DeepSeek V4 Flash Vision Exp",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     384000,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				ForceAdaptiveThinking:           lo.ToPtr(true),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
-		"accounts/fireworks/models/deepseek-v4-pro": {
-			ID:        "accounts/fireworks/models/deepseek-v4-pro",
-			Name:      "DeepSeek V4 Pro",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 1.2, CacheRead: 0.6, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     384000,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				ForceAdaptiveThinking:           lo.ToPtr(true),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
-		"accounts/fireworks/models/deepseek-v4-pro-0813": {
-			ID:        "accounts/fireworks/models/deepseek-v4-pro-0813",
-			Name:      "DeepSeek V4 Pro 0813",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.32, Output: 3.96, CacheRead: 0.044, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     384000,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				ForceAdaptiveThinking:           lo.ToPtr(true),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
 		"accounts/fireworks/models/deepseek-v4p1-flash": {
 			ID:        "accounts/fireworks/models/deepseek-v4p1-flash",
 			Name:      "DeepSeek V4.1 Flash",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -8804,32 +9457,44 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
-		"accounts/fireworks/models/glm-5p2": {
-			ID:        "accounts/fireworks/models/glm-5p2",
-			Name:      "GLM 5.2",
-			API:       ApiOpenAICompletions,
+		"accounts/fireworks/models/ember-1": {
+			ID:        "accounts/fireworks/models/ember-1",
+			Name:      "Ember-1",
+			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference/v1",
+			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
 				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
 				ModelThinkingHigh:    lo.ToPtr("high"),
 				ModelThinkingXHigh:   nil,
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.14, CacheWrite: 0}},
-			ContextWindow: 1048575,
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0}},
+			ContextWindow: 1048576,
 			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsStrictMode:         lo.ToPtr(true),
-				SendSessionAffinityHeaders: lo.ToPtr(true),
-				SupportsLongCacheRetention: lo.ToPtr(false),
+			Compat: &AnthropicMessagesCompat{
+				SupportsEagerToolInputStreaming: lo.ToPtr(false),
+				SupportsLongCacheRetention:      lo.ToPtr(false),
+				SendSessionAffinityHeaders:      lo.ToPtr(true),
+				SupportsCacheControlOnTools:     lo.ToPtr(false),
+				ForceAdaptiveThinking:           lo.ToPtr(true),
+				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
 		"accounts/fireworks/models/glm-5p3": {
@@ -8838,6 +9503,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -8866,6 +9532,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -8904,6 +9571,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -8933,6 +9601,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -8956,70 +9625,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
-		"accounts/fireworks/models/kimi-k2p6": {
-			ID:        "accounts/fireworks/models/kimi-k2p6",
-			Name:      "Kimi K2.6",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.16, CacheWrite: 0}},
-			ContextWindow: 262000,
-			MaxTokens:     262000,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
-		"accounts/fireworks/models/kimi-k2p7-code": {
-			ID:        "accounts/fireworks/models/kimi-k2p7-code",
-			Name:      "Kimi K2.7 Code",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.19, CacheWrite: 0}},
-			ContextWindow: 262000,
-			MaxTokens:     262000,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
 		"accounts/fireworks/models/kimi-k3": {
 			ID:        "accounts/fireworks/models/kimi-k3",
 			Name:      "Kimi K3",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -9056,41 +9668,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention:     lo.ToPtr(false),
 			},
 		},
-		"accounts/fireworks/models/minimax-m2p7": {
-			ID:        "accounts/fireworks/models/minimax-m2p7",
-			Name:      "MiniMax-M2.7",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     nil,
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     nil,
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 1.2, CacheRead: 0.6, CacheWrite: 0}},
-			ContextWindow: 196608,
-			MaxTokens:     131072,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				ForceAdaptiveThinking:           lo.ToPtr(true),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
 		"accounts/fireworks/models/minimax-m3": {
 			ID:        "accounts/fireworks/models/minimax-m3",
 			Name:      "MiniMax-M3",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -9114,51 +9698,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
-		"accounts/fireworks/models/muse-glimmer-30b": {
-			ID:        "accounts/fireworks/models/muse-glimmer-30b",
-			Name:      "Muse Glimmer 30B",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     nil,
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-				ModelThinkingMax:     nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.35, Output: 1.5, CacheRead: 0.04, CacheWrite: 0}},
-			ContextWindow: 131072,
-			MaxTokens:     131072,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				ForceAdaptiveThinking:           lo.ToPtr(true),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
 		"accounts/fireworks/models/nemotron-3-ultra-nvfp4": {
 			ID:            "accounts/fireworks/models/nemotron-3-ultra-nvfp4",
 			Name:          "Nemotron 3 Ultra 550B A55B",
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderFireworks,
 			BaseURL:       "https://api.fireworks.ai/inference",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.12, CacheWrite: 0}},
@@ -9178,6 +9724,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderFireworks,
 			BaseURL:       "https://api.fireworks.ai/inference",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0.01, CacheWrite: 0}},
@@ -9191,51 +9738,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
-		"accounts/fireworks/models/qwen3p7-plus": {
-			ID:        "accounts/fireworks/models/qwen3p7-plus",
-			Name:      "Qwen 3.7 Plus",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.6, CacheRead: 0.08, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     65536,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				ForceAdaptiveThinking:           lo.ToPtr(true),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
 		"accounts/fireworks/models/qwen3p8-2p4t-a95b": {
 			ID:        "accounts/fireworks/models/qwen3p8-2p4t-a95b",
 			Name:      "Qwen3.8 2.4T A95B",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -9265,6 +9774,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -9304,6 +9814,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -9337,69 +9848,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature:             lo.ToPtr(true),
 			},
 		},
-		"accounts/fireworks/routers/deepseek-pro-latest": {
-			ID:        "accounts/fireworks/routers/deepseek-pro-latest",
-			Name:      "DeepSeek Pro Latest",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.32, Output: 3.96, CacheRead: 0.044, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     384000,
-			Compat: &AnthropicMessagesCompat{
-				SupportsEagerToolInputStreaming: lo.ToPtr(false),
-				SupportsLongCacheRetention:      lo.ToPtr(false),
-				SendSessionAffinityHeaders:      lo.ToPtr(true),
-				SupportsCacheControlOnTools:     lo.ToPtr(false),
-				ForceAdaptiveThinking:           lo.ToPtr(true),
-				AllowEmptySignature:             lo.ToPtr(true),
-			},
-		},
-		"accounts/fireworks/routers/glm-5p2-fast": {
-			ID:        "accounts/fireworks/routers/glm-5p2-fast",
-			Name:      "GLM 5.2 Fast",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderFireworks,
-			BaseURL:   "https://api.fireworks.ai/inference/v1",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.1, Output: 6.6, CacheRead: 0.21, CacheWrite: 0}},
-			ContextWindow: 1048575,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsStrictMode:         lo.ToPtr(true),
-				SendSessionAffinityHeaders: lo.ToPtr(true),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
 		"accounts/fireworks/routers/glm-5p3-fast": {
 			ID:        "accounts/fireworks/routers/glm-5p3-fast",
 			Name:      "GLM 5.3 Fast",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -9428,6 +9883,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -9456,6 +9912,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -9494,6 +9951,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -9522,6 +9980,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -9561,6 +10020,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -9603,6 +10063,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -9642,6 +10103,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -9671,6 +10133,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderFireworks,
 			BaseURL:   "https://api.fireworks.ai/inference",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -9702,6 +10165,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -9739,6 +10203,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -9776,6 +10241,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -9807,6 +10273,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: lo.ToPtr("low"),
@@ -9844,6 +10311,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: lo.ToPtr("low"),
@@ -9882,6 +10350,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: lo.ToPtr("low"),
@@ -9920,10 +10389,16 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingXHigh: lo.ToPtr("xhigh"),
-				ModelThinkingMax:   lo.ToPtr("max"),
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input: []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -9957,6 +10432,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: lo.ToPtr("low"),
@@ -9992,6 +10468,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -10021,12 +10498,51 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking: lo.ToPtr(true),
 			},
 		},
+		"claude-sonnet-5.5": {
+			ID:        "claude-sonnet-5.5",
+			Name:      "Claude Sonnet 5.5",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderID("github-copilot"),
+			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+				ModelThinkingMax:   lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+			Headers: map[string]string{
+				"Copilot-Integration-Id": "vscode-chat",
+				"Editor-Plugin-Version":  "copilot-chat/0.35.0",
+				"Editor-Version":         "vscode/1.107.0",
+				"User-Agent":             "GitHubCopilotChat/0.35.0",
+			},
+			Compat: &AnthropicMessagesCompat{
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+			},
+		},
 		"gemini-3.5-flash": {
 			ID:        "gemini-3.5-flash",
 			Name:      "Gemini 3.5 Flash",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -10061,6 +10577,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -10095,6 +10612,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -10129,6 +10647,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -10163,6 +10682,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10203,6 +10723,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10243,6 +10764,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10290,6 +10812,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10332,6 +10855,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10368,6 +10892,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10415,6 +10940,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10462,6 +10988,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10509,6 +11036,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10556,6 +11084,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10603,6 +11132,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -10650,6 +11180,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -10691,12 +11222,61 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsAdditionalTools:        lo.ToPtr(true),
 			},
 		},
+		"gpt-6.1-sol": {
+			ID:        "gpt-6.1-sol",
+			Name:      "GPT-6.1 Sol",
+			API:       Api("openai-responses"),
+			Provider:  ProviderID("github-copilot"),
+			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4, Output: 15, CacheRead: 0.2, CacheWrite: 5}, InputTokensAbove: 272000},
+				},
+			},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Headers: map[string]string{
+				"Copilot-Integration-Id": "vscode-chat",
+				"Editor-Plugin-Version":  "copilot-chat/0.35.0",
+				"Editor-Version":         "vscode/1.107.0",
+				"User-Agent":             "GitHubCopilotChat/0.35.0",
+			},
+			Compat: &OpenAIResponsesCompat{
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SupportsOpenAIGrammarTools:     lo.ToPtr(true),
+				SupportsAdditionalTools:        lo.ToPtr(true),
+			},
+		},
 		"grok-4.5": {
 			ID:        "grok-4.5",
 			Name:      "Grok 4.5",
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10739,6 +11319,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10781,6 +11362,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10823,6 +11405,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -10857,6 +11440,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -10892,6 +11476,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10919,6 +11504,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderID("github-copilot"),
 			BaseURL:   "https://api.individual.githubcopilot.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -10958,6 +11544,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -10982,6 +11569,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -11006,6 +11594,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -11021,8 +11610,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 10, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 131072,
-			MaxTokens:     65536,
+			ContextWindow: 128000,
+			MaxTokens:     64000,
 		},
 		"gemini-2.5-flash": {
 			ID:        "gemini-2.5-flash",
@@ -11030,6 +11619,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -11054,6 +11644,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -11078,6 +11669,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -11102,6 +11694,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11135,6 +11728,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11168,6 +11762,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11193,7 +11788,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 30, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 65536,
-			MaxTokens:     65536,
+			MaxTokens:     4096,
 		},
 		"gemini-3.1-flash-lite-preview": {
 			ID:        "gemini-3.1-flash-lite-preview",
@@ -11201,6 +11796,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11234,6 +11830,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11267,6 +11864,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11300,6 +11898,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11333,6 +11932,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11366,6 +11966,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11399,6 +12000,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11432,6 +12034,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11465,6 +12068,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11498,6 +12102,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11531,6 +12136,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11564,6 +12170,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11595,6 +12202,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderID("google"),
 			BaseURL:   "https://generativelanguage.googleapis.com/v1beta",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11628,6 +12236,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -11650,6 +12259,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -11664,7 +12274,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.4, CacheRead: 0.01, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     65536,
+			MaxTokens:     65535,
 		},
 		"gemini-2.5-pro": {
 			ID:        "gemini-2.5-pro",
@@ -11672,6 +12282,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -11694,6 +12305,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11725,6 +12337,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11756,6 +12369,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11787,6 +12401,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11818,6 +12433,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11849,6 +12465,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11880,6 +12497,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11911,6 +12529,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11942,6 +12561,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -11973,6 +12593,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -12004,6 +12625,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-vertex"),
 			Provider:  ProviderID("google-vertex"),
 			BaseURL:   "https://{location}-aiplatform.googleapis.com",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -12037,6 +12659,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderGroq,
 			BaseURL:       "https://api.groq.com/openai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.08, CacheRead: 0, CacheWrite: 0}},
@@ -12052,6 +12675,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderGroq,
 			BaseURL:       "https://api.groq.com/openai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.59, Output: 0.79, CacheRead: 0, CacheWrite: 0}},
@@ -12067,6 +12691,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderGroq,
 			BaseURL:   "https://api.groq.com/openai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -12091,6 +12716,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderGroq,
 			BaseURL:   "https://api.groq.com/openai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -12115,6 +12741,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderGroq,
 			BaseURL:   "https://api.groq.com/openai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -12139,6 +12766,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderGroq,
 			BaseURL:   "https://api.groq.com/openai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -12173,6 +12801,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderGroq,
 			BaseURL:   "https://api.groq.com/openai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -12209,6 +12838,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
@@ -12225,6 +12855,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
@@ -12241,6 +12872,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.03, CacheWrite: 0}},
@@ -12257,6 +12889,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
@@ -12273,6 +12906,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -12299,6 +12933,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.2, CacheRead: 0, CacheWrite: 0}},
@@ -12315,6 +12950,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.8, CacheRead: 0, CacheWrite: 0}},
@@ -12331,6 +12967,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.855, Output: 2.565, CacheRead: 0, CacheWrite: 0}},
@@ -12347,6 +12984,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 3, CacheRead: 0, CacheWrite: 0}},
@@ -12363,6 +13001,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 0.5, CacheRead: 0, CacheWrite: 0}},
@@ -12379,6 +13018,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.29, Output: 0.59, CacheRead: 0, CacheWrite: 0}},
@@ -12395,6 +13035,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.26, CacheRead: 0, CacheWrite: 0}},
@@ -12411,6 +13052,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 2, CacheRead: 0, CacheWrite: 0}},
@@ -12427,6 +13069,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.5, CacheRead: 0, CacheWrite: 0}},
@@ -12443,6 +13086,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1, CacheRead: 0, CacheWrite: 0}},
@@ -12459,6 +13103,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2, CacheRead: 0, CacheWrite: 0}},
@@ -12475,6 +13120,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -12501,6 +13147,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -12536,6 +13183,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -12562,6 +13210,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -12588,6 +13237,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -12614,6 +13264,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -12649,6 +13300,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -12675,6 +13327,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -12701,6 +13354,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -12727,6 +13381,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -12752,6 +13407,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -12787,6 +13443,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.3, CacheRead: 0, CacheWrite: 0}},
@@ -12803,6 +13460,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -12828,6 +13486,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -12853,6 +13512,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.7, Output: 2.5, CacheRead: 0, CacheWrite: 0}},
@@ -12869,6 +13529,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 5, CacheRead: 0, CacheWrite: 0}},
@@ -12885,6 +13546,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.3, CacheRead: 0, CacheWrite: 0}},
@@ -12901,6 +13563,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.27, Output: 1.12, CacheRead: 0, CacheWrite: 0}},
@@ -12917,6 +13580,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.27, Output: 1, CacheRead: 0, CacheWrite: 0}},
@@ -12933,6 +13597,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.28, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
@@ -12949,6 +13614,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.28, CacheRead: 0, CacheWrite: 0}},
@@ -12965,6 +13631,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -12990,6 +13657,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13025,6 +13693,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13050,6 +13719,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13075,6 +13745,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -13110,6 +13781,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13136,6 +13808,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13162,6 +13835,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13188,6 +13862,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13214,6 +13889,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13240,6 +13916,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.06, CacheRead: 0, CacheWrite: 0}},
@@ -13256,6 +13933,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.59, Output: 0.79, CacheRead: 0, CacheWrite: 0}},
@@ -13272,6 +13950,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 3, CacheRead: 0, CacheWrite: 0}},
@@ -13288,6 +13967,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 3, CacheRead: 0, CacheWrite: 0}},
@@ -13304,6 +13984,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.5, CacheRead: 0.15, CacheWrite: 0}},
@@ -13320,6 +14001,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13346,6 +14028,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13372,6 +14055,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13398,6 +14082,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13433,6 +14118,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13458,6 +14144,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13483,6 +14170,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.3, CacheRead: 0, CacheWrite: 0}},
@@ -13499,6 +14187,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13534,6 +14223,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -13559,6 +14249,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -13584,6 +14275,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13619,6 +14311,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13645,6 +14338,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0, CacheWrite: 0}},
@@ -13661,6 +14355,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.85, CacheRead: 0, CacheWrite: 0}},
@@ -13677,6 +14372,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13703,6 +14399,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.55, Output: 2.2, CacheRead: 0, CacheWrite: 0}},
@@ -13719,6 +14416,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -13745,6 +14443,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.11, CacheWrite: 0}},
@@ -13761,6 +14460,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -13777,6 +14477,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 3.2, CacheRead: 0.2, CacheWrite: 0}},
@@ -13793,6 +14494,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 3.2, CacheRead: 0.2, CacheWrite: 0}},
@@ -13809,6 +14511,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderHuggingFace,
 			BaseURL:       "https://router.huggingface.co/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0, CacheWrite: 0}},
@@ -13825,6 +14528,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13850,6 +14554,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderHuggingFace,
 			BaseURL:   "https://router.huggingface.co/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13887,6 +14592,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderKimiCoding,
 			BaseURL:   "https://api.kimi.com/coding",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13922,6 +14628,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderKimiCoding,
 			BaseURL:   "https://api.kimi.com/coding",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13956,6 +14663,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderKimiCoding,
 			BaseURL:   "https://api.kimi.com/coding",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -13991,6 +14699,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderKimiCoding,
 			BaseURL:   "https://api.kimi.com/coding",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14018,6 +14727,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderMeta,
 			BaseURL:   "https://api.meta.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -14049,6 +14759,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderMeta,
 			BaseURL:   "https://api.meta.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -14080,6 +14791,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderMeta,
 			BaseURL:   "https://api.meta.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -14111,6 +14823,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderMeta,
 			BaseURL:   "https://api.meta.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -14142,6 +14855,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderMeta,
 			BaseURL:   "https://api.meta.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -14175,6 +14889,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderMinimax,
 			BaseURL:       "https://api.minimax.io/anthropic",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0.375}},
@@ -14187,6 +14902,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderMinimax,
 			BaseURL:       "https://api.minimax.io/anthropic",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.06, CacheWrite: 0.375}},
@@ -14199,6 +14915,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderMinimax,
 			BaseURL:   "https://api.minimax.io/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14212,7 +14929,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
-			ContextWindow: 1048576,
+			ContextWindow: 1000000,
 			MaxTokens:     512000,
 		},
 	},
@@ -14223,6 +14940,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderMinimaxCN,
 			BaseURL:       "https://api.minimaxi.com/anthropic",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0.375}},
@@ -14235,6 +14953,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderMinimaxCN,
 			BaseURL:       "https://api.minimaxi.com/anthropic",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.06, CacheWrite: 0.375}},
@@ -14247,6 +14966,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderMinimaxCN,
 			BaseURL:   "https://api.minimaxi.com/anthropic",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14260,7 +14980,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
-			ContextWindow: 1048576,
+			ContextWindow: 1000000,
 			MaxTokens:     512000,
 		},
 	},
@@ -14271,6 +14991,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderMoonshotAI,
 			BaseURL:   "https://api.moonshot.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14302,6 +15023,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderMoonshotAI,
 			BaseURL:   "https://api.moonshot.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -14336,6 +15058,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderMoonshotAI,
 			BaseURL:   "https://api.moonshot.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -14370,6 +15093,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderMoonshotAI,
 			BaseURL:   "https://api.moonshot.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -14393,7 +15117,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     131072,
+			MaxTokens:     1048576,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:                               lo.ToPtr(false),
 				SupportsDeveloperRole:                       lo.ToPtr(false),
@@ -14414,6 +15138,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderMoonshotAICN,
 			BaseURL:   "https://api.moonshot.cn/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14445,6 +15170,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderMoonshotAICN,
 			BaseURL:   "https://api.moonshot.cn/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -14479,6 +15205,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderMoonshotAICN,
 			BaseURL:   "https://api.moonshot.cn/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -14513,6 +15240,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderMoonshotAICN,
 			BaseURL:   "https://api.moonshot.cn/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -14536,7 +15264,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     131072,
+			MaxTokens:     1048576,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:                               lo.ToPtr(false),
 				SupportsDeveloperRole:                       lo.ToPtr(false),
@@ -14557,6 +15285,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14590,6 +15319,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14623,6 +15353,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14656,6 +15387,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14689,6 +15421,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14722,6 +15455,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderNVIDIA,
 			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -14745,6 +15479,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14778,6 +15513,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14811,6 +15547,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14844,6 +15581,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderNVIDIA,
 			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -14867,6 +15605,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderNVIDIA,
 			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -14890,6 +15629,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -14923,6 +15663,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderNVIDIA,
 			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.8, CacheRead: 0, CacheWrite: 0}},
@@ -14946,6 +15687,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderNVIDIA,
 			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 2.5, CacheRead: 0.15, CacheWrite: 0}},
@@ -14969,6 +15711,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderNVIDIA,
 			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -14992,6 +15735,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderNVIDIA,
 			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -15015,6 +15759,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderNVIDIA,
 			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -15038,6 +15783,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderNVIDIA,
 			BaseURL:       "https://integrate.api.nvidia.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -15061,6 +15807,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderNVIDIA,
 			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15096,6 +15843,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           Api("openai-responses"),
 			Provider:      ProviderOpenAI,
 			BaseURL:       "https://api.openai.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 30, Output: 60, CacheRead: 0, CacheWrite: 0}},
@@ -15111,6 +15859,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15138,6 +15887,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15165,6 +15915,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15192,6 +15943,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15219,6 +15971,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15246,6 +15999,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15273,6 +16027,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15300,6 +16055,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15327,6 +16083,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -15354,6 +16111,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -15391,6 +16149,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -15422,6 +16181,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -15459,6 +16219,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -15496,6 +16257,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -15533,6 +16295,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -15570,6 +16333,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -15607,6 +16371,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -15644,6 +16409,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -15681,6 +16447,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -15713,6 +16480,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -15750,6 +16518,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -15787,6 +16556,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -15832,6 +16602,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -15872,6 +16643,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -15909,6 +16681,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -15954,6 +16727,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -15999,6 +16773,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16041,6 +16816,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -16087,6 +16863,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -16133,6 +16910,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -16179,6 +16957,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16225,6 +17004,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -16271,6 +17051,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -16311,12 +17092,136 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsExplicitPromptCacheMode: lo.ToPtr(true),
 			},
 		},
+		"gpt-6.1-sol": {
+			ID:        "gpt-6.1-sol",
+			Name:      "GPT-6.1 Sol",
+			API:       Api("openai-responses"),
+			Provider:  ProviderOpenAI,
+			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				MaxRequestBytes: 536870912,
+				Images: &ModelImageInputLimits{
+					MaxPerRequest: 1500,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4, Output: 15, CacheRead: 0.2, CacheWrite: 5}, InputTokensAbove: 272000},
+				},
+			},
+			ContextWindow: 272000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsMidConvoSystemMessages:  lo.ToPtr(true),
+				SupportsStrictMode:              lo.ToPtr(true),
+				SupportsOpenAIGrammarTools:      lo.ToPtr(true),
+				SupportsAdditionalTools:         lo.ToPtr(true),
+				SupportsToolSearch:              lo.ToPtr(true),
+				SupportsExplicitPromptCacheMode: lo.ToPtr(true),
+			},
+		},
+		"gpt-daybreak-blue-latest": {
+			ID:        "gpt-daybreak-blue-latest",
+			Name:      "Daybreak Blue",
+			API:       Api("openai-responses"),
+			Provider:  ProviderOpenAI,
+			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				MaxRequestBytes: 536870912,
+				Images: &ModelImageInputLimits{
+					MaxPerRequest: 1500,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsStrictMode:              lo.ToPtr(true),
+				SupportsExplicitPromptCacheMode: lo.ToPtr(true),
+			},
+		},
+		"gpt-daybreak-red-latest": {
+			ID:        "gpt-daybreak-red-latest",
+			Name:      "Daybreak Red",
+			API:       Api("openai-responses"),
+			Provider:  ProviderOpenAI,
+			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				MaxRequestBytes: 536870912,
+				Images: &ModelImageInputLimits{
+					MaxPerRequest: 1500,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 12.5, Output: 75, CacheRead: 1.25, CacheWrite: 15.625}},
+			ContextWindow: 400000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsStrictMode:              lo.ToPtr(true),
+				SupportsExplicitPromptCacheMode: lo.ToPtr(true),
+			},
+		},
 		"gpt-realtime-2.1": {
 			ID:        "gpt-realtime-2.1",
 			Name:      "GPT-Realtime-2.1",
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16353,6 +17258,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16389,6 +17295,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16425,6 +17332,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16461,6 +17369,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16485,6 +17394,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16521,6 +17431,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenAI,
 			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16559,6 +17470,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-codex-responses"),
 			Provider:  ProviderID("openai-codex"),
 			BaseURL:   "https://chatgpt.com/backend-api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: lo.ToPtr("low"),
@@ -16578,6 +17490,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-codex-responses"),
 			Provider:  ProviderID("openai-codex"),
 			BaseURL:   "https://chatgpt.com/backend-api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: lo.ToPtr("low"),
@@ -16614,6 +17527,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-codex-responses"),
 			Provider:  ProviderID("openai-codex"),
 			BaseURL:   "https://chatgpt.com/backend-api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: lo.ToPtr("low"),
@@ -16652,6 +17566,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-codex-responses"),
 			Provider:  ProviderID("openai-codex"),
 			BaseURL:   "https://chatgpt.com/backend-api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: lo.ToPtr("low"),
@@ -16690,6 +17605,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-codex-responses"),
 			Provider:  ProviderID("openai-codex"),
 			BaseURL:   "https://chatgpt.com/backend-api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: lo.ToPtr("low"),
@@ -16728,6 +17644,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-codex-responses"),
 			Provider:  ProviderID("openai-codex"),
 			BaseURL:   "https://chatgpt.com/backend-api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -16770,6 +17687,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-codex-responses"),
 			Provider:  ProviderID("openai-codex"),
 			BaseURL:   "https://chatgpt.com/backend-api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -16812,6 +17730,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-codex-responses"),
 			Provider:  ProviderID("openai-codex"),
 			BaseURL:   "https://chatgpt.com/backend-api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -16848,6 +17767,49 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsToolSearch:             lo.ToPtr(true),
 			},
 		},
+		"gpt-6.1-sol": {
+			ID:        "gpt-6.1-sol",
+			Name:      "GPT-6.1 Sol",
+			API:       Api("openai-codex-responses"),
+			Provider:  ProviderID("openai-codex"),
+			BaseURL:   "https://chatgpt.com/backend-api",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("low"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4, Output: 15, CacheRead: 0.2, CacheWrite: 5}, InputTokensAbove: 272000},
+				},
+			},
+			ContextWindow: 272000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SupportsOpenAIGrammarTools:     lo.ToPtr(true),
+				SupportsAdditionalTools:        lo.ToPtr(true),
+				SupportsToolSearch:             lo.ToPtr(true),
+			},
+		},
 	},
 	ProviderOpenCode: {
 		"big-pickle": {
@@ -16856,6 +17818,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCode,
 			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -16874,6 +17837,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -16905,6 +17869,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -16936,6 +17901,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -16958,6 +17924,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -16980,6 +17947,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -17008,6 +17976,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -17038,6 +18007,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -17069,6 +18039,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -17100,6 +18071,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -17131,6 +18103,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -17153,6 +18126,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -17175,6 +18149,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -17203,6 +18178,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -17226,12 +18202,45 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking: lo.ToPtr(true),
 			},
 		},
+		"claude-sonnet-5-5": {
+			ID:        "claude-sonnet-5-5",
+			Name:      "Claude Sonnet 5.5",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderOpenCode,
+			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+				ModelThinkingMax:   lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+			},
+		},
 		"deepseek-v4-flash": {
 			ID:        "deepseek-v4-flash",
 			Name:      "DeepSeek V4 Flash",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17261,6 +18270,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17299,6 +18309,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17328,6 +18339,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17366,6 +18378,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17397,6 +18410,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17428,6 +18442,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17459,6 +18474,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17490,6 +18506,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17521,6 +18538,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17552,6 +18570,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("google-generative-ai"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17583,6 +18602,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCode,
 			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 3.2, CacheRead: 0.2, CacheWrite: 0}},
@@ -17601,6 +18621,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCode,
 			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
@@ -17619,6 +18640,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17646,6 +18668,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17673,6 +18696,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17710,6 +18734,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17745,6 +18770,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17780,6 +18806,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17815,6 +18842,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17850,6 +18878,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17885,6 +18914,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17920,6 +18950,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17955,6 +18986,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -17990,6 +19022,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18025,6 +19058,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18060,6 +19094,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18097,6 +19132,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18134,6 +19170,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18169,6 +19206,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18206,6 +19244,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18243,6 +19282,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18278,6 +19318,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18315,6 +19356,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18352,6 +19394,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18389,6 +19432,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18426,6 +19470,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -18463,6 +19508,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -18494,12 +19540,51 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsAdditionalTools:        lo.ToPtr(true),
 			},
 		},
+		"gpt-6.1-sol": {
+			ID:        "gpt-6.1-sol",
+			Name:      "GPT-6.1 Sol",
+			API:       Api("openai-responses"),
+			Provider:  ProviderOpenCode,
+			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SessionAffinityFormat:          lo.ToPtr(SessionAffinityOpenAINoSession),
+				SupportsOpenAIGrammarTools:     lo.ToPtr(true),
+				SupportsAdditionalTools:        lo.ToPtr(true),
+			},
+		},
 		"grok-4.5": {
 			ID:        "grok-4.5",
 			Name:      "Grok 4.5",
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18534,6 +19619,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18564,10 +19650,11 @@ var MODELS = map[ProviderID]map[string]Model{
 		},
 		"grok-4.7": {
 			ID:        "grok-4.7",
-			Name:      "Grok 4.7 (30% Off)",
+			Name:      "Grok 4.7",
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18589,7 +19676,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.2, CacheRead: 0.35, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     500000,
 			Compat: &OpenAIResponsesCompat{
@@ -18602,6 +19689,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18633,6 +19721,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -18662,6 +19751,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -18693,6 +19783,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -18721,6 +19812,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18760,11 +19852,41 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCode,
 			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     32768,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:         lo.ToPtr(false),
+				SupportsDeveloperRole: lo.ToPtr(false),
+				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:    lo.ToPtr(true),
+			},
+		},
+		"longcat-2.5-preview-free": {
+			ID:        "longcat-2.5-preview-free",
+			Name:      "LongCat 2.5 Preview Free",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenCode,
+			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:         lo.ToPtr(false),
 				SupportsDeveloperRole: lo.ToPtr(false),
@@ -18778,6 +19900,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -18806,6 +19929,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCode,
 			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
@@ -18824,6 +19948,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCode,
 			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
@@ -18843,6 +19968,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -18871,6 +19997,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18899,46 +20026,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				SessionAffinityFormat: lo.ToPtr(SessionAffinityOpenAINoSession),
 			},
 		},
-		"muse-spark-1.2-contributor-free": {
-			ID:        "muse-spark-1.2-contributor-free",
-			Name:      "Muse Spark 1.2 Free",
-			API:       Api("openai-responses"),
-			Provider:  ProviderOpenCode,
-			BaseURL:   "https://opencode.ai/zen/v1",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     nil,
-				ModelThinkingMinimal: lo.ToPtr("minimal"),
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-				ModelThinkingMax:     nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 1048576,
-			MaxTokens:     131072,
-			Compat: &OpenAIResponsesCompat{
-				SessionAffinityFormat: lo.ToPtr(SessionAffinityOpenAINoSession),
-			},
-		},
 		"muse-spark-1.3": {
 			ID:        "muse-spark-1.3",
 			Name:      "Muse Spark 1.3",
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -18973,6 +20067,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19007,6 +20102,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCode,
 			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -19025,6 +20121,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCode,
 			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -19043,6 +20140,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19065,6 +20163,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19087,6 +20186,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCode,
 			BaseURL:   "https://opencode.ai/zen",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19102,6 +20202,76 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.47, CacheRead: 0.016, CacheWrite: 0.2}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
+		"qwen3.8-max": {
+			ID:        "qwen3.8-max",
+			Name:      "Qwen3.8 Max",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenCode,
+			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.25, CacheWrite: 2.5}},
+			ContextWindow: 262144,
+			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:         lo.ToPtr(false),
+				SupportsDeveloperRole: lo.ToPtr(false),
+				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:    lo.ToPtr(true),
+			},
+		},
+		"space-bunny-free": {
+			ID:        "space-bunny-free",
+			Name:      "Space Bunny Free",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenCode,
+			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     524288,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:         lo.ToPtr(false),
+				SupportsDeveloperRole: lo.ToPtr(false),
+				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:    lo.ToPtr(true),
+			},
 		},
 	},
 	ProviderOpenCodeGo: {
@@ -19111,6 +20281,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -19138,6 +20309,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -19175,6 +20347,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -19202,6 +20375,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19235,30 +20409,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
 		},
-		"glm-5.1": {
-			ID:            "glm-5.1",
-			Name:          "GLM-5.1",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderOpenCodeGo,
-			BaseURL:       "https://opencode.ai/zen/go/v1",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
-			ContextWindow: 202752,
-			MaxTokens:     32768,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:         lo.ToPtr(false),
-				SupportsDeveloperRole: lo.ToPtr(false),
-				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
-				SupportsStrictMode:    lo.ToPtr(true),
-			},
-		},
 		"glm-5.2": {
 			ID:        "glm-5.2",
 			Name:      "GLM-5.2",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19286,6 +20443,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19313,6 +20471,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19350,6 +20509,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19380,12 +20540,50 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsAdditionalTools:        lo.ToPtr(true),
 			},
 		},
+		"gpt-6-luna": {
+			ID:        "gpt-6-luna",
+			Name:      "GPT-6 Luna",
+			API:       Api("openai-responses"),
+			Provider:  ProviderOpenCodeGo,
+			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAIResponsesCompat{
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SessionAffinityFormat:          lo.ToPtr(SessionAffinityOpenAINoSession),
+				SupportsAdditionalTools:        lo.ToPtr(true),
+			},
+		},
 		"grok-4.6": {
 			ID:        "grok-4.6",
 			Name:      "Grok 4.6",
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19420,6 +20618,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19454,6 +20653,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -19481,6 +20681,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -19502,48 +20703,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsStrictMode:    lo.ToPtr(true),
 			},
 		},
-		"kimi-k2.6": {
-			ID:        "kimi-k2.6",
-			Name:      "Kimi K2.6",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderOpenCodeGo,
-			BaseURL:   "https://opencode.ai/zen/go/v1",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.16, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     65536,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsReasoningEffort:    lo.ToPtr(false),
-				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatDeepSeek),
-				SupportsStrictMode:         lo.ToPtr(true),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
 		"kimi-k2.7-code": {
 			ID:        "kimi-k2.7-code",
 			Name:      "Kimi K2.7 Code",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19572,6 +20738,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19611,9 +20778,39 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCodeGo,
 			BaseURL:       "https://opencode.ai/zen/go/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:         lo.ToPtr(false),
+				SupportsDeveloperRole: lo.ToPtr(false),
+				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:    lo.ToPtr(true),
+			},
+		},
+		"longcat-2.5-preview-free": {
+			ID:        "longcat-2.5-preview-free",
+			Name:      "LongCat 2.5 Preview Free",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenCodeGo,
+			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -19629,6 +20826,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19657,6 +20855,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCodeGo,
 			BaseURL:       "https://opencode.ai/zen/go/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.435, Output: 0.87, CacheRead: 0.003625, CacheWrite: 0}},
@@ -19675,6 +20874,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19703,6 +20903,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19731,6 +20932,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCodeGo,
 			BaseURL:       "https://opencode.ai/zen/go/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0.375}},
@@ -19749,6 +20951,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19771,6 +20974,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19805,6 +21009,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19833,59 +21038,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				SessionAffinityFormat: lo.ToPtr(SessionAffinityOpenAINoSession),
 			},
 		},
-		"qwen3.6-plus": {
-			ID:        "qwen3.6-plus",
-			Name:      "Qwen3.6 Plus",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderOpenCodeGo,
-			BaseURL:   "https://opencode.ai/zen/go/v1",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0.05, CacheWrite: 0.625}},
-			ContextWindow: 1000000,
-			MaxTokens:     65536,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:         lo.ToPtr(false),
-				SupportsDeveloperRole: lo.ToPtr(false),
-				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:        lo.ToPtr(ThinkingFormatQwen),
-				SupportsStrictMode:    lo.ToPtr(true),
-			},
-		},
-		"qwen3.7-max": {
-			ID:            "qwen3.7-max",
-			Name:          "Qwen3.7 Max",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderOpenCodeGo,
-			BaseURL:       "https://opencode.ai/zen/go/v1",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 7.5, CacheRead: 0.5, CacheWrite: 3.125}},
-			ContextWindow: 1000000,
-			MaxTokens:     65536,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:         lo.ToPtr(false),
-				SupportsDeveloperRole: lo.ToPtr(false),
-				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
-				SupportsStrictMode:    lo.ToPtr(true),
-			},
-		},
 		"qwen3.7-plus": {
 			ID:        "qwen3.7-plus",
 			Name:      "Qwen3.7 Plus",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19914,6 +21073,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -19929,6 +21089,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.47, CacheRead: 0.016, CacheWrite: 0.2}},
 			ContextWindow: 1000000,
 			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
 		},
 		"qwen3.8-max": {
 			ID:        "qwen3.8-max",
@@ -19936,6 +21099,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenCodeGo,
 			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -19967,6 +21131,44 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsStrictMode:    lo.ToPtr(true),
 			},
 		},
+		"space-bunny-free": {
+			ID:        "space-bunny-free",
+			Name:      "Space Bunny Free",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenCodeGo,
+			BaseURL:   "https://opencode.ai/zen/go/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     524288,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:         lo.ToPtr(false),
+				SupportsDeveloperRole: lo.ToPtr(false),
+				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:    lo.ToPtr(true),
+			},
+		},
 	},
 	ProviderOpenRouter: {
 		"aion-labs/aion-2.0": {
@@ -19975,6 +21177,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -19996,6 +21199,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -20017,6 +21221,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -20032,12 +21237,69 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
+		"aion-labs/aion-3.5": {
+			ID:        "aion-labs/aion-3.5",
+			Name:      "AionLabs: Aion 3.5",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 6, CacheRead: 0.75, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     32768,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"aion-labs/aion-3.5-mini": {
+			ID:        "aion-labs/aion-3.5-mini",
+			Name:      "AionLabs: Aion 3.5 Mini",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.7, Output: 1.4, CacheRead: 0.18, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     32768,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
 		"amazon/nova-2-lite-v1": {
 			ID:        "amazon/nova-2-lite-v1",
 			Name:      "Amazon: Nova 2 Lite",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20066,6 +21328,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20094,6 +21357,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.035, Output: 0.14, CacheRead: 0, CacheWrite: 0}},
@@ -20112,6 +21376,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20140,6 +21405,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20162,34 +21428,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
-		"anthropic/claude-3-haiku": {
-			ID:        "anthropic/claude-3-haiku",
-			Name:      "Anthropic: Claude 3 Haiku",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderOpenRouter,
-			BaseURL:   "https://openrouter.ai/api",
-			Reasoning: false,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1.25, CacheRead: 0.03, CacheWrite: 0.3}},
-			ContextWindow: 200000,
-			MaxTokens:     4096,
-		},
 		"anthropic/claude-fable-5": {
 			ID:        "anthropic/claude-fable-5",
 			Name:      "Anthropic: Claude Fable 5",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -20224,6 +21469,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -20259,6 +21505,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -20296,6 +21543,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -20333,6 +21581,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20355,6 +21604,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20383,6 +21633,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20405,6 +21656,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20433,6 +21685,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20455,6 +21708,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20483,6 +21737,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20517,6 +21772,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20554,6 +21810,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20589,6 +21846,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20626,6 +21884,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20661,6 +21920,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20698,6 +21958,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20733,6 +21994,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -20769,6 +22031,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -20806,6 +22069,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20843,6 +22107,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20865,6 +22130,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20887,6 +22153,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -20915,6 +22182,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20949,6 +22217,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -20986,6 +22255,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21014,12 +22284,88 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking: lo.ToPtr(true),
 			},
 		},
+		"anthropic/claude-sonnet-5.5": {
+			ID:        "anthropic/claude-sonnet-5.5",
+			Name:      "Anthropic: Claude Sonnet 5.5",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				SupportsTemperature:    lo.ToPtr(false),
+				ForceAdaptiveThinking:  lo.ToPtr(true),
+				SupportsMidConvoEffort: lo.ToPtr(true),
+			},
+		},
+		"anthropic/claude-sonnet-5.5:batch": {
+			ID:        "anthropic/claude-sonnet-5.5:batch",
+			Name:      "Anthropic: Claude Sonnet 5.5 (batch)",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.1, CacheWrite: 1.25}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+			Compat: &OpenAICompletionsCompat{
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				CacheControlFormat:         lo.ToPtr(CacheControlAnthropic),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
 		"anthropic/claude-sonnet-5:batch": {
 			ID:        "anthropic/claude-sonnet-5:batch",
 			Name:      "Anthropic: Claude Sonnet 5 (batch)",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21057,6 +22403,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -21078,6 +22425,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21106,6 +22454,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21134,6 +22483,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21162,6 +22512,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21190,6 +22541,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21227,6 +22579,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21264,6 +22617,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21301,6 +22655,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21329,6 +22684,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
@@ -21347,6 +22703,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 10, CacheRead: 0, CacheWrite: 0}},
@@ -21365,6 +22722,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -21383,11 +22741,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.32, Output: 0.89, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 163840,
-			MaxTokens:     16384,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2574, Output: 1.0287, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 128000,
+			MaxTokens:     16000,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -21401,9 +22760,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.29, Output: 1.14, CacheRead: 0.11, CacheWrite: 0}},
 			ContextWindow: 163840,
 			MaxTokens:     147456,
 			Compat: &OpenAICompletionsCompat{
@@ -21419,6 +22779,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 0.95, CacheRead: 0.13, CacheWrite: 0}},
@@ -21437,6 +22798,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -21458,6 +22820,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -21479,11 +22842,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.27, Output: 1, CacheRead: 0.135, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1, CacheRead: 0.135, CacheWrite: 0}},
 			ContextWindow: 131072,
-			MaxTokens:     32768,
+			MaxTokens:     65536,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -21497,10 +22861,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.269, Output: 0.4, CacheRead: 0.1345, CacheWrite: 0}},
-			ContextWindow: 163840,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.28, Output: 0.42, CacheRead: 0.028, CacheWrite: 0}},
+			ContextWindow: 131072,
 			MaxTokens:     65536,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
@@ -21515,11 +22880,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.27, Output: 0.41, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 163840,
-			MaxTokens:     65536,
+			MaxTokens:     147456,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -21533,6 +22899,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21544,9 +22911,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.088606, Output: 0.177212, CacheRead: 0.017721, CacheWrite: 0}},
-			ContextWindow: 1024000,
-			MaxTokens:     384000,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.28, CacheRead: 0.028, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:                       lo.ToPtr(false),
 				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
@@ -21561,6 +22928,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21572,7 +22940,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.64, CacheRead: 0.016, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.01, Output: 1.28, CacheRead: 0.01, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
@@ -21589,6 +22957,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21610,9 +22979,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2156, Output: 0.6468, CacheRead: 0.00686, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     943718,
+			MaxTokens:     262144,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:                       lo.ToPtr(false),
 				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
@@ -21627,6 +22996,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21655,6 +23025,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21666,9 +23037,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.32, Output: 3.96, CacheRead: 0.044, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.66, Output: 1.98, CacheRead: 0.022, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     384000,
+			MaxTokens:     393216,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:                       lo.ToPtr(false),
 				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
@@ -21683,6 +23054,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21704,7 +23076,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0198, Output: 0.396, CacheRead: 0.00291, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
@@ -21721,6 +23093,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -21759,6 +23132,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21781,12 +23155,51 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
+		"fireworks/ember-1": {
+			ID:        "fireworks/ember-1",
+			Name:      "Fireworks: Ember-1",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     943718,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
 		"google/gemini-2.5-flash": {
 			ID:        "google/gemini-2.5-flash",
 			Name:      "Google: Gemini 2.5 Flash",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21815,6 +23228,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21843,6 +23257,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21871,6 +23286,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -21899,6 +23315,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -21930,6 +23347,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -21961,6 +23379,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -21992,6 +23411,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -22029,6 +23449,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -22066,6 +23487,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -22097,6 +23519,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -22134,6 +23557,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -22171,6 +23595,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -22208,6 +23633,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22245,6 +23671,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22282,6 +23709,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22319,6 +23747,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22356,6 +23785,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22393,6 +23823,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22430,6 +23861,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22467,6 +23899,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22504,6 +23937,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22541,6 +23975,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22578,6 +24013,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22615,6 +24051,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22652,6 +24089,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22689,6 +24127,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -22717,6 +24156,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -22745,6 +24185,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -22773,6 +24214,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -22801,6 +24243,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -22829,6 +24272,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -22857,6 +24301,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -22884,6 +24329,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22911,6 +24357,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -22938,6 +24385,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.021, Output: 0.063, CacheRead: 0.0042, CacheWrite: 0}},
@@ -22956,29 +24404,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.18, CacheRead: 0.012, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     235929,
-			Compat: &OpenAICompletionsCompat{
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
-				SupportsStrictMode:         lo.ToPtr(true),
-				SendSessionAffinityHeaders: lo.ToPtr(true),
-			},
-		},
-		"inclusionai/ling-3.0-flash-fin:free": {
-			ID:            "inclusionai/ling-3.0-flash-fin:free",
-			Name:          "inclusionAI: Ling 3.0 Flash Fin (free)",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderOpenRouter,
-			BaseURL:       "https://openrouter.ai/api/v1",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -22992,6 +24423,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -23010,6 +24442,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23022,35 +24455,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.18, CacheRead: 0.012, CacheWrite: 0}},
-			ContextWindow: 131072,
-			MaxTokens:     32768,
-			Compat: &OpenAICompletionsCompat{
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
-				SupportsStrictMode:         lo.ToPtr(true),
-				SendSessionAffinityHeaders: lo.ToPtr(true),
-			},
-		},
-		"inclusionai/ling-3.0-flash-vl:free": {
-			ID:        "inclusionai/ling-3.0-flash-vl:free",
-			Name:      "inclusionAI: Ling 3.0 Flash VL (free)",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderOpenRouter,
-			BaseURL:   "https://openrouter.ai/api/v1",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.021, Output: 0.0616, CacheRead: 0.0042, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
@@ -23066,6 +24471,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.74, Output: 2.96, CacheRead: 0.15, CacheWrite: 0}},
@@ -23084,6 +24490,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -23105,6 +24512,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
@@ -23123,6 +24531,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
@@ -23141,6 +24550,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.08, CacheRead: 0.025, CacheWrite: 0}},
@@ -23159,6 +24569,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.32, CacheRead: 0, CacheWrite: 0}},
@@ -23177,6 +24588,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23205,6 +24617,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23233,6 +24646,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -23254,9 +24668,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.04, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.35, Output: 1.5, CacheRead: 0.04, CacheWrite: 0}},
 			ContextWindow: 131072,
-			MaxTokens:     16384,
+			MaxTokens:     117964,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -23270,6 +24684,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -23307,6 +24722,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -23344,6 +24760,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -23381,6 +24798,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -23418,6 +24836,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -23455,6 +24874,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 2.2, CacheRead: 0, CacheWrite: 0}},
@@ -23473,14 +24893,15 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.255, Output: 1.02, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 204800,
-			MaxTokens:     131072,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 196608,
+			MaxTokens:     176947,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -23494,6 +24915,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -23515,6 +24937,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -23536,14 +24959,15 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
-			ContextWindow: 204800,
-			MaxTokens:     131072,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.21, Output: 0.84, CacheRead: 0.042, CacheWrite: 0}},
+			ContextWindow: 196608,
+			MaxTokens:     176947,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -23557,6 +24981,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23585,6 +25010,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 0.9, CacheRead: 0.03, CacheWrite: 0}},
@@ -23603,6 +25029,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.45, CacheRead: 0.015, CacheWrite: 0}},
@@ -23621,6 +25048,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 2, CacheRead: 0.04, CacheWrite: 0}},
@@ -23639,6 +25067,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23667,6 +25096,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23695,6 +25125,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23723,6 +25154,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23751,6 +25183,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.2, CacheWrite: 0}},
@@ -23769,11 +25202,41 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.2, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     104857,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"mistralai/mistral-large-2512": {
+			ID:        "mistralai/mistral-large-2512",
+			Name:      "Mistral: Mistral Large 3 2512",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.5, CacheRead: 0.05, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     209715,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -23787,6 +25250,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23815,6 +25279,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23843,6 +25308,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -23880,6 +25346,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -23917,6 +25384,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23945,6 +25413,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -23973,6 +25442,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.019, Output: 0.03, CacheRead: 0, CacheWrite: 0}},
@@ -23991,6 +25461,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.6, CacheRead: 0.02, CacheWrite: 0}},
@@ -24009,6 +25480,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -24046,6 +25518,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -24083,6 +25556,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24111,6 +25585,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24139,6 +25614,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.2, CacheWrite: 0}},
@@ -24157,6 +25633,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.3, CacheRead: 0.01, CacheWrite: 0}},
@@ -24175,6 +25652,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.57, Output: 2.3, CacheRead: 0, CacheWrite: 0}},
@@ -24193,6 +25671,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.5, CacheRead: 0, CacheWrite: 0}},
@@ -24211,6 +25690,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -24232,6 +25712,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24260,6 +25741,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24272,7 +25754,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.16, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.65, Output: 3.41, CacheRead: 0.15, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
@@ -24289,6 +25771,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -24304,7 +25787,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.7062, Output: 3.3, CacheRead: 0.18, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6712, Output: 3.35, CacheRead: 0.18, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
@@ -24320,6 +25803,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -24357,6 +25841,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -24388,49 +25873,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
-		"nex-agi/nex-n2.5-mini:free": {
-			ID:        "nex-agi/nex-n2.5-mini:free",
-			Name:      "Nex AGI: Nex-N2.5-Mini (free)",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderOpenRouter,
-			BaseURL:   "https://openrouter.ai/api/v1",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     235929,
-			Compat: &OpenAICompletionsCompat{
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
-				SupportsStrictMode:         lo.ToPtr(true),
-				SendSessionAffinityHeaders: lo.ToPtr(true),
-			},
-		},
 		"nex-agi/nex-n2.5-pro": {
 			ID:        "nex-agi/nex-n2.5-pro",
 			Name:      "Nex AGI: Nex-N2.5-Pro",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -24462,49 +25911,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
-		"nex-agi/nex-n2.5-pro:free": {
-			ID:        "nex-agi/nex-n2.5-pro:free",
-			Name:      "Nex AGI: Nex-N2.5-Pro (free)",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderOpenRouter,
-			BaseURL:   "https://openrouter.ai/api/v1",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     235929,
-			Compat: &OpenAICompletionsCompat{
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
-				SupportsStrictMode:         lo.ToPtr(true),
-				SendSessionAffinityHeaders: lo.ToPtr(true),
-			},
-		},
 		"nvidia/nemotron-3-nano-30b-a3b": {
 			ID:            "nvidia/nemotron-3-nano-30b-a3b",
 			Name:          "NVIDIA: Nemotron 3 Nano 30B A3B",
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0.03, CacheWrite: 0}},
@@ -24523,6 +25936,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24551,6 +25965,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -24578,6 +25993,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -24605,6 +26021,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -24632,6 +26049,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -24659,11 +26077,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.2, CacheRead: 0.04, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.16, CacheRead: 0.03, CacheWrite: 0}},
 			ContextWindow: 262144,
-			MaxTokens:     235929,
+			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -24677,6 +26096,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -24695,6 +26115,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.5, CacheRead: 0, CacheWrite: 0}},
@@ -24712,6 +26133,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 2, CacheRead: 0, CacheWrite: 0}},
@@ -24729,6 +26151,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 4, CacheRead: 0, CacheWrite: 0}},
@@ -24746,6 +26169,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 0.75, CacheRead: 0, CacheWrite: 0}},
@@ -24763,6 +26187,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 30, Output: 60, CacheRead: 0, CacheWrite: 0}},
@@ -24780,6 +26205,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24807,6 +26233,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24834,6 +26261,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24861,6 +26289,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24888,6 +26317,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24915,6 +26345,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24942,6 +26373,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24969,6 +26401,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -24996,6 +26429,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -25023,6 +26457,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -25050,6 +26485,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -25077,6 +26513,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -25104,6 +26541,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -25131,6 +26569,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -25158,6 +26597,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -25185,6 +26625,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -25212,6 +26653,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25248,6 +26690,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25284,6 +26727,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25320,6 +26764,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25356,6 +26801,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25392,6 +26838,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25428,6 +26875,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25464,6 +26912,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -25500,6 +26949,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25536,6 +26986,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25572,6 +27023,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -25608,6 +27060,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -25644,6 +27097,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -25680,6 +27134,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -25710,6 +27165,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25746,6 +27202,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25782,6 +27239,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -25818,6 +27276,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -25854,6 +27313,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -25890,6 +27350,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -25927,6 +27388,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -25964,6 +27426,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26000,6 +27463,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26036,6 +27500,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26072,6 +27537,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -26109,6 +27575,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -26145,6 +27612,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26181,6 +27649,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26218,6 +27687,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -26254,6 +27724,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -26290,6 +27761,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26326,6 +27798,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26363,6 +27836,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26399,6 +27873,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26435,6 +27910,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26471,6 +27947,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26508,6 +27985,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26529,7 +28007,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &OpenAICompletionsCompat{
@@ -26544,6 +28022,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26580,6 +28059,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26616,6 +28096,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26653,6 +28134,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26689,6 +28171,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26725,6 +28208,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26761,6 +28245,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -26797,6 +28282,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -26834,6 +28320,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -26870,6 +28357,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -26906,6 +28394,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -26942,6 +28431,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -26979,6 +28469,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -27015,6 +28506,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -27051,6 +28543,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -27087,6 +28580,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -27124,6 +28618,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -27160,6 +28655,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -27196,6 +28692,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -27226,12 +28723,162 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
+		"openai/gpt-6.1-sol": {
+			ID:        "openai/gpt-6.1-sol",
+			Name:      "OpenAI: GPT-6.1 Sol",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAICompletionsCompat{
+				ThinkingFormat:                 lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SupportsStrictMode:             lo.ToPtr(true),
+				SendSessionAffinityHeaders:     lo.ToPtr(true),
+			},
+		},
+		"openai/gpt-6.1-sol-pro": {
+			ID:        "openai/gpt-6.1-sol-pro",
+			Name:      "OpenAI: GPT-6.1 Sol Pro",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAICompletionsCompat{
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"openai/gpt-6.1-sol-pro:batch": {
+			ID:        "openai/gpt-6.1-sol-pro:batch",
+			Name:      "OpenAI: GPT-6.1 Sol Pro (batch)",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.05, CacheWrite: 1.25}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAICompletionsCompat{
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"openai/gpt-6.1-sol:batch": {
+			ID:        "openai/gpt-6.1-sol:batch",
+			Name:      "OpenAI: GPT-6.1 Sol (batch)",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.05, CacheWrite: 1.25}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &OpenAICompletionsCompat{
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
 		"openai/gpt-audio": {
 			ID:            "openai/gpt-audio",
 			Name:          "OpenAI: GPT Audio",
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 10, CacheRead: 0, CacheWrite: 0}},
@@ -27249,6 +28896,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0, CacheWrite: 0}},
@@ -27266,6 +28914,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27293,6 +28942,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -27304,9 +28954,36 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.075, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.037, Output: 0.17, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
-			MaxTokens:     65536,
+			MaxTokens:     117964,
+			Compat: &OpenAICompletionsCompat{
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"openai/gpt-oss-120b:batch": {
+			ID:        "openai/gpt-oss-120b:batch",
+			Name:      "OpenAI: gpt-oss-120b (batch)",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0296, Output: 0.136, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 131072,
+			MaxTokens:     117964,
 			Compat: &OpenAICompletionsCompat{
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
 				SupportsStrictMode:         lo.ToPtr(true),
@@ -27319,6 +28996,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -27330,7 +29008,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.018, Output: 0.09, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.018, Output: 0.09, CacheRead: 0.009, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
@@ -27345,6 +29023,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -27371,6 +29050,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -27391,6 +29071,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27418,6 +29099,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27445,6 +29127,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.1, Output: 4.4, CacheRead: 0.55, CacheWrite: 0}},
@@ -27462,6 +29145,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -27488,6 +29172,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.55, Output: 2.2, CacheRead: 0.275, CacheWrite: 0}},
@@ -27505,6 +29190,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27532,6 +29218,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27559,6 +29246,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27586,6 +29274,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -27622,6 +29311,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27649,6 +29339,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27677,6 +29368,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27705,6 +29397,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -27733,11 +29426,50 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     30000,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"perceptron/perceptron-mk1.5": {
+			ID:        "perceptron/perceptron-mk1.5",
+			Name:      "Perceptron: Perceptron Mk1.5",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     nil,
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 1.5, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 36864,
+			MaxTokens:     8192,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -27751,6 +29483,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.09, Output: 0.18, CacheRead: 0.009, CacheWrite: 0}},
@@ -27769,6 +29502,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -27787,6 +29521,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.12, CacheRead: 0.03, CacheWrite: 0}},
@@ -27805,6 +29540,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -27823,6 +29559,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -27844,7 +29581,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.5, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.5, CacheRead: 0.0375, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
@@ -27860,6 +29597,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.36, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
@@ -27878,6 +29616,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.2, CacheRead: 0, CacheWrite: 0}},
@@ -27896,6 +29635,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.26, Output: 0.78, CacheRead: 0.052, CacheWrite: 0.325}},
@@ -27914,6 +29654,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.26, Output: 0.78, CacheRead: 0, CacheWrite: 0}},
@@ -27932,6 +29673,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 0.24, CacheRead: 0, CacheWrite: 0}},
@@ -27950,6 +29692,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.455, Output: 1.82, CacheRead: 0, CacheWrite: 0}},
@@ -27968,6 +29711,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0875, Output: 0.35, CacheRead: 0.0175, CacheWrite: 0}},
@@ -27986,6 +29730,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -28007,11 +29752,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 0.5, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 40960,
-			MaxTokens:     16384,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.52, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 131072,
+			MaxTokens:     8192,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -28025,6 +29771,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04815, Output: 0.19305, CacheRead: 0, CacheWrite: 0}},
@@ -28043,6 +29790,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -28064,6 +29812,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.08, Output: 0.28, CacheRead: 0, CacheWrite: 0}},
@@ -28082,6 +29831,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.117, Output: 0.455, CacheRead: 0, CacheWrite: 0}},
@@ -28100,6 +29850,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1, CacheRead: 0.1, CacheWrite: 0}},
@@ -28118,6 +29869,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.28, CacheRead: 0, CacheWrite: 0}},
@@ -28136,6 +29888,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.195, Output: 0.975, CacheRead: 0.039, CacheWrite: 0.24375}},
@@ -28154,6 +29907,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 0.8, CacheRead: 0.07, CacheWrite: 0}},
@@ -28172,6 +29926,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.65, Output: 3.25, CacheRead: 0.13, CacheWrite: 0.8125}},
@@ -28190,6 +29945,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.78, Output: 3.9, CacheRead: 0.156, CacheWrite: 0.975}},
@@ -28208,6 +29964,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.78, Output: 3.9, CacheRead: 0, CacheWrite: 0}},
@@ -28226,11 +29983,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.09, Output: 1.1, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 1.1, CacheRead: 0.07, CacheWrite: 0}},
 			ContextWindow: 262144,
-			MaxTokens:     16384,
+			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -28244,6 +30002,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -28265,6 +30024,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28293,6 +30053,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -28324,6 +30085,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28336,9 +30098,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.52, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 131072,
-			MaxTokens:     32768,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     16384,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -28352,6 +30114,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -28383,6 +30146,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28411,6 +30175,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28439,6 +30204,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -28470,6 +30236,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28498,6 +30265,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28526,6 +30294,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28538,9 +30307,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3125, Output: 1.25, CacheRead: 0.15625, CacheWrite: 0}},
-			ContextWindow: 256000,
-			MaxTokens:     16384,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1625, Output: 1.3, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     65536,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -28554,6 +30323,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28582,6 +30352,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28610,6 +30381,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28638,6 +30410,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28666,6 +30439,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28694,6 +30468,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28706,9 +30481,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.32, Output: 2.7, CacheRead: 0.15, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.32, Output: 3.2, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
-			MaxTokens:     262140,
+			MaxTokens:     81920,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -28722,6 +30497,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28750,6 +30526,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28778,6 +30555,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.027, Output: 6.162, CacheRead: 0, CacheWrite: 1.28375}},
@@ -28796,6 +30574,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28824,6 +30603,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28852,6 +30632,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.475, Output: 4.425, CacheRead: 0.295, CacheWrite: 1.84375}},
@@ -28870,6 +30651,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -28898,6 +30680,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -28925,6 +30708,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -28946,9 +30730,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.42, Output: 3, CacheRead: 0.085, CacheWrite: 0}},
-			ContextWindow: 1000000,
-			MaxTokens:     131072,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0249, Output: 4.35, CacheRead: 0.0199, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -28962,6 +30746,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -28999,6 +30784,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -29027,6 +30813,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -29058,12 +30845,51 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
+		"qwen/qwen3.8-max-prime": {
+			ID:        "qwen/qwen3.8-max-prime",
+			Name:      "Qwen: Qwen3.8 Max Prime",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     nil,
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 12, CacheRead: 0.5, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
 		"qwen/qwen3.8-omni-flash": {
 			ID:        "qwen/qwen3.8-omni-flash",
 			Name:      "Qwen: Qwen3.8 Omni Flash",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -29092,6 +30918,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -29120,6 +30947,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 3, CacheRead: 0, CacheWrite: 0}},
@@ -29138,6 +30966,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -29175,6 +31004,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -29212,6 +31042,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -29249,6 +31080,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29286,11 +31118,50 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.85, Output: 0.85, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     16384,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"stealth/space-bunny-alpha": {
+			ID:        "stealth/space-bunny-alpha",
+			Name:      "Space Bunny Alpha",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     524288,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -29304,6 +31175,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -29325,6 +31197,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -29362,6 +31235,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29389,6 +31263,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29416,6 +31291,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29443,6 +31319,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29480,6 +31357,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29517,6 +31395,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29554,6 +31433,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29591,6 +31471,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -29613,12 +31494,41 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
+		"upstage/solar-mini4": {
+			ID:        "upstage/solar-mini4",
+			Name:      "Upstage: Solar Mini 4",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingMinimal: lo.ToPtr("minimal"),
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0.005, CacheWrite: 0}},
+			ContextWindow: 524288,
+			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
 		"upstage/solar-pro-3": {
 			ID:        "upstage/solar-pro-3",
 			Name:      "Upstage: Solar Pro 3",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29646,6 +31556,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29673,6 +31584,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -29701,6 +31613,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29738,6 +31651,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -29775,6 +31689,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -29812,6 +31727,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -29849,6 +31765,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -29870,7 +31787,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.6, Output: 4.8, CacheRead: 0.4, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     450000,
 			Compat: &OpenAICompletionsCompat{
@@ -29886,6 +31803,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff: nil,
@@ -29917,6 +31835,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -29945,6 +31864,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.435, Output: 0.87, CacheRead: 0.0036, CacheWrite: 0}},
@@ -29963,6 +31883,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -29991,6 +31912,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -30019,6 +31941,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -30047,6 +31970,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.11, CacheWrite: 0}},
@@ -30065,6 +31989,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.85, CacheRead: 0.025, CacheWrite: 0}},
@@ -30083,6 +32008,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -30111,6 +32037,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.43, Output: 1.75, CacheRead: 0.08, CacheWrite: 0}},
@@ -30129,6 +32056,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -30157,9 +32085,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.75, CacheRead: 0.08, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.11, CacheWrite: 0}},
 			ContextWindow: 202752,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -30175,6 +32104,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0605, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
@@ -30193,6 +32123,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 1.9, CacheRead: 0.119, CacheWrite: 0}},
@@ -30211,6 +32142,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 4, CacheRead: 0.24, CacheWrite: 0}},
@@ -30229,11 +32161,12 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.966, Output: 3.036, CacheRead: 0.1794, CacheWrite: 0}},
-			ContextWindow: 200000,
-			MaxTokens:     128000,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
+			ContextWindow: 202752,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -30247,6 +32180,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -30258,9 +32192,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6496, Output: 2.0416, CacheRead: 0.12064, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.41, Output: 3.99, CacheRead: 0.26, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     131072,
+			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -30274,6 +32208,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30285,9 +32220,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.84, Output: 2.64, CacheRead: 0.156, CacheWrite: 0}},
-			ContextWindow: 1048576,
-			MaxTokens:     131072,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
+			ContextWindow: 1048575,
+			MaxTokens:     943717,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -30301,6 +32236,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30322,9 +32258,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.5, CacheRead: 0.05, CacheWrite: 0}},
-			ContextWindow: 1048576,
-			MaxTokens:     943718,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.5, CacheRead: 0.03, CacheWrite: 0}},
+			ContextWindow: 1048575,
+			MaxTokens:     943717,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -30338,6 +32274,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30375,6 +32312,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30396,8 +32334,36 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.37, Output: 1.25, CacheRead: 0.075, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.37, Output: 1.25, CacheRead: 0.09, CacheWrite: 0}},
 			ContextWindow: 1048576,
+			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"z-ai/glm-5.3-prime": {
+			ID:        "z-ai/glm-5.3-prime",
+			Name:      "Z.ai: GLM 5.3 Prime",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.8, Output: 8.8, CacheRead: 0.56, CacheWrite: 0}},
+			ContextWindow: 1000000,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
@@ -30412,6 +32378,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30423,7 +32390,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.72, Output: 2.4, CacheRead: 0.12, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.45, Output: 2, CacheRead: 0.1, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -30439,6 +32406,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -30467,6 +32435,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30505,6 +32474,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -30534,6 +32504,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30572,9 +32543,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
 				ModelThinkingLow:     lo.ToPtr("low"),
 				ModelThinkingMedium:  lo.ToPtr("medium"),
@@ -30610,6 +32582,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -30631,7 +32604,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0198, Output: 0.396, CacheRead: 0.00291, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
@@ -30647,6 +32620,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -30658,9 +32632,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 4.3, CacheRead: 0.033, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.134, Output: 3.5, CacheRead: 0.134, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     384000,
+			MaxTokens:     393216,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -30674,6 +32648,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -30685,7 +32660,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.038, Output: 0.55, CacheRead: 0.0228, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0099, Output: 0.13068, CacheRead: 0.001386, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
@@ -30702,6 +32677,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30739,6 +32715,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30776,6 +32753,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -30797,7 +32775,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.49, Output: 14.5, CacheRead: 0.21, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3654, Output: 9.1343, CacheRead: 0.4, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -30813,6 +32791,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -30850,6 +32829,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -30887,6 +32867,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -30924,9 +32905,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("none"),
+				ModelThinkingOff:     nil,
 				ModelThinkingMinimal: nil,
 				ModelThinkingLow:     lo.ToPtr("low"),
 				ModelThinkingMedium:  lo.ToPtr("medium"),
@@ -30945,7 +32927,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &OpenAICompletionsCompat{
@@ -30961,6 +32943,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -30998,6 +32981,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31019,7 +33003,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.6, Output: 4.8, CacheRead: 0.4, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     450000,
 			Compat: &OpenAICompletionsCompat{
@@ -31035,6 +33019,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31056,9 +33041,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.25, CacheRead: 0.015, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.02, Output: 0.2475, CacheRead: 0.01, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     131072,
+			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -31072,6 +33057,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderOpenRouter,
 			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31083,7 +33069,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5625, Output: 2.5, CacheRead: 0.125, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 4, CacheRead: 0.13, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -31101,6 +33087,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderQwenTokenPlan,
 			BaseURL:       "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -31120,6 +33107,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderQwenTokenPlan,
 			BaseURL:       "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -31139,6 +33127,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31167,6 +33156,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31195,6 +33185,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31223,6 +33214,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31251,6 +33243,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31289,6 +33282,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -31316,6 +33310,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -31343,6 +33338,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31371,6 +33367,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31399,6 +33396,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -31428,6 +33426,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -31457,6 +33456,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -31486,6 +33486,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -31515,6 +33516,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -31544,6 +33546,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderQwenTokenPlan,
 			BaseURL:       "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -31563,6 +33566,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -31592,6 +33596,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31630,6 +33635,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlan,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31670,6 +33676,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderQwenTokenPlanCN,
 			BaseURL:       "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -31689,6 +33696,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderQwenTokenPlanCN,
 			BaseURL:       "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -31708,6 +33716,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31736,6 +33745,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31764,6 +33774,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31792,6 +33803,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31820,6 +33832,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31858,6 +33871,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -31885,6 +33899,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -31912,6 +33927,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31940,6 +33956,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -31968,6 +33985,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -31997,6 +34015,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -32026,6 +34045,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -32055,6 +34075,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -32084,6 +34105,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -32113,6 +34135,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderQwenTokenPlanCN,
 			BaseURL:       "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -32132,6 +34155,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -32161,6 +34185,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32199,6 +34224,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanCN,
 			BaseURL:   "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32239,6 +34265,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanInd,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32267,6 +34294,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanInd,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32295,6 +34323,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanInd,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32323,6 +34352,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanInd,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32351,6 +34381,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanInd,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -32380,6 +34411,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderQwenTokenPlanInd,
 			BaseURL:       "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -32399,6 +34431,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanInd,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -32428,6 +34461,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanInd,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32466,6 +34500,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderQwenTokenPlanInd,
 			BaseURL:   "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32506,6 +34541,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32515,7 +34551,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
-			ContextWindow: 202752,
+			ContextWindow: 196608,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
@@ -32532,6 +34568,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32568,6 +34605,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderTogether,
 			BaseURL:       "https://api.together.ai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 0.3, CacheRead: 0, CacheWrite: 0}},
@@ -32589,6 +34627,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32625,6 +34664,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32651,6 +34691,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderTogether,
 			BaseURL:       "https://api.together.ai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.25, Output: 3.75, CacheRead: 0.125, CacheWrite: 0}},
@@ -32672,6 +34713,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32680,7 +34722,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.28, CacheRead: 0.03, CacheWrite: 0}},
-			ContextWindow: 1000000,
+			ContextWindow: 1048576,
 			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
@@ -32698,6 +34740,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32726,6 +34769,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32752,6 +34796,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32788,6 +34833,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32824,72 +34870,11 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderTogether,
 			BaseURL:       "https://api.together.ai/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.04, Output: 1.04, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsReasoningEffort:    lo.ToPtr(false),
-				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatTogether),
-				SupportsStrictMode:         lo.ToPtr(false),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
-		"moonshotai/Kimi-K2.6": {
-			ID:        "moonshotai/Kimi-K2.6",
-			Name:      "Kimi K2.6",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderTogether,
-			BaseURL:   "https://api.together.ai/v1",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 4.5, CacheRead: 0.2, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     131000,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsReasoningEffort:    lo.ToPtr(false),
-				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatTogether),
-				SupportsStrictMode:         lo.ToPtr(false),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
-		"moonshotai/Kimi-K2.7-Code": {
-			ID:        "moonshotai/Kimi-K2.7-Code",
-			Name:      "Kimi K2.7 Code",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderTogether,
-			BaseURL:   "https://api.together.ai/v1",
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.19, CacheWrite: 0}},
-			ContextWindow: 262144,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
@@ -32907,6 +34892,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32943,6 +34929,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -32969,6 +34956,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -32999,6 +34987,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -33029,6 +35018,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -33065,6 +35055,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -33073,7 +35064,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
-			ContextWindow: 512000,
+			ContextWindow: 1048575,
 			MaxTokens:     164000,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
@@ -33091,6 +35082,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -33117,6 +35109,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMinimal: nil,
@@ -33155,6 +35148,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 0.24, CacheRead: 0, CacheWrite: 0}},
@@ -33170,6 +35164,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.88, CacheRead: 0, CacheWrite: 0}},
@@ -33185,6 +35180,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 0.5, CacheRead: 0, CacheWrite: 0}},
@@ -33200,6 +35196,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.16, Output: 0.64, CacheRead: 0, CacheWrite: 0}},
@@ -33215,6 +35212,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.3, Output: 7.8, CacheRead: 0.13, CacheWrite: 1.625}},
@@ -33230,6 +35228,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33255,6 +35254,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.5, Output: 7.5, CacheRead: 0.3, CacheWrite: 0}},
@@ -33270,6 +35270,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
@@ -33285,6 +35286,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
@@ -33300,6 +35302,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.2, CacheWrite: 0}},
@@ -33315,6 +35318,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 6, CacheRead: 0.24, CacheWrite: 0}},
@@ -33330,6 +35334,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 6, CacheRead: 0.24, CacheWrite: 0}},
@@ -33345,6 +35350,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 6, CacheRead: 0.24, CacheWrite: 0}},
@@ -33360,6 +35366,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
@@ -33375,6 +35382,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
@@ -33390,6 +35398,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33415,6 +35424,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33440,6 +35450,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33465,6 +35476,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33490,6 +35502,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33502,7 +35515,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 2.5, CacheRead: 0.04, CacheWrite: 0.5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 2.4, CacheRead: 0.04, CacheWrite: 0.5}},
 			ContextWindow: 1000000,
 			MaxTokens:     64000,
 			Compat: &AnthropicMessagesCompat{
@@ -33515,6 +35528,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33540,6 +35554,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33565,6 +35580,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33590,6 +35606,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 7.5, CacheRead: 0.5, CacheWrite: 3.125}},
@@ -33605,6 +35622,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33630,6 +35648,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33655,6 +35674,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33680,6 +35700,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33705,6 +35726,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33730,6 +35752,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33749,12 +35772,39 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature: lo.ToPtr(true),
 			},
 		},
+		"alibaba/qwen3.8-max-prime": {
+			ID:        "alibaba/qwen3.8-max-prime",
+			Name:      "Qwen 3.8 Max Prime",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderVercelAIGateway,
+			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 12, CacheRead: 0.5, CacheWrite: 5}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
 		"alibaba/qwen3.8-omni-flash": {
 			ID:        "alibaba/qwen3.8-omni-flash",
 			Name:      "Qwen 3.8 Omni Flash",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33780,6 +35830,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33805,6 +35856,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33830,6 +35882,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.035, Output: 0.14, CacheRead: 0, CacheWrite: 0}},
@@ -33845,6 +35898,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33870,6 +35924,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33895,6 +35950,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -33926,6 +35982,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:   nil,
@@ -33957,6 +36014,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -33982,6 +36040,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34007,6 +36066,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34032,6 +36092,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -34061,6 +36122,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -34092,6 +36154,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -34123,6 +36186,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -34154,6 +36218,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -34185,6 +36250,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -34216,6 +36282,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -34247,6 +36314,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -34278,6 +36346,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34303,6 +36372,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34328,6 +36398,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingMax: lo.ToPtr("max"),
@@ -34357,6 +36428,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -34381,12 +36453,45 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature:   lo.ToPtr(true),
 			},
 		},
+		"anthropic/claude-sonnet-5.5": {
+			ID:        "anthropic/claude-sonnet-5.5",
+			Name:      "Claude Sonnet 5.5",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderVercelAIGateway,
+			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+				ModelThinkingMax:   lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				SupportsTemperature:   lo.ToPtr(false),
+				ForceAdaptiveThinking: lo.ToPtr(true),
+				AllowEmptySignature:   lo.ToPtr(true),
+			},
+		},
 		"arcee-ai/trinity-large-thinking": {
 			ID:            "arcee-ai/trinity-large-thinking",
 			Name:          "Trinity Large Thinking",
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 0.9, CacheRead: 0, CacheWrite: 0}},
@@ -34402,6 +36507,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34427,6 +36533,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34452,6 +36559,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34477,6 +36585,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 10, CacheRead: 0, CacheWrite: 0}},
@@ -34492,6 +36601,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.35, Output: 5.4, CacheRead: 0, CacheWrite: 0}},
@@ -34507,6 +36617,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 0.95, CacheRead: 0.13, CacheWrite: 0}},
@@ -34522,6 +36633,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.27, Output: 1, CacheRead: 0.135, CacheWrite: 0}},
@@ -34537,6 +36649,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.62, Output: 1.85, CacheRead: 0, CacheWrite: 0}},
@@ -34552,6 +36665,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.62, Output: 1.85, CacheRead: 0, CacheWrite: 0}},
@@ -34567,6 +36681,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.26, CacheRead: 0.028, CacheWrite: 0}},
@@ -34582,6 +36697,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.076, Output: 0.153, CacheRead: 0.014, CacheWrite: 0}},
@@ -34597,6 +36713,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34609,7 +36726,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2156, Output: 0.6468, CacheRead: 0.0068, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     1048576,
 			Compat: &AnthropicMessagesCompat{
@@ -34622,6 +36739,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.66, Output: 1.98, CacheRead: 0.022, CacheWrite: 0}},
@@ -34637,6 +36755,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.66, Output: 1.98, CacheRead: 0.066, CacheWrite: 0}},
@@ -34652,6 +36771,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34671,12 +36791,39 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature: lo.ToPtr(true),
 			},
 		},
+		"fireworks/ember-1": {
+			ID:        "fireworks/ember-1",
+			Name:      "Ember-1",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderVercelAIGateway,
+			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     1048576,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
 		"google/gemini-2.5-flash": {
 			ID:        "google/gemini-2.5-flash",
 			Name:      "Gemini 2.5 Flash",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34702,6 +36849,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34727,6 +36875,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34752,6 +36901,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34777,6 +36927,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34802,6 +36953,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34827,6 +36979,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34852,6 +37005,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34877,6 +37031,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34902,6 +37057,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34927,6 +37083,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34952,6 +37109,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -34977,6 +37135,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35002,6 +37161,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 0.75, CacheRead: 0.025, CacheWrite: 0}},
@@ -35017,6 +37177,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.15, CacheRead: 0.004, CacheWrite: 0}},
@@ -35032,6 +37193,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1, CacheRead: 0, CacheWrite: 0}},
@@ -35047,6 +37209,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.021, Output: 0.063, CacheRead: 0.0042, CacheWrite: 0}},
@@ -35062,24 +37225,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 256000,
-			MaxTokens:     32000,
-			Compat: &AnthropicMessagesCompat{
-				AllowEmptySignature: lo.ToPtr(true),
-			},
-		},
-		"inclusionai/ling-3.0-flash-fin-free": {
-			ID:            "inclusionai/ling-3.0-flash-fin-free",
-			Name:          "Ling 3.0 Flash Fin (Free)",
-			API:           ApiAnthropicMessages,
-			Provider:      ProviderVercelAIGateway,
-			BaseURL:       "https://ai-gateway.vercel.sh",
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.22, CacheRead: 0.015, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
 			Compat: &AnthropicMessagesCompat{
@@ -35092,6 +37241,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -35107,6 +37257,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -35122,6 +37273,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35134,34 +37286,41 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.075, Output: 0.22, CacheRead: 0.015, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32000,
 			Compat: &AnthropicMessagesCompat{
 				AllowEmptySignature: lo.ToPtr(true),
 			},
 		},
-		"inclusionai/ling-3.0-flash-vl-free": {
-			ID:        "inclusionai/ling-3.0-flash-vl-free",
-			Name:      "Ling 3.0 Flash VL (Free)",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderVercelAIGateway,
-			BaseURL:   "https://ai-gateway.vercel.sh",
-			Reasoning: true,
-			Input:     []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
+		"inclusionai/ling-3.1-flash": {
+			ID:            "inclusionai/ling-3.1-flash",
+			Name:          "Ling 3.1 Flash",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 256000,
-			MaxTokens:     32000,
+			ContextWindow: 262144,
+			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
+		"inclusionai/ling-3.1-flash-free": {
+			ID:            "inclusionai/ling-3.1-flash-free",
+			Name:          "Ling 3.1 Flash (Free)",
+			API:           ApiAnthropicMessages,
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     32768,
 			Compat: &AnthropicMessagesCompat{
 				AllowEmptySignature: lo.ToPtr(true),
 			},
@@ -35172,6 +37331,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35191,12 +37351,39 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature: lo.ToPtr(true),
 			},
 		},
+		"meituan/longcat-2.5-preview": {
+			ID:        "meituan/longcat-2.5-preview",
+			Name:      "LongCat 2.5 Preview",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderVercelAIGateway,
+			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     131072,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
 		"meta/llama-3.1-70b": {
 			ID:            "meta/llama-3.1-70b",
 			Name:          "Llama 3.1 70B Instruct",
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.72, Output: 0.72, CacheRead: 0, CacheWrite: 0}},
@@ -35212,6 +37399,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.22, CacheRead: 0, CacheWrite: 0}},
@@ -35227,6 +37415,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.72, Output: 0.72, CacheRead: 0, CacheWrite: 0}},
@@ -35242,6 +37431,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35267,6 +37457,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35292,6 +37483,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35317,6 +37509,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35342,6 +37535,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35367,6 +37561,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35392,6 +37587,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35417,6 +37613,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35442,6 +37639,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.03, CacheWrite: 0.375}},
@@ -35457,6 +37655,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.03, CacheWrite: 0.375}},
@@ -35472,6 +37671,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2.4, CacheRead: 0.03, CacheWrite: 0.375}},
@@ -35487,6 +37687,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.03, CacheWrite: 0.375}},
@@ -35502,6 +37703,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.03, CacheWrite: 0.375}},
@@ -35517,6 +37719,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0.375}},
@@ -35532,6 +37735,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.06, CacheWrite: 0.375}},
@@ -35547,6 +37751,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35572,6 +37777,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 0.9, CacheRead: 0.03, CacheWrite: 0}},
@@ -35587,6 +37793,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35612,6 +37819,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35637,6 +37845,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35662,6 +37871,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35687,6 +37897,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35712,6 +37923,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0.17, CacheRead: 0, CacheWrite: 0}},
@@ -35727,6 +37939,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35752,6 +37965,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 0.72, CacheRead: 0.036, CacheWrite: 0}},
@@ -35767,6 +37981,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.57, Output: 2.3, CacheRead: 0, CacheWrite: 0}},
@@ -35782,6 +37997,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.47, Output: 2, CacheRead: 0.141, CacheWrite: 0}},
@@ -35797,6 +38013,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35822,6 +38039,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35847,6 +38065,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35859,7 +38078,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.16, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.19, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     32768,
 			Compat: &AnthropicMessagesCompat{
@@ -35872,6 +38091,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35897,6 +38117,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35922,6 +38143,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -35947,6 +38169,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0.025, CacheWrite: 0}},
@@ -35962,6 +38185,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.65, CacheRead: 0, CacheWrite: 0}},
@@ -35977,6 +38201,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.12, CacheWrite: 0}},
@@ -35992,6 +38217,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0.01, CacheWrite: 0}},
@@ -36007,6 +38233,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36032,6 +38259,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.23, CacheRead: 0, CacheWrite: 0}},
@@ -36047,6 +38275,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.5, CacheRead: 0, CacheWrite: 0}},
@@ -36062,6 +38291,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36087,6 +38317,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36112,6 +38343,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36137,6 +38369,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36162,6 +38395,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36187,6 +38421,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36212,6 +38447,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36237,6 +38473,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36262,6 +38499,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36287,6 +38525,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36312,6 +38551,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36337,6 +38577,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36362,6 +38603,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36387,6 +38629,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36412,6 +38655,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36437,6 +38681,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36462,6 +38707,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36487,6 +38733,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36512,6 +38759,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36537,6 +38785,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36562,6 +38811,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36587,6 +38837,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36612,6 +38863,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -36637,6 +38889,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36665,6 +38918,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36693,6 +38947,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36721,6 +38976,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36749,6 +39005,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36777,6 +39034,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36805,6 +39063,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36833,6 +39092,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36861,6 +39121,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36889,6 +39150,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36917,6 +39179,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36945,6 +39208,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -36973,6 +39237,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37001,6 +39266,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37029,6 +39295,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -37060,6 +39327,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37088,6 +39356,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37116,6 +39385,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37144,6 +39414,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37172,6 +39443,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37200,6 +39472,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37228,6 +39501,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37256,6 +39530,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37284,6 +39559,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37312,6 +39588,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37340,6 +39617,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37368,6 +39646,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingXHigh: lo.ToPtr("xhigh"),
@@ -37390,15 +39669,74 @@ var MODELS = map[ProviderID]map[string]Model{
 				AllowEmptySignature: lo.ToPtr(true),
 			},
 		},
+		"openai/gpt-6.1-sol": {
+			ID:        "openai/gpt-6.1-sol",
+			Name:      "GPT-6.1 Sol",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderVercelAIGateway,
+			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
+		"openai/gpt-6.1-sol-fast": {
+			ID:        "openai/gpt-6.1-sol-fast",
+			Name:      "GPT-6.1 Sol (Fast)",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderVercelAIGateway,
+			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.2, CacheWrite: 5}},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
 		"openai/gpt-oss-120b": {
 			ID:            "openai/gpt-oss-120b",
 			Name:          "GPT OSS 120B",
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.1, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     131072,
 			Compat: &AnthropicMessagesCompat{
@@ -37411,6 +39749,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.03, Output: 0.14, CacheRead: 0, CacheWrite: 0}},
@@ -37426,6 +39765,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
@@ -37441,6 +39781,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.2, CacheRead: 0, CacheWrite: 0}},
@@ -37456,6 +39797,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37481,6 +39823,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37506,6 +39849,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37531,6 +39875,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.1, Output: 4.4, CacheRead: 0.55, CacheWrite: 0}},
@@ -37546,6 +39891,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37571,6 +39917,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37596,6 +39943,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37621,6 +39969,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.2, CacheRead: 0.01, CacheWrite: 0}},
@@ -37636,6 +39985,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -37651,6 +40001,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37676,6 +40027,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37701,6 +40053,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37726,6 +40079,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37751,6 +40105,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37776,6 +40131,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37801,6 +40157,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37826,6 +40183,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37851,6 +40209,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37876,6 +40235,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37901,6 +40261,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37926,6 +40287,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37951,6 +40313,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -37976,6 +40339,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38001,6 +40365,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38026,6 +40391,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38051,6 +40417,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38076,6 +40443,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38088,7 +40456,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 3.6, CacheRead: 0.3, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 6, CacheRead: 0.5, CacheWrite: 0}},
 			ContextWindow: 500000,
 			MaxTokens:     500000,
 			Compat: &AnthropicMessagesCompat{
@@ -38101,6 +40469,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38126,6 +40495,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38151,6 +40521,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38176,6 +40547,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.58, CacheRead: 0.035, CacheWrite: 0}},
@@ -38191,6 +40563,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.834, Output: 2.501, CacheRead: 0.042, CacheWrite: 0}},
@@ -38206,6 +40579,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38231,6 +40605,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38243,7 +40618,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 1.2, CacheRead: 0.1, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.45, Output: 1.2, CacheRead: 0.1, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     1000000,
 			Compat: &AnthropicMessagesCompat{
@@ -38256,6 +40631,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38281,6 +40657,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.435, Output: 0.87, CacheRead: 0.0036, CacheWrite: 0}},
@@ -38296,6 +40673,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38321,6 +40699,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38346,6 +40725,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38371,6 +40751,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.11, CacheWrite: 0}},
@@ -38386,6 +40767,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.1, CacheRead: 0.03, CacheWrite: 0}},
@@ -38401,6 +40783,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38426,6 +40809,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.11, CacheWrite: 0}},
@@ -38441,9 +40825,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.12, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 200000,
 			MaxTokens:     120000,
 			Compat: &AnthropicMessagesCompat{
@@ -38456,6 +40841,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.07, Output: 0.4, CacheRead: 0, CacheWrite: 0}},
@@ -38471,6 +40857,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.4, CacheRead: 0.01, CacheWrite: 0}},
@@ -38486,6 +40873,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 3.2, CacheRead: 0, CacheWrite: 0}},
@@ -38501,6 +40889,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 4, CacheRead: 0.24, CacheWrite: 0}},
@@ -38516,6 +40905,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
@@ -38531,6 +40921,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.8, Output: 2.55, CacheRead: 0.16, CacheWrite: 0}},
@@ -38546,9 +40937,10 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.1, Output: 6.6, CacheRead: 0.21, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.8, Output: 8.8, CacheRead: 0.56, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{
@@ -38561,6 +40953,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.14, CacheWrite: 0}},
@@ -38576,6 +40969,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiAnthropicMessages,
 			Provider:      ProviderVercelAIGateway,
 			BaseURL:       "https://ai-gateway.vercel.sh",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.1, Output: 6.6, CacheRead: 0.21, CacheWrite: 0}},
@@ -38591,6 +40985,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38616,6 +41011,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38641,6 +41037,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderVercelAIGateway,
 			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38668,6 +41065,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderXAI,
 			BaseURL:   "https://api.x.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -38707,6 +41105,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderXAI,
 			BaseURL:   "https://api.x.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -38746,6 +41145,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderXAI,
 			BaseURL:   "https://api.x.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -38785,6 +41185,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       Api("openai-responses"),
 			Provider:  ProviderXAI,
 			BaseURL:   "https://api.x.ai/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -38826,6 +41227,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomi,
 			BaseURL:   "https://api.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38853,6 +41255,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderXiaomi,
 			BaseURL:       "https://api.xiaomimimo.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.435, Output: 0.87, CacheRead: 0.0036, CacheWrite: 0}},
@@ -38870,6 +41273,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderXiaomi,
 			BaseURL:       "https://api.xiaomimimo.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.305, Output: 2.61, CacheRead: 0.0108, CacheWrite: 0}},
@@ -38887,6 +41291,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomi,
 			BaseURL:   "https://api.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38914,6 +41319,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomi,
 			BaseURL:   "https://api.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38941,6 +41347,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomi,
 			BaseURL:   "https://api.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38970,6 +41377,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomiTokenPlanAMS,
 			BaseURL:   "https://token-plan-ams.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -38997,6 +41405,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderXiaomiTokenPlanAMS,
 			BaseURL:       "https://token-plan-ams.xiaomimimo.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -39014,6 +41423,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomiTokenPlanAMS,
 			BaseURL:   "https://token-plan-ams.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -39041,6 +41451,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomiTokenPlanAMS,
 			BaseURL:   "https://token-plan-ams.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -39070,6 +41481,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomiTokenPlanCN,
 			BaseURL:   "https://token-plan-cn.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -39097,6 +41509,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderXiaomiTokenPlanCN,
 			BaseURL:       "https://token-plan-cn.xiaomimimo.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -39114,6 +41527,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomiTokenPlanCN,
 			BaseURL:   "https://token-plan-cn.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -39141,6 +41555,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomiTokenPlanCN,
 			BaseURL:   "https://token-plan-cn.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -39170,6 +41585,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomiTokenPlanSGP,
 			BaseURL:   "https://token-plan-sgp.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -39197,6 +41613,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderXiaomiTokenPlanSGP,
 			BaseURL:       "https://token-plan-sgp.xiaomimimo.com/v1",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
@@ -39214,6 +41631,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomiTokenPlanSGP,
 			BaseURL:   "https://token-plan-sgp.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -39241,6 +41659,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderXiaomiTokenPlanSGP,
 			BaseURL:   "https://token-plan-sgp.xiaomimimo.com/v1",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -39270,6 +41689,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderZai,
 			BaseURL:       "https://api.z.ai/api/coding/paas/v4",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.2, CacheRead: 0.11, CacheWrite: 0}},
@@ -39291,6 +41711,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderZai,
 			BaseURL:       "https://api.z.ai/api/coding/paas/v4",
+			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.2, Output: 4, CacheRead: 0.24, CacheWrite: 0}},
@@ -39312,6 +41733,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderZai,
 			BaseURL:   "https://api.z.ai/api/coding/paas/v4",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -39342,6 +41764,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderZai,
 			BaseURL:   "https://api.z.ai/api/coding/paas/v4",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     lo.ToPtr("none"),
@@ -39372,6 +41795,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderZai,
 			BaseURL:   "https://api.z.ai/api/coding/paas/v4",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -39402,6 +41826,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderZai,
 			BaseURL:   "https://api.z.ai/api/coding/paas/v4",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -39442,6 +41867,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderZai,
 			BaseURL:   "https://api.z.ai/api/coding/paas/v4",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -39474,6 +41900,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderZaiCodingCN,
 			BaseURL:   "https://open.bigmodel.cn/api/coding/paas/v4",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			InputLimits: &ModelInputLimits{
@@ -39505,6 +41932,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderZaiCodingCN,
 			BaseURL:   "https://open.bigmodel.cn/api/coding/paas/v4",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -39535,6 +41963,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderZaiCodingCN,
 			BaseURL:   "https://open.bigmodel.cn/api/coding/paas/v4",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -39575,6 +42004,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderZaiCodingCN,
 			BaseURL:   "https://open.bigmodel.cn/api/coding/paas/v4",
+			Type:      ModelTypeChat,
 			Reasoning: true,
 			ThinkingLevelMap: ThinkingLevelMap{
 				ModelThinkingOff:     nil,
@@ -39602,7 +42032,1552 @@ var MODELS = map[ProviderID]map[string]Model{
 	},
 }
 
+// IMAGE_MODELS is the generated built-in image-generation catalog (pi:
+// models.generated.ts IMAGE_MODELS): provider id -> model id -> model. pi types
+// the key set closed (keyof typeof IMAGE_MODELS); pig keys by the open
+// ProviderID. pi's per-provider providers/*.models.ts files have no
+// separate Go counterpart — the generator emits one file.
+var IMAGE_MODELS = map[ProviderID]map[string]Model{
+	ProviderOpenRouter: {
+		"black-forest-labs/flux.2-flex": {
+			ID:        "black-forest-labs/flux.2-flex",
+			Name:      "Black Forest Labs: FLUX.2 Flex",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"black-forest-labs/flux.2-klein-4b": {
+			ID:        "black-forest-labs/flux.2-klein-4b",
+			Name:      "Black Forest Labs: FLUX.2 Klein 4B",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"black-forest-labs/flux.2-max": {
+			ID:        "black-forest-labs/flux.2-max",
+			Name:      "Black Forest Labs: FLUX.2 Max",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"black-forest-labs/flux.2-pro": {
+			ID:        "black-forest-labs/flux.2-pro",
+			Name:      "Black Forest Labs: FLUX.2 Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"bytedance-seed/seedream-4.5": {
+			ID:        "bytedance-seed/seedream-4.5",
+			Name:      "ByteDance Seed: Seedream 4.5",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"bytedance-seed/seedream-5-0-lite": {
+			ID:        "bytedance-seed/seedream-5-0-lite",
+			Name:      "ByteDance Seed: Seedream 5.0 Lite",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"bytedance-seed/seedream-5-0-pro": {
+			ID:        "bytedance-seed/seedream-5-0-pro",
+			Name:      "ByteDance Seed: Seedream 5.0 Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"google/gemini-2.5-flash-image": {
+			ID:        "google/gemini-2.5-flash-image",
+			Name:      "Google: Nano Banana (Gemini 2.5 Flash Image)",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage, ModelInputText},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 2.5, CacheRead: 0.03, CacheWrite: 0.083333}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"google/gemini-3-pro-image": {
+			ID:        "google/gemini-3-pro-image",
+			Name:      "Google: Nano Banana Pro (Gemini 3 Pro Image)",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage, ModelInputText},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0.375}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"google/gemini-3-pro-image-preview": {
+			ID:        "google/gemini-3-pro-image-preview",
+			Name:      "Google: Nano Banana Pro (Gemini 3 Pro Image Preview)",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage, ModelInputText},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 0.375}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"google/gemini-3.1-flash-image": {
+			ID:        "google/gemini-3.1-flash-image",
+			Name:      "Google: Nano Banana 2 (Gemini 3.1 Flash Image)",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage, ModelInputText},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"google/gemini-3.1-flash-image-preview": {
+			ID:        "google/gemini-3.1-flash-image-preview",
+			Name:      "Google: Nano Banana 2 (Gemini 3.1 Flash Image Preview)",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage, ModelInputText},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 3, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"google/gemini-3.1-flash-lite-image": {
+			ID:        "google/gemini-3.1-flash-lite-image",
+			Name:      "Google: Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image)",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage, ModelInputText},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.25, Output: 1.5, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"inclusionai/ming-image-0.1-design": {
+			ID:            "inclusionai/ming-image-0.1-design",
+			Name:          "inclusionAI: Ming Image 0.1 Design",
+			API:           Api("openrouter-images"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeImage,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Output:        []ModelInput{ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"inclusionai/ming-image-0.1-design-layer": {
+			ID:        "inclusionai/ming-image-0.1-design-layer",
+			Name:      "inclusionAI: Ming Image 0.1 Design Layer",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"krea/krea-2-large": {
+			ID:        "krea/krea-2-large",
+			Name:      "Krea: Krea 2 Large",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"krea/krea-2-medium": {
+			ID:        "krea/krea-2-medium",
+			Name:      "Krea: Krea 2 Medium",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"krea/krea-2-medium-turbo": {
+			ID:        "krea/krea-2-medium-turbo",
+			Name:      "Krea: Krea 2 Medium Turbo",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"meta/muse-image": {
+			ID:        "meta/muse-image",
+			Name:      "Meta: Muse Image",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"microsoft/mai-image-2.5": {
+			ID:        "microsoft/mai-image-2.5",
+			Name:      "Microsoft AI: MAI-Image-2.5",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"microsoft/mai-image-2.5-pro": {
+			ID:        "microsoft/mai-image-2.5-pro",
+			Name:      "Microsoft AI: MAI-Image-2.5 Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"microsoft/mai-image-2.6": {
+			ID:        "microsoft/mai-image-2.6",
+			Name:      "Microsoft AI: MAI-Image-2.6",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"microsoft/mai-image-2.6-flash": {
+			ID:        "microsoft/mai-image-2.6-flash",
+			Name:      "Microsoft AI: MAI-Image-2.6 Flash",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.75, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openai/gpt-5-image": {
+			ID:        "openai/gpt-5-image",
+			Name:      "OpenAI: GPT-5 Image",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage, ModelInputText},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 10, Output: 10, CacheRead: 1.25, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openai/gpt-5-image-mini": {
+			ID:        "openai/gpt-5-image-mini",
+			Name:      "OpenAI: GPT-5 Image Mini",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage, ModelInputText},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 2, CacheRead: 0.25, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openai/gpt-5.4-image-2": {
+			ID:        "openai/gpt-5.4-image-2",
+			Name:      "OpenAI: GPT-5.4 Image 2",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage, ModelInputText},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 8, Output: 15, CacheRead: 2, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openai/gpt-image-1": {
+			ID:        "openai/gpt-image-1",
+			Name:      "OpenAI: GPT Image 1",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 10, Output: 10, CacheRead: 1.25, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openai/gpt-image-1-mini": {
+			ID:        "openai/gpt-image-1-mini",
+			Name:      "OpenAI: GPT Image 1 Mini",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 2.5, CacheRead: 0.25, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openai/gpt-image-2": {
+			ID:        "openai/gpt-image-2",
+			Name:      "OpenAI: GPT Image 2",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 8, Output: 8, CacheRead: 2, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openai/gpt-image-2.5-flare": {
+			ID:        "openai/gpt-image-2.5-flare",
+			Name:      "OpenAI: GPT Image 2.5 Flare",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 8, Output: 8, CacheRead: 2, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openai/gpt-image-2.5-sunburst": {
+			ID:        "openai/gpt-image-2.5-sunburst",
+			Name:      "OpenAI: GPT Image 2.5 Sunburst",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 8, Output: 8, CacheRead: 2, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openrouter/auto": {
+			ID:        "openrouter/auto",
+			Name:      "Auto Router",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: -1000000, Output: -1000000, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"openrouter/auto-beta": {
+			ID:        "openrouter/auto-beta",
+			Name:      "Auto Router (Beta)",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: -1000000, Output: -1000000, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"qwen/qwen-image-3": {
+			ID:        "qwen/qwen-image-3",
+			Name:      "Qwen: Qwen Image 3",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"qwen/qwen-image-3-pro": {
+			ID:        "qwen/qwen-image-3-pro",
+			Name:      "Qwen: Qwen Image 3 Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v3": {
+			ID:        "recraft/recraft-v3",
+			Name:      "Recraft: Recraft V3",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4": {
+			ID:        "recraft/recraft-v4",
+			Name:      "Recraft: Recraft V4",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4-pro": {
+			ID:        "recraft/recraft-v4-pro",
+			Name:      "Recraft: Recraft V4 Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4-pro-vector": {
+			ID:        "recraft/recraft-v4-pro-vector",
+			Name:      "Recraft: Recraft V4 Pro Vector",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4-styles": {
+			ID:        "recraft/recraft-v4-styles",
+			Name:      "Recraft: Recraft V4 Styles",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4-styles-pro": {
+			ID:        "recraft/recraft-v4-styles-pro",
+			Name:      "Recraft: Recraft V4 Styles Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4-styles-pro-vector": {
+			ID:        "recraft/recraft-v4-styles-pro-vector",
+			Name:      "Recraft: Recraft V4 Styles Pro Vector",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4-styles-vector": {
+			ID:        "recraft/recraft-v4-styles-vector",
+			Name:      "Recraft: Recraft V4 Styles Vector",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4-vector": {
+			ID:        "recraft/recraft-v4-vector",
+			Name:      "Recraft: Recraft V4 Vector",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4.1": {
+			ID:        "recraft/recraft-v4.1",
+			Name:      "Recraft: Recraft V4.1",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4.1-flash": {
+			ID:            "recraft/recraft-v4.1-flash",
+			Name:          "Recraft: Recraft V4.1 Flash",
+			API:           Api("openrouter-images"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeImage,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Output:        []ModelInput{ModelInputImage},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4.1-pro": {
+			ID:        "recraft/recraft-v4.1-pro",
+			Name:      "Recraft: Recraft V4.1 Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4.1-pro-vector": {
+			ID:        "recraft/recraft-v4.1-pro-vector",
+			Name:      "Recraft: Recraft V4.1 Pro Vector",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4.1-utility": {
+			ID:        "recraft/recraft-v4.1-utility",
+			Name:      "Recraft: Recraft V4.1 Utility",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4.1-utility-pro": {
+			ID:        "recraft/recraft-v4.1-utility-pro",
+			Name:      "Recraft: Recraft V4.1 Utility Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"recraft/recraft-v4.1-vector": {
+			ID:        "recraft/recraft-v4.1-vector",
+			Name:      "Recraft: Recraft V4.1 Vector",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"sourceful/riverflow-v2-fast": {
+			ID:        "sourceful/riverflow-v2-fast",
+			Name:      "Sourceful: Riverflow V2 Fast",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"sourceful/riverflow-v2-pro": {
+			ID:        "sourceful/riverflow-v2-pro",
+			Name:      "Sourceful: Riverflow V2 Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"sourceful/riverflow-v2.5-fast": {
+			ID:        "sourceful/riverflow-v2.5-fast",
+			Name:      "Sourceful: Riverflow V2.5 Fast",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"sourceful/riverflow-v2.5-pro": {
+			ID:        "sourceful/riverflow-v2.5-pro",
+			Name:      "Sourceful: Riverflow V2.5 Pro",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"x-ai/grok-imagine-image-2.0": {
+			ID:        "x-ai/grok-imagine-image-2.0",
+			Name:      "xAI: Grok Imagine Image 2.0",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"x-ai/grok-imagine-image-quality": {
+			ID:        "x-ai/grok-imagine-image-quality",
+			Name:      "SpaceXAI: Grok Imagine Image Quality",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+	},
+}
+
+// CLASSIFIER_MODELS is the generated built-in classifier catalog (pi:
+// models.generated.ts CLASSIFIER_MODELS): provider id -> model id -> model. pi types
+// the key set closed (keyof typeof CLASSIFIER_MODELS); pig keys by the open
+// ProviderID. pi's per-provider providers/*.models.ts files have no
+// separate Go counterpart — the generator emits one file.
+var CLASSIFIER_MODELS = map[ProviderID]map[string]Model{
+	ProviderCloudflareWorkersAI: {
+		"typesafe/jev": {
+			ID:            "typesafe/jev",
+			Name:          "Jev",
+			API:           Api("cloudflare-workers-ai-system-one"),
+			Provider:      ProviderCloudflareWorkersAI,
+			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 32000,
+			MaxTokens:     0,
+		},
+	},
+	ProviderOpenCode: {
+		"jev-1.13": {
+			ID:            "jev-1.13",
+			Name:          "Jev 1.13",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenCode,
+			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.042, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 32000,
+			MaxTokens:     0,
+		},
+		"jev-1.13-free": {
+			ID:            "jev-1.13-free",
+			Name:          "Jev 1.13 Free",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenCode,
+			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 32000,
+			MaxTokens:     0,
+		},
+	},
+	ProviderOpenRouter: {
+		"jaredpalmer/kev-4b": {
+			ID:            "jaredpalmer/kev-4b",
+			Name:          "Jared Palmer: Kev 4B",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.042, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 8192,
+			MaxTokens:     0,
+		},
+		"respan/span-01": {
+			ID:            "respan/span-01",
+			Name:          "Respan: Span-01",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.02, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 4096,
+			MaxTokens:     0,
+		},
+		"respan/span-01-lite": {
+			ID:            "respan/span-01-lite",
+			Name:          "Respan: Span-01 Lite",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 4096,
+			MaxTokens:     0,
+		},
+		"respan/span-01-lite:free": {
+			ID:            "respan/span-01-lite:free",
+			Name:          "Respan: Span-01 Lite (free)",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 4096,
+			MaxTokens:     0,
+		},
+		"typesafe/jev-1.13": {
+			ID:            "typesafe/jev-1.13",
+			Name:          "TypeSafe: Jev 1.13",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.042, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 32000,
+			MaxTokens:     0,
+		},
+		"upstage/solar-decide": {
+			ID:            "upstage/solar-decide",
+			Name:          "Upstage: Solar Decide",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0, CacheRead: 0.05, CacheWrite: 0}},
+			ContextWindow: 524288,
+			MaxTokens:     0,
+		},
+		"~typesafe/jev-latest": {
+			ID:            "~typesafe/jev-latest",
+			Name:          "TypeSafe: Jev Latest",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.042, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 32000,
+			MaxTokens:     0,
+		},
+	},
+	ProviderID("typesafe"): {
+		"jev-latest": {
+			ID:            "jev-latest",
+			Name:          "Jev",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderID("typesafe"),
+			BaseURL:       "https://api.typesafe.ai/v1/",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 64000,
+			MaxTokens:     0,
+		},
+	},
+	ProviderVercelAIGateway: {
+		"liquid/d1": {
+			ID:            "liquid/d1",
+			Name:          "Liquid d1",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh/typesafe/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 32000,
+			MaxTokens:     0,
+		},
+		"typesafe-ai/jev": {
+			ID:            "typesafe-ai/jev",
+			Name:          "Jev",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh/typesafe/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.042, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 32000,
+			MaxTokens:     0,
+		},
+	},
+}
+
 // MODELSGeneratedAt is the generation timestamp shared by all built-in
 // provider catalogs, Unix milliseconds (pi: providers/data/.manifest.json
 // generatedAt). 0 means unknown; pi models the unknown case as undefined.
-var MODELSGeneratedAt int64 = 1790151380339
+var MODELSGeneratedAt int64 = 1790765733482

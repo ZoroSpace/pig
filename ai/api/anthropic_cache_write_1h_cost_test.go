@@ -70,4 +70,36 @@ func TestAnthropicCacheWrite1hCost(t *testing.T) {
 			t.Errorf("cost.cacheWrite = %v, want 6.25", result.Usage.Cost.CacheWrite)
 		}
 	})
+
+	// Regression for #9210: Vercel AI Gateway sends cache usage in
+	// message_delta, not message_start (pi v0.99.1 667fc3dd3).
+	t.Run("prices 1h cache writes reported only in message_delta", func(t *testing.T) {
+		gatewayModel := catalogAnthropicModel(t, types.ProviderVercelAIGateway, "anthropic/claude-haiku-4.5")
+		events := []anthropicTestEvent{
+			{event: "message_start", data: mustJSON(map[string]any{"type": "message_start", "message": map[string]any{"id": "msg_test", "usage": map[string]any{"input_tokens": 0, "output_tokens": 0}}})},
+			{event: "message_delta", data: mustJSON(map[string]any{
+				"type":  "message_delta",
+				"delta": map[string]any{"stop_reason": "end_turn"},
+				"usage": map[string]any{
+					"input_tokens":                3,
+					"output_tokens":               4,
+					"cache_creation_input_tokens": 6535,
+					"cache_creation":              map[string]any{"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 6535},
+				},
+			})},
+			{event: "message_stop", data: mustJSON(map[string]any{"type": "message_stop"})},
+		}
+		options := anthropicTestOptions(events, nil)
+		result := streamAnthropicMessages(gocontext.Background(), gatewayModel, llmContext, options).Result()
+		if result.Usage.CacheWrite != 6535 {
+			t.Errorf("cacheWrite = %d, want 6535", result.Usage.CacheWrite)
+		}
+		if result.Usage.CacheWrite1h == nil || *result.Usage.CacheWrite1h != 6535 {
+			t.Errorf("cacheWrite1h = %#v, want 6535", result.Usage.CacheWrite1h)
+		}
+		want := 6535 * gatewayModel.Cost.Input * 2 / 1000000
+		if diff := result.Usage.Cost.CacheWrite - want; diff > 1e-9 || diff < -1e-9 {
+			t.Errorf("cost.cacheWrite = %v, want %v", result.Usage.Cost.CacheWrite, want)
+		}
+	})
 }

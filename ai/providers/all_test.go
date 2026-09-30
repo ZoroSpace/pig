@@ -54,7 +54,7 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 		"openai-codex", "opencode", "opencode-go", "openrouter", "qwen-token-plan",
 		"qwen-token-plan-cn", "qwen-token-plan-individual", "together", "vercel-ai-gateway",
 		"volcengine-plan", "xiaomi", "xiaomi-token-plan-ams", "xiaomi-token-plan-cn",
-		"xiaomi-token-plan-sgp", "xai", "zai", "zai-coding-cn",
+		"xiaomi-token-plan-sgp", "xai", "zai", "zai-coding-cn", "typesafe",
 	}
 	if !reflect.DeepEqual(ids, want) {
 		t.Fatalf("BuiltinProviders() = %v, want %v", ids, want)
@@ -71,7 +71,7 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 		"openai-codex", "opencode", "opencode-go", "openrouter", "qwen-token-plan",
 		"qwen-token-plan-cn", "qwen-token-plan-individual", "together", "vercel-ai-gateway",
 		"volcengine-plan", "xiaomi", "xiaomi-token-plan-ams", "xiaomi-token-plan-cn",
-		"xiaomi-token-plan-sgp", "xai", "zai", "zai-coding-cn",
+		"xiaomi-token-plan-sgp", "xai", "zai", "zai-coding-cn", "typesafe",
 	} {
 		provider := models.GetProvider(id)
 		if provider == nil {
@@ -88,8 +88,8 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 39 {
-		t.Fatalf("GetProviders() length = %d, want 39", got)
+	if got := len(models.GetProviders()); got != 40 {
+		t.Fatalf("GetProviders() length = %d, want 40", got)
 	}
 }
 

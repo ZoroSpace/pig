@@ -557,7 +557,12 @@ func buildAzureResponsesParams(model *types.Model, llmContext *types.TranscriptC
 		}
 	}
 
-	// Last so custom keys override the named request fields.
+	// Last so custom keys override the named request fields. Model defaults
+	// apply first, per-request keys override them (pi: Object.assign(params,
+	// model.samplingParams, options?.samplingParams), #9506).
+	for key, value := range model.SamplingParams {
+		params[key] = value
+	}
 	for key, value := range options.SamplingParams {
 		params[key] = value
 	}
