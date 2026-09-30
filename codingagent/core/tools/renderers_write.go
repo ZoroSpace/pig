@@ -12,6 +12,7 @@ package tools
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
@@ -21,6 +22,22 @@ import (
 // writePartialFullHighlightLines is the prefix re-highlighted after each
 // incremental append (pi: WRITE_PARTIAL_FULL_HIGHLIGHT_LINES).
 const writePartialFullHighlightLines = 50
+
+// writePreviewThrottleInterval is the pig-only minimum interval between
+// preview text updates while tool args are still streaming (pi has no
+// equivalent — see docs/fix/2026-09-30-write-preview-streaming-flicker.md).
+// Each args delta re-renders the preview; on terminals without DEC 2026
+// synchronized output (tmux does not pass it through) the differential
+// renderer's per-line erase+rewrite of the constantly-changing preview lines
+// (growing tail line + the "N more lines" counter) is visible as strobing at
+// delta rate. Throttling the partial-preview updates caps that at ~5 fps;
+// skipped updates leave the text untouched so the differential renderer
+// emits nothing for the region. ArgsComplete, first render and expanded
+// toggles always bypass the throttle.
+var writePreviewThrottleInterval = 200 * time.Millisecond
+
+// writePreviewClock is the throttle clock (test seam).
+var writePreviewClock = time.Now
 
 // WriteHighlightCache carries the incremental syntax-highlight state (pi:
 // WriteHighlightCache). rawPath nil = pi's null.
@@ -37,6 +54,13 @@ type WriteHighlightCache struct {
 type WriteCallRenderComponent struct {
 	*tui.Text
 	Cache *WriteHighlightCache
+
+	// pig-only streaming-throttle bookkeeping (same fix doc as
+	// writePreviewThrottleInterval). Rendered only from writeRenderCall,
+	// which the ToolExecutionComponent invokes under its own mutex.
+	lastPreviewAt       time.Time
+	hasPreview          bool
+	lastPreviewExpanded bool
 }
 
 // highlightSingleLine highlights one line, dropping the multi-line shape
@@ -263,6 +287,8 @@ func formatWriteResult(theme UITheme, result ToolRenderResult, isError bool) str
 }
 
 // writeRenderCall is the write call renderer (pi: writeRenderers.renderCall).
+// pig deviation: partial (args-still-streaming) updates are time-throttled —
+// see writePreviewThrottleInterval.
 func writeRenderCall(args any, themeArg UITheme, context ToolRenderContext) tui.Component {
 	renderArgs, _ := args.(map[string]any)
 	if renderArgs == nil {
@@ -276,6 +302,18 @@ func writeRenderCall(args any, themeArg UITheme, context ToolRenderContext) tui.
 	} else {
 		component = &WriteCallRenderComponent{Text: tui.NewText("", 0, 0)}
 	}
+	// pig-only throttle gate: skip the whole cache+SetText update when the
+	// args are still streaming and the last applied preview is fresh enough.
+	// An early return leaves the component's text untouched, so the
+	// differential renderer finds no changed lines and writes nothing.
+	forceUpdate := context.ArgsComplete || !component.hasPreview || context.Expanded != component.lastPreviewExpanded
+	now := writePreviewClock()
+	if !forceUpdate && now.Sub(component.lastPreviewAt) < writePreviewThrottleInterval {
+		return component
+	}
+	component.lastPreviewAt = now
+	component.hasPreview = true
+	component.lastPreviewExpanded = context.Expanded
 	if !contentInvalid {
 		if context.ArgsComplete {
 			component.Cache = rebuildWriteHighlightCacheFull(rawPath, fileContent)
