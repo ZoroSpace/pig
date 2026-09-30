@@ -126,6 +126,17 @@ func TestBuiltinSlashCommandsIncludeQuitWithAppName(t *testing.T) {
 	}
 }
 
+// TestBuiltinSlashCommandsExcludeBugReportCommand pins the intentional pig
+// deviation: /bug (pi's bug-report upload chain) is not shipped — pig users
+// open a GitHub issue instead (docs/fix/2026-09-30-remove-bug-command.md).
+func TestBuiltinSlashCommandsExcludeBugReportCommand(t *testing.T) {
+	for _, command := range BuiltinSlashCommands {
+		if command.Name == "bug" {
+			t.Fatalf("/bug is removed in pig but still registered: %+v", command)
+		}
+	}
+}
+
 func TestExecuteBashWithOperationsStreamsAndSucceeds(t *testing.T) {
 	var chunks []string
 	operations := tools.BashOperations{

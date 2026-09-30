@@ -116,6 +116,7 @@ func TestClipboardPathSubmissionReachesModel(t *testing.T) {
 		{"bare pasted path", "/var/folders/dn/T/pi-clipboard-x.png"},
 		{"other absolute path text", "/etc/hosts 里有什么内容"},
 		{"unknown slash word", "/foo bar"},
+		{"removed /bug command is ordinary text", "/bug hello"},
 		{"command-like prefix that is not a command", "/exports folder"},
 	}
 

@@ -57,8 +57,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -388,7 +386,8 @@ type InteractiveMode struct {
 	// Shutdown state
 	shutdownRequested bool
 
-	// bugReportHintShown: the /bug hint renders at most once per session so
+	// bugReportHintShown: the issue-tracker hint (pi's /bug hint; pig-only
+	// wording — /bug is not shipped) renders at most once per session so
 	// error output stays readable (pi v0.86.0: bugReportHintShown).
 	bugReportHintShown bool
 	isShuttingDown     bool
@@ -892,18 +891,10 @@ func (m *InteractiveMode) Run(ctx context.Context) error {
 		}()
 	}
 
-	// pig disables pi's update-version check (pi: run's checkForNewPiVersion):
-	// the check queries pi.dev for PI's latest release and compares it against
-	// pig's pinned baseline version — two unrelated products. The resulting
-	// "New version available. Run pig update" banner is meaningless for pig
-	// (a static Go binary with no npm distribution / self-update channel;
-	// self-update arrives with the P8 packaging batch). Re-enable when pig
-	// has its own release channel, pointing at pig's endpoint instead.
-	// go func() {
-	// 	if release := utils.CheckForNewPiVersion(context.Background(), m.version); release != nil {
-	// 		m.showNewVersionNotification(release)
-	// 	}
-	// }()
+	// pig deletes pi's update-version check entirely (pi: run's
+	// checkForNewPiVersion): the check queried pi.dev for PI's latest release
+	// and compared it against pig's pinned baseline version — two unrelated
+	// products. Revisit only when pig grows its own release/update channel.
 
 	// pi's package update check lands with the package manager (P7) and the
 	// tmux keyboard setup check with T6 (declared).
@@ -942,8 +933,11 @@ func (m *InteractiveMode) Run(ctx context.Context) error {
 		if parsed, err := time.Parse(time.RFC3339Nano, crash.Timestamp); err == nil {
 			when = parsed.Local().Format("1/2/06, 3:04:05 PM")
 		}
-		m.ShowWarning(fmt.Sprintf("%s crashed on %s (%s). Run /bug to report it; the crash details are attached automatically.",
-			codingagent.AppName, when, crash.Message))
+		// pig-only wording: /bug is not shipped, the hint points at the pig
+		// issue tracker + the local crash record (pi: "Run /bug to report
+		// it; the crash details are attached automatically.").
+		m.ShowWarning(fmt.Sprintf("%s crashed on %s (%s). A crash record is saved in %s; please open an issue at %s.",
+			codingagent.AppName, when, crash.Message, core.CrashLogPath(), codingagent.IssuesURL))
 	}
 
 	m.maybeWarnAboutAnthropicSubscriptionAuth(nil)
@@ -1173,11 +1167,10 @@ func (m *InteractiveMode) processSubmitText(ctx context.Context, text string) {
 		m.editor.SetText("")
 		m.handleExportCommand(text)
 		return
-	case text == "/bug" || strings.HasPrefix(text, "/bug "):
-		hint := strings.TrimSpace(strings.TrimPrefix(text, "/bug"))
-		m.editor.SetText("")
-		m.handleBugCommand(ctx, hint)
-		return
+	// pi: bug — "Report a bug to the Pi developers"; not ported (pig users
+	// open a GitHub issue instead; see docs/fix/2026-09-30-remove-bug-command.md).
+	// "/bug ..." falls through as ordinary text, per pi's unknown-command
+	// semantics.
 	case text == "/copy":
 		// pi: await handleCopyCommand() (defaults: flash=true, preferSelection=false)
 		m.handleCopyCommand(true, false)
@@ -4079,7 +4072,7 @@ func (m *InteractiveMode) stopInteractive() {
 
 // =========================================================================
 // Startup notices / changelog (pi: showStartupNoticesIfNeeded,
-// getChangelogForDisplay, reportInstallTelemetry, checkTmuxKeyboardSetup)
+// getChangelogForDisplay, checkTmuxKeyboardSetup)
 // =========================================================================
 
 // showStartupNoticesIfNeeded shows the "What's New" changelog once (pi:
@@ -4128,16 +4121,14 @@ func (m *InteractiveMode) getChangelogForDisplay() string {
 	entries := utils.ParseChangelog(codingagent.GetChangelogPath())
 
 	if !ok {
-		// Fresh install - record the version, send telemetry, don't show changelog
+		// Fresh install - record the version, don't show changelog
 		m.settingsManager().SetLastChangelogVersion(codingagent.Version)
-		m.reportInstallTelemetry(codingagent.Version)
 		return ""
 	}
 
 	newEntries := utils.GetNewEntries(entries, lastVersion)
 	if len(newEntries) > 0 {
 		m.settingsManager().SetLastChangelogVersion(codingagent.Version)
-		m.reportInstallTelemetry(codingagent.Version)
 		contents := make([]string, 0, len(newEntries))
 		for i := range newEntries {
 			contents = append(contents, utils.NormalizeChangelogLinks(newEntries[i].Content, newEntries[i]))
@@ -4146,32 +4137,6 @@ func (m *InteractiveMode) getChangelogForDisplay() string {
 	}
 
 	return ""
-}
-
-// reportInstallTelemetry posts the install report (pi:
-// reportInstallTelemetry); best-effort, errors swallowed.
-func (m *InteractiveMode) reportInstallTelemetry(version string) {
-	if os.Getenv("PI_OFFLINE") != "" {
-		return
-	}
-	if !core.IsInstallTelemetryEnabled(m.settingsManager(), nil) {
-		return
-	}
-	go func() {
-		defer pigutils.RecoverPanic("interactive.installReport")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, "GET",
-			"https://pi.dev/api/report-install?version="+url.QueryEscape(version), nil)
-		if err != nil {
-			return
-		}
-		req.Header.Set("User-Agent", utils.GetPiUserAgent(version))
-		resp, err := http.DefaultClient.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-		}
-	}()
 }
 
 // checkTmuxKeyboardSetup warns about tmux keyboard settings (pi:
@@ -8448,34 +8413,39 @@ func (m *InteractiveMode) getCrashExtensionHint(err error) (hint string) {
 	return FormatCrashExtensionHint(core.FindExtensionStackMatches(stack, extensions.Extensions))
 }
 
-// crashReportInstructions is the /bug follow-up hint (pi:
-// crashReportInstructions, v0.86.0).
+// crashReportInstructions is the crash follow-up hint (pi:
+// crashReportInstructions, v0.86.0; pig-only wording — /bug is not shipped,
+// the hint points at the pig issue tracker + the local crash record).
 func (m *InteractiveMode) crashReportInstructions() string {
 	resume := "start " + codingagent.AppName + " and"
 	if m.session().SessionFile() != "" {
 		resume = fmt.Sprintf("run `%s -r` to resume the session, then", codingagent.AppName)
 	}
-	return fmt.Sprintf("To report this crash: %s run /bug. The crash details are attached automatically.", resume)
+	return fmt.Sprintf("To report this crash: %s open an issue at %s. The crash record is saved in %s.",
+		resume, codingagent.IssuesURL, core.CrashLogPath())
 }
 
-// suggestBugReport shows the /bug hint once per session after a failure (pi:
-// suggestBugReport, v0.86.0).
+// suggestBugReport shows the issue-tracker hint once per session after a
+// failure (pi: suggestBugReport, v0.86.0; pig-only wording — /bug is not
+// shipped).
 func (m *InteractiveMode) suggestBugReport() {
 	if m.bugReportHintShown {
 		return
 	}
 	m.bugReportHintShown = true
 	m.chatContainer.AddChild(tui.NewText(
-		theme.Current().Fg("muted", fmt.Sprintf("If this looks like a %s bug, /bug sends a report to the developers.", codingagent.AppName)),
+		theme.Current().Fg("muted", fmt.Sprintf("If this looks like a %s bug, please open an issue at %s.", codingagent.AppName, codingagent.IssuesURL)),
 		m.outputPad, 0))
 	m.ui.RequestRender(false)
 }
 
-// bugReportCancelPattern guards the /bug hint against expected failures (pi
+// bugReportCancelPattern guards the issue-tracker hint against expected
+// failures (pi
 // v0.86.1: /\b(?:abort(?:ed)?|cancel(?:l?ed)?)\b/i on errorMessage).
 var bugReportCancelPattern = regexp.MustCompile(`(?i)\b(?:abort(?:ed)?|cancel(?:l?ed)?)\b`)
 
-// maybeSuggestBugReport shows the /bug hint only for unexpected errors (pi:
+// maybeSuggestBugReport shows the issue-tracker hint only for unexpected
+// errors (pi:
 // maybeSuggestBugReport, v0.86.1): not retryable failures and not
 // cancellations.
 func (m *InteractiveMode) maybeSuggestBugReport(message *types.AssistantMessage) {
@@ -8773,40 +8743,4 @@ func buildPigLogo(t *theme.Theme, version string) string {
 	return sb.String() +
 		t.Bold(t.Fg("text", "             |___/")) +
 		t.Fg("text", " v"+version)
-}
-
-// =========================================================================
-// Update notifications (pi: showNewVersionNotification /
-// showPackageUpdateNotification)
-// =========================================================================
-
-// showNewVersionNotification renders the update banner (pi:
-// showNewVersionNotification).
-func (m *InteractiveMode) showNewVersionNotification(release *utils.LatestPiRelease) {
-	t := theme.Current()
-	action := t.Fg("accent", codingagent.AppName+" update")
-	updateInstruction := t.Fg("muted", fmt.Sprintf("New version %s is available. Run ", release.Version)) + action
-	changelogURL := "https://pi.dev/changelog"
-	var changelogLink string
-	if tui.GetCapabilities().Hyperlinks {
-		changelogLink = tui.Hyperlink(t.Fg("accent", changelogURL), changelogURL)
-	} else {
-		changelogLink = t.Fg("accent", changelogURL)
-	}
-	changelogLine := t.Fg("muted", "Changelog: ") + changelogLink
-	note := strings.TrimSpace(release.Note)
-
-	m.chatContainer.AddChild(tui.NewSpacer(1))
-	m.chatContainer.AddChild(components.NewDynamicBorder(func(text string) string { return t.Fg("warning", text) }))
-	m.chatContainer.AddChild(tui.NewText(
-		fmt.Sprintf("%s\n%s", t.Bold(t.Fg("warning", "Update Available")), updateInstruction), 1, 0))
-	if note != "" {
-		m.chatContainer.AddChild(tui.NewSpacer(1))
-		m.chatContainer.AddChild(tui.NewMarkdown(note, 1, 0, m.getMarkdownThemeWithSettings(),
-			&tui.DefaultTextStyle{Color: func(text string) string { return t.Fg("muted", text) }}, nil))
-		m.chatContainer.AddChild(tui.NewSpacer(1))
-	}
-	m.chatContainer.AddChild(tui.NewText(changelogLine, 1, 0))
-	m.chatContainer.AddChild(components.NewDynamicBorder(func(text string) string { return t.Fg("warning", text) }))
-	m.ui.RequestRender(false)
 }

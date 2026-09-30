@@ -40,7 +40,8 @@ var BuiltinSlashCommands = []BuiltinSlashCommand{
 	{Name: "export", Description: "Export session (HTML default, or specify path: .html/.jsonl)"},
 	{Name: "import", Description: "Import and resume a session from a JSONL file"},
 	{Name: "share", Description: "Share session as a secret GitHub gist"},
-	{Name: "bug", Description: "Report a bug to the Pi developers", ArgumentHint: "<description>"},
+	// pi: bug — "Report a bug to the Pi developers"; not ported (pig users
+	// open a GitHub issue instead; see docs/fix/2026-09-30-remove-bug-command.md).
 	{Name: "copy", Description: "Copy last agent message to clipboard"},
 	{Name: "name", Description: "Set session display name"},
 	{Name: "session", Description: "Show session info and stats"},

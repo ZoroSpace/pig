@@ -1,5 +1,7 @@
 // pi: src/core/crash-log.ts — best-effort crash persistence so the next
-// start can point the user at `/bug` (pi v0.86.0). Deviation: pi reads
+// start can show the saved record and point the user at the issue tracker
+// (pig-only: /bug is not shipped; pi v0.86.0 pointed it at /bug).
+// Deviation: pi reads
 // `error.stack` off Error objects; Go errors carry no stack, so the caller
 // passes one when available (Input.Stack) and nil otherwise.
 package core
@@ -49,6 +51,11 @@ type CrashRecord struct {
 func crashLogPath() string {
 	return filepath.Join(codingagent.GetAgentDir(), "crashes.json")
 }
+
+// CrashLogPath returns the crash log file path (pig-only: pi's only
+// consumer was the /bug report bundle; the crash hints use it now —
+// docs/fix/2026-09-30-remove-bug-command.md).
+func CrashLogPath() string { return crashLogPath() }
 
 // ReadCrashLog returns the persisted crash records, skipping malformed ones
 // (pi: readCrashLog). Records must carry string timestamp + message.

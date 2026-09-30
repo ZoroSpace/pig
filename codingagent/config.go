@@ -185,6 +185,12 @@ const ConfigDirName = ".pig"
 // sync (S7 missed the v0.86.1 bump; pinned by TestVersionTracksPiBaseline).
 const Version = "0.87.1"
 
+// IssuesURL is the pig issue tracker (pig-only: pi has no counterpart —
+// pig removed /bug and the Pi Radius bug-report chain per user decision
+// 2026-09-30; crash hints and error hints point here instead, see
+// docs/fix/2026-09-30-remove-bug-command.md).
+const IssuesURL = "https://github.com/ZoroSpace/pig/issues"
+
 // EnvAgentDir is the env var overriding the agent config dir (pi:
 // ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`; pig deviates:
 // PIG_ prefix — no data migration, pig has its own config dir).

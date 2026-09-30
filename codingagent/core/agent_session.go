@@ -5787,42 +5787,9 @@ func entryTimestampMillis(timestamp string) int64 {
 // Utilities
 // ============================================================================
 
-// SummarizeForBugReport asks the session model for a bug report summary when
-// the user does not share the transcript (pi: summarizeForBugReport, pi
-// v0.86.0). ctx carries the loader's cancellation (pi: options.signal).
-func (s *AgentSession) SummarizeForBugReport(ctx context.Context, options *BugReportSummaryOptions) (string, error) {
-	model := s.Model()
-	if model == nil {
-		return "", fmt.Errorf("No model selected")
-	}
-	auth, err := s.getSummarizationRequestAuth(ctx, model)
-	if err != nil {
-		return "", err
-	}
-	var hint string
-	if options != nil {
-		hint = options.Hint
-	}
-	return GenerateBugReportSummary(ctx, GenerateBugReportSummaryOptions{
-		Messages:      s.Messages(),
-		Hint:          hint,
-		Model:         auth.model,
-		APIKey:        auth.apiKey,
-		Headers:       auth.headers,
-		Env:           auth.env,
-		ThinkingLevel: s.ThinkingLevel(),
-		StreamFn:      s.Agent.StreamFunction,
-		Retry:         retryPolicyFromSettings(s.SettingsManager.GetRetrySettings()),
-		SessionID:     s.SessionID(),
-	})
-}
-
-// BugReportSummaryOptions are the summarizeForBugReport options (pi: the
-// `{ hint?, signal }` object; signal → ctx).
-type BugReportSummaryOptions struct {
-	// Hint is the user-provided description; "" = undefined.
-	Hint string
-}
+// pi: summarizeForBugReport + BugReportSummaryOptions (v0.86.0) — removed:
+// the only consumer was /bug, which pig does not ship (pig users open a
+// GitHub issue instead; see docs/fix/2026-09-30-remove-bug-command.md).
 
 // GetLastAssistantText returns the text content of the last assistant message,
 // for the /copy command (pi: getLastAssistantText). Returns "" when no

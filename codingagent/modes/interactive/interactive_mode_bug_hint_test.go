@@ -5,9 +5,12 @@
 package interactive
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/codingagent"
+	"github.com/ZoroSpace/pig/codingagent/core"
 )
 
 func bugHintErrorMessage(message string) *types.AssistantMessage {
@@ -77,6 +80,30 @@ func TestMaybeSuggestBugReport(t *testing.T) {
 		m.maybeSuggestBugReport(bugHintErrorMessage("Unexpected internal state"))
 		if len(m.chatContainer.Children) == 0 {
 			t.Fatal("expected a bug hint for an unexpected error")
+		}
+	})
+
+	// pig-only: /bug is not shipped (docs/fix/2026-09-30-remove-bug-command.md);
+	// the hints must point at the pig issue tracker + the local crash record.
+	t.Run("hints point at the issue tracker, not the removed command", func(t *testing.T) {
+		m := newHintContext(t)
+		m.suggestBugReport()
+		hints := renderAllChildren(m.chatContainer, 100)
+		if !strings.Contains(hints, codingagent.IssuesURL) {
+			t.Fatalf("bug hint missing issue tracker URL:\n%s", hints)
+		}
+		if strings.Contains(hints, "/bug") {
+			t.Fatalf("bug hint still references the removed /bug command:\n%s", hints)
+		}
+		instructions := m.crashReportInstructions()
+		if !strings.Contains(instructions, codingagent.IssuesURL) {
+			t.Fatalf("crash instructions missing issue tracker URL:\n%s", instructions)
+		}
+		if !strings.Contains(instructions, core.CrashLogPath()) {
+			t.Fatalf("crash instructions missing crash log path %q:\n%s", core.CrashLogPath(), instructions)
+		}
+		if strings.Contains(instructions, "/bug") {
+			t.Fatalf("crash instructions still reference the removed /bug command:\n%s", instructions)
 		}
 	})
 }
