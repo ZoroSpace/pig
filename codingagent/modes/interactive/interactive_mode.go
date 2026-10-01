@@ -57,6 +57,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -774,7 +775,7 @@ func (m *InteractiveMode) Init() error {
 		// with the new colors on invalidate (pi: ThemedText).
 		buildHeaderPart := func(expanded bool) string {
 			currentTheme := theme.Current()
-			logo := buildPigLogo(currentTheme, m.version)
+			logo := buildPigLogo(currentTheme, m.version, m.settingsManager().GetLogoStyle())
 
 			// Build startup instructions using keybinding hint helpers
 			hint := func(keybinding string, description string) string {
@@ -6230,6 +6231,7 @@ func (m *InteractiveMode) showSettingsSelector() {
 				Warnings:                   m.settingsManager().GetWarnings(),
 				CJKSegmenter:               m.settingsManager().GetCJKSegmenter(),
 				ShowResourceStats:          m.settingsManager().GetShowResourceStats(),
+				LogoStyle:                  m.settingsManager().GetLogoStyle(),
 			},
 			&components.SettingsCallbacks{
 				OnAutoCompactChange: func(enabled bool) {
@@ -6341,6 +6343,15 @@ func (m *InteractiveMode) showSettingsSelector() {
 				OnShowResourceStatsChange: func(enabled bool) {
 					m.settingsManager().SetShowResourceStats(enabled)
 					m.footer.SetShowResourceStats(enabled)
+				},
+				OnLogoStyleChange: func(style string) {
+					m.settingsManager().SetLogoStyle(style)
+					// Rebuild the header text in place: the logo closure reads the
+					// setting, so the next render picks up the new style.
+					if header, ok := m.builtInHeader.(*expandableText); ok {
+						header.Invalidate()
+					}
+					m.ui.RequestRender(false)
 				},
 				OnDefaultProjectTrustChange: func(defaultProjectTrust core.DefaultProjectTrust) {
 					m.settingsManager().SetDefaultProjectTrust(defaultProjectTrust)
@@ -8863,30 +8874,179 @@ func (m *InteractiveMode) handleOpenExternalEditor(ctx context.Context) {
 }
 
 // =========================================================================
-// Startup logo (pig-only: pi prints the plain "pi v0.85.1" header line)
+// Startup logo (pig-only: pi prints a 4x4 half-block mark, components/pi-logo.ts)
 // =========================================================================
 
+// pigLogoBrandGradient is the ramp the figlet mark is drawn with. The colors
+// are theme-independent and only quantized to the terminal's color mode,
+// exactly like pi's fixed brand colors (pi: pi-logo.ts CORAL/BLUE/YELLOW).
+// Deviation from pi: instead of fixed brand colors, pig samples a fresh pair
+// of anchors once per process start (user request), so every run gets its own
+// gradient while later header rebuilds (theme change, invalidate) reuse the
+// colors sampled for this run.
+var pigLogoBrandGradient = randomPigLogoGradient()
+
+// Ranges the startup gradient samples: a shared lightness and OKHSL
+// saturation keep mid-gradient colors saturated (the ramp is interpolated in
+// OKLCH, so an achromatic pair would wash out to gray) and every hue legible
+// on both dark and light terminals, while the hue arc stays wide enough that
+// the two anchors read as two colors instead of one nearly flat band. The
+// shipped values also keep all 19 art columns distinguishable after sRGB
+// quantization (see TestSamplePigLogoGradientProducesDistinctRamp).
+const (
+	pigLogoGradientLightnessMin  = 0.60
+	pigLogoGradientLightnessMax  = 0.70
+	pigLogoGradientSaturationMin = 0.70
+	pigLogoGradientSaturationMax = 0.90
+	pigLogoGradientHueArcMin     = 45.0
+	pigLogoGradientHueArcMax     = 135.0
+)
+
+// pigLogoFallbackGradient is the blue -> purple pair the logo used before the
+// ramp was randomized; it is returned when building an OKHSL color fails,
+// which the literal ranges above cannot cause.
+var pigLogoFallbackGradient = []tui.Color{
+	{Kind: tui.ColorKindRgb, R: 59, G: 130, B: 246}, // blue
+	{Kind: tui.ColorKindRgb, R: 168, G: 85, B: 247}, // purple
+}
+
+// randomPigLogoGradient samples this process's two gradient anchors.
+func randomPigLogoGradient() []tui.Color {
+	return samplePigLogoGradient(rand.Float64)
+}
+
+// samplePigLogoGradient builds the two anchors from a unit-random source
+// (five draws: hue, arc, direction, lightness, saturation). The colors are
+// built in OKHSL, whose saturation is relative to the sRGB gamut at the hue
+// and lightness, so equal saturation looks equally colorful across hues (a
+// fixed OKLCH chroma would clip greens and yellows). The arc may run either
+// direction, so the second anchor is not always the "warmer" end.
+func samplePigLogoGradient(random func() float64) []tui.Color {
+	hue := random() * 360
+	arc := pigLogoGradientHueArcMin + random()*(pigLogoGradientHueArcMax-pigLogoGradientHueArcMin)
+	if random() < 0.5 {
+		arc = -arc
+	}
+	lightness := pigLogoGradientLightnessMin + random()*(pigLogoGradientLightnessMax-pigLogoGradientLightnessMin)
+	saturation := pigLogoGradientSaturationMin + random()*(pigLogoGradientSaturationMax-pigLogoGradientSaturationMin)
+
+	anchors := make([]tui.Color, 2)
+	for i, anchorHue := range []float64{hue, hue + arc} {
+		color, err := tui.NewOkhslColor(anchorHue, saturation, lightness)
+		if err != nil {
+			// Unreachable for the literal ranges above; NewOkhslColor
+			// normalizes the hue itself.
+			return append([]tui.Color(nil), pigLogoFallbackGradient...)
+		}
+		anchors[i] = color
+	}
+	return anchors
+}
+
+// pigLogoForegroundAnsi returns one foreground escape sequence per art
+// column, sampling the brand ramp (see pigLogoBrandGradient) from left to
+// right in OKLCH (pi mixColors) so the midpoints stay saturated instead of
+// turning gray. The first and last columns are the pure endpoint colors, and
+// a middle anchor (odd anchor count, odd column count) lands on its own
+// column too. Every art line shares the same column colors, so the mark reads
+// as fixed vertical bands rather than per-glyph noise.
+//
+// ok is false when the interpolation fails, which cannot happen for the
+// sampled anchors and in-range amounts; callers degrade to the theme's text
+// color (pi mixColors has no error case either).
+func pigLogoForegroundAnsi(mode tui.TerminalColorMode, columns int) ([]string, bool) {
+	if columns <= 0 || len(pigLogoBrandGradient) == 0 {
+		return nil, false
+	}
+	sequences := make([]string, columns)
+	segments := len(pigLogoBrandGradient) - 1
+	for column := range sequences {
+		color := pigLogoBrandGradient[0]
+		if segments > 0 {
+			// position 0 = first anchor, position 1 = last anchor.
+			position := float64(column) / float64(max(columns-1, 1))
+			scaled := position * float64(segments)
+			index := min(int(scaled), segments-1)
+			mixed, err := tui.MixColors(
+				pigLogoBrandGradient[index],
+				pigLogoBrandGradient[index+1],
+				scaled-float64(index),
+				tui.MixSpaceOklch,
+			)
+			if err != nil {
+				return nil, false
+			}
+			color = mixed
+		}
+		sequences[column] = tui.ForegroundAnsi(color, mode)
+	}
+	return sequences, true
+}
+
 // buildPigLogo renders the ASCII art startup logo shown above the keybinding
-// hints. Deviation from pi (pi: single-line bold(accent("pi")) +
-// dim(" v"+version)): the user asked for a prominent logo. Art lines are
-// colored individually so SGR state never leaks across lines in the diff
-// renderer; color is the theme text color (white on dark themes, black on
-// light themes, user request), and the version tag trails the bottom line.
-func buildPigLogo(t *theme.Theme, version string) string {
-	// figlet output, uniform 19 columns (trailing spaces included).
+// hints. Deviation from pi (pi: the 2-line half-block mark in
+// components/pi-logo.ts plus the version and hints on its lines): the user
+// asked for a prominent figlet logo instead. The logoStyle setting picks the
+// rendering (pig-only; see core.LogoStyle): "plain" (default) draws the mark
+// in the theme's dim color (matching the startup hint line), "gradient"
+// carries a per-start gradient (see pigLogoBrandGradient) as a left-to-right
+// ramp rather than pi's solid colors. Either way the version tag trails the
+// bottom art line, so the version keeps following the theme (dark/light).
+func buildPigLogo(t *theme.Theme, version string, style string) string {
+	// figlet output, uniform 19 columns (trailing spaces included; the last
+	// line is one column short).
 	art := []string{
 		" ____    _         ",
 		"|  _ \\  (_)   __ _ ",
 		"| |_) | | |  / _` |",
 		"|  __/  | | | (_| |",
 		"|_|     |_|  \\__, |",
+		"             |___/",
 	}
-	var sb strings.Builder
-	for _, line := range art {
-		sb.WriteString(t.Bold(t.Fg("text", line)))
-		sb.WriteByte('\n')
+
+	if style == core.LogoStyleGradient {
+		return buildPigLogoGradient(t, art, version)
 	}
-	return sb.String() +
-		t.Bold(t.Fg("text", "             |___/")) +
-		t.Fg("text", " v"+version)
+	return buildPigLogoPlain(t, art, version)
+}
+
+// buildPigLogoPlain draws the art in the theme's dim color — the same color
+// as the "Press ctrl+o to show…" startup hint (and the keybinding hint keys),
+// so the default mark reads as quiet chrome instead of a bright headline.
+// Every art line is bold and self-contained (fg and bold resets inside the
+// line) so SGR state never leaks across lines in the diff renderer; the
+// version tag trails the bottom art line in the same dim color.
+func buildPigLogoPlain(t *theme.Theme, art []string, version string) string {
+	lines := make([]string, len(art))
+	for i, line := range art {
+		lines[i] = t.Bold(t.Fg("dim", line))
+	}
+	lines[len(lines)-1] += t.Fg("dim", " v"+version)
+	return strings.Join(lines, "\n")
+}
+
+// buildPigLogoGradient draws the art with the per-start random brand ramp.
+// Every art line is bold with per-column fg resets so SGR state never leaks
+// across lines in the diff renderer.
+func buildPigLogoGradient(t *theme.Theme, art []string, version string) string {
+	sequences, ok := pigLogoForegroundAnsi(t.GetColorMode(), len(art[0]))
+	if !ok {
+		// Unreachable; degrade to the plain theme-colored art.
+		return buildPigLogoPlain(t, art, version)
+	}
+
+	lines := make([]string, len(art))
+	for i, line := range art {
+		var sb strings.Builder
+		for column, ch := range line { // ASCII art: byte index == column index
+			if ch == ' ' {
+				sb.WriteByte(' ')
+				continue
+			}
+			sb.WriteString(tui.StyleTextWithAnsi(string(ch), sequences[column], "", tui.TextAttributes{}))
+		}
+		lines[i] = t.Bold(sb.String())
+	}
+	lines[len(lines)-1] += t.Fg("text", " v"+version)
+	return strings.Join(lines, "\n")
 }

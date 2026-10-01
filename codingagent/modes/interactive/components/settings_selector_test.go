@@ -108,6 +108,41 @@ func TestSettingsSelectorCyclesCJKSegmenter(t *testing.T) {
 	}
 }
 
+// pig-only item: cycles the startup logo style (plain → gradient) and
+// dispatches OnLogoStyleChange with the bare style value.
+func TestSettingsSelectorCyclesLogoStyle(t *testing.T) {
+	initTestTheme(t)
+
+	coreKeybindings := core.CreateKeybindingsManager("")
+	tui.SetKeybindings(coreKeybindings.KeybindingsManager)
+	defer tui.SetKeybindings(core.CreateKeybindingsManager("").KeybindingsManager)
+
+	var changes []string
+	config := &SettingsConfig{
+		Warnings:  core.WarningSettings{},
+		LogoStyle: core.LogoStylePlain,
+	}
+	callbacks := &SettingsCallbacks{
+		OnLogoStyleChange: func(style string) {
+			changes = append(changes, style)
+		},
+	}
+
+	list := NewSettingsSelectorComponent(config, callbacks).GetSettingsList()
+	for _, character := range "Startup logo" {
+		list.HandleInput(string(character))
+	}
+	output := stripVT(t, strings.Join(list.Render(120), "\n"))
+	if !strings.Contains(output, "plain (theme text color)") {
+		t.Fatalf("expected decorated plain label:\n%s", output)
+	}
+	list.HandleInput("\r")
+	list.HandleInput("\r")
+	if want := []string{core.LogoStyleGradient, core.LogoStylePlain}; !reflect.DeepEqual(changes, want) {
+		t.Fatalf("logo style changes = %v, want %v", changes, want)
+	}
+}
+
 // pi: "keeps the configured fixed theme marked while browsing" (v0.85.1).
 func TestSettingsSelectorKeepsFixedThemeMarkedWhileBrowsing(t *testing.T) {
 	initTestTheme(t)

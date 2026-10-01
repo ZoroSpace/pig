@@ -117,6 +117,7 @@ import (
 //	fullscreenCopyOnSelect?: boolean                     — default true; no effect in regular TUI mode (v0.85.1)
 //	cjkSegmenter?: "bigram" | "sst" | "gse"              — pig-only; default via PIG_CJK_SEGMENTER env, else "bigram"
 //	showResourceStats?: boolean                          — pig-only; footer resource stats (MEM always, G/FD/CPU alerts on anomaly), default false
+//	logoStyle?: "plain" | "gradient"                     — pig-only; startup logo rendering, default "plain"
 type Settings map[string]any
 
 // SettingsScope selects which settings layer a storage operation targets.
@@ -156,6 +157,17 @@ const (
 	ScrollViewScrollbarAuto   ScrollViewScrollbar = "auto"
 	ScrollViewScrollbarAlways ScrollViewScrollbar = "always"
 	ScrollViewScrollbarHidden ScrollViewScrollbar = "hidden"
+)
+
+// LogoStyle selects how the startup logo is drawn (pig-only; pi has a
+// fixed half-block mark instead). "plain" draws the figlet art in the
+// theme's text color; "gradient" samples a fresh two-hue ramp per process
+// start (see interactive_mode.go's randomPigLogoGradient).
+type LogoStyle = string
+
+const (
+	LogoStylePlain    LogoStyle = "plain"
+	LogoStyleGradient LogoStyle = "gradient"
 )
 
 // DefaultProjectTrust selects the default project trust decision.
@@ -2198,6 +2210,46 @@ func (m *SettingsManager) SetShowResourceStats(show bool) {
 	defer m.mutex.Unlock()
 	m.globalSettings["showResourceStats"] = show
 	m.markModified("showResourceStats", "")
+	m.save()
+}
+
+// logoStyles lists the valid startup-logo renderings (pig-only setting).
+var logoStyles = []string{LogoStylePlain, LogoStyleGradient}
+
+// GetLogoStyle returns the startup-logo rendering (pig-only; no pi
+// counterpart). An invalid stored value resolves to "plain", so a hand-edited
+// settings.json can never break startup rendering.
+func (m *SettingsManager) GetLogoStyle() string {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if style, ok := settingsString(m.settings, "logoStyle"); ok {
+		for _, valid := range logoStyles {
+			if style == valid {
+				return style
+			}
+		}
+	}
+	return LogoStylePlain
+}
+
+// SetLogoStyle records the startup-logo rendering (pig-only). Invalid values
+// are ignored, mirroring the resolver's never-error contract (bad config can
+// only change the logo, never break startup).
+func (m *SettingsManager) SetLogoStyle(style string) {
+	valid := false
+	for _, candidate := range logoStyles {
+		if style == candidate {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return
+	}
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.globalSettings["logoStyle"] = style
+	m.markModified("logoStyle", "")
 	m.save()
 }
 

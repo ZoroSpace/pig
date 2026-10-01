@@ -166,11 +166,13 @@ func TestSettingsListSpaceWithActiveQueryDoesNotChangeTheSetting(t *testing.T) {
 	}
 }
 
-// TestSettingsListHintSaysGoBackNotCancel locks the pig deviation
-// (2026-09-30): Esc closes the panel but does not revert anything (values are
-// applied immediately), so the hint must not promise a "cancel". pi says
-// "Esc to cancel"; the settings submenu already says "Esc to go back".
-func TestSettingsListHintSaysGoBackNotCancel(t *testing.T) {
+// TestSettingsListHintSaysConfirmAndGoBackNotCancel locks the pig deviation
+// (2026-09-30, reworded 2026-10-01): Esc closes the panel but does not revert
+// anything (values are applied immediately), so the hint must neither promise
+// a "cancel" nor leave it ambiguous — it confirms the edits and goes back.
+// pi says "Esc to cancel"; the settings submenu still says "Esc to go back"
+// (its Esc can abort a preview).
+func TestSettingsListHintSaysConfirmAndGoBackNotCancel(t *testing.T) {
 	render := func(enableSearch bool) string {
 		list := NewSettingsList(
 			altSettingsItems(),
@@ -188,8 +190,8 @@ func TestSettingsListHintSaysGoBackNotCancel(t *testing.T) {
 		enableSearch bool
 		want         string
 	}{
-		{"without-search", false, "  Enter to change · Esc to go back"},
-		{"with-search", true, "  Type to search · Enter to change · Esc to go back"},
+		{"without-search", false, "  Enter to change · Esc to confirm and go back"},
+		{"with-search", true, "  Type to search · Enter to change · Esc to confirm and go back"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out := render(tc.enableSearch)

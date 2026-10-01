@@ -438,16 +438,18 @@ func (l *SettingsList) applyFilter(query string) {
 
 // addHintLine renders the key hints. Esc closes the panel without undoing
 // anything: every value change is applied (and persisted) immediately by
-// activateItem, so there is no pending state to cancel. The wording is
-// "go back" rather than pi's "Esc to cancel" (pig deviation, 2026-09-30) —
-// "cancel" wrongly suggests the edits made so far are discarded. This also
-// matches the settings submenu hint (settings_submenu.go). The hint only
+// activateItem, so Esc confirms the edits and returns to the chat. The
+// wording is "confirm and go back" rather than pi's "Esc to cancel" (pig
+// deviation, 2026-09-30; extended 2026-10-01) — "cancel" wrongly suggests
+// the edits made so far are discarded. Unlike the settings submenu hint
+// (settings_submenu.go, whose Esc can still abort a preview), the settings
+// list has no pending state, so "confirm" is accurate here. The hint only
 // shows while no submenu is open (Render delegates to the submenu when one
 // is), so it never describes the submenu's own cancel-on-escape step.
 func (l *SettingsList) addHintLine(lines []string, width int) []string {
-	hint := "  Enter to change · Esc to go back"
+	hint := "  Enter to change · Esc to confirm and go back"
 	if l.searchEnabled {
-		hint = "  Type to search · Enter to change · Esc to go back"
+		hint = "  Type to search · Enter to change · Esc to confirm and go back"
 	}
 	lines = append(lines, "")
 	lines = append(lines, TruncateToWidth(l.theme.Hint(hint), width, "", false))

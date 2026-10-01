@@ -80,6 +80,27 @@ func cjkSegmenterLabel(mode string) string {
 	return cjkSegmenterLabels[0].Label
 }
 
+// logoStyleLabels pairs each startup-logo rendering with its picker label
+// (pig-only; same label-mapping pattern as cjkSegmenterLabels).
+var logoStyleLabels = []struct {
+	Value string
+	Label string
+}{
+	{"plain", "plain (theme text color)"},
+	{"gradient", "gradient (new random colors each start)"},
+}
+
+// logoStyleLabel returns the picker label for a logo style (unknown styles
+// render as the plain default, matching the settings resolver).
+func logoStyleLabel(style string) string {
+	for _, pair := range logoStyleLabels {
+		if pair.Value == style {
+			return pair.Label
+		}
+	}
+	return logoStyleLabels[0].Label
+}
+
 // SettingsConfig is the settings snapshot the selector renders (pi:
 // SettingsConfig).
 type SettingsConfig struct {
@@ -126,6 +147,7 @@ type SettingsConfig struct {
 	Warnings                   core.WarningSettings
 	CJKSegmenter               string // pig-only: "bigram" | "sst" | "gse"
 	ShowResourceStats          bool   // pig-only: footer resource segment (MEM now, more later)
+	LogoStyle                  string // pig-only: "plain" | "gradient" startup logo
 }
 
 // SettingsCallbacks carries the change handlers (pi: SettingsCallbacks).
@@ -169,6 +191,7 @@ type SettingsCallbacks struct {
 	OnWarningsChange                   func(warnings core.WarningSettings)
 	OnCJKSegmenterChange               func(mode string)  // pig-only
 	OnShowResourceStatsChange          func(enabled bool) // pig-only
+	OnLogoStyleChange                  func(style string) // pig-only
 	OnCancel                           func()
 }
 
@@ -1166,6 +1189,22 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 		Values:       []string{"true", "false"},
 	}
 
+	// Startup logo style (pig-only; insert after resource-stats). Default
+	// "plain" keeps the mark in the theme's text color; "gradient" restores
+	// the per-start random color ramp.
+	resourceStatsIndex := findItemIndex(items, "resource-stats")
+	items = append(items, nil)
+	copy(items[resourceStatsIndex+1:], items[resourceStatsIndex:])
+	items[resourceStatsIndex+1] = &tui.SettingItem{
+		Id:           "logo-style",
+		Label:        "Startup logo",
+		Description:  "Startup mark rendering: plain theme color, or a gradient with new random colors on every start",
+		CurrentValue: logoStyleLabel(config.LogoStyle),
+	}
+	for _, pair := range logoStyleLabels {
+		items[resourceStatsIndex+1].Values = append(items[resourceStatsIndex+1].Values, pair.Label)
+	}
+
 	// HTTP idle timeout values (labels of the picker choices)
 	for _, item := range items {
 		if item.Id == "http-idle-timeout" {
@@ -1310,6 +1349,17 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 			case "resource-stats":
 				if callbacks.OnShowResourceStatsChange != nil {
 					callbacks.OnShowResourceStatsChange(newValue == "true")
+				}
+			case "logo-style":
+				if callbacks.OnLogoStyleChange != nil {
+					// The picker cycles display labels; map back to the style
+					// value (same pattern as cjk-segmenter).
+					for _, pair := range logoStyleLabels {
+						if pair.Label == newValue {
+							callbacks.OnLogoStyleChange(pair.Value)
+							break
+						}
+					}
 				}
 			case "tui-mode":
 				if callbacks.OnTuiModeChange != nil {

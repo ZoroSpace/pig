@@ -1,7 +1,7 @@
 # /settings 面板提示「Esc to cancel」误导（Esc 不撤销任何改动）
 
 - **日期**: 2026-09-30 11:48
-- **状态**: 已修复
+- **状态**: 已修复（2026-10-01 文案再收为 `Esc to confirm and go back`，见文末追加）
 - **涉及文件**: `tui/settings_list.go`、`tui/settings_list_test.go`
 
 ## 现象
@@ -41,3 +41,18 @@ if l.searchEnabled {
 ```
 
 改回 `Esc to go back` → 全绿。
+
+## 追加（2026-10-01）：文案再收为「Esc to confirm and go back」
+
+用户报：`Esc to go back` 仍不够明确——Esc 会**保留并落盘**本次改动再返回，应在文案里体现「确认」语义。
+
+处置：`tui/settings_list.go` 两种形态改为 `Esc to confirm and go back`，注释同步（并说明与子菜单 `Esc to go back` 的差异：子菜单的 Esc 可能放弃预览，故不跟改）。这是对 09-30 那次的措辞收紧，不是行为变更。
+
+```go
+hint := "  Enter to change · Esc to confirm and go back"
+if l.searchEnabled {
+    hint = "  Type to search · Enter to change · Esc to confirm and go back"
+}
+```
+
+回归测试 `TestSettingsListHintSaysConfirmAndGoBackNotCancel`（原 `TestSettingsListHintSaysGoBackNotCancel` 重命名）断言两种形态含新文案、不含 `Esc to cancel`。stash 等价验证（把文案改回 `Esc to go back` 再复原）红→绿。

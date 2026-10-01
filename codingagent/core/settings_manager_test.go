@@ -941,3 +941,53 @@ func TestSettingsManagerCJKSegmenter(t *testing.T) {
 		}
 	})
 }
+
+// A valid `logoStyle` setting applies; the default and invalid stored values
+// resolve to "plain" (the startup-logo never-error contract).
+func TestSettingsManagerLogoStyle(t *testing.T) {
+	t.Run("defaults to plain", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+		if got := manager.GetLogoStyle(); got != LogoStylePlain {
+			t.Fatalf("logoStyle = %q, want plain", got)
+		}
+	})
+
+	t.Run("stored setting applies", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"logoStyle":"gradient"}`)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+		if got := manager.GetLogoStyle(); got != LogoStyleGradient {
+			t.Fatalf("logoStyle = %q, want gradient", got)
+		}
+	})
+
+	t.Run("invalid stored value resolves to plain", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"logoStyle":"rainbow"}`)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+		if got := manager.GetLogoStyle(); got != LogoStylePlain {
+			t.Fatalf("logoStyle = %q, want plain", got)
+		}
+	})
+
+	t.Run("Set persists and rejects invalid values", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+
+		manager.SetLogoStyle("rainbow")
+		if saved, err := os.ReadFile(filepath.Join(agentDir, "settings.json")); err == nil && strings.Contains(string(saved), "logoStyle") {
+			t.Fatalf("invalid value must not be persisted: %s", saved)
+		}
+
+		manager.SetLogoStyle(LogoStyleGradient)
+		manager.Flush()
+		saved := readSettingsJSON(t, filepath.Join(agentDir, "settings.json"))
+		if got := settingsJSONString(t, saved, "logoStyle"); got != LogoStyleGradient {
+			t.Fatalf("persisted logoStyle = %q, want gradient", got)
+		}
+		if got := manager.GetLogoStyle(); got != LogoStyleGradient {
+			t.Fatalf("logoStyle = %q, want gradient", got)
+		}
+	})
+}
