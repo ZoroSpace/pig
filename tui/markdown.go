@@ -348,6 +348,11 @@ type Markdown struct {
 	cachedWidth    int
 	cachedWidthSet bool
 	cachedLines    []string
+	// Parsed tokens depend only on the source, so they survive theme and
+	// width invalidation (pi v0.99.1: cachedTokens).
+	cachedTokens    string
+	cachedTokensSet bool
+	cachedTokenList []*MarkedToken
 }
 
 // NewMarkdown mirrors pi's constructor (defaultTextStyle/options may be nil).
@@ -412,10 +417,19 @@ func (m *Markdown) Render(width int) []string {
 	// Replace tabs with 3 spaces for consistent rendering
 	normalizedText := strings.ReplaceAll(text, "\t", "   ")
 
-	// Parse markdown to tokens
-	lexer := markdownLexer()
-	tokens := lexer.Lex(normalizedText)
-	trimPartialClosingFences(tokens)
+	// Parse markdown to tokens (reused across invalidations while the source
+	// is unchanged — pi v0.99.1).
+	var tokens []*MarkedToken
+	if m.cachedTokensSet && m.cachedTokens == normalizedText {
+		tokens = m.cachedTokenList
+	} else {
+		lexer := markdownLexer()
+		tokens = lexer.Lex(normalizedText)
+		trimPartialClosingFences(tokens)
+		m.cachedTokens = normalizedText
+		m.cachedTokensSet = true
+		m.cachedTokenList = tokens
+	}
 
 	// Convert tokens to styled terminal output
 	renderedLines := []string{}

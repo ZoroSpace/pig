@@ -1,5 +1,6 @@
-// tui/terminal_colors.go (pi: packages/tui/src/terminal-colors.ts) — OSC 11
-// background color responses and color-scheme reports (CSI ? 997 n).
+// tui/terminal_colors.go (pi: packages/tui/src/terminal-colors.ts) — colors
+// the terminal reports for its current theme: OSC 10/11/4 color replies and
+// color-scheme reports (CSI ? 997 n).
 package tui
 
 import (
@@ -15,13 +16,26 @@ type RgbColor struct {
 	B int
 }
 
-// TerminalColorScheme is the terminal's color-scheme preference.
+// TerminalColorScheme is the terminal's color-scheme preference
+// (pi: TerminalColorScheme = "dark" | "light").
 type TerminalColorScheme = string
 
 const (
 	TerminalColorSchemeDark  TerminalColorScheme = "dark"
 	TerminalColorSchemeLight TerminalColorScheme = "light"
 )
+
+// TerminalColors holds the colors the terminal reports for its current theme
+// (pi: TerminalColors). Palette is only set when the terminal reported all
+// 16 entries.
+type TerminalColors struct {
+	// Foreground is the default foreground (OSC 10); nil = not reported.
+	Foreground *RgbColor
+	// Background is the default background (OSC 11); nil = not reported.
+	Background *RgbColor
+	// Palette is ANSI colors 0-15 (OSC 4); nil = not all reported.
+	Palette []RgbColor
+}
 
 func hexToRgb(hex string) RgbColor {
 	normalized := strings.TrimPrefix(hex, "#")
@@ -56,39 +70,65 @@ func parseOscHexChannel(channel string) (int, bool) {
 	return int((float64(value) / float64(max)) * 255), true
 }
 
-var osc11BackgroundColorResponsePattern = regexp.MustCompile(`(?i)^\x1b\]11;([^\x07\x1b]*)(?:\x07|\x1b\\)$`)
-var colorSchemeReportPattern = regexp.MustCompile(`^(?:\x1b\[\?997;(1|2)n)+$`)
-var rgbaPrefixRegex = regexp.MustCompile(`(?i)^rgba?:`)
-
-// IsOsc11BackgroundColorResponse reports whether data is an OSC 11 reply.
-func IsOsc11BackgroundColorResponse(data string) bool {
-	return osc11BackgroundColorResponsePattern.MatchString(data)
+// OscColorTarget is what an OSC color reply reports: the default foreground
+// (OSC 10), background (OSC 11), or a palette index (OSC 4)
+// (pi: OscColorTarget = "foreground" | "background" | number).
+type OscColorTarget struct {
+	// PaletteIndex >= 0 selects the palette slot; -1 means foreground or background.
+	PaletteIndex int
+	// Foreground distinguishes foreground from background when PaletteIndex < 0.
+	Foreground bool
 }
 
-// ParseOsc11BackgroundColor parses an OSC 11 background color response.
-// Returns nil when data is not a parsable response (pi: undefined).
-func ParseOsc11BackgroundColor(data string) *RgbColor {
-	m := osc11BackgroundColorResponsePattern.FindStringSubmatch(data)
-	if m == nil {
-		return nil
+func (t OscColorTarget) key() string {
+	if t.PaletteIndex >= 0 {
+		return strconv.Itoa(t.PaletteIndex)
 	}
+	if t.Foreground {
+		return "foreground"
+	}
+	return "background"
+}
 
-	value := strings.TrimSpace(m[1])
+var oscColorResponsePattern = regexp.MustCompile(`(?i)^\x1b\](?:(1[01])|4;(\d{1,3}));([^\x07\x1b]*)(?:\x07|\x1b\\)$`)
+var colorSchemeReportPattern = regexp.MustCompile(`^(?:\x1b\[\?997;(1|2)n)+$`)
+var rgbaPrefixRegex = regexp.MustCompile(`(?i)^rgba?:`)
+var oscHex6Pattern = regexp.MustCompile(`(?i)^[0-9a-f]{6}$`)
+var oscHex12Pattern = regexp.MustCompile(`(?i)^[0-9a-f]{12}$`)
+
+// ParseOscColorResponse parses an OSC 10, 11, or 4 color reply. ok=false when
+// data is not such a reply; rgb=nil when it is a reply with an unparseable
+// color (pi: parseOscColorResponse).
+func ParseOscColorResponse(data string) (OscColorTarget, *RgbColor, bool) {
+	m := oscColorResponsePattern.FindStringSubmatch(data)
+	if m == nil {
+		return OscColorTarget{}, nil, false
+	}
+	var target OscColorTarget
+	switch {
+	case m[1] == "10":
+		target = OscColorTarget{PaletteIndex: -1, Foreground: true}
+	case m[1] == "11":
+		target = OscColorTarget{PaletteIndex: -1}
+	default:
+		index, err := strconv.Atoi(m[2])
+		if err != nil {
+			return OscColorTarget{}, nil, false
+		}
+		target = OscColorTarget{PaletteIndex: index}
+	}
+	return target, parseOscColorValue(m[3]), true
+}
+
+func parseOscColorValue(rawValue string) *RgbColor {
+	value := strings.TrimSpace(rawValue)
 	if strings.HasPrefix(value, "#") {
 		hex := value[1:]
-		isHex := func(s string) bool {
-			for _, ch := range s {
-				if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')) {
-					return false
-				}
-			}
-			return s != ""
-		}
-		if len(hex) == 6 && isHex(hex) {
-			rgb := hexToRgb(hex)
+		if oscHex6Pattern.MatchString(hex) {
+			rgb := hexToRgb(value)
 			return &rgb
 		}
-		if len(hex) == 12 && isHex(hex) {
+		if oscHex12Pattern.MatchString(hex) {
 			r, okR := parseOscHexChannel(hex[0:4])
 			g, okG := parseOscHexChannel(hex[4:8])
 			b, okB := parseOscHexChannel(hex[8:12])
@@ -114,7 +154,8 @@ func ParseOsc11BackgroundColor(data string) *RgbColor {
 }
 
 // ParseTerminalColorSchemeReport parses a color-scheme report
-// (CSI ? 997 ; 1 n dark / CSI ? 997 ; 2 n light). Returns "" when absent.
+// (CSI ? 997 ; 1 n dark / CSI ? 997 ; 2 n light). Returns ok=false when
+// absent.
 func ParseTerminalColorSchemeReport(data string) (TerminalColorScheme, bool) {
 	m := colorSchemeReportPattern.FindStringSubmatch(data)
 	if m == nil {

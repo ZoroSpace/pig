@@ -225,24 +225,14 @@ func GetShellEnv() []string {
 // SanitizeBinaryOutput strips characters that crash string-width or cause
 // display issues (pi: sanitizeBinaryOutput): control characters except
 // tab/newline/carriage-return, and the interlinear-annotation range.
+var sanitizeBinaryOutputPattern = regexp.MustCompile("[\x00-\x08\x0B\x0C\x0E-\x1F\uFFF9-\uFFFB]")
+
 func SanitizeBinaryOutput(str string) string {
-	var b strings.Builder
-	b.Grow(len(str))
-	for _, char := range str {
-		code := char
-		if code == 0x09 || code == 0x0a || code == 0x0d {
-			b.WriteRune(char)
-			continue
-		}
-		if code <= 0x1f {
-			continue
-		}
-		if code >= 0xfff9 && code <= 0xfffb {
-			continue
-		}
-		b.WriteRune(char)
-	}
-	return b.String()
+	// Single regex replace (pi v0.99.1): all removed characters are single
+	// code points, so surrogate pairs are never split. pi's rationale: the
+	// removed set shrank to the characters that crash string-width or break
+	// display.
+	return sanitizeBinaryOutputPattern.ReplaceAllString(str, "")
 }
 
 // trackedDetachedChildPids records detached child processes so they can be

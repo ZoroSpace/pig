@@ -36,9 +36,8 @@ const bashUpdateThrottleMs = 100
 // BashResultRenderState is the result-row cache state (pi:
 // BashResultRenderState).
 type BashResultRenderState struct {
-	CachedWidth   int
-	CachedLines   []string
-	CachedSkipped int
+	CachedWidth int
+	CachedLines []string
 	// Cached is true once CachedLines holds a render for CachedWidth (pi:
 	// undefined checks).
 	Cached bool
@@ -54,41 +53,39 @@ type BashResultRenderComponent struct {
 // bashPreviewComponent is the inline collapsed-preview renderer (pi: the
 // object literal { render, invalidate } with width-aware caching).
 type bashPreviewComponent struct {
-	theme         UITheme
-	styledOutput  string
-	cachedWidth   int
-	cachedLines   []string
-	cachedSkipped int
-	cached        bool
-	state         *BashResultRenderState
+	theme        UITheme
+	styledOutput string
+	cachedWidth  int
+	cachedLines  []string
+	cached       bool
+	state        *BashResultRenderState
 }
 
 func (b *bashPreviewComponent) Render(width int) []string {
+	// Cache the complete output including the expand hint: this renders on
+	// every frame for every bash result in the transcript (pi v0.99.1).
 	if !b.cached || b.cachedWidth != width {
 		preview := TruncateToVisualLines(b.styledOutput, bashPreviewLines, width, 0)
-		b.cachedLines = preview.VisualLines
-		b.cachedSkipped = preview.SkippedCount
+		lines := []string{""}
+		if preview.SkippedCount > 0 {
+			hint := b.theme.Fg("muted", fmt.Sprintf("... (%d earlier lines,", preview.SkippedCount)) +
+				" " + KeyHint("app.tools.expand", "to expand") + b.theme.Fg("muted", ")")
+			lines = append(lines, tui.TruncateToWidth(hint, width, "...", false))
+		}
+		b.cachedLines = append(lines, preview.VisualLines...)
 		b.cachedWidth = width
 		b.cached = true
 		b.state.CachedWidth = width
-		b.state.CachedLines = preview.VisualLines
-		b.state.CachedSkipped = preview.SkippedCount
+		b.state.CachedLines = b.cachedLines
 		b.state.Cached = true
 	}
-	if b.state.CachedSkipped > 0 {
-		hint := b.theme.Fg("muted", fmt.Sprintf("... (%d earlier lines,", b.state.CachedSkipped)) +
-			" " + KeyHint("app.tools.expand", "to expand") + b.theme.Fg("muted", ")")
-		lines := []string{"", tui.TruncateToWidth(hint, width, "...", false)}
-		return append(lines, b.state.CachedLines...)
-	}
-	return append([]string{""}, b.state.CachedLines...)
+	return b.state.CachedLines
 }
 
 func (b *bashPreviewComponent) Invalidate() {
 	b.cached = false
 	b.state.Cached = false
 	b.state.CachedLines = nil
-	b.state.CachedSkipped = 0
 }
 
 // formatDuration renders short durations with one decimal and falls back to

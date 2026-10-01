@@ -104,6 +104,19 @@ type ReadonlyFooterDataProvider interface {
 
 // footerSessionView is the session surface the footer reads (pig seam; see
 // header deviation).
+// footerSessionStats caches the usage totals and context usage (pi:
+// SessionStats, v0.99.1 — see getSessionStats).
+type footerSessionStats struct {
+	session            *core.AgentSession
+	sessionID          string
+	leafID             *string
+	entryCount         int
+	limitsModel        *types.Model
+	usageTotals        core.UsageTotals
+	latestCacheHitRate *float64
+	contextUsage       *core.ContextUsage
+}
+
 type footerSessionView struct {
 	state               func() *agent.AgentState
 	entries             func() []core.SessionEntry
@@ -144,6 +157,7 @@ type FooterComponent struct {
 	showResourceStats  bool // pig-only: gates the resource segment (showResourceStats setting)
 	session            *core.AgentSession
 	view               footerSessionView
+	sessionStats       *footerSessionStats
 	footerData         ReadonlyFooterDataProvider
 	ui                 FooterTUI // set via SetTUI; the resource poller's render wake-up handle
 
@@ -259,22 +273,44 @@ func (f *FooterComponent) Dispose() {
 	}
 }
 
-// Render renders the footer lines (pi: render).
-func (f *FooterComponent) Render(width int) []string {
-	f.mu.Lock()
-	autoCompact := f.autoCompactEnabled
-	showResourceStats := f.showResourceStats
-	view := f.view
-	f.mu.Unlock()
+// getSessionStats returns the cached usage totals and context usage
+// (pi: getSessionStats, v0.99.1). Usage totals and context usage scan the
+// whole session, and the footer renders on every frame. Entries are
+// append-only and every append moves the leaf, so the results only change
+// with the session, leaf, entry count, or the model whose context window
+// applies.
+func (f *FooterComponent) getSessionStats() *footerSessionStats {
+	if f.session == nil {
+		// Test seam: footers built from a bare view have no session to key
+		// the cache on; compute uncached (the seam's entries are static).
+		return f.computeSessionStats()
+	}
+	sessionManager := f.session.SessionManager
+	entryCount := sessionManager.GetEntryCount()
+	sessionID := sessionManager.GetSessionID()
+	leafID := sessionManager.GetLeafID()
+	limitsModel := f.view.state().Model
+	cached := f.sessionStats
+	if cached != nil &&
+		cached.session == f.session &&
+		cached.sessionID == sessionID &&
+		leafIDsEqual(cached.leafID, leafID) &&
+		cached.entryCount == entryCount &&
+		cached.limitsModel == limitsModel {
+		return cached
+	}
 
-	state := view.state()
+	return f.computeSessionStats()
+}
 
+// computeSessionStats scans the session entries (see getSessionStats).
+func (f *FooterComponent) computeSessionStats() *footerSessionStats {
 	// Calculate cumulative usage from ALL session entries (not just
 	// post-compaction messages)
 	usageTotals := core.CreateUsageTotals()
 	var latestCacheHitRate *float64
 
-	for _, entry := range view.entries() {
+	for _, entry := range f.view.entries() {
 		// pi v0.86.0: usage entries feed the totals (e.g. cache-warming
 		// refreshes paid on their own).
 		if usageEntry, ok := entry.(*core.UsageEntry); ok {
@@ -334,7 +370,42 @@ func (f *FooterComponent) Render(width int) []string {
 
 	// Calculate context usage from session (handles compaction correctly).
 	// After compaction, tokens are unknown until the next LLM response.
-	contextUsage := view.contextUsage()
+	contextUsage := f.view.contextUsage()
+	return &footerSessionStats{
+		session:            f.session,
+		usageTotals:        usageTotals,
+		latestCacheHitRate: latestCacheHitRate,
+		contextUsage:       contextUsage,
+	}
+}
+
+func leafIDsEqual(a, b *string) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func (f *FooterComponent) Render(width int) []string {
+	f.mu.Lock()
+	autoCompact := f.autoCompactEnabled
+	showResourceStats := f.showResourceStats
+	view := f.view
+	f.mu.Unlock()
+
+	state := view.state()
+
+	stats := f.getSessionStats()
+	usageTotals := stats.usageTotals
+	latestCacheHitRate := stats.latestCacheHitRate
+
+	// Calculate context usage from session (handles compaction correctly).
+	// After compaction, tokens are unknown until the next LLM response.
+	contextUsage := stats.contextUsage
+
 	contextWindow := int64(0)
 	if contextUsage != nil {
 		contextWindow = contextUsage.ContextWindow

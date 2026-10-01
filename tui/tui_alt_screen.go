@@ -132,6 +132,10 @@ type altWheelEvent struct {
 	x         int
 	y         int
 	button    int
+	// lines is the wheel step for this event from the accelerator (pig
+	// addition to carry the accelerated count from dispatch to routeWheel;
+	// pi recomputes wheelDelta once and passes it through).
+	lines int
 }
 
 // altScrollToEndIndicatorRect is the last rendered jump-to-end indicator
@@ -183,7 +187,9 @@ type altSearchHighlightRange struct {
 // TuiAltScreenOptions).
 type TuiAltScreenOptions struct {
 	// WheelScrollLines is the number of logical lines moved for each
-	// mouse-wheel event.
+	// mouse-wheel event. WheelScrollLinesAuto (0) accelerates fast wheel
+	// spins on terminals that send one event per notch (pi:
+	// WheelScrollLines = number | "auto", v0.99.1 #9758).
 	WheelScrollLines int
 	// Mouse captures mouse events for viewport scrolling and
 	// application-owned text selection.
@@ -281,6 +287,7 @@ type TuiAltScreen struct {
 	lastComponentClick *altComponentClick
 
 	wheelScrollLines            int
+	wheelScroll                 *WheelScrollAccelerator
 	mouseEnabled                bool
 	searchMatchStyle            func(text string) string
 	searchCurrentMatchStyle     func(text string) string
@@ -326,7 +333,11 @@ func NewTuiAltScreen(terminal Terminal, showHardwareCursor *bool, logDirectory s
 	searchCurrentMatchStyle := func(text string) string { return "\x1b[1;7m" + text + "\x1b[22;27m" }
 	copyOnSelect := true
 	if options != nil {
-		wheelScrollLines = maxInt(1, options.WheelScrollLines)
+		if options.WheelScrollLines == WheelScrollLinesAuto {
+			wheelScrollLines = WheelScrollLinesAuto
+		} else {
+			wheelScrollLines = maxInt(1, options.WheelScrollLines)
+		}
 		if options.Mouse != nil {
 			mouseEnabled = *options.Mouse
 		}
@@ -351,6 +362,7 @@ func NewTuiAltScreen(terminal Terminal, showHardwareCursor *bool, logDirectory s
 		t.searchNavigationButtonStyle = func(text string, hovered bool) string { return text }
 	}
 	t.wheelScrollLines = wheelScrollLines
+	t.wheelScroll = NewWheelScrollAccelerator(wheelScrollLines)
 	t.mouseEnabled = mouseEnabled
 	t.searchMatchStyle = searchMatchStyle
 	t.searchCurrentMatchStyle = searchCurrentMatchStyle
@@ -982,7 +994,8 @@ func (t *TuiAltScreen) handleViewportInput(data string) *TuiInputListenerResult 
 	}
 
 	if wheelEvent, ok := t.parseWheelEvent(data); ok {
-		event := t.createMouseEvent(MouseEventTypeWheel, wheelEvent.button, wheelEvent.x, wheelEvent.y, intPtr(wheelEvent.direction*t.getWheelScrollLines(wheelEvent.button)), nil)
+		wheelEvent.lines = t.wheelScroll.Next(wheelEvent.direction, NowMillis())
+		event := t.createMouseEvent(MouseEventTypeWheel, wheelEvent.button, wheelEvent.x, wheelEvent.y, intPtr(wheelEvent.direction*t.getWheelScrollLines(wheelEvent.button, wheelEvent.lines)), nil)
 		hit, result := t.dispatchMouseToOverlayLocked(event)
 		if !hit {
 			result = t.dispatchMouseToLayoutLocked(event)
@@ -1406,18 +1419,25 @@ func (t *TuiAltScreen) parseWheelEvent(data string) (altWheelEvent, bool) {
 	return altWheelEvent{}, false
 }
 
-// getWheelScrollLines returns the wheel step, scaled 5x while Alt is held
-// (pi: getWheelScrollLines; SGR mouse button codes use bit 3 (value 8) for
-// the Alt modifier).
-func (t *TuiAltScreen) getWheelScrollLines(button int) int {
+// getWheelScrollLines returns the wheel step for this event, scaled 5x while
+// Alt is held (pi: getWheelScrollLines; SGR mouse button codes use bit 3
+// (value 8) for the Alt modifier).
+func (t *TuiAltScreen) getWheelScrollLines(button int, lines int) int {
 	if (button & 8) != 0 {
-		return t.wheelScrollLines * altWheelScrollMultiplier
+		return lines * altWheelScrollMultiplier
 	}
-	return t.wheelScrollLines
+	return lines
+}
+
+// SetWheelScrollLines updates the lines-per-wheel setting and resets the
+// acceleration gesture state (pi: setWheelScrollLines).
+func (t *TuiAltScreen) SetWheelScrollLines(lines int) {
+	t.wheelScrollLines = lines
+	t.wheelScroll.SetLines(lines)
 }
 
 func (t *TuiAltScreen) routeWheel(event altWheelEvent) {
-	remaining := event.direction * t.getWheelScrollLines(event.button)
+	remaining := event.direction * t.getWheelScrollLines(event.button, event.lines)
 	seen := map[*ScrollView]bool{}
 	var scrollViews []*ScrollView
 	if t.currentLayout != nil {

@@ -12,24 +12,25 @@ import (
 // FirstTimeSetupResult carries the dialog outcome (pi:
 // FirstTimeSetupResult).
 type FirstTimeSetupResult struct {
-	Theme          theme.TerminalTheme
+	Theme          string
 	ShareAnalytics bool
 }
 
-// FirstTimeSetupOptions wire the dialog (pi: FirstTimeSetupOptions).
+// FirstTimeSetupOptions wire the dialog (pi: FirstTimeSetupOptions). The
+// detected-appearance display was removed with the system theme (pi #10067).
 type FirstTimeSetupOptions struct {
-	DetectedTheme  theme.TerminalTheme
-	OnThemePreview func(themeName theme.TerminalTheme)
+	OnThemePreview func(themeName string)
 	OnSubmit       func(result FirstTimeSetupResult)
 	OnCancel       func()
 }
 
 type firstTimeSetupThemeOption struct {
-	value theme.TerminalTheme
+	value string
 	label string
 }
 
 var firstTimeSetupThemeOptions = []firstTimeSetupThemeOption{
+	{value: theme.SystemThemeName, label: "System (matches your terminal colors)"},
 	{value: "dark", label: "Dark"},
 	{value: "light", label: "Light"},
 }
@@ -63,16 +64,15 @@ func NewFirstTimeSetupComponent(options FirstTimeSetupOptions) *FirstTimeSetupCo
 		options: options,
 	}
 	c.themeIndex = 0
-	for i, option := range firstTimeSetupThemeOptions {
-		if option.value == options.DetectedTheme {
-			if i > c.themeIndex {
-				c.themeIndex = i
-			}
-			break
-		}
-	}
 	c.update()
 	return c
+}
+
+// Invalidate rebuilds the dialog on theme changes, e.g. when the system
+// theme receives the terminal's colors (pi: invalidate override).
+func (c *FirstTimeSetupComponent) Invalidate() {
+	c.update()
+	c.Container.Invalidate()
 }
 
 // update rebuilds the whole dialog on every change so theme previews
@@ -89,7 +89,6 @@ func (c *FirstTimeSetupComponent) update() {
 
 	if c.step == "theme" {
 		c.AddChild(tui.NewText(currentTheme.Fg("text", "Pick a theme."), 1, 0))
-		c.AddChild(tui.NewText(currentTheme.Fg("muted", "Detected system appearance: "+string(c.options.DetectedTheme)), 1, 0))
 		c.AddChild(tui.NewSpacer(1))
 		labels := make([]string, len(firstTimeSetupThemeOptions))
 		for i, option := range firstTimeSetupThemeOptions {

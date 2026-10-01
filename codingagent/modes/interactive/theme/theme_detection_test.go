@@ -1,134 +1,98 @@
 package theme
 
 import (
-	"fmt"
-
-	"github.com/samber/lo"
 	"regexp"
 	"testing"
 
 	"github.com/ZoroSpace/pig/tui"
 )
 
-// Port of test/theme-detection.test.ts.
-//
-// Declared adaptations: DetectTerminalThemeForAuto's two concurrency
-// assertions (backgroundQueryStarted before resolution, never-resolving
-// background) have no blocking-call equivalent; pig serializes
-// color-scheme → background (see theme.go deviations), so those two tests
-// assert the resolution order instead.
+// Port of test/theme-detection.test.ts (v0.99.1 shape). The v0.87.1-era
+// detection family (TerminalThemeDetection/Source/Confidence,
+// DetectTerminalBackgroundTheme/ForAuto) was removed upstream with #10067;
+// its tests are replaced by detectColorFgBgTheme/detectTerminalTheme.
 
-func TestDetectTerminalBackgroundFromEnv(t *testing.T) {
-	t.Run("uses the COLORFGBG background color index", func(t *testing.T) {
-		d := DetectTerminalBackgroundFromEnv(&TerminalThemeDetectionOptions{Env: map[string]string{"COLORFGBG": "0;15"}})
-		if d.Theme != TerminalThemeLight || d.Source != "COLORFGBG" || d.Confidence != "high" {
-			t.Fatalf("got %+v", d)
+func TestDetectColorFgBgTheme(t *testing.T) {
+	t.Run("classifies the last field by palette index like Vim", func(t *testing.T) {
+		env := func(key string) string {
+			if key == "COLORFGBG" {
+				return "15;0"
+			}
+			return ""
 		}
-		d = DetectTerminalBackgroundFromEnv(&TerminalThemeDetectionOptions{Env: map[string]string{"COLORFGBG": "15;0"}})
-		if d.Theme != TerminalThemeDark || d.Source != "COLORFGBG" || d.Confidence != "high" {
-			t.Fatalf("got %+v", d)
+		if got := DetectColorFgBgTheme(env); got != TerminalThemeDark {
+			t.Fatalf("15;0: got %q", got)
 		}
-	})
-
-	t.Run("uses the last COLORFGBG field as the background", func(t *testing.T) {
-		d := DetectTerminalBackgroundFromEnv(&TerminalThemeDetectionOptions{Env: map[string]string{"COLORFGBG": "0;7;15"}})
-		if d.Theme != TerminalThemeLight {
-			t.Fatalf("got %v", d.Theme)
+		env2 := func(key string) string {
+			if key == "COLORFGBG" {
+				return "0;7;15"
+			}
+			return ""
 		}
-	})
-
-	t.Run("defaults to dark without terminal background hints", func(t *testing.T) {
-		d := DetectTerminalBackgroundFromEnv(&TerminalThemeDetectionOptions{Env: map[string]string{}})
-		if d.Theme != TerminalThemeDark || d.Source != "fallback" || d.Confidence != "low" {
-			t.Fatalf("got %+v", d)
+		if got := DetectColorFgBgTheme(env2); got != TerminalThemeLight {
+			t.Fatalf("0;7;15: got %q", got)
 		}
-	})
-}
-
-// stubBackgroundDetector records the queried timeout (pi:
-// queryTerminalBackgroundColor mock).
-type stubBackgroundDetector struct {
-	timeoutMs int
-	rgb       *tui.RgbColor
-	err       error
-}
-
-func (s *stubBackgroundDetector) QueryTerminalBackgroundColor(timeoutMs int) (*tui.RgbColor, error) {
-	s.timeoutMs = timeoutMs
-	return s.rgb, s.err
-}
-
-func TestDetectTerminalBackgroundTheme(t *testing.T) {
-	t.Run("uses the queried terminal background before environment hints", func(t *testing.T) {
-		detector := &stubBackgroundDetector{rgb: &tui.RgbColor{R: 250, G: 250, B: 250}}
-		d := DetectTerminalBackgroundTheme(TerminalBackgroundThemeDetectionOptions{
-			Env:       map[string]string{"COLORFGBG": "15;0"},
-			TimeoutMs: 250,
-			Ui:        detector,
-		})
-
-		if detector.timeoutMs != 250 {
-			t.Fatalf("timeoutMs = %d", detector.timeoutMs)
+		// Solarized Dark's background is bright black.
+		env3 := func(key string) string {
+			if key == "COLORFGBG" {
+				return "12;8"
+			}
+			return ""
 		}
-		if d.Theme != TerminalThemeLight || d.Source != "terminal background" || d.Confidence != "high" {
-			t.Fatalf("got %+v", d)
+		if got := DetectColorFgBgTheme(env3); got != TerminalThemeDark {
+			t.Fatalf("12;8: got %q", got)
 		}
-	})
-
-	t.Run("falls back to environment hints when the terminal query returns no color", func(t *testing.T) {
-		d := DetectTerminalBackgroundTheme(TerminalBackgroundThemeDetectionOptions{
-			Env:       map[string]string{"COLORFGBG": "15;0"},
-			TimeoutMs: 250,
-			Ui:        &stubBackgroundDetector{rgb: nil},
-		})
-
-		if d.Theme != TerminalThemeDark || d.Source != "COLORFGBG" || d.Confidence != "high" {
-			t.Fatalf("got %+v", d)
+		// rxvt writes "default" when the background is not a palette color.
+		env4 := func(key string) string {
+			if key == "COLORFGBG" {
+				return "15;default"
+			}
+			return ""
 		}
-	})
-
-	t.Run("falls back to environment hints when the terminal query fails", func(t *testing.T) {
-		d := DetectTerminalBackgroundTheme(TerminalBackgroundThemeDetectionOptions{
-			Env:       map[string]string{"COLORFGBG": "0;15"},
-			TimeoutMs: 250,
-			Ui:        &stubBackgroundDetector{err: fmt.Errorf("terminal write failed")},
-		})
-
-		if d.Theme != TerminalThemeLight || d.Source != "COLORFGBG" || d.Confidence != "high" {
-			t.Fatalf("got %+v", d)
+		if got := DetectColorFgBgTheme(env4); got != "" {
+			t.Fatalf("15;default: got %q, want unset", got)
+		}
+		if got := DetectColorFgBgTheme(func(string) string { return "" }); got != "" {
+			t.Fatalf("unset: got %q, want unset", got)
 		}
 	})
 }
 
-// stubAutoDetector is the auto variant (pi:
-// queryTerminalColorScheme mock).
-type stubAutoDetector struct {
-	stubBackgroundDetector
-	scheme    *TerminalTheme
-	schemeErr error
-}
-
-func (s *stubAutoDetector) QueryTerminalColorScheme(timeoutMs int) (*TerminalTheme, error) {
-	return s.scheme, s.schemeErr
-}
-
-func TestDetectTerminalThemeForAuto(t *testing.T) {
-	t.Run("returns the preferred color-scheme result over the background query", func(t *testing.T) {
-		detector := &stubAutoDetector{scheme: lo.ToPtr(TerminalThemeDark)}
-		got := DetectTerminalThemeForAuto(TerminalAutoThemeDetectionOptions{TimeoutMs: 100, Ui: detector})
-		if got != TerminalThemeDark {
-			t.Fatalf("got %v", got)
+func TestDetectTerminalTheme(t *testing.T) {
+	t.Run("prefers the background, then the reported scheme, then COLORFGBG, then dark", func(t *testing.T) {
+		env := func(key string) string {
+			if key == "COLORFGBG" {
+				return "0;15"
+			}
+			return ""
+		}
+		if got := DetectTerminalTheme(&tui.TerminalColors{Background: &tui.RgbColor{R: 8, G: 8, B: 8}}, TerminalThemeLight, env); got != TerminalThemeDark {
+			t.Fatalf("background beats scheme: got %q", got)
+		}
+		if got := DetectTerminalTheme(&tui.TerminalColors{}, TerminalThemeDark, env); got != TerminalThemeDark {
+			t.Fatalf("scheme beats env: got %q", got)
+		}
+		if got := DetectTerminalTheme(&tui.TerminalColors{}, "", env); got != TerminalThemeLight {
+			t.Fatalf("env: got %q", got)
+		}
+		if got := DetectTerminalTheme(&tui.TerminalColors{}, "", func(string) string { return "" }); got != TerminalThemeDark {
+			t.Fatalf("fallback: got %q", got)
 		}
 	})
 
-	t.Run("uses the background result when the color-scheme query fails", func(t *testing.T) {
-		detector := &stubAutoDetector{
-			stubBackgroundDetector: stubBackgroundDetector{rgb: &tui.RgbColor{R: 250, G: 250, B: 250}},
-			schemeErr:              fmt.Errorf("color-scheme query failed"),
+	t.Run("follows the foreground when text is readable that way", func(t *testing.T) {
+		background := tui.RgbColor{R: 118, G: 118, B: 118}
+		if got := DetectTerminalTheme(&tui.TerminalColors{Background: &background}, "", nil); got != TerminalThemeLight {
+			t.Fatalf("mid background: got %q", got)
 		}
-		got := DetectTerminalThemeForAuto(TerminalAutoThemeDetectionOptions{TimeoutMs: 100, Ui: detector})
-		if got != TerminalThemeLight {
-			t.Fatalf("got %v", got)
+		white := tui.RgbColor{R: 255, G: 255, B: 255}
+		if got := DetectTerminalTheme(&tui.TerminalColors{Background: &background, Foreground: &white}, "", nil); got != TerminalThemeDark {
+			t.Fatalf("white foreground: got %q", got)
+		}
+		// White text cannot reach 4.5:1 on mid-gray.
+		midGray := tui.RgbColor{R: 128, G: 128, B: 128}
+		if got := DetectTerminalTheme(&tui.TerminalColors{Background: &midGray, Foreground: &white}, "", nil); got != TerminalThemeLight {
+			t.Fatalf("mid-gray: got %q", got)
 		}
 	})
 }
@@ -158,17 +122,6 @@ func TestThemeColorMode(t *testing.T) {
 		}
 		if matched, _ := regexp.MatchString(`^\x1b\[38;2;\d+;\d+;\d+m$`, truecolorTheme.GetFgAnsi(ColorAccent)); !matched {
 			t.Fatalf("fgAnsi = %q", truecolorTheme.GetFgAnsi(ColorAccent))
-		}
-	})
-}
-
-func TestThemeDetectionFromRGB(t *testing.T) {
-	t.Run("classifies RGB colors by luminance", func(t *testing.T) {
-		if GetThemeForRgbColor(tui.RgbColor{R: 8, G: 8, B: 8}) != TerminalThemeDark {
-			t.Fatal("expected dark")
-		}
-		if GetThemeForRgbColor(tui.RgbColor{R: 250, G: 250, B: 250}) != TerminalThemeLight {
-			t.Fatal("expected light")
 		}
 	})
 }

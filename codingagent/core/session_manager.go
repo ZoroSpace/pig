@@ -1889,10 +1889,11 @@ func (m *SessionManager) AppendSessionInfo(name string) (string, error) {
 func (m *SessionManager) GetSessionName() (string, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Walk entries in reverse to find the latest session_info entry.
-	entries := m.getEntriesLocked()
-	for i := len(entries) - 1; i >= 0; i-- {
-		if entry, ok := entries[i].(*SessionInfoEntry); ok {
+	// Walk entries in reverse to find the latest session_info entry. Reads
+	// fileEntries directly: the footer calls this on every frame, and
+	// getEntriesLocked copies the whole session (pi v0.99.1).
+	for i := len(m.fileEntries) - 1; i >= 0; i-- {
+		if entry, ok := m.fileEntries[i].(*SessionInfoEntry); ok {
 			if entry.Name != nil && strings.TrimSpace(*entry.Name) != "" {
 				return strings.TrimSpace(*entry.Name), true
 			}
@@ -2159,6 +2160,24 @@ func (m *SessionManager) GetHeader() *SessionHeader {
 		}
 	}
 	return nil
+}
+
+// GetEntryCount returns the number of session entries (excludes header),
+// without copying them like GetEntries does (pi: getEntryCount, v0.99.1 —
+// the footer calls this on every frame).
+func (m *SessionManager) GetEntryCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	count := 0
+	for _, entry := range m.fileEntries {
+		if _, ok := entry.(*SessionHeader); ok {
+			continue
+		}
+		if _, ok := entry.(SessionEntry); ok {
+			count++
+		}
+	}
+	return count
 }
 
 // GetEntries returns all session entries (excludes header) as a shallow

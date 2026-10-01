@@ -75,6 +75,12 @@ func ValidateThemeJson(label string, parsed any) (*ThemeJson, error) {
 			otherErrors = append(otherErrors, "  - /$schema: must be string")
 		}
 	}
+	if v, ok := top["appearance"]; ok && v != nil {
+		appearance, ok := v.(string)
+		if !ok || (appearance != "dark" && appearance != "light") {
+			otherErrors = append(otherErrors, "  - /appearance: must be \"dark\" or \"light\"")
+		}
+	}
 	if v, ok := top["vars"]; ok && v != nil {
 		vars, ok := v.(map[string]any)
 		if !ok {

@@ -205,6 +205,7 @@ type expandableText struct {
 	*tui.Text
 	getCollapsedText func() string
 	getExpandedText  func() string
+	expanded         bool
 }
 
 func newExpandableText(getCollapsedText, getExpandedText func() string, expanded bool, paddingX, paddingY int) *expandableText {
@@ -213,11 +214,24 @@ func newExpandableText(getCollapsedText, getExpandedText func() string, expanded
 		Text:             text,
 		getCollapsedText: getCollapsedText,
 		getExpandedText:  getExpandedText,
+		expanded:         expanded,
 	}
 }
 
 func (e *expandableText) SetExpanded(expanded bool) {
+	e.expanded = expanded
 	e.SetText(cond(expanded, e.getExpandedText, e.getCollapsedText)())
+}
+
+// Invalidate rebuilds the text from the closures (pig equivalent of pi's
+// ThemedText conversion, v0.99.1 #10067: plain Text keeps the colors its
+// string was built with, so a theme change or the system theme receiving the
+// terminal's colors leaves it stale). Closures that reference precomputed
+// strings keep their old behavior; sites that want rebuilds construct the
+// string inside the closure.
+func (e *expandableText) Invalidate() {
+	e.SetText(cond(e.expanded, e.getExpandedText, e.getCollapsedText)())
+	e.Text.Invalidate()
 }
 
 func cond[T any](flag bool, a, b func() T) func() T {
@@ -523,7 +537,8 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 		if err := m.rebindCurrentSession(true); err != nil {
 			return err
 		}
-		return m.themeController.ApplyFromSettings()
+		m.themeController.ApplyFromSettings()
+		return nil
 	})
 	m.idleStatus = &components.IdleStatus{}
 	m.workingVisible = true
@@ -555,6 +570,8 @@ func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options Interacti
 		logDirectory:           codingagent.GetAgentDir(),
 		onRightClickPaste:      m.handleRightClickPaste,
 		fullscreenCopyOnSelect: settingsManager.GetFullscreenCopyOnSelect(),
+		// 0 = auto (accelerated); the alt-screen accelerator consumes it.
+		fullscreenWheelScrollLines: settingsManager.GetFullscreenWheelScrollLines(),
 	})
 	m.ui = createInteractiveTuiReference(func() tui.TUI { return m.renderer })
 	m.ui.SetClearOnShrink(settingsManager.GetClearOnShrink())
@@ -741,59 +758,70 @@ func (m *InteractiveMode) Init() error {
 	m.ui.Start()
 	m.isInitialized = true
 
-	if err := m.themeController.ApplyFromSettings(); err != nil {
-		return err
-	}
+	m.themeController.ApplyFromSettings()
+	// The startup header bakes theme colors into its text; wait for the
+	// first color query (ends at the DA1 reply or after 100ms) so the system
+	// theme is not built grayscale (pi: waitForTerminalColors before the
+	// header).
+	m.themeController.WaitTerminalColors()
 
 	// Add header with keybindings from config (unless silenced)
 	if m.options.Verbose || !m.settingsManager().GetQuietStartup() {
-		currentTheme := theme.Current()
-		logo := buildPigLogo(currentTheme, m.version)
+		// The header strings are built inside the closures so a theme change
+		// (or the system theme receiving the terminal's colors) rebuilds them
+		// with the new colors on invalidate (pi: ThemedText).
+		buildHeaderPart := func(expanded bool) string {
+			currentTheme := theme.Current()
+			logo := buildPigLogo(currentTheme, m.version)
 
-		// Build startup instructions using keybinding hint helpers
-		hint := func(keybinding string, description string) string {
-			return coretools.KeyHint(keybinding, description)
+			// Build startup instructions using keybinding hint helpers
+			hint := func(keybinding string, description string) string {
+				return coretools.KeyHint(keybinding, description)
+			}
+			if expanded {
+				expandedInstructions := strings.Join([]string{
+					hint(core.AppKeybindingInterrupt, "to interrupt"),
+					hint(core.AppKeybindingClear, "to clear"),
+					coretools.RawKeyHint(coretools.KeyText(core.AppKeybindingClear)+" twice", "to exit"),
+					hint(core.AppKeybindingExit, "to exit (empty)"),
+					hint(core.AppKeybindingSuspend, "to suspend"),
+					hint("tui.editor.deleteToLineEnd", "to delete to end"),
+					hint(core.AppKeybindingThinkingCycle, "to cycle thinking level"),
+					coretools.RawKeyHint(coretools.KeyText(core.AppKeybindingModelCycleForward)+"/"+
+						coretools.KeyText(core.AppKeybindingModelCycleBackward), "to cycle models"),
+					hint(core.AppKeybindingModelSelect, "to select model"),
+					hint(core.AppKeybindingToolsExpand, "to expand tools"),
+					hint(core.AppKeybindingThinkingToggle, "to expand thinking"),
+					hint(core.AppKeybindingEditorExternal, "for external editor"),
+					coretools.RawKeyHint("/", "for commands"),
+					coretools.RawKeyHint("!", "to run bash"),
+					coretools.RawKeyHint("!!", "to run bash (no context)"),
+					hint(core.AppKeybindingMessageFollowUp, "to queue follow-up"),
+					hint(core.AppKeybindingMessageDequeue, "to edit all queued messages"),
+					hint(core.AppKeybindingClipboardPasteImage, "to paste image (with text fallback)"),
+					coretools.RawKeyHint("drop files", "to attach"),
+				}, "\n")
+				onboarding := currentTheme.Fg("dim",
+					"Pig can explain its own features and look up its docs. Ask it how to use or extend Pig.")
+				return logo + "\n" + expandedInstructions + "\n\n" + onboarding
+			}
+			compactInstructions := strings.Join([]string{
+				hint(core.AppKeybindingInterrupt, "interrupt"),
+				coretools.RawKeyHint(coretools.KeyText(core.AppKeybindingClear)+"/"+
+					coretools.KeyText(core.AppKeybindingExit), "clear/exit"),
+				coretools.RawKeyHint("/", "commands"),
+				coretools.RawKeyHint("!", "bash"),
+				hint(core.AppKeybindingToolsExpand, "more"),
+			}, currentTheme.Fg("muted", " · "))
+			compactOnboarding := currentTheme.Fg("dim",
+				"Press "+coretools.KeyText(core.AppKeybindingToolsExpand)+" to show full startup help and loaded resources.")
+			onboarding := currentTheme.Fg("dim",
+				"Pig can explain its own features and look up its docs. Ask it how to use or extend Pig.")
+			return logo + "\n" + compactInstructions + "\n" + compactOnboarding + "\n\n" + onboarding
 		}
-
-		expandedInstructions := strings.Join([]string{
-			hint(core.AppKeybindingInterrupt, "to interrupt"),
-			hint(core.AppKeybindingClear, "to clear"),
-			coretools.RawKeyHint(coretools.KeyText(core.AppKeybindingClear)+" twice", "to exit"),
-			hint(core.AppKeybindingExit, "to exit (empty)"),
-			hint(core.AppKeybindingSuspend, "to suspend"),
-			hint("tui.editor.deleteToLineEnd", "to delete to end"),
-			hint(core.AppKeybindingThinkingCycle, "to cycle thinking level"),
-			coretools.RawKeyHint(coretools.KeyText(core.AppKeybindingModelCycleForward)+"/"+
-				coretools.KeyText(core.AppKeybindingModelCycleBackward), "to cycle models"),
-			hint(core.AppKeybindingModelSelect, "to select model"),
-			hint(core.AppKeybindingToolsExpand, "to expand tools"),
-			hint(core.AppKeybindingThinkingToggle, "to expand thinking"),
-			hint(core.AppKeybindingEditorExternal, "for external editor"),
-			coretools.RawKeyHint("/", "for commands"),
-			coretools.RawKeyHint("!", "to run bash"),
-			coretools.RawKeyHint("!!", "to run bash (no context)"),
-			hint(core.AppKeybindingMessageFollowUp, "to queue follow-up"),
-			hint(core.AppKeybindingMessageDequeue, "to edit all queued messages"),
-			hint(core.AppKeybindingClipboardPasteImage, "to paste image (with text fallback)"),
-			coretools.RawKeyHint("drop files", "to attach"),
-		}, "\n")
-		compactInstructions := strings.Join([]string{
-			hint(core.AppKeybindingInterrupt, "interrupt"),
-			coretools.RawKeyHint(coretools.KeyText(core.AppKeybindingClear)+"/"+
-				coretools.KeyText(core.AppKeybindingExit), "clear/exit"),
-			coretools.RawKeyHint("/", "commands"),
-			coretools.RawKeyHint("!", "bash"),
-			hint(core.AppKeybindingToolsExpand, "more"),
-		}, currentTheme.Fg("muted", " · "))
-		compactOnboarding := currentTheme.Fg("dim",
-			"Press "+coretools.KeyText(core.AppKeybindingToolsExpand)+" to show full startup help and loaded resources.")
-		onboarding := currentTheme.Fg("dim",
-			"Pig can explain its own features and look up its docs. Ask it how to use or extend Pig.")
 		builtInHeader := newExpandableText(
-			func() string {
-				return logo + "\n" + compactInstructions + "\n" + compactOnboarding + "\n\n" + onboarding
-			},
-			func() string { return logo + "\n" + expandedInstructions + "\n\n" + onboarding },
+			func() string { return buildHeaderPart(false) },
+			func() string { return buildHeaderPart(true) },
 			m.getStartupExpansionState(),
 			1,
 			0,
@@ -4008,11 +4036,12 @@ func (m *InteractiveMode) switchTuiMode(mode core.TuiMode, restoreProgress bool,
 	}
 
 	nextUi := createInteractiveTui(createInteractiveTuiOptions{
-		tuiMode:                mode,
-		showHardwareCursor:     showHardwareCursor,
-		logDirectory:           codingagent.GetAgentDir(),
-		onRightClickPaste:      m.handleRightClickPaste,
-		fullscreenCopyOnSelect: m.settingsManager().GetFullscreenCopyOnSelect(),
+		tuiMode:                    mode,
+		showHardwareCursor:         showHardwareCursor,
+		logDirectory:               codingagent.GetAgentDir(),
+		onRightClickPaste:          m.handleRightClickPaste,
+		fullscreenCopyOnSelect:     m.settingsManager().GetFullscreenCopyOnSelect(),
+		fullscreenWheelScrollLines: m.settingsManager().GetFullscreenWheelScrollLines(),
 	})
 	nextUi.SetClearOnShrink(clearOnShrink)
 	if _, ok := nextUi.(*tui.TuiMainScreen); ok && m.hasMainScreenRenderState {
@@ -6143,7 +6172,7 @@ func (m *InteractiveMode) showSettingsSelector() {
 		}
 		currentThemeSetting, hasThemeSelection := m.themeController.GetThemeSelection()
 		if !hasThemeSelection {
-			currentThemeSetting = "dark"
+			currentThemeSetting = theme.SystemThemeName
 		}
 		selector = components.NewSettingsSelectorComponent(
 			&components.SettingsConfig{
@@ -6164,33 +6193,34 @@ func (m *InteractiveMode) showSettingsSelector() {
 				ThinkingLevel:          thinkingLevel,
 				// pi: [...THINKING_LEVEL_OPTIONS] — read by no component code
 				// today (pi shape fidelity).
-				AvailableThinkingLevels: []agent.ThinkingLevel{},
-				ModelThinkingLevels:     m.settingsManager().GetAllModelThinkingLevels(),
-				CurrentTheme:            currentThemeSetting,
-				TerminalTheme:           m.themeController.GetTerminalTheme(),
-				AvailableThemes:         theme.GetAvailableThemes(),
-				HideThinkingBlock:       m.hideThinkingBlock,
-				MermaidRenderingMode:    m.settingsManager().GetMermaidRenderingMode(),
-				ShowCacheMissNotices:    m.settingsManager().GetShowCacheMissNotices(),
-				CollapseChangelog:       m.settingsManager().GetCollapseChangelog(),
-				EnableInstallTelemetry:  m.settingsManager().GetEnableInstallTelemetry(),
-				DoubleEscapeAction:      m.settingsManager().GetDoubleEscapeAction(),
-				TreeFilterMode:          m.settingsManager().GetTreeFilterMode(),
-				ShowHardwareCursor:      m.settingsManager().GetShowHardwareCursor(),
-				DefaultProjectTrust:     m.settingsManager().GetDefaultProjectTrust(),
-				EditorPaddingX:          m.settingsManager().GetEditorPaddingX(),
-				OutputPad:               m.outputPad,
-				AutocompleteMaxVisible:  m.settingsManager().GetAutocompleteMaxVisible(),
-				QuietStartup:            m.settingsManager().GetQuietStartup(),
-				ClearOnShrink:           m.settingsManager().GetClearOnShrink(),
-				ShowTerminalProgress:    m.settingsManager().GetShowTerminalProgress(),
-				TuiMode:                 m.ui.Mode(),
-				FullscreenExitOutput:    m.settingsManager().GetFullscreenExitOutput(),
-				FullscreenScrollbar:     m.settingsManager().GetFullscreenScrollbar(),
-				FullscreenCopyOnSelect:  m.settingsManager().GetFullscreenCopyOnSelect(),
-				Warnings:                m.settingsManager().GetWarnings(),
-				CJKSegmenter:            m.settingsManager().GetCJKSegmenter(),
-				ShowResourceStats:       m.settingsManager().GetShowResourceStats(),
+				AvailableThinkingLevels:    []agent.ThinkingLevel{},
+				ModelThinkingLevels:        m.settingsManager().GetAllModelThinkingLevels(),
+				CurrentTheme:               currentThemeSetting,
+				TerminalTheme:              m.themeController.GetTerminalTheme(),
+				AvailableThemes:            theme.GetAvailableThemes(),
+				HideThinkingBlock:          m.hideThinkingBlock,
+				MermaidRenderingMode:       m.settingsManager().GetMermaidRenderingMode(),
+				ShowCacheMissNotices:       m.settingsManager().GetShowCacheMissNotices(),
+				CollapseChangelog:          m.settingsManager().GetCollapseChangelog(),
+				EnableInstallTelemetry:     m.settingsManager().GetEnableInstallTelemetry(),
+				DoubleEscapeAction:         m.settingsManager().GetDoubleEscapeAction(),
+				TreeFilterMode:             m.settingsManager().GetTreeFilterMode(),
+				ShowHardwareCursor:         m.settingsManager().GetShowHardwareCursor(),
+				DefaultProjectTrust:        m.settingsManager().GetDefaultProjectTrust(),
+				EditorPaddingX:             m.settingsManager().GetEditorPaddingX(),
+				OutputPad:                  m.outputPad,
+				AutocompleteMaxVisible:     m.settingsManager().GetAutocompleteMaxVisible(),
+				QuietStartup:               m.settingsManager().GetQuietStartup(),
+				ClearOnShrink:              m.settingsManager().GetClearOnShrink(),
+				ShowTerminalProgress:       m.settingsManager().GetShowTerminalProgress(),
+				TuiMode:                    m.ui.Mode(),
+				FullscreenExitOutput:       m.settingsManager().GetFullscreenExitOutput(),
+				FullscreenScrollbar:        m.settingsManager().GetFullscreenScrollbar(),
+				FullscreenCopyOnSelect:     m.settingsManager().GetFullscreenCopyOnSelect(),
+				FullscreenWheelScrollLines: m.settingsManager().GetFullscreenWheelScrollLines(),
+				Warnings:                   m.settingsManager().GetWarnings(),
+				CJKSegmenter:               m.settingsManager().GetCJKSegmenter(),
+				ShowResourceStats:          m.settingsManager().GetShowResourceStats(),
 			},
 			&components.SettingsCallbacks{
 				OnAutoCompactChange: func(enabled bool) {
@@ -6271,7 +6301,7 @@ func (m *InteractiveMode) showSettingsSelector() {
 				},
 				OnThemeChange: func(themeSetting string) {
 					m.settingsManager().SetTheme(themeSetting)
-					_ = m.themeController.SetThemeSetting(themeSetting)
+					m.themeController.SetThemeSetting(themeSetting)
 				},
 				OnThemePreview: func(themeName string) {
 					m.themeController.Preview(themeName)
@@ -6385,6 +6415,12 @@ func (m *InteractiveMode) showSettingsSelector() {
 				OnFullscreenScrollbarChange: func(mode core.ScrollViewScrollbar) {
 					m.settingsManager().SetFullscreenScrollbar(mode)
 					m.applyFullscreenScrollbarSetting()
+				},
+				OnFullscreenWheelScrollLinesChange: func(lines int) {
+					m.settingsManager().SetFullscreenWheelScrollLines(lines)
+					if altScreen, ok := m.renderer.(*tui.TuiAltScreen); ok {
+						altScreen.SetWheelScrollLines(lines)
+					}
 				},
 				OnFullscreenCopyOnSelectChange: func(enabled bool) {
 					m.settingsManager().SetFullscreenCopyOnSelect(enabled)
@@ -8163,6 +8199,7 @@ func (m *InteractiveMode) applyRuntimeSettings() {
 	m.applyFullscreenScrollbarSetting()
 	if altScreen, ok := m.renderer.(*tui.TuiAltScreen); ok {
 		altScreen.SetCopyOnSelect(m.settingsManager().GetFullscreenCopyOnSelect())
+		altScreen.SetWheelScrollLines(m.settingsManager().GetFullscreenWheelScrollLines())
 	}
 	m.footer.SetSession(m.session())
 	m.footer.SetAutoCompactEnabled(m.session().AutoCompactionEnabled())
@@ -8263,9 +8300,7 @@ func (m *InteractiveMode) handleReloadCommand(ctx context.Context) error {
 		// terminal capability overrides) runs before the theme is applied so
 		// theme-dependent rendering sees the final capabilities.
 		m.applyRuntimeSettings()
-		if err := m.themeController.ApplyFromSettings(); err != nil {
-			return err
-		}
+		m.themeController.ApplyFromSettings()
 		m.setupAutocompleteProvider()
 		runner := m.session().GetExtensionRunner()
 		m.setupExtensionShortcuts(runner)

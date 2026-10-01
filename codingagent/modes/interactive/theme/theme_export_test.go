@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	codingagent "github.com/ZoroSpace/pig/codingagent"
+	"github.com/ZoroSpace/pig/tui"
 )
 
 // Port of test/theme-export.test.ts (getThemeExportColors).
@@ -116,4 +117,47 @@ func TestGetThemeExportColors(t *testing.T) {
 			t.Fatalf("got %+v", colors)
 		}
 	})
+}
+
+// pi v0.99.1: OKHSL export colors convert to hex because CSS does not
+// support them; oklch() passes through.
+func TestGetThemeExportColorsOkhsl(t *testing.T) {
+	tempRoot := t.TempDir()
+	agentDir := filepath.Join(tempRoot, "agent")
+	t.Setenv(codingagent.EnvAgentDir, agentDir)
+	if err := os.MkdirAll(filepath.Join(agentDir, "themes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	darkTheme := readDarkThemeFixture(t)
+	customTheme := themeFile{
+		Name:   "custom-export-okhsl",
+		Vars:   map[string]any{"card": "okhsl(250 20% 20%)"},
+		Colors: darkTheme.Colors,
+		Export: map[string]any{
+			"pageBg": "okhsl(250 20% 15%)",
+			"cardBg": "card",
+			"infoBg": "oklch(30% 0.05 80)",
+		},
+	}
+	data, err := json.MarshalIndent(customTheme, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agentDir, "themes", "custom-export-okhsl.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	wantPage, _ := tui.NewOkhslColor(250, 0.2, 0.15)
+	wantCard, _ := tui.NewOkhslColor(250, 0.2, 0.2)
+	colors := GetThemeExportColors("custom-export-okhsl")
+	if colors.PageBg != tui.ColorToHex(wantPage) {
+		t.Errorf("pageBg = %q, want %q", colors.PageBg, tui.ColorToHex(wantPage))
+	}
+	if colors.CardBg != tui.ColorToHex(wantCard) {
+		t.Errorf("cardBg = %q, want %q", colors.CardBg, tui.ColorToHex(wantCard))
+	}
+	if colors.InfoBg != "oklch(30% 0.05 80)" {
+		t.Errorf("infoBg = %q, want passthrough", colors.InfoBg)
+	}
 }

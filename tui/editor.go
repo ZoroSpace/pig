@@ -380,9 +380,19 @@ func (p *autocompleteContextPattern) MatchString(text string) bool {
 			continue
 		}
 		// Boundary before the trigger character (both alternatives sit after
-		// pi's (?:^|autocompleteSeparator) group).
-		if i > 0 {
-			prev, _ := utf8.DecodeLastRuneInString(text[:i])
+		// pi's (?:^|autocompleteSeparator) group). pi v0.99.1 allows opening
+		// wrappers between the boundary and the trigger, e.g. "(@src" or
+		// "`@src" (pi: autocompleteTokenStartSource appends [([{<`]*).
+		boundary := i
+		for boundary > 0 {
+			previous, size := utf8.DecodeLastRuneInString(text[:boundary])
+			if _, isWrapper := pathWrappers[previous]; !isWrapper {
+				break
+			}
+			boundary -= size
+		}
+		if boundary > 0 {
+			prev, _ := utf8.DecodeLastRuneInString(text[:boundary])
 			if !autocompleteSeparatorRune(prev) {
 				continue
 			}

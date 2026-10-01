@@ -88,6 +88,16 @@ func TestSyntaxHighlightRenderer(t *testing.T) {
 	})
 }
 
+// ansiFgOf builds the truecolor foreground escape for a dark-theme token.
+func ansiFgOf(t *testing.T, token ThemeColor) string {
+	t.Helper()
+	theme := GetThemeByName("dark")
+	if theme == nil {
+		t.Fatal("dark theme not found")
+	}
+	return theme.GetFgAnsi(token)
+}
+
 func TestThemeSyntaxHighlighting(t *testing.T) {
 	t.Cleanup(func() { tui.ResetCapabilitiesCache() })
 	tui.SetCapabilities(tui.TerminalCapabilities{Images: nil, TrueColor: true, Hyperlinks: false})
@@ -102,10 +112,13 @@ func TestThemeSyntaxHighlighting(t *testing.T) {
 		// chroma's diff lexer tags "-old"/"+new" as GenericDeleted/
 		// GenericInserted → deletion/addition scopes → theme diff colors
 		// (same bytes as pi's hljs diff tokenizer).
-		if lines[0] != "\x1b[38;2;204;102;102m-old\x1b[39m" {
+		// Expected bytes derive from the builtin dark.json diff colors (the
+		// v0.99.1 OKHSL redesign replaced the old palette values these
+		// assertions hardcoded).
+		if lines[0] != ansiFgOf(t, ColorToolDiffRemoved)+"-old\x1b[39m" {
 			t.Fatalf("line 0 = %q", lines[0])
 		}
-		if lines[1] != "\x1b[38;2;181;189;104m+new\x1b[39m" {
+		if lines[1] != ansiFgOf(t, ColorToolDiffAdded)+"+new\x1b[39m" {
 			t.Fatalf("line 1 = %q", lines[1])
 		}
 	})
@@ -114,7 +127,7 @@ func TestThemeSyntaxHighlighting(t *testing.T) {
 		// chroma tokenization differs from hljs (declared); assert the
 		// scope→theme-color mapping on tokens chroma does emit.
 		js := HighlightCode("const value = 1", "javascript")[0]
-		if !strings.Contains(js, "\x1b[38;2;86;156;214m") { // syntaxKeyword #569CD6
+		if !strings.Contains(js, ansiFgOf(t, ColorSyntaxKeyword)) {
 			t.Fatalf("javascript keyword color missing: %q", js)
 		}
 		py := HighlightCode("@decorator", "python")[0]

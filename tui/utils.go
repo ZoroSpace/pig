@@ -372,8 +372,14 @@ var (
 // Based on code from the string-width library, but includes a possible-emoji
 // check to avoid the RGI_Emoji set lookup unnecessarily.
 func graphemeWidth(segment string) int {
-	if segment == "\t" {
-		return 3
+	if len(segment) == 1 {
+		code := segment[0]
+		if code >= 0x20 && code <= 0x7e {
+			return 1
+		}
+		if code == 0x09 {
+			return 3
+		}
 	}
 
 	// Some marks occupy cells even without a base character.
@@ -456,9 +462,11 @@ func VisibleWidth(str string) int {
 		return 0
 	}
 
-	// Fast path: pure ASCII printable
-	if isPrintableAscii(str) {
-		return len(str)
+	// Fast path: printable ASCII, tabs, and ANSI escape sequences. Styled
+	// lines take this path, so re-rendering after a theme change does not run
+	// grapheme segmentation on every line (pi v0.99.1).
+	if width := asciiVisibleWidth(str); width != -1 {
+		return width
 	}
 
 	// Check cache
@@ -471,20 +479,27 @@ func VisibleWidth(str string) int {
 	if strings.Contains(clean, "\t") {
 		clean = strings.ReplaceAll(clean, "\t", "   ")
 	}
-	if strings.Contains(clean, "\x1b") {
+	if escapeIndex := strings.IndexByte(clean, 0x1b); escapeIndex != -1 {
 		// Strip supported ANSI/OSC/APC escape sequences in one pass.
 		// This covers CSI styling/cursor codes, OSC hyperlinks and prompt markers,
-		// and APC sequences like CURSOR_MARKER.
+		// and APC sequences like CURSOR_MARKER (pi: copyFrom/indexOf scan).
 		var stripped strings.Builder
-		i := 0
-		for i < len(clean) {
-			if ansi := ExtractAnsiCode(clean, i); ansi != nil {
-				i += ansi.Length
-				continue
+		copyFrom := 0
+		for escapeIndex != -1 {
+			if length := ansiCodeLength(clean, escapeIndex); length > 0 {
+				stripped.WriteString(clean[copyFrom:escapeIndex])
+				escapeIndex += length
+				copyFrom = escapeIndex
+			} else {
+				escapeIndex++
 			}
-			stripped.WriteByte(clean[i])
-			i++
+			next := strings.IndexByte(clean[escapeIndex:], 0x1b)
+			if next == -1 {
+				break
+			}
+			escapeIndex += next
 		}
+		stripped.WriteString(clean[copyFrom:])
 		clean = stripped.String()
 	}
 
@@ -667,45 +682,80 @@ type AnsiCode struct {
 // ExtractAnsiCode extracts an ANSI escape sequence from a string at the given
 // byte position, or nil when there is none.
 func ExtractAnsiCode(str string, pos int) *AnsiCode {
-	if pos >= len(str) || str[pos] != '\x1b' {
-		return nil
+	length := ansiCodeLength(str, pos)
+	if length > 0 {
+		return &AnsiCode{Code: str[pos : pos+length], Length: length}
+	}
+	return nil
+}
+
+// ansiCodeLength returns the length of the ANSI/OSC/APC escape sequence
+// starting at pos, or 0 if there is none (pi: ansiCodeLength, v0.99.1).
+func ansiCodeLength(str string, pos int) int {
+	if pos >= len(str) || str[pos] != 0x1b {
+		return 0
 	}
 	if pos+1 >= len(str) {
-		return nil
+		return 0
 	}
 	next := str[pos+1]
 
 	switch next {
 	// CSI sequence: ESC [ ... m/G/K/H/J
 	case '[':
-		j := pos + 2
-		for j < len(str) && !isCsiFinalByte(str[j]) {
-			j++
+		for j := pos + 2; j < len(str); j++ {
+			if isCsiFinalByte(str[j]) {
+				return j + 1 - pos
+			}
 		}
-		if j < len(str) {
-			return &AnsiCode{Code: str[pos : j+1], Length: j + 1 - pos}
-		}
-		return nil
+		return 0
 
 	// OSC sequence: ESC ] ... BEL or ESC ] ... ST (ESC \)
 	// Used for hyperlinks (OSC 8), window titles, etc.
 	// APC sequence: ESC _ ... BEL or ESC _ ... ST (ESC \)
 	// Used for cursor marker and application-specific commands
 	case ']', '_':
-		j := pos + 2
-		for j < len(str) {
+		for j := pos + 2; j < len(str); j++ {
 			if str[j] == '\x07' {
-				return &AnsiCode{Code: str[pos : j+1], Length: j + 1 - pos}
+				return j + 1 - pos
 			}
 			if str[j] == '\x1b' && j+1 < len(str) && str[j+1] == '\\' {
-				return &AnsiCode{Code: str[pos : j+2], Length: j + 2 - pos}
+				return j + 2 - pos
 			}
-			j++
 		}
-		return nil
+		return 0
 	}
 
-	return nil
+	return 0
+}
+
+// asciiVisibleWidth is the width of a string made of printable ASCII, tabs,
+// and ANSI escape sequences, or -1 if it contains anything else. Matches
+// VisibleWidth for those strings without allocating (pi: asciiVisibleWidth,
+// v0.99.1).
+func asciiVisibleWidth(str string) int {
+	width := 0
+	i := 0
+	for i < len(str) {
+		code := str[i]
+		switch {
+		case code >= 0x20 && code <= 0x7e:
+			width++
+			i++
+		case code == 0x09:
+			width += 3
+			i++
+		case code == 0x1b:
+			length := ansiCodeLength(str, i)
+			if length == 0 {
+				return -1
+			}
+			i += length
+		default:
+			return -1
+		}
+	}
+	return width
 }
 
 func isCsiFinalByte(b byte) bool {
@@ -1023,14 +1073,19 @@ func (t *ansiCodeTracker) GetLineEndReset() string {
 }
 
 func updateTrackerFromText(text string, tracker *ansiCodeTracker) {
-	i := 0
-	for i < len(text) {
-		if ansi := ExtractAnsiCode(text, i); ansi != nil {
-			tracker.Process(ansi.Code)
-			i += ansi.Length
+	i := strings.IndexByte(text, 0x1b)
+	for i != -1 {
+		if length := ansiCodeLength(text, i); length > 0 {
+			tracker.Process(text[i : i+length])
+			i += length
 		} else {
 			i++
 		}
+		next := strings.IndexByte(text[i:], 0x1b)
+		if next == -1 {
+			break
+		}
+		i += next
 	}
 }
 

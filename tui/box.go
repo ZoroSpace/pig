@@ -126,15 +126,16 @@ func (b *Box) Render(width int) []string {
 	contentWidth := max(1, width-b.paddingX*2)
 	leftPad := strings.Repeat(" ", b.paddingX)
 
-	// Render all children
+	// Render all children. Keep the child lines unpadded: children usually
+	// return the same string objects every frame, so the cache check below is
+	// a cheap identity comparison per line (pi v0.99.1). Padding here would
+	// create new strings that must be compared character by character.
 	childLines := []string{}
 	var mouseChildren []containerMouseChild
 	for _, child := range b.Children {
 		lines := child.Render(contentWidth)
 		mouseChildren = append(mouseChildren, containerMouseChild{component: child, height: len(lines)})
-		for _, line := range lines {
-			childLines = append(childLines, leftPad+line)
-		}
+		childLines = append(childLines, lines...)
 	}
 	b.mouseLayout = &containerMouseLayout{width: contentWidth, children: mouseChildren}
 
@@ -165,7 +166,7 @@ func (b *Box) Render(width int) []string {
 
 	// Content
 	for _, line := range childLines {
-		result = append(result, b.applyBg(line, width))
+		result = append(result, b.applyBg(leftPad+line, width))
 	}
 
 	// Bottom padding
@@ -183,9 +184,10 @@ func (b *Box) applyBg(line string, width int) string {
 	visLen := VisibleWidth(line)
 	padNeeded := max(0, width-visLen)
 	padded := line + strings.Repeat(" ", padNeeded)
-
+	// Already padded to width, so apply the background directly instead of
+	// measuring the line again (pi v0.99.1).
 	if b.bgFn != nil {
-		return ApplyBackgroundToLine(padded, width, b.bgFn)
+		return b.bgFn(padded)
 	}
 	return padded
 }

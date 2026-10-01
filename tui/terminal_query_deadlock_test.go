@@ -56,49 +56,37 @@ func (s *dispatchDeadlockSubclass) afterTerminalStop(options TuiStopOptions)  {}
 func (s *dispatchDeadlockSubclass) getMountedRoots() []Component              { return nil }
 
 // queryOnInputComponent reproduces the interactive settings chain: a key
-// handler that synchronously queries the terminal background from within
-// HandleInput (theme apply → applyFromSettings → detectTerminalThemeForAuto).
+// handler that synchronously queries the terminal colors from within
+// HandleInput (theme apply → applyFromSettings → queryTerminalColors).
 type queryOnInputComponent struct {
-	tui            *TuiBase
-	timeout        time.Duration
-	done           chan struct{}
-	useColorScheme bool
+	tui     *TuiBase
+	timeout time.Duration
+	done    chan struct{}
 }
 
 func (c *queryOnInputComponent) HandleInput(data string) {
-	if c.useColorScheme {
-		c.tui.QueryTerminalColorScheme(int(c.timeout / time.Millisecond))
-	} else {
-		c.tui.QueryTerminalBackgroundColor(int(c.timeout / time.Millisecond))
-	}
+	c.tui.QueryTerminalColors(int(c.timeout/time.Millisecond), nil)
 	close(c.done)
 }
 func (c *queryOnInputComponent) Render(width int) []string { return nil }
 func (c *queryOnInputComponent) Invalidate()               {}
 
+// TestTerminalQueryTimeoutSurvivesInputDispatch is the regression for the
+// input-dispatch deadlock in the v0.87.1-era blocking queries (pig-only
+// concurrency face; see docs/fix/2026-09-19-terminal-query-dispatch-deadlock
+// .md): the timeout timer took b.mu, which the dispatching goroutine held
+// across the resolve-channel wait, so the query — and the whole TUI — froze
+// (settings → Theme → Automatic → Apply reproduced it 100%). QueryTerminal-
+// Colors keeps the same dispatch-safety contract: the timer settles via its
+// own query mutex + CAS at ~50ms.
 func TestTerminalQueryTimeoutSurvivesInputDispatch(t *testing.T) {
-	testTerminalQueryFromDispatch(t, false)
-}
-
-// TestColorSchemeQuerySurvivesInputDispatch is the regression for the
-// deadlock the Apply button actually hit first: QueryTerminalColorScheme
-// registered its settle listener via OnTerminalColorSchemeChange, which took
-// b.mu directly — self-deadlock while the dispatching goroutine holds b.mu,
-// before the OSC 11 fallback is ever reached.
-func TestColorSchemeQuerySurvivesInputDispatch(t *testing.T) {
-	testTerminalQueryFromDispatch(t, true)
-}
-
-func testTerminalQueryFromDispatch(t *testing.T, colorScheme bool) {
-	t.Helper()
 	term := &dispatchDeadlockTerminal{out: io.Discard}
 	b := newTuiBase(term, TuiModeRegular, &dispatchDeadlockSubclass{}, nil, "")
 
 	comp := &queryOnInputComponent{
-		tui:            b,
-		timeout:        50 * time.Millisecond,
-		done:           make(chan struct{}),
-		useColorScheme: colorScheme,
+		tui:     b,
+		timeout: 50 * time.Millisecond,
+		done:    make(chan struct{}),
 	}
 	b.SetFocus(comp)
 
@@ -106,18 +94,10 @@ func testTerminalQueryFromDispatch(t *testing.T, colorScheme bool) {
 	// the query blocks inside HandleInput while b.mu is held.
 	go func() { b.handleTerminalInput("x") }()
 
-	// Pre-fix: the OSC 11 timeout timer blocked on b.mu (background-query
-	// variant) / listener registration blocked on b.mu (color-scheme
-	// variant), so the query — and this dispatch — never completes → the
-	// 5s guard fires. Post-fix: the timer settles via CAS at ~50ms.
 	select {
 	case <-comp.done:
 	case <-time.After(5 * time.Second):
-		name := "background"
-		if colorScheme {
-			name = "color-scheme"
-		}
-		t.Fatalf("input dispatch deadlocked: %s query could not settle while b.mu was held by the dispatching goroutine", name)
+		t.Fatal("input dispatch deadlocked: terminal color query could not settle while b.mu was held by the dispatching goroutine")
 	}
 }
 
@@ -205,22 +185,23 @@ func TestTerminalQueryRealReplyWinsOverTimeout(t *testing.T) {
 
 	// Reply delivered from another goroutine while the query is pending —
 	// consume path (b.mu held) must win the settle race and deliver the
-	// parsed color instead of the timeout's nil. Query timeout is long
-	// enough that only the reply path can settle within the guard.
+	// parsed color instead of the timeout's empty result. Query timeout is
+	// long enough that only the reply path can settle within the guard.
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		b.handleTerminalInput("\x1b]11;rgb:0000/0000/0000\x07")
+		b.handleTerminalInput("\x1b[?62c") // trailing DA1 ends the query
 	}()
 
-	done := make(chan *RgbColor, 1)
-	go func() { done <- b.QueryTerminalBackgroundColor(10_000) }()
+	done := make(chan TerminalColors, 1)
+	go func() { done <- b.QueryTerminalColors(10_000, nil) }()
 	select {
-	case rgb := <-done:
-		if rgb == nil {
-			t.Fatal("query returned nil (timeout) although a reply was delivered")
+	case colors := <-done:
+		if colors.Background == nil {
+			t.Fatal("query returned no background although a reply was delivered")
 		}
-		if rgb.R != 0 || rgb.G != 0 || rgb.B != 0 {
-			t.Fatalf("parsed color %+v, want 0/0/0", rgb)
+		if colors.Background.R != 0 || colors.Background.G != 0 || colors.Background.B != 0 {
+			t.Fatalf("parsed color %+v, want 0/0/0", colors.Background)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("query with real reply did not settle")

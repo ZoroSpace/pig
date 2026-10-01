@@ -15,6 +15,15 @@ import (
 	"github.com/samber/lo"
 )
 
+// startupTuiAdapter exposes the queryTerminalColors face of *tui.TuiMainScreen
+// to the theme controller (pi passes the TUI directly; pig narrows the
+// surface like theme.ThemeControllerTUI).
+type startupTuiAdapter struct{ ui *tui.TuiMainScreen }
+
+func (a startupTuiAdapter) QueryTerminalColors(timeoutMs int, onLateReply func(colors tui.TerminalColors)) tui.TerminalColors {
+	return a.ui.QueryTerminalColors(timeoutMs, onLateReply)
+}
+
 const (
 	officialPackageName   = "@earendil-works/pi-coding-agent"
 	officialAppName       = "pi"
@@ -63,12 +72,13 @@ func loadStartupThemesFor(settingsManager *core.SettingsManager) []*theme.Theme 
 // keybindings (pi: createStartupTui).
 func CreateStartupTui(settingsManager *core.SettingsManager) *tui.TuiMainScreen {
 	theme.SetRegisteredThemes(loadStartupThemesFor(settingsManager))
-	terminalTheme := theme.DetectTerminalBackgroundFromEnv(nil).Theme
+	// The system theme starts in grayscale until the terminal reports its colors.
+	theme.MarkTerminalColorsPending()
 	name := ""
-	if resolved, ok := theme.ResolveThemeSetting(mustThemeSetting(settingsManager), terminalTheme); ok {
+	if resolved, ok := theme.ResolveThemeSetting(mustThemeSetting(settingsManager), theme.GetTerminalTheme()); ok {
 		name = resolved
 	} else {
-		name = string(terminalTheme)
+		name = theme.SystemThemeName
 	}
 	theme.InitTheme(name, false)
 	tui.SetKeybindings(core.CreateKeybindingsManager("").KeybindingsManager)
@@ -78,36 +88,32 @@ func CreateStartupTui(settingsManager *core.SettingsManager) *tui.TuiMainScreen 
 	return ui
 }
 
-// StartStartupTui starts the renderer and applies the detected auto theme
-// (pi: startStartupTui).
+// StartStartupTui starts the renderer and queries the terminal colors, which
+// re-resolve the theme (including the generated system theme) when they
+// arrive (pi: startStartupTui).
 func StartStartupTui(ui *tui.TuiMainScreen, settingsManager *core.SettingsManager) {
 	ui.Start()
-	applyDetectedStartupTheme(ui, settingsManager)
+	themeSetting, _ := mustThemeSettingFull(settingsManager)
+	queryStartupTerminalColors(ui, func() {
+		name := theme.SystemThemeName
+		if resolved, ok := theme.ResolveThemeSetting(themeSetting, theme.GetTerminalTheme()); ok {
+			name = resolved
+		}
+		theme.SetTheme(name, false)
+	})
 }
 
-func applyDetectedStartupTheme(ui *tui.TuiMainScreen, settingsManager *core.SettingsManager) {
-	themeSetting, ok := mustThemeSettingFull(settingsManager)
-	if ok && theme.ParseAutoThemeSetting(themeSetting) == nil {
-		return
-	}
-
-	terminalTheme := theme.DetectTerminalThemeForAuto(theme.TerminalAutoThemeDetectionOptions{
-		Ui:        theme.TuiThemeDetector(ui),
-		TimeoutMs: 100,
+// queryStartupTerminalColors queries the terminal's colors without waiting.
+// When they arrive, including after the timeout, record them for the system
+// theme and "" (terminal default) tokens, run onColors, and re-render (pi:
+// queryStartupTerminalColors).
+func queryStartupTerminalColors(ui *tui.TuiMainScreen, onColors func()) {
+	theme.RequestTerminalColors(startupTuiAdapter{ui: ui}, func(colors tui.TerminalColors) {
+		theme.SetTerminalColors(colors)
+		onColors()
+		ui.Invalidate()
+		ui.RequestRender(false)
 	})
-	name := ""
-	if ok {
-		if resolved, resolvedOk := theme.ResolveThemeSetting(themeSetting, terminalTheme); resolvedOk {
-			name = resolved
-		} else {
-			name = string(terminalTheme)
-		}
-	} else {
-		name = string(terminalTheme)
-	}
-	theme.SetTheme(name, false)
-	ui.Invalidate()
-	ui.RequestRender(false)
 }
 
 func clearStartupTui(ui *tui.TuiMainScreen) {
@@ -206,15 +212,12 @@ func ShowFirstTimeSetup(settingsManager *core.SettingsManager) {
 
 	go func() {
 		ui.Start()
-		detectedTheme := theme.DetectTerminalThemeForAuto(theme.TerminalAutoThemeDetectionOptions{
-			Ui:        theme.TuiThemeDetector(ui),
-			TimeoutMs: 100,
-		})
-		theme.SetTheme(string(detectedTheme), false)
+		previewTheme := theme.SystemThemeName
+		theme.SetTheme(previewTheme, false)
 		component := components.NewFirstTimeSetupComponent(components.FirstTimeSetupOptions{
-			DetectedTheme: detectedTheme,
-			OnThemePreview: func(themeName theme.TerminalTheme) {
-				theme.SetTheme(string(themeName), false)
+			OnThemePreview: func(themeName string) {
+				previewTheme = themeName
+				theme.SetTheme(themeName, false)
 				ui.RequestRender(false)
 			},
 			OnSubmit: func(result components.FirstTimeSetupResult) { finish(&result) },
@@ -223,6 +226,9 @@ func ShowFirstTimeSetup(settingsManager *core.SettingsManager) {
 		ui.AddChild(component)
 		ui.SetFocus(component)
 		ui.RequestRender(false)
+		// The terminal's colors regenerate the system theme; re-rendering
+		// rebuilds the dialog with it.
+		queryStartupTerminalColors(ui, func() { theme.SetTheme(previewTheme, false) })
 	}()
 
 	result := <-resultCh

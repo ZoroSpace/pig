@@ -5,13 +5,23 @@
 // ModelResolverRuntime. tui.TUI satisfies it; tests stub it.
 //
 // pi's async controller methods (applyFromSettings/setThemeSetting) become
-// blocking calls with error returns; the terminal queries are blocking
-// (see theme.go detection deviations).
+// blocking calls with error returns; the terminal color query is blocking
+// (see the QueryTerminalColors dispatch-safety notes in tui/tui.go).
+// waitForTerminalColors becomes WaitTerminalColors (blocking on a channel).
 package theme
 
 import (
+	"sync"
+
 	"github.com/ZoroSpace/pig/tui"
 )
+
+// terminalQueryTimeoutMs is how long the system theme stays grayscale before
+// falling back to palette indices. Terminals answer the trailing DA1 request
+// right after the color replies, so this only matters for terminals that
+// answer neither. Replies arriving later still apply (pi:
+// TERMINAL_QUERY_TIMEOUT_MS).
+const terminalQueryTimeoutMs = 100
 
 // ThemeSettingsManager is the SettingsManager surface the controller
 // consumes (pi: SettingsManager). Declared deviation: package theme cannot
@@ -28,43 +38,57 @@ type ThemeSettingsManager interface {
 
 // ThemeControllerTUI is the TUI surface consumed by the controller (pi:
 // TUI used via invalidate/requestRender/setTerminalColorSchemeNotifications/
-// onTerminalColorSchemeChange/queryTerminalColorScheme;
-// queryTerminalBackgroundColor reaches the detector through
-// DetectTerminalBackgroundTheme).
+// onTerminalColorSchemeChange/queryTerminalColors).
 type ThemeControllerTUI interface {
 	Invalidate()
 	RequestRender(force bool)
 	SetTerminalColorSchemeNotifications(enabled bool)
 	OnTerminalColorSchemeChange(listener func(scheme tui.TerminalColorScheme)) func()
-	QueryTerminalBackgroundColor(timeoutMs int) *tui.RgbColor
-	QueryTerminalColorScheme(timeoutMs int) *tui.TerminalColorScheme
+	QueryTerminalColors(timeoutMs int, onLateReply func(colors tui.TerminalColors)) tui.TerminalColors
 }
 
-// controllerThemeDetector adapts the controller TUI to the detection
-// interfaces (pi passes the TUI directly; pig's detector interfaces carry
-// explicit error returns).
-type controllerThemeDetector struct{ ui ThemeControllerTUI }
-
-// TuiThemeDetector adapts any tui.TUI to the theme detection interfaces
-// (pig addition for the startup-ui/interactive-mode callers; pi passes the
-// TUI directly).
-func TuiThemeDetector(ui ThemeControllerTUI) TerminalAutoThemeDetector {
-	return controllerThemeDetector{ui: ui}
+// TerminalColorQuerier is the narrow face requestTerminalColors needs (pi
+// passes the full TUI; pig narrows so the startup selectors can share the
+// helper without a full controller TUI).
+type TerminalColorQuerier interface {
+	QueryTerminalColors(timeoutMs int, onLateReply func(colors tui.TerminalColors)) tui.TerminalColors
 }
 
-func (d controllerThemeDetector) QueryTerminalBackgroundColor(timeoutMs int) (*tui.RgbColor, error) {
-	// pig's blocking query reports failure as nil (pi: rejected promise →
-	// catch → env fallback; TUI timeout → nil → same path).
-	return d.ui.QueryTerminalBackgroundColor(timeoutMs), nil
+// RequestTerminalColors queries the terminal's colors and passes them to
+// apply when the query completes or times out, and again if the terminal
+// answers after the timeout. A failed query applies no colors. Settles after
+// the first apply (pi: requestTerminalColors; pig blocks and returns the
+// first result).
+func RequestTerminalColors(ui TerminalColorQuerier, apply func(colors tui.TerminalColors)) tui.TerminalColors {
+	return ui.QueryTerminalColors(terminalQueryTimeoutMs, apply)
 }
 
-func (d controllerThemeDetector) QueryTerminalColorScheme(timeoutMs int) (*TerminalTheme, error) {
-	scheme := d.ui.QueryTerminalColorScheme(timeoutMs)
-	if scheme == nil {
-		return nil, nil
+func sameRgb(a, b *tui.RgbColor) bool {
+	if a == b {
+		return true
 	}
-	theme := TerminalTheme(*scheme)
-	return &theme, nil
+	if a == nil || b == nil {
+		return false
+	}
+	return a.R == b.R && a.G == b.G && a.B == b.B
+}
+
+func sameTerminalColors(a, b tui.TerminalColors) bool {
+	if !sameRgb(a.Foreground, b.Foreground) || !sameRgb(a.Background, b.Background) {
+		return false
+	}
+	if len(a.Palette) == 0 && len(b.Palette) == 0 {
+		return true
+	}
+	if len(a.Palette) != len(b.Palette) {
+		return false
+	}
+	for i := range a.Palette {
+		if a.Palette[i] != b.Palette[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // ThemeResult is pi's ThemeResult = { success: boolean; error?: string }.
@@ -80,11 +104,15 @@ type InteractiveThemeController struct {
 	getSettingsManager             func() ThemeSettingsManager
 	showError                      func(message string)
 	onChanged                      func()
-	currentThemeSetting            string // "" = undefined (pi: string | undefined)
-	terminalTheme                  TerminalTheme
-	activeThemeName                string // "" = undefined (pi: string | undefined)
+	currentThemeSetting            string              // "" = undefined (pi: string | undefined)
+	terminalColors                 *tui.TerminalColors // nil = unset; last reported colors
+	activeThemeName                string              // "" = undefined (pi: string | undefined)
 	autoSyncEnabled                bool
 	terminalColorSchemeUnsubscribe func()
+	// terminalColorQuery settles when the latest color query completed or
+	// timed out, and its colors applied (pi: terminalColorQuery promise →
+	// pig: a fresh channel per query; WaitTerminalColors blocks on it).
+	terminalColorQuery chan struct{}
 }
 
 // InteractiveThemeControllerOptions carries the constructor's callbacks
@@ -104,13 +132,12 @@ func NewInteractiveThemeController(ui ThemeControllerTUI, options InteractiveThe
 		showError:           options.ShowError,
 		onChanged:           options.OnChanged,
 		currentThemeSetting: options.InitialThemeSetting,
-		terminalTheme:       DetectTerminalBackgroundFromEnv(nil).Theme,
+		terminalColorQuery:  make(chan struct{}),
 	}
-	setting := c.currentThemeSetting
-	if setting == "" {
-		setting, _ = c.getSettingsManager().GetThemeSetting()
-	}
-	c.activeThemeName, _ = ResolveThemeSetting(setting, c.terminalTheme)
+	c.activeThemeName = c.resolveThemeName()
+	// The system theme starts in grayscale; color follows once the terminal
+	// reports its colors.
+	MarkTerminalColorsPending()
 	InitTheme(c.activeThemeName, true)
 	c.bindTerminalColorSchemeListener()
 	return c
@@ -127,7 +154,7 @@ func (c *InteractiveThemeController) RebindTui() {
 }
 
 // Dispose stops terminal appearance updates and drops the color-scheme
-// listener subscription (pi: dispose, v0.85.1).
+// listener subscription (pi: dispose).
 func (c *InteractiveThemeController) Dispose() {
 	c.setAutoSync(false)
 	if c.terminalColorSchemeUnsubscribe != nil {
@@ -136,47 +163,24 @@ func (c *InteractiveThemeController) Dispose() {
 	}
 }
 
-// ApplyFromSettings resolves the theme from the current setting and applies
-// it (pi: applyFromSettings).
-func (c *InteractiveThemeController) ApplyFromSettings() error {
-	settingsManager := c.getSettingsManager()
-	themeSetting := c.currentThemeSetting
-	if themeSetting == "" {
-		themeSetting, _ = settingsManager.GetThemeSetting()
-	}
-	if autoTheme := ParseAutoThemeSetting(themeSetting); autoTheme != nil {
-		c.terminalTheme = DetectTerminalThemeForAuto(TerminalAutoThemeDetectionOptions{
-			Ui:        controllerThemeDetector{ui: c.ui},
-			TimeoutMs: 100,
-		})
-		c.setAutoSync(true)
-		theme := autoTheme.DarkTheme
-		if c.terminalTheme == TerminalThemeLight {
-			theme = autoTheme.LightTheme
-		}
-		c.applyThemeName(theme, true)
-		return nil
-	}
+// ApplyFromSettings applies the theme setting now and queries the terminal's
+// colors, which update the theme when they arrive. Theme pairs and the system
+// theme follow terminal appearance changes (pi: applyFromSettings).
+func (c *InteractiveThemeController) ApplyFromSettings() {
+	themeSetting := c.getThemeSetting()
+	themeName := c.resolveThemeName()
+	c.setAutoSync(ParseAutoThemeSetting(themeSetting) != nil || themeName == SystemThemeName)
+	c.applyThemeName(themeName, themeSetting != "")
+	c.queryTerminalColors()
+}
 
-	c.setAutoSync(false)
-	if themeSetting != "" {
-		c.applyThemeName(themeSetting, true)
-		return nil
-	}
-
-	detection := DetectTerminalBackgroundTheme(TerminalBackgroundThemeDetectionOptions{
-		Ui:        controllerThemeDetector{ui: c.ui},
-		TimeoutMs: 100,
-	})
-	c.terminalTheme = detection.Theme
-	if !c.applyThemeName(string(detection.Theme), false).Success {
-		return nil
-	}
-	if detection.Confidence == "high" {
-		settingsManager.SetTheme(string(detection.Theme))
-		settingsManager.Flush()
-	}
-	return nil
+// WaitTerminalColors blocks until the latest color query completed or timed
+// out. Content that bakes theme colors into strings, such as the startup
+// header, should be built after this. Terminals answer the DA1 request right
+// after the color replies, so this only takes the full timeout when a
+// terminal answers nothing (pi: waitForTerminalColors).
+func (c *InteractiveThemeController) WaitTerminalColors() {
+	<-c.terminalColorQuery
 }
 
 // GetThemeSelection returns the effective theme setting (pi:
@@ -196,7 +200,7 @@ func (c *InteractiveThemeController) GetThemeSelection() (string, bool) {
 
 // SetThemeName selects a theme explicitly (pi: setThemeName).
 func (c *InteractiveThemeController) SetThemeName(themeName string, showError bool) ThemeResult {
-	c.setAutoSync(false)
+	c.setAutoSync(themeName == SystemThemeName)
 	result := c.applyThemeName(themeName, showError)
 	if result.Success {
 		c.currentThemeSetting = themeName
@@ -206,9 +210,9 @@ func (c *InteractiveThemeController) SetThemeName(themeName string, showError bo
 
 // SetThemeSetting persists and applies a theme setting (pi:
 // setThemeSetting).
-func (c *InteractiveThemeController) SetThemeSetting(themeSetting string) error {
+func (c *InteractiveThemeController) SetThemeSetting(themeSetting string) {
 	c.currentThemeSetting = themeSetting
-	return c.ApplyFromSettings()
+	c.ApplyFromSettings()
 }
 
 // SetThemeInstance installs a direct theme instance (pi: setThemeInstance).
@@ -222,7 +226,7 @@ func (c *InteractiveThemeController) SetThemeInstance(themeInstance *Theme) Them
 
 // Preview applies a theme without persisting the selection (pi: preview).
 func (c *InteractiveThemeController) Preview(themeSettingOrName string) {
-	themeName, ok := ResolveThemeSetting(themeSettingOrName, c.terminalTheme)
+	themeName, ok := ResolveThemeSetting(themeSettingOrName, GetTerminalTheme())
 	if !ok {
 		if c.activeThemeName == "" {
 			return
@@ -243,7 +247,24 @@ func (c *InteractiveThemeController) DisableAutoSync() {
 // GetTerminalTheme returns the detected terminal appearance (pi:
 // getTerminalTheme).
 func (c *InteractiveThemeController) GetTerminalTheme() TerminalTheme {
-	return c.terminalTheme
+	return GetTerminalTheme()
+}
+
+func (c *InteractiveThemeController) getThemeSetting() string {
+	if c.currentThemeSetting != "" {
+		return c.currentThemeSetting
+	}
+	setting, _ := c.getSettingsManager().GetThemeSetting()
+	return setting
+}
+
+// resolveThemeName returns the theme for the current setting and terminal
+// appearance. Without a setting, pi uses the system theme.
+func (c *InteractiveThemeController) resolveThemeName() string {
+	if resolved, ok := ResolveThemeSetting(c.getThemeSetting(), GetTerminalTheme()); ok {
+		return resolved
+	}
+	return SystemThemeName
 }
 
 func (c *InteractiveThemeController) applyThemeName(themeName string, showError bool) SetThemeResult {
@@ -251,18 +272,87 @@ func (c *InteractiveThemeController) applyThemeName(themeName string, showError 
 	if result.Success {
 		c.activeThemeName = themeName
 	} else {
-		c.activeThemeName = "dark"
+		c.activeThemeName = SystemThemeName
 	}
 	c.notifyChanged()
 	if !result.Success && showError {
-		c.showError("Failed to load theme \"" + themeName + "\": " + result.Error + "\nFell back to dark theme.")
+		c.showError("Failed to load theme \"" + themeName + "\": " + result.Error + "\nFell back to the system theme.")
 	}
 	return result
 }
 
-func (c *InteractiveThemeController) notifyChanged() {
+// queryTerminalColors queries the terminal's colors without waiting for them;
+// WaitTerminalColors waits for this query (pi: queryTerminalColors).
+func (c *InteractiveThemeController) queryTerminalColors() {
+	settled := make(chan struct{})
+	var once sync.Once
+	closeSettled := func() { once.Do(func() { close(settled) }) }
+	c.terminalColorQuery = settled
+	first := c.ui.QueryTerminalColors(terminalQueryTimeoutMs, func(colors tui.TerminalColors) {
+		c.applyTerminalColors(colors)
+		closeSettled()
+	})
+	// The blocking query returns the colors reported by the timeout; the
+	// late-reply callback covers replies that arrive afterwards (pi:
+	// query.then(apply, ...) with onLateReply: apply).
+	c.applyTerminalColors(first)
+	closeSettled()
+}
+
+// applyTerminalColors records reported colors: themes use the default colors
+// for tokens set to "", the system theme is generated from all of them, and
+// light/dark detection uses them. Re-renders only when they changed (pi:
+// applyTerminalColors).
+func (c *InteractiveThemeController) applyTerminalColors(reported tui.TerminalColors) {
+	previous := c.terminalColors
+	next := tui.TerminalColors{}
+	if reported.Foreground != nil || (previous != nil && previous.Foreground != nil) {
+		if reported.Foreground != nil {
+			fg := *reported.Foreground
+			next.Foreground = &fg
+		} else {
+			next.Foreground = previous.Foreground
+		}
+	}
+	if reported.Background != nil || (previous != nil && previous.Background != nil) {
+		if reported.Background != nil {
+			bg := *reported.Background
+			next.Background = &bg
+		} else {
+			next.Background = previous.Background
+		}
+	}
+	if len(reported.Palette) > 0 || (previous != nil && len(previous.Palette) > 0) {
+		if len(reported.Palette) > 0 {
+			next.Palette = reported.Palette
+		} else {
+			next.Palette = previous.Palette
+		}
+	}
+	// Re-rendering rebuilds every component, so skip it when nothing changed
+	// (including timeouts).
+	if previous != nil && sameTerminalColors(*previous, next) {
+		return
+	}
+	c.terminalColors = &next
+	SetTerminalColors(next)
+	c.reapplyForTerminal()
 	c.ui.Invalidate()
-	c.onChanged()
+	c.ui.RequestRender(false)
+}
+
+// reapplyForTerminal re-applies the setting after the terminal's colors or
+// appearance changed: regenerate the system theme, or switch the theme of a
+// pair. Themes set through extensions or previews are left alone (pi:
+// reapplyForTerminal).
+func (c *InteractiveThemeController) reapplyForTerminal() {
+	if c.activeThemeName == "<in-memory>" {
+		return
+	}
+	themeName := c.resolveThemeName()
+	if themeName == SystemThemeName || themeName != c.activeThemeName {
+		c.applyThemeName(themeName, false)
+	}
 }
 
 func (c *InteractiveThemeController) setAutoSync(enabled bool) {
@@ -275,29 +365,27 @@ func (c *InteractiveThemeController) setAutoSync(enabled bool) {
 
 func (c *InteractiveThemeController) bindTerminalColorSchemeListener() {
 	c.terminalColorSchemeUnsubscribe = c.ui.OnTerminalColorSchemeChange(func(terminalTheme tui.TerminalColorScheme) {
-		c.applyTerminalTheme(TerminalTheme(terminalTheme))
+		c.applyTerminalColorSchemeChange(TerminalTheme(terminalTheme))
 	})
 }
 
-func (c *InteractiveThemeController) applyTerminalTheme(terminalTheme TerminalTheme) {
+// applyTerminalColorSchemeChange handles the terminal reporting a light/dark
+// switch. Its colors changed too, so query them again: they decide the
+// appearance. The reported scheme only matters for terminals that do not
+// report their background (pi: applyTerminalColorSchemeChange).
+func (c *InteractiveThemeController) applyTerminalColorSchemeChange(terminalTheme TerminalTheme) {
 	if !c.autoSyncEnabled {
 		return
 	}
-	c.terminalTheme = terminalTheme
-	setting := c.currentThemeSetting
-	if setting == "" {
-		setting, _ = c.getSettingsManager().GetThemeSetting()
+	previous := GetTerminalTheme()
+	SetTerminalColorScheme(terminalTheme)
+	if GetTerminalTheme() != previous {
+		c.reapplyForTerminal()
 	}
-	autoTheme := ParseAutoThemeSetting(setting)
-	if autoTheme == nil {
-		c.setAutoSync(false)
-		return
-	}
-	themeName := autoTheme.DarkTheme
-	if terminalTheme == TerminalThemeLight {
-		themeName = autoTheme.LightTheme
-	}
-	if themeName != c.activeThemeName {
-		c.applyThemeName(themeName, false)
-	}
+	c.queryTerminalColors()
+}
+
+func (c *InteractiveThemeController) notifyChanged() {
+	c.ui.Invalidate()
+	c.onChanged()
 }

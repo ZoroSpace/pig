@@ -16,12 +16,13 @@ import (
 // createInteractiveTuiOptions mirror pi's InteractiveTuiOptions. Terminal is
 // injectable for tests (pi: terminal?); nil = ProcessTerminal.
 type createInteractiveTuiOptions struct {
-	tuiMode                core.TuiMode
-	showHardwareCursor     bool
-	logDirectory           string
-	terminal               tui.Terminal
-	onRightClickPaste      func()
-	fullscreenCopyOnSelect bool
+	tuiMode                    core.TuiMode
+	showHardwareCursor         bool
+	logDirectory               string
+	terminal                   tui.Terminal
+	onRightClickPaste          func()
+	fullscreenCopyOnSelect     bool
+	fullscreenWheelScrollLines int
 }
 
 // interactiveCopyToClipboard is the clipboard write used by the fullscreen
@@ -46,6 +47,7 @@ func createInteractiveTui(options createInteractiveTuiOptions) tui.TUI {
 			return t.Bg("searchMatchBg", t.Fg("searchMatchText", text))
 		}
 		copyOnSelect := options.fullscreenCopyOnSelect
+		wheelScrollLines := options.fullscreenWheelScrollLines
 		return tui.NewTuiAltScreen(terminal, &cursor, options.logDirectory, &tui.TuiAltScreenOptions{
 			SearchMatchStyle: func(text string) string {
 				t := theme.Current()
@@ -72,6 +74,7 @@ func createInteractiveTui(options createInteractiveTuiOptions) tui.TUI {
 				label += " "
 				return t.Bg("selectedBg", t.Fg("text", label))
 			},
+			WheelScrollLines:  wheelScrollLines,
 			OpenUrl:           utils.OpenBrowser,
 			OnRightClickPaste: options.onRightClickPaste,
 			CopyOnSelect:      &copyOnSelect,
@@ -130,11 +133,8 @@ func (r *tuiReference) OnTerminalColorSchemeChange(l func(scheme tui.TerminalCol
 func (r *tuiReference) SetTerminalColorSchemeNotifications(enabled bool) {
 	r.getTui().SetTerminalColorSchemeNotifications(enabled)
 }
-func (r *tuiReference) QueryTerminalBackgroundColor(timeoutMs int) *tui.RgbColor {
-	return r.getTui().QueryTerminalBackgroundColor(timeoutMs)
-}
-func (r *tuiReference) QueryTerminalColorScheme(timeoutMs int) *tui.TerminalColorScheme {
-	return r.getTui().QueryTerminalColorScheme(timeoutMs)
+func (r *tuiReference) QueryTerminalColors(timeoutMs int, onLateReply func(colors tui.TerminalColors)) tui.TerminalColors {
+	return r.getTui().QueryTerminalColors(timeoutMs, onLateReply)
 }
 
 // Convenience accessors (pi: getters).

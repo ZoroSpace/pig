@@ -6,6 +6,7 @@ package components
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ZoroSpace/pig/agent"
@@ -82,91 +83,93 @@ func cjkSegmenterLabel(mode string) string {
 // SettingsConfig is the settings snapshot the selector renders (pi:
 // SettingsConfig).
 type SettingsConfig struct {
-	AutoCompact             bool
-	DefaultModel            string
-	CurrentModel            *ai.Model
-	AvailableDefaultModels  []ai.Model
-	ShowImages              bool
-	ImageWidthCells         int64
-	AutoResizeImages        bool
-	BlockImages             bool
-	EnableSkillCommands     bool
-	SteeringMode            string // "all" | "one-at-a-time"
-	FollowUpMode            string // "all" | "one-at-a-time"
-	Transport               ai.Transport
-	HTTPIdleTimeoutMs       int64
-	CacheWarmingMode        core.CacheWarmingMode
-	ThinkingLevel           agent.ThinkingLevel
-	AvailableThinkingLevels []agent.ThinkingLevel
-	ModelThinkingLevels     map[string]agent.ThinkingLevel
-	CurrentTheme            string
-	TerminalTheme           theme.TerminalTheme
-	AvailableThemes         []string
-	HideThinkingBlock       bool
-	MermaidRenderingMode    core.MermaidRenderingMode
-	ShowCacheMissNotices    bool
-	CollapseChangelog       bool
-	EnableInstallTelemetry  bool
-	DoubleEscapeAction      string // "fork" | "tree" | "none"
-	TreeFilterMode          string // "default" | "no-tools" | "user-only" | "labeled-only" | "all"
-	ShowHardwareCursor      bool
-	EditorPaddingX          int64
-	OutputPad               int // 0 | 1
-	AutocompleteMaxVisible  int64
-	QuietStartup            bool
-	DefaultProjectTrust     core.DefaultProjectTrust
-	ClearOnShrink           bool
-	ShowTerminalProgress    bool
-	TuiMode                 core.TuiMode
-	FullscreenExitOutput    core.FullscreenExitOutput
-	FullscreenScrollbar     core.ScrollViewScrollbar
-	FullscreenCopyOnSelect  bool
-	Warnings                core.WarningSettings
-	CJKSegmenter            string // pig-only: "bigram" | "sst" | "gse"
-	ShowResourceStats       bool   // pig-only: footer resource segment (MEM now, more later)
+	AutoCompact                bool
+	DefaultModel               string
+	CurrentModel               *ai.Model
+	AvailableDefaultModels     []ai.Model
+	ShowImages                 bool
+	ImageWidthCells            int64
+	AutoResizeImages           bool
+	BlockImages                bool
+	EnableSkillCommands        bool
+	SteeringMode               string // "all" | "one-at-a-time"
+	FollowUpMode               string // "all" | "one-at-a-time"
+	Transport                  ai.Transport
+	HTTPIdleTimeoutMs          int64
+	CacheWarmingMode           core.CacheWarmingMode
+	ThinkingLevel              agent.ThinkingLevel
+	AvailableThinkingLevels    []agent.ThinkingLevel
+	ModelThinkingLevels        map[string]agent.ThinkingLevel
+	CurrentTheme               string
+	TerminalTheme              theme.TerminalTheme
+	AvailableThemes            []string
+	HideThinkingBlock          bool
+	MermaidRenderingMode       core.MermaidRenderingMode
+	ShowCacheMissNotices       bool
+	CollapseChangelog          bool
+	EnableInstallTelemetry     bool
+	DoubleEscapeAction         string // "fork" | "tree" | "none"
+	TreeFilterMode             string // "default" | "no-tools" | "user-only" | "labeled-only" | "all"
+	ShowHardwareCursor         bool
+	EditorPaddingX             int64
+	OutputPad                  int // 0 | 1
+	AutocompleteMaxVisible     int64
+	QuietStartup               bool
+	DefaultProjectTrust        core.DefaultProjectTrust
+	ClearOnShrink              bool
+	ShowTerminalProgress       bool
+	TuiMode                    core.TuiMode
+	FullscreenExitOutput       core.FullscreenExitOutput
+	FullscreenScrollbar        core.ScrollViewScrollbar
+	FullscreenCopyOnSelect     bool
+	FullscreenWheelScrollLines int
+	Warnings                   core.WarningSettings
+	CJKSegmenter               string // pig-only: "bigram" | "sst" | "gse"
+	ShowResourceStats          bool   // pig-only: footer resource segment (MEM now, more later)
 }
 
 // SettingsCallbacks carries the change handlers (pi: SettingsCallbacks).
 // Optional members (pi: onThemePreview?) stay nil-able.
 type SettingsCallbacks struct {
-	OnAutoCompactChange            func(enabled bool)
-	OnShowImagesChange             func(enabled bool)
-	OnImageWidthCellsChange        func(width int64)
-	OnAutoResizeImagesChange       func(enabled bool)
-	OnBlockImagesChange            func(blocked bool)
-	OnEnableSkillCommandsChange    func(enabled bool)
-	OnSteeringModeChange           func(mode string)
-	OnFollowUpModeChange           func(mode string)
-	OnTransportChange              func(transport ai.Transport)
-	OnHTTPIdleTimeoutMsChange      func(timeoutMs int64)
-	OnCacheWarmingModeChange       func(mode core.CacheWarmingMode)
-	OnModelThinkingLevelChange     func(provider string, modelID string, level agent.ThinkingLevel)
-	OnModelThinkingLevelRemove     func(provider string, modelID string)
-	OnThemeChange                  func(themeSetting string)
-	OnThemePreview                 func(themeName string)
-	OnHideThinkingBlockChange      func(hidden bool)
-	OnMermaidRenderingModeChange   func(mode core.MermaidRenderingMode)
-	OnShowCacheMissNoticesChange   func(shown bool)
-	OnCollapseChangelogChange      func(collapsed bool)
-	OnEnableInstallTelemetryChange func(enabled bool)
-	OnDoubleEscapeActionChange     func(action string)
-	OnTreeFilterModeChange         func(mode string)
-	OnShowHardwareCursorChange     func(enabled bool)
-	OnEditorPaddingXChange         func(padding int64)
-	OnOutputPadChange              func(padding int)
-	OnAutocompleteMaxVisibleChange func(maxVisible int64)
-	OnQuietStartupChange           func(enabled bool)
-	OnDefaultProjectTrustChange    func(defaultProjectTrust core.DefaultProjectTrust)
-	OnClearOnShrinkChange          func(enabled bool)
-	OnShowTerminalProgressChange   func(enabled bool)
-	OnTuiModeChange                func(mode core.TuiMode)
-	OnFullscreenExitOutputChange   func(output core.FullscreenExitOutput)
-	OnFullscreenScrollbarChange    func(mode core.ScrollViewScrollbar)
-	OnFullscreenCopyOnSelectChange func(enabled bool)
-	OnWarningsChange               func(warnings core.WarningSettings)
-	OnCJKSegmenterChange           func(mode string)  // pig-only
-	OnShowResourceStatsChange      func(enabled bool) // pig-only
-	OnCancel                       func()
+	OnAutoCompactChange                func(enabled bool)
+	OnShowImagesChange                 func(enabled bool)
+	OnImageWidthCellsChange            func(width int64)
+	OnAutoResizeImagesChange           func(enabled bool)
+	OnBlockImagesChange                func(blocked bool)
+	OnEnableSkillCommandsChange        func(enabled bool)
+	OnSteeringModeChange               func(mode string)
+	OnFollowUpModeChange               func(mode string)
+	OnTransportChange                  func(transport ai.Transport)
+	OnHTTPIdleTimeoutMsChange          func(timeoutMs int64)
+	OnCacheWarmingModeChange           func(mode core.CacheWarmingMode)
+	OnModelThinkingLevelChange         func(provider string, modelID string, level agent.ThinkingLevel)
+	OnModelThinkingLevelRemove         func(provider string, modelID string)
+	OnThemeChange                      func(themeSetting string)
+	OnThemePreview                     func(themeName string)
+	OnHideThinkingBlockChange          func(hidden bool)
+	OnMermaidRenderingModeChange       func(mode core.MermaidRenderingMode)
+	OnShowCacheMissNoticesChange       func(shown bool)
+	OnCollapseChangelogChange          func(collapsed bool)
+	OnEnableInstallTelemetryChange     func(enabled bool)
+	OnDoubleEscapeActionChange         func(action string)
+	OnTreeFilterModeChange             func(mode string)
+	OnShowHardwareCursorChange         func(enabled bool)
+	OnEditorPaddingXChange             func(padding int64)
+	OnOutputPadChange                  func(padding int)
+	OnAutocompleteMaxVisibleChange     func(maxVisible int64)
+	OnQuietStartupChange               func(enabled bool)
+	OnDefaultProjectTrustChange        func(defaultProjectTrust core.DefaultProjectTrust)
+	OnClearOnShrinkChange              func(enabled bool)
+	OnShowTerminalProgressChange       func(enabled bool)
+	OnTuiModeChange                    func(mode core.TuiMode)
+	OnFullscreenExitOutputChange       func(output core.FullscreenExitOutput)
+	OnFullscreenScrollbarChange        func(mode core.ScrollViewScrollbar)
+	OnFullscreenCopyOnSelectChange     func(enabled bool)
+	OnFullscreenWheelScrollLinesChange func(lines int)
+	OnWarningsChange                   func(warnings core.WarningSettings)
+	OnCJKSegmenterChange               func(mode string)  // pig-only
+	OnShowResourceStatsChange          func(enabled bool) // pig-only
+	OnCancel                           func()
 }
 
 // =============================================================================
@@ -216,6 +219,33 @@ func NewWarningSettingsSubmenu(warnings core.WarningSettings, onChange func(warn
 
 	w.AddChild(w.settingsList)
 	return w
+}
+
+// fullscreenWheelScrollValues builds the picker values: "auto" plus the
+// preset lines and the current value, deduped, sorted (pi: the values array
+// in the fullscreen-wheel-scroll-lines entry).
+func fullscreenWheelScrollValues(current int) []string {
+	seen := map[string]bool{"auto": true}
+	values := []string{"auto"}
+	add := func(lines int) {
+		key := strconv.Itoa(lines)
+		if !seen[key] {
+			seen[key] = true
+			values = append(values, key)
+		}
+	}
+	for _, preset := range []int{1, 2, 3, 5, 10, current} {
+		if preset != core.WheelScrollLinesAutoSetting {
+			add(preset)
+		}
+	}
+	numbers := values[1:]
+	sort.Slice(numbers, func(i, j int) bool {
+		a, _ := strconv.Atoi(numbers[i])
+		b, _ := strconv.Atoi(numbers[j])
+		return a < b
+	})
+	return append([]string{"auto"}, numbers...)
 }
 
 func boolSettingValue(v bool) string {
@@ -269,21 +299,37 @@ func themeItems(availableThemes []string, currentTheme string) []tui.SelectItem 
 		if name == currentTheme {
 			label = "✓ " + name
 		}
-		items = append(items, tui.SelectItem{Value: name, Label: label})
+		item := tui.SelectItem{Value: name, Label: label}
+		if name == theme.SystemThemeName {
+			item.Description = "Theme created from your terminal's colors"
+		}
+		items = append(items, item)
 	}
 	return items
 }
 
 const automaticThemeValue = "/"
 
+// singleModeThemeItems orders the list: the system theme first, then
+// automatic mode, then the remaining themes (pi v0.99.1).
 func singleModeThemeItems(availableThemes []string, currentTheme string) []tui.SelectItem {
-	return append([]tui.SelectItem{
-		{
-			Value:       automaticThemeValue,
-			Label:       "  Automatic",
-			Description: "Use separate themes for light and dark terminal appearance",
-		},
-	}, themeItems(availableThemes, currentTheme)...)
+	items := themeItems(availableThemes, currentTheme)
+	system := []tui.SelectItem{}
+	rest := make([]tui.SelectItem, 0, len(items))
+	for _, item := range items {
+		if item.Value == theme.SystemThemeName {
+			system = append(system, item)
+		} else {
+			rest = append(rest, item)
+		}
+	}
+	out := append([]tui.SelectItem{}, system...)
+	out = append(out, tui.SelectItem{
+		Value:       automaticThemeValue,
+		Label:       "  Automatic",
+		Description: "Use separate themes for light and dark terminal appearance",
+	})
+	return append(out, rest...)
 }
 
 func preferredTheme(availableThemes []string, preferred string, fallback string) string {
@@ -317,7 +363,7 @@ func defaultAutomaticThemes(currentThemeSetting string, availableThemes []string
 	if !strings.Contains(currentThemeSetting, "/") {
 		currentFixedTheme = currentThemeSetting
 	}
-	themeName := preferredTheme(availableThemes, currentFixedTheme, "dark")
+	themeName := preferredTheme(availableThemes, currentFixedTheme, theme.SystemThemeName)
 	return themeName, themeName
 }
 
@@ -377,7 +423,7 @@ func NewThemeSubmenu(
 	if preferred == "" && autoTheme != nil {
 		preferred = t.getActiveAutomaticTheme()
 	}
-	t.singleTheme = preferredTheme(availableThemes, preferred, "dark")
+	t.singleTheme = preferredTheme(availableThemes, preferred, theme.SystemThemeName)
 
 	if t.mode == "automatic" {
 		t.showAutomaticMenu()
@@ -931,6 +977,18 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 			Values:       []string{"true", "false"},
 		},
 		{
+			Id:          "fullscreen-wheel-scroll-lines",
+			Label:       "Fullscreen wheel scrolling",
+			Description: "Lines per mouse-wheel event in fullscreen mode; 'auto' speeds up fast wheel spins where the terminal does not",
+			CurrentValue: func() string {
+				if config.FullscreenWheelScrollLines == core.WheelScrollLinesAutoSetting {
+					return "auto"
+				}
+				return strconv.Itoa(config.FullscreenWheelScrollLines)
+			}(),
+			Values: fullscreenWheelScrollValues(config.FullscreenWheelScrollLines),
+		},
+		{
 			Id:           "theme",
 			Label:        "Theme",
 			Description:  "Color theme for the interface",
@@ -1268,6 +1326,17 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 			case "fullscreen-copy-on-select":
 				if callbacks.OnFullscreenCopyOnSelectChange != nil {
 					callbacks.OnFullscreenCopyOnSelectChange(newValue == "true")
+				}
+			case "fullscreen-wheel-scroll-lines":
+				if callbacks.OnFullscreenWheelScrollLinesChange != nil {
+					if newValue == "auto" {
+						callbacks.OnFullscreenWheelScrollLinesChange(core.WheelScrollLinesAutoSetting)
+					} else {
+						lines, err := strconv.Atoi(newValue)
+						if err == nil {
+							callbacks.OnFullscreenWheelScrollLinesChange(lines)
+						}
+					}
 				}
 			case "cjk-segmenter":
 				if callbacks.OnCJKSegmenterChange != nil {

@@ -84,6 +84,32 @@ func buildFdPathQuery(query string) string {
 	return pattern
 }
 
+// pathWrappers maps opening wrappers that may precede a path in prose to
+// their closing counterpart (pi: PATH_WRAPPERS, v0.99.1).
+var pathWrappers = map[rune]rune{
+	'(': ')',
+	'[': ']',
+	'{': '}',
+	'<': '>',
+	'`': '`',
+}
+
+// stripLeadingWrappers strips opening wrappers before a path, e.g. "(~/Dev" →
+// "~/Dev" or "`src/ma" → "src/ma". A wrapper is kept when the token also
+// contains its closer, e.g. "app/[slug]/pa" or "(group)/pa" (pi:
+// stripLeadingWrappers, v0.99.1).
+func stripLeadingWrappers(token string) string {
+	for len(token) > 0 {
+		first, size := utf8.DecodeRuneInString(token)
+		closer, ok := pathWrappers[first]
+		if !ok || strings.ContainsRune(token[size:], closer) {
+			break
+		}
+		token = token[size:]
+	}
+	return token
+}
+
 func findLastDelimiter(text string) int {
 	// pi v0.86.0 iterates code points and also accepts autocomplete separator
 	// characters (whitespace or CJK punctuation) as delimiters; indices are
@@ -131,17 +157,27 @@ func findUnclosedQuoteStart(text string) *int {
 }
 
 func isTokenStart(text string, index int) bool {
+	// pi v0.99.1: skip opening wrappers before the start, e.g. "(@src" or
+	// "`@src" still start a token (pi: the while loop over PATH_WRAPPERS).
+	start := index
+	for start > 0 {
+		previous, size := utf8.DecodeLastRuneInString(text[:start])
+		if _, ok := pathWrappers[previous]; !ok {
+			break
+		}
+		start -= size
+	}
 	// pi v0.86.0: PATH_DELIMITERS.has(text[index - 1] ?? "") ||
 	// tokenStartRegex.test(text.slice(0, index)) — the second check is true
 	// for an empty prefix (index == 0) or when the code point before the
 	// index is a whitespace/CJK-punctuation separator.
-	if index == 0 {
+	if start == 0 {
 		return true
 	}
-	if pathDelimiters[text[index-1]] {
+	if pathDelimiters[text[start-1]] {
 		return true
 	}
-	return isAutocompleteSeparatorAtEnd(text[:index])
+	return isAutocompleteSeparatorAtEnd(text[:start])
 }
 
 func extractQuotedPrefix(text string) *string {
@@ -492,14 +528,32 @@ func (p *CombinedAutocompleteProvider) GetSuggestions(ctx context.Context, lines
 				commandItems = append(commandItems, entry)
 			}
 
-			filtered := FuzzyFilter(commandItems, prefix, func(item AutocompleteItem) string {
-				// pi v0.86.0: skill: commands match on the bare skill name unless
-				// the query explicitly starts with "skill:".
-				if !strings.HasPrefix(prefix, "skill:") && strings.HasPrefix(item.Value, "skill:") {
+			// pi v0.99.1 (#9944): skill: commands match on the bare skill
+			// name unless the query explicitly starts with "skill:"; matches
+			// that only match the full "skill:..." name follow the bare-name
+			// matches instead of being dropped when the query does not start
+			// with "skill:".
+			bareNameMatches := FuzzyFilter(commandItems, prefix, func(item AutocompleteItem) string {
+				if strings.HasPrefix(item.Value, "skill:") {
 					return item.Value[len("skill:"):]
 				}
 				return item.Value
 			})
+			bareNameMatchSet := make(map[AutocompleteItem]bool, len(bareNameMatches))
+			for _, item := range bareNameMatches {
+				bareNameMatchSet[item] = true
+			}
+			fullNameOnly := make([]AutocompleteItem, 0)
+			for _, item := range commandItems {
+				if !strings.HasPrefix(item.Value, "skill:") || bareNameMatchSet[item] {
+					continue
+				}
+				fullNameOnly = append(fullNameOnly, item)
+			}
+			fullNameOnlyMatches := FuzzyFilter(fullNameOnly, prefix, func(item AutocompleteItem) string {
+				return item.Value
+			})
+			filtered := append(append([]AutocompleteItem{}, bareNameMatches...), fullNameOnlyMatches...)
 			mapped := make([]AutocompleteItem, 0, len(filtered))
 			for _, item := range filtered {
 				mapped = append(mapped, AutocompleteItem{Value: item.Value, Label: item.Label, Description: item.Description})
@@ -664,14 +718,15 @@ func (p *CombinedAutocompleteProvider) extractAtPrefix(text string) *string {
 	}
 
 	lastDelimiterIndex := findLastDelimiter(text)
-	tokenStart := 0
+	// pi v0.99.1: strip opening wrappers, e.g. "(@src/foo" → "@src/foo".
+	token := text
 	if lastDelimiterIndex != -1 {
-		tokenStart = delimiterRuneEnd(text, lastDelimiterIndex)
+		token = text[delimiterRuneEnd(text, lastDelimiterIndex):]
 	}
+	token = stripLeadingWrappers(token)
 
-	if tokenStart < len(text) && text[tokenStart] == '@' {
-		out := text[tokenStart:]
-		return &out
+	if strings.HasPrefix(token, "@") {
+		return &token
 	}
 
 	return nil
@@ -689,6 +744,8 @@ func (p *CombinedAutocompleteProvider) extractPathPrefix(text string, forceExtra
 	if lastDelimiterIndex != -1 {
 		pathPrefix = text[delimiterRuneEnd(text, lastDelimiterIndex):]
 	}
+	// pi v0.99.1: opening wrappers before a path do not block it.
+	pathPrefix = stripLeadingWrappers(pathPrefix)
 
 	// For forced extraction (Tab key), always return something
 	if forceExtract {

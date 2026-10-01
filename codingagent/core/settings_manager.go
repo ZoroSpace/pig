@@ -393,6 +393,24 @@ func settingsBool(s Settings, key string) (bool, bool) {
 
 // settingsNumber reads a number-typed member (JSON numbers decode as
 // float64).
+// WheelScrollLinesAutoSetting is the "auto" value of the
+// fullscreenWheelScrollLines setting (pi: WheelScrollLines = "auto").
+const WheelScrollLinesAutoSetting = 0
+
+func settingsMaxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func settingsMinInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func settingsNumber(s Settings, key string) (float64, bool) {
 	if v, ok := s[key]; ok {
 		if n, ok := v.(float64); ok {
@@ -2694,6 +2712,32 @@ func (m *SettingsManager) SetFullscreenCopyOnSelect(enabled bool) {
 	defer m.mutex.Unlock()
 	m.globalSettings["fullscreenCopyOnSelect"] = enabled
 	m.markModified("fullscreenCopyOnSelect", "")
+	m.save()
+}
+
+// GetFullscreenWheelScrollLines returns the lines moved per mouse-wheel
+// event in fullscreen mode; 0 = "auto" (accelerated) (pi:
+// getFullscreenWheelScrollLines — v0.99.1 #9758; default "auto", 1-100).
+func (m *SettingsManager) GetFullscreenWheelScrollLines() int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	lines, ok := settingsNumber(m.settings, "fullscreenWheelScrollLines")
+	if !ok {
+		return WheelScrollLinesAutoSetting
+	}
+	return settingsMaxInt(1, settingsMinInt(100, int(lines)))
+}
+
+// SetFullscreenWheelScrollLines records the fullscreen wheel lines (pi:
+// setFullscreenWheelScrollLines — v0.99.1 #9758; 0 = "auto").
+func (m *SettingsManager) SetFullscreenWheelScrollLines(lines int) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if lines != WheelScrollLinesAutoSetting {
+		lines = settingsMaxInt(1, settingsMinInt(100, lines))
+	}
+	m.globalSettings["fullscreenWheelScrollLines"] = lines
+	m.markModified("fullscreenWheelScrollLines", "")
 	m.save()
 }
 

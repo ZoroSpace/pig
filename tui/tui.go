@@ -561,8 +561,7 @@ type TUI interface {
 	RemoveInputListener(listener TuiInputListener)
 	OnTerminalColorSchemeChange(listener func(scheme TerminalColorScheme)) func()
 	SetTerminalColorSchemeNotifications(enabled bool)
-	QueryTerminalBackgroundColor(timeoutMs int) *RgbColor
-	QueryTerminalColorScheme(timeoutMs int) *TerminalColorScheme
+	QueryTerminalColors(timeoutMs int, onLateReply func(TerminalColors)) TerminalColors
 }
 
 // =============================================================================
@@ -622,16 +621,80 @@ type overlayFocusRestoreState struct {
 	resumeTarget         Component
 }
 
-type pendingOsc11BackgroundQuery struct {
-	// settled is CAS-guarded instead of guarded by b.mu (pig addition):
-	// the timeout timer fires on its own goroutine, while a query issued
-	// from inside input dispatch (component HandleInput → theme detection)
-	// holds b.mu across the resolve-channel wait — the timer taking b.mu
-	// there deadlocks the whole TUI (pi never blocks its event loop, so
-	// this timer path is pig-only concurrency surface).
+// pendingTerminalColorQuery is one in-flight queryTerminalColors burst
+// (pi: PendingTerminalColorQuery). Query fields are guarded by q.mu, not
+// b.mu (pig addition): the timeout timer fires on its own goroutine, while
+// the query may be issued from inside input dispatch (b.mu held across the
+// resolve-channel wait) — the timer taking b.mu there deadlocks the whole
+// TUI. b.mu only guards the queue slice; q.mu never calls out.
+type pendingTerminalColorQuery struct {
+	mu         sync.Mutex
+	foreground *RgbColor
+	background *RgbColor
+	palette    [terminalPaletteSize]*RgbColor
+	// replied holds the targets that already replied, so duplicates do not count twice.
+	replied map[string]bool
+	// settled is CAS-guarded: the timeout timer and the reply consumer race
+	// to settle the blocking resolve channel exactly once.
 	settled atomic.Bool
-	resolve chan *RgbColor
-	timer   *time.Timer
+	// deliverLate is installed by the timeout; completions after it invoke it
+	// instead of the resolve channel (pi: query.deliver switching to
+	// onLateReply). Unset once the query completed before the timeout.
+	deliverLate func(TerminalColors)
+	resolve     chan TerminalColors
+	timer       *time.Timer
+}
+
+const terminalPaletteSize = 16
+
+// osc 10 and 11 plus osc 4 for every palette color.
+const terminalColorReplyCount = 2 + terminalPaletteSize
+
+// terminalColorQuery is the default colors, palette colors 0-15, and a
+// trailing primary device attributes (DA1) request. Every terminal answers
+// DA1 and terminals answer in order, so the DA1 reply marks the end of the
+// color replies, including for terminals that ignore the color queries.
+const terminalColorQuery = "\x1b]10;?\x07\x1b]11;?\x07" +
+	"\x1b]4;0;?\x07\x1b]4;1;?\x07\x1b]4;2;?\x07\x1b]4;3;?\x07" +
+	"\x1b]4;4;?\x07\x1b]4;5;?\x07\x1b]4;6;?\x07\x1b]4;7;?\x07" +
+	"\x1b]4;8;?\x07\x1b]4;9;?\x07\x1b]4;10;?\x07\x1b]4;11;?\x07" +
+	"\x1b]4;12;?\x07\x1b]4;13;?\x07\x1b]4;14;?\x07\x1b]4;15;?\x07" +
+	"\x1b[c"
+
+var deviceAttributesResponsePattern = regexp.MustCompile(`^\x1b\[\?[\d;]*c$`)
+
+// snapshotTerminalColors builds the query result so far (pi:
+// terminalColorQueryResult). Caller holds q.mu.
+func (q *pendingTerminalColorQuery) snapshotTerminalColors() TerminalColors {
+	result := TerminalColors{Foreground: q.foreground, Background: q.background}
+	palette := make([]RgbColor, 0, terminalPaletteSize)
+	for _, color := range q.palette {
+		if color == nil {
+			return result
+		}
+		palette = append(palette, *color)
+	}
+	result.Palette = palette
+	return result
+}
+
+// completeTerminalColorQuery settles the query: the first completion resolves
+// the blocking caller; completions after the timeout deliver to deliverLate.
+// Caller holds q.mu.
+func (q *pendingTerminalColorQuery) completeTerminalColorQuery() {
+	snapshot := q.snapshotTerminalColors()
+	if q.settled.CompareAndSwap(false, true) {
+		if q.timer != nil {
+			q.timer.Stop()
+		}
+		q.resolve <- snapshot
+		return
+	}
+	if q.deliverLate != nil {
+		late := q.deliverLate
+		q.deliverLate = nil
+		late(snapshot)
+	}
 }
 
 // TuiBase is the shared TUI machinery; concrete renderers subclass it
@@ -665,8 +728,7 @@ type TuiBase struct {
 	fullRedrawCount    int
 	stopped            bool
 
-	pendingOsc11BackgroundReplies           int
-	pendingOsc11BackgroundQueries           []*pendingOsc11BackgroundQuery
+	pendingTerminalColorQueries             []*pendingTerminalColorQuery
 	terminalColorSchemeListeners            []func(scheme TerminalColorScheme)
 	terminalColorSchemeNotificationsEnabled bool
 
@@ -733,7 +795,7 @@ func (b *TuiBase) SetShowHardwareCursor(enabled bool) {
 		}
 		b.showHardwareCursor = enabled
 		if !enabled {
-			b.terminal.HideCursor()
+			b.hideTerminalCursorLocked()
 		}
 		b.requestRenderLocked(false)
 	})
@@ -951,7 +1013,7 @@ func (b *TuiBase) ShowOverlay(component Component, options *OverlayOptions) Over
 		if (options == nil || !options.NonCapturing) && b.isOverlayVisibleLocked(entry) {
 			b.setFocusInternalLocked(component, true)
 		}
-		b.terminal.HideCursor()
+		b.hideTerminalCursorLocked()
 		b.requestRenderLocked(false)
 	})
 	return handle
@@ -981,7 +1043,7 @@ func (h *overlayHandleImpl) Hide() {
 					}
 				}
 				if len(h.t.overlayStack) == 0 {
-					h.t.terminal.HideCursor()
+					h.t.hideTerminalCursorLocked()
 				}
 				h.t.requestRenderLocked(false)
 				return
@@ -1138,10 +1200,20 @@ func (b *TuiBase) HideOverlay() {
 			}
 		}
 		if len(b.overlayStack) == 0 {
-			b.terminal.HideCursor()
+			b.hideTerminalCursorLocked()
 		}
 		b.requestRenderLocked(false)
 	})
+}
+
+// hideTerminalCursorLocked hides the cursor while running. After Stop(), the
+// shell owns the cursor and it must stay visible (pi: hideTerminalCursor,
+// #10026 — closing the last overlay after stop() used to leave the shell
+// with an invisible cursor). Caller holds b.mu.
+func (b *TuiBase) hideTerminalCursorLocked() {
+	if !b.stopped {
+		b.terminal.HideCursor()
+	}
 }
 
 // hasOverlayLocked is the lock-held form of HasOverlay.
@@ -1526,7 +1598,7 @@ func (b *TuiBase) handleTerminalInput(data string) {
 }
 
 func (b *TuiBase) handleTerminalInputLocked(data string) {
-	if b.consumeOsc11BackgroundResponseLocked(data) {
+	if b.consumeTerminalColorResponseLocked(data) {
 		return
 	}
 	if b.consumeTerminalColorSchemeReportLocked(data) {
@@ -1622,27 +1694,45 @@ func (b *TuiBase) handleTerminalInputLocked(data string) {
 		}
 	}
 }
-func (b *TuiBase) consumeOsc11BackgroundResponseLocked(data string) bool {
-	if b.pendingOsc11BackgroundReplies <= 0 {
+
+// consumeTerminalColorResponseLocked consumes an OSC color reply or the DA1
+// reply that ends a pending terminal color query (pi:
+// consumeTerminalColorResponse).
+func (b *TuiBase) consumeTerminalColorResponseLocked(data string) bool {
+	if len(b.pendingTerminalColorQueries) == 0 {
 		return false
 	}
-
-	if !IsOsc11BackgroundColorResponse(data) {
-		return false
+	if deviceAttributesResponsePattern.MatchString(data) {
+		query := b.pendingTerminalColorQueries[0]
+		b.pendingTerminalColorQueries = b.pendingTerminalColorQueries[1:]
+		query.mu.Lock()
+		query.completeTerminalColorQuery()
+		query.mu.Unlock()
+		return true
 	}
 
-	rgb := ParseOsc11BackgroundColor(data)
-	b.pendingOsc11BackgroundReplies--
-	if len(b.pendingOsc11BackgroundQueries) > 0 {
-		query := b.pendingOsc11BackgroundQueries[0]
-		b.pendingOsc11BackgroundQueries = b.pendingOsc11BackgroundQueries[1:]
-		if query.settled.CompareAndSwap(false, true) {
-			if query.timer != nil {
-				query.timer.Stop()
-				query.timer = nil
-			}
-			query.resolve <- rgb
-		}
+	target, rgb, ok := ParseOscColorResponse(data)
+	if !ok {
+		return false
+	}
+	query := b.pendingTerminalColorQueries[0]
+	key := target.key()
+	query.mu.Lock()
+	defer query.mu.Unlock()
+	if query.replied[key] {
+		return true
+	}
+	query.replied[key] = true
+	switch {
+	case target.PaletteIndex < 0 && target.Foreground:
+		query.foreground = rgb
+	case target.PaletteIndex < 0:
+		query.background = rgb
+	case target.PaletteIndex < terminalPaletteSize:
+		query.palette[target.PaletteIndex] = rgb
+	}
+	if len(query.replied) == terminalColorReplyCount {
+		query.completeTerminalColorQuery()
 	}
 	return true
 }
@@ -1690,53 +1780,54 @@ func (b *TuiBase) consumeCellSizeResponseLocked(data string) bool {
 // Terminal queries
 // =============================================================================
 
-// QueryTerminalBackgroundColor queries the terminal's default background
-// color with OSC 11 and blocks until the reply or timeoutMs elapses.
-// Returns nil on timeout or unparsable reply (pi: Promise → undefined).
-// Dispatch-safe (pig addition): when called from inside input dispatch
-// (b.mu held by the dispatching goroutine, e.g. a key handler changing the
-// theme), it still returns after timeoutMs — the timeout settle path uses
-// CAS and never takes b.mu. The reply that arrives later is consumed by a
-// subsequent dispatch (a no-op once the query has settled).
-func (b *TuiBase) QueryTerminalBackgroundColor(timeoutMs int) *RgbColor {
-	query := &pendingOsc11BackgroundQuery{resolve: make(chan *RgbColor, 1)}
-	b.lock(func() {
-		query.timer = time.AfterFunc(time.Duration(timeoutMs)*time.Millisecond, func() {
-			// Must not take b.mu: the querying goroutine may be the input
-			// dispatch itself, holding b.mu across the resolve-channel wait.
-			// CAS-only settle keeps the timeout path deadlock-free.
-			if !query.settled.CompareAndSwap(false, true) {
-				return
-			}
-			query.resolve <- nil
-		})
-		b.pendingOsc11BackgroundQueries = append(b.pendingOsc11BackgroundQueries, query)
-		b.pendingOsc11BackgroundReplies++
-		b.terminal.Write("\x1b]11;?\x07")
+// QueryTerminalColors queries the terminal's theme colors: the default
+// foreground (OSC 10), the default background (OSC 11), and ANSI colors 0-15
+// (OSC 4), followed by a DA1 request that marks the end of the replies
+// (pi: queryTerminalColors). Blocks until the DA1 reply or all color replies
+// arrive, or when timeoutMs elapses. Colors the terminal did not report are
+// nil; the palette is only set when all 16 arrived. A reply arriving after
+// the timeout (e.g. over slow links) is delivered through onLateReply.
+//
+// Dispatch-safe (pig addition, same rationale as the v0.87.1 blocking
+// queries): when called from inside input dispatch (b.mu held by the
+// dispatching goroutine), it still returns after timeoutMs — the timeout
+// settle path uses its own query mutex and CAS and never takes b.mu. The
+// late-reply callback runs on the input-dispatch goroutine.
+func (b *TuiBase) QueryTerminalColors(timeoutMs int, onLateReply func(TerminalColors)) TerminalColors {
+	query := &pendingTerminalColorQuery{
+		replied: map[string]bool{},
+		resolve: make(chan TerminalColors, 1),
+	}
+	query.mu.Lock()
+	query.timer = time.AfterFunc(time.Duration(timeoutMs)*time.Millisecond, func() {
+		// Must not take b.mu: the querying goroutine may be the input
+		// dispatch itself, holding b.mu across the resolve-channel wait.
+		query.mu.Lock()
+		defer query.mu.Unlock()
+		if !query.settled.CompareAndSwap(false, true) {
+			return
+		}
+		query.deliverLate = onLateReply
+		query.resolve <- query.snapshotTerminalColors()
 	})
-	return <-query.resolve
-}
-
-// QueryTerminalColorScheme queries the terminal's color-scheme preference
-// with DSR (CSI ? 996 n) and blocks until the reply or timeoutMs elapses.
-// Terminals that support the color palette notification protocol reply with
-// CSI ? 997 ; 1 n for dark or CSI ? 997 ; 2 n for light.
-// Returns nil on timeout (pi: Promise → undefined).
-func (b *TuiBase) QueryTerminalColorScheme(timeoutMs int) *TerminalColorScheme {
-	settled := make(chan TerminalColorScheme, 1)
-	var once sync.Once
-	settle := func(scheme TerminalColorScheme) {
-		once.Do(func() { settled <- scheme })
-	}
-	unsubscribe := b.OnTerminalColorSchemeChange(settle)
-	time.AfterFunc(time.Duration(timeoutMs)*time.Millisecond, func() { settle("") })
-	b.terminal.Write("\x1b[?996n")
-	scheme := <-settled
-	unsubscribe()
-	if scheme == "" {
-		return nil
-	}
-	return &scheme
+	query.mu.Unlock()
+	b.lock(func() {
+		b.pendingTerminalColorQueries = append(b.pendingTerminalColorQueries, query)
+		b.terminal.Write(terminalColorQuery)
+	})
+	result := <-query.resolve
+	// The query stays queued until the DA1 reply or its own completion so
+	// late replies keep filling it (pi: shift happens on the DA1 reply
+	// only); drain our position when later queries were queued behind us.
+	b.lock(func() {
+		for i, q := range b.pendingTerminalColorQueries {
+			if q == query {
+				b.pendingTerminalColorQueries = append(b.pendingTerminalColorQueries[:i], b.pendingTerminalColorQueries[i+1:]...)
+				break
+			}
+		}
+	})
+	return result
 }
 
 // =============================================================================

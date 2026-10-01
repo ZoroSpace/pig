@@ -1210,6 +1210,7 @@ func TestCombinedAutocompleteProviderSlashCommandFilter(t *testing.T) {
 		AutocompleteItem{Value: "skill:deep-research", Description: "Multi-agent deep research"},
 		AutocompleteItem{Value: "skill:research-idea", Description: "Refine a raw idea into a falsifiable seed"},
 		AutocompleteItem{Value: "skill:to-sidecar", Description: "Route work to a sidecar"},
+		AutocompleteItem{Value: "skill:brainstorm", Description: "Generate ideas"},
 		AutocompleteItem{Value: "model", Description: "Select the active model"},
 	}
 
@@ -1233,9 +1234,40 @@ func TestCombinedAutocompleteProviderSlashCommandFilter(t *testing.T) {
 		if items[0] != "skill:research-idea" {
 			t.Fatalf("items[0] = %q, want skill:research-idea", items[0])
 		}
-		for _, item := range items {
+		// pi v0.99.1: full-name-only matches follow the bare-name matches
+		// instead of being dropped.
+		researchIdea := -1
+		deepResearch := -1
+		for i, item := range items {
+			if item == "skill:research-idea" {
+				researchIdea = i
+			}
 			if item == "skill:deep-research" {
-				t.Fatalf("items = %v, want deep-research excluded", items)
+				deepResearch = i
+			}
+		}
+		if researchIdea == -1 || deepResearch == -1 || deepResearch <= researchIdea {
+			t.Fatalf("items = %v, want deep-research ranked after research-idea", items)
+		}
+	})
+
+	// Regression test for #9944: bare-name matching used to drop every skill
+	// while the "skill" prefix was still being typed.
+	t.Run("lists skills while typing the skill prefix", func(t *testing.T) {
+		items := suggestionsFor(t, "skill")
+		var skills []string
+		for _, item := range items {
+			if strings.HasPrefix(item, "skill:") {
+				skills = append(skills, item)
+			}
+		}
+		want := []string{"skill:deep-research", "skill:research-idea", "skill:to-sidecar", "skill:brainstorm"}
+		if len(skills) != len(want) {
+			t.Fatalf("skills = %v, want %v", skills, want)
+		}
+		for i := range want {
+			if skills[i] != want[i] {
+				t.Fatalf("skills = %v, want %v", skills, want)
 			}
 		}
 	})
