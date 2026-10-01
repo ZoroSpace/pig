@@ -69,6 +69,47 @@ func (r *ModelRegistry) Find(provider, modelID string) *ai.Model {
 	return &model
 }
 
+// FindOfType looks up a model of a non-chat type (pi: findOfType).
+func (r *ModelRegistry) FindOfType(modelType ai.ModelType, provider, modelID string) *ai.Model {
+	model, ok := r.runtime.GetModelOfType(modelType, provider, modelID)
+	if !ok {
+		return nil
+	}
+	return &model
+}
+
+// GetModelsOfType returns models of one type, optionally for one provider
+// (pi: getModelsOfType).
+func (r *ModelRegistry) GetModelsOfType(modelType ai.ModelType, provider string) []ai.Model {
+	return r.runtime.GetModelsOfType(modelType, provider)
+}
+
+// GetAvailableOfType returns available models of one type (pi:
+// getAvailableOfType).
+func (r *ModelRegistry) GetAvailableOfType(ctx context.Context, modelType ai.ModelType, provider string) ([]ai.Model, error) {
+	return r.runtime.GetAvailableOfType(ctx, modelType, provider)
+}
+
+// GetModelOfType looks up one model of the given type (pi: getModelOfType).
+func (r *ModelRegistry) GetModelOfType(modelType ai.ModelType, provider, modelID string) *ai.Model {
+	model, ok := r.runtime.GetModelOfType(modelType, provider, modelID)
+	if !ok {
+		return nil
+	}
+	return &model
+}
+
+// GetAllModels returns last-known models of every type (pi: getAllModels).
+func (r *ModelRegistry) GetAllModels(provider string) []ai.Model {
+	return r.runtime.GetAllModels(provider)
+}
+
+// GetAllAvailable returns models of every type with working credentials (pi:
+// getAllAvailable).
+func (r *ModelRegistry) GetAllAvailable(ctx context.Context, provider string) ([]ai.Model, error) {
+	return r.runtime.GetAllAvailable(ctx, provider)
+}
+
 // HasConfiguredAuth reports whether the model's provider is configured (pi:
 // hasConfiguredAuth).
 func (r *ModelRegistry) HasConfiguredAuth(model ai.Model) bool {

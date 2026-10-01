@@ -1649,35 +1649,38 @@ func (m *SessionManager) GetSessionFile() string {
 	return m.sessionFile
 }
 
+// hasConversationLocked reports whether the session contains a user or
+// assistant message (pi: _hasConversation). A new session file is created
+// only once the session contains one: setup entries alone (model, thinking
+// level, system prompt) stay in memory so opening and closing pig without
+// chatting leaves no file behind. Starting at the user message (not the
+// first assistant reply) keeps the prompt on disk if the first turn never
+// completes (#10000).
+func (m *SessionManager) hasConversationLocked() bool {
+	for _, e := range m.fileEntries {
+		if me, ok := e.(*SessionMessageEntry); ok {
+			switch me.Message.(type) {
+			case types.UserMessage, types.AssistantMessage:
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // persist appends an entry to the session file. Writing is deferred until
-// the first assistant message so that abandoned short turns never hit disk
-// (pi: _persist; pig keeps it unexported — reach for it again if the
-// extensions batch needs it).
+// the first user or assistant message (#10000) so that abandoned short
+// turns and setup-only sessions never hit disk (pi: _persist; pig keeps it
+// unexported — reach for it again if the extensions batch needs it).
 func (m *SessionManager) persistLocked(entry SessionEntry) error {
 	if !m.persist || m.sessionFile == "" {
 		return nil
 	}
 
-	hasAssistant := false
-	for _, e := range m.fileEntries {
-		if me, ok := e.(*SessionMessageEntry); ok {
-			if _, ok := me.Message.(types.AssistantMessage); ok {
-				hasAssistant = true
-				break
-			}
-		}
-	}
-	if !hasAssistant {
-		if m.flushed {
-			return appendJSONLLine(m.sessionFile, entry)
-		}
-		// Mark as not flushed so when assistant arrives, all entries get
-		// written.
-		m.flushed = false
-		return nil
-	}
-
 	if !m.flushed {
+		if !m.hasConversationLocked() {
+			return nil
+		}
 		f, err := os.OpenFile(m.sessionFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
 			return err
@@ -2518,21 +2521,10 @@ func (m *SessionManager) CreateBranchedSession(leafID string) (string, error) {
 		m.sessionFile = newSessionFile
 		m.buildIndexLocked()
 
-		// Only write the file now if it contains an assistant message.
-		// Otherwise defer to persistLocked, which creates the file on the
-		// first assistant response, matching the NewSession contract and
-		// avoiding the duplicate-header bug when the no-assistant guard
-		// later resets flushed to false.
-		hasAssistant := false
-		for _, e := range m.fileEntries {
-			if me, ok := e.(*SessionMessageEntry); ok {
-				if _, ok := me.Message.(types.AssistantMessage); ok {
-					hasAssistant = true
-					break
-				}
-			}
-		}
-		if hasAssistant {
+		// Use the same rule as persistLocked: write now if the branched path
+		// already has a conversation, otherwise let persistLocked create the
+		// file later (#10000).
+		if m.hasConversationLocked() {
 			if err := m.rewriteFileLocked(); err != nil {
 				return "", err
 			}

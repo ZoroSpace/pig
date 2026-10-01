@@ -43,6 +43,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -526,7 +527,99 @@ func deepMergeObjects(base map[string]any, overrides map[string]any) map[string]
 // deepMergeSettings deep merges settings: project/overrides take precedence,
 // nested objects merge recursively (pi: deepMergeSettings).
 func deepMergeSettings(base Settings, overrides Settings) Settings {
-	return deepMergeObjects(base, overrides)
+	merged := deepMergeObjects(base, overrides)
+	// pi: mergeDefaultTools — a list of only `+name`/`-name` entries appends to
+	// the inherited selection; anything else replaces it wholesale.
+	baseTools, hasBase := nativeToStringSlice(base["defaultTools"])
+	overrideTools, hasOverride := nativeToStringSlice(overrides["defaultTools"])
+	if hasOverride {
+		if _, baseIsArray := base["defaultTools"].([]any); !hasBase || !baseIsArray || !allToolModifiers(overrideTools) {
+			// Settings files are not validated; a malformed value replaces
+			// instead of throwing here (pi matches: overrides wins as-is).
+			merged["defaultTools"] = overrides["defaultTools"]
+		} else {
+			mergedList := make([]any, 0, len(baseTools)+len(overrideTools))
+			for _, tool := range baseTools {
+				mergedList = append(mergedList, tool)
+			}
+			for _, tool := range overrideTools {
+				mergedList = append(mergedList, tool)
+			}
+			merged["defaultTools"] = mergedList
+		}
+	}
+	return merged
+}
+
+// DefaultToolNames lists the tools enabled at startup when defaultTools does
+// not change them (pi: DEFAULT_TOOL_NAMES).
+var DefaultToolNames = []string{"read", "bash", "edit", "write"}
+
+// isToolModifier reports whether entry is a `+name`/`-name` defaultTools
+// modifier (pi: isToolModifier).
+func isToolModifier(entry string) bool {
+	return strings.HasPrefix(entry, "+") || strings.HasPrefix(entry, "-")
+}
+
+// allToolModifiers reports whether every entry is a modifier (pi: the
+// overrides.every(isToolModifier) check in mergeDefaultTools).
+func allToolModifiers(entries []string) bool {
+	for _, entry := range entries {
+		if !isToolModifier(entry) {
+			return false
+		}
+	}
+	return true
+}
+
+// nativeToStringSlice converts a settings value holding a JSON array of
+// strings into a string slice; ok=false when the key is absent or not an
+// array (non-string entries are kept as-is by the any-typed return).
+func nativeToStringSlice(value any) ([]string, bool) {
+	items, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if str, isStr := item.(string); isStr {
+			result = append(result, str)
+		}
+	}
+	return result, true
+}
+
+// resolveDefaultTools resolves a merged defaultTools list: plain names
+// replace DefaultToolNames, then `+name` adds and `-name` removes a tool, in
+// list order (pi: resolveDefaultTools).
+func resolveDefaultTools(entries []string) []string {
+	var plain []string
+	for _, entry := range entries {
+		if !isToolModifier(entry) {
+			plain = append(plain, entry)
+		}
+	}
+	var toolsList []string
+	if len(plain) > 0 || len(entries) == 0 {
+		toolsList = plain
+	} else {
+		toolsList = append([]string(nil), DefaultToolNames...)
+	}
+	for _, entry := range entries {
+		if !isToolModifier(entry) {
+			continue
+		}
+		name := entry[1:]
+		index := slices.Index(toolsList, name)
+		if strings.HasPrefix(entry, "+") {
+			if index == -1 && name != "" {
+				toolsList = append(toolsList, name)
+			}
+		} else if index != -1 {
+			toolsList = slices.Delete(toolsList, index, index+1)
+		}
+	}
+	return toolsList
 }
 
 // parseTimeoutSetting parses an optional timeout setting, erroring on
@@ -2809,16 +2902,19 @@ func (m *SettingsManager) GetEnabledModels() ([]string, bool) {
 	return settingsStringSlice(m.settings, "enabledModels")
 }
 
-// GetDefaultTools returns the initial built-in tool selection (pi:
-// getDefaultTools — an empty list is preserved).
+// GetDefaultTools returns the resolved initial tool selection (pi:
+// getDefaultTools — plain names replace DefaultToolNames, then `+name`/
+// `-name` modifiers add/remove; an empty list is preserved; a malformed
+// value resolves to an empty list rather than the default).
 func (m *SettingsManager) GetDefaultTools() ([]string, bool) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	tools, ok := settingsStringSlice(m.settings, "defaultTools")
+	value, ok := m.settings["defaultTools"]
 	if !ok {
 		return nil, false
 	}
-	return append([]string(nil), tools...), true
+	tools, _ := nativeToStringSlice(value)
+	return resolveDefaultTools(tools), true
 }
 
 // SetEnabledModels records the model cycling patterns (pi:

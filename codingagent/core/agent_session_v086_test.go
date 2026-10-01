@@ -167,16 +167,16 @@ func TestAgentSessionSteerFollowUpRunThroughInputHandlers(t *testing.T) {
 	mu.Unlock()
 
 	rpcSource := QueueUserInputOptions{Source: InputSourceRPC}
-	if err := session.Steer(context.Background(), "steer me", nil, &rpcSource); err != nil {
+	if _, err := session.Steer(context.Background(), "steer me", nil, &rpcSource); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.Steer(context.Background(), "handle steer", nil, &rpcSource); err != nil {
+	if _, err := session.Steer(context.Background(), "handle steer", nil, &rpcSource); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.FollowUp(context.Background(), "follow me", nil, &rpcSource); err != nil {
+	if _, err := session.FollowUp(context.Background(), "follow me", nil, &rpcSource); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.FollowUp(context.Background(), "handle follow", nil, &rpcSource); err != nil {
+	if _, err := session.FollowUp(context.Background(), "handle follow", nil, &rpcSource); err != nil {
 		t.Fatal(err)
 	}
 

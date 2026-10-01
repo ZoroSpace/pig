@@ -3,7 +3,6 @@
 package core
 
 import (
-	"encoding/json"
 	"os"
 	"reflect"
 	"sort"
@@ -692,7 +691,7 @@ func TestCreateBranchedSession(t *testing.T) {
 		}
 	})
 
-	t.Run("does not duplicate entries when forking from first user message", func(t *testing.T) {
+	t.Run("does not duplicate entries when forking from before the first user message", func(t *testing.T) {
 		tempDir := newTempDir(t)
 
 		// Create a persisted session with a couple of turns
@@ -700,67 +699,42 @@ func TestCreateBranchedSession(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		id1, err := session.AppendMessage(userMsg("first question"))
-		mustAppend(t, id1, err)
+		modelChangeID, err := session.AppendModelChange("anthropic", "claude-sonnet-4-5")
+		mustAppend(t, modelChangeID, err)
+		_, _ = session.AppendMessage(userMsg("first question"))
 		_, _ = session.AppendMessage(assistantMsg("first answer"))
-		_, _ = session.AppendMessage(userMsg("second question"))
-		_, _ = session.AppendMessage(assistantMsg("second answer"))
 
-		// Fork from the very first user message (no assistant in the branched path)
-		newFile, err := session.CreateBranchedSession(id1)
+		// Fork from a setup entry (no user or assistant message in the branched path)
+		newFile, err := session.CreateBranchedSession(modelChangeID)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		// The branched path has no assistant, so the file should not exist yet
-		// (deferred to _persist on first assistant, matching newSession() contract)
+		// Nothing to save yet, so the file is created later by the first user
+		// message (#10000)
 		if _, err := os.Stat(newFile); !os.IsNotExist(err) {
 			t.Fatalf("expected file to not exist: %s", newFile)
 		}
 
-		// Simulate extension adding entry before assistant (like preset on turn_start)
-		_, _ = session.AppendCustomEntry("preset-state", map[string]any{"name": "plan"})
-
-		// Now the assistant responds
-		_, _ = session.AppendMessage(assistantMsg("new answer"))
-
-		// File should now exist with exactly one header and no duplicate IDs
+		_, _ = session.AppendMessage(userMsg("new question"))
 		if _, err := os.Stat(newFile); err != nil {
 			t.Fatalf("expected file to exist: %v", err)
 		}
-		content, err := os.ReadFile(newFile)
-		if err != nil {
-			t.Fatal(err)
+
+		// Simulate extension adding entry before assistant (like preset on turn_start)
+		_, _ = session.AppendCustomEntry("preset-state", map[string]any{"name": "plan"})
+		_, _ = session.AppendMessage(assistantMsg("new answer"))
+
+		// Exactly one header and each entry written once
+		roles := readSessionFileRoles(t, newFile)
+		want := []string{"session", "model_change", "message", "custom", "message"}
+		if len(roles) != len(want) {
+			t.Fatalf("roles = %v, want %v", roles, want)
 		}
-		headers := 0
-		entryIDs := 0
-		idSet := map[string]bool{}
-		for _, line := range strings.Split(strings.TrimSpace(string(content)), "\n") {
-			if line == "" {
-				continue
+		for i := range want {
+			if roles[i] != want[i] {
+				t.Fatalf("roles = %v, want %v", roles, want)
 			}
-			var rec struct {
-				Type string `json:"type"`
-				ID   string `json:"id"`
-			}
-			if err := json.Unmarshal([]byte(line), &rec); err != nil {
-				t.Fatal(err)
-			}
-			if rec.Type == "session" {
-				headers++
-			} else if rec.ID != "" {
-				entryIDs++
-				if idSet[rec.ID] {
-					t.Fatalf("duplicate id %s", rec.ID)
-				}
-				idSet[rec.ID] = true
-			}
-		}
-		if headers != 1 {
-			t.Fatalf("expected 1 header, got %d", headers)
-		}
-		if entryIDs == 0 {
-			t.Fatal("expected entries")
 		}
 	})
 
@@ -820,47 +794,36 @@ func TestCreateBranchedSession(t *testing.T) {
 		}
 	})
 
-	t.Run("writes file immediately when forking from a point with assistant messages", func(t *testing.T) {
+	t.Run("writes file immediately when forking at a user message", func(t *testing.T) {
 		tempDir := newTempDir(t)
 
 		session, err := CreateSessionManager(tempDir, tempDir, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, _ = session.AppendMessage(userMsg("first question"))
-		id2, err := session.AppendMessage(assistantMsg("first answer"))
-		mustAppend(t, id2, err)
-		_, _ = session.AppendMessage(userMsg("second question"))
-		_, _ = session.AppendMessage(assistantMsg("second answer"))
+		id1, err := session.AppendMessage(userMsg("first question"))
+		mustAppend(t, id1, err)
+		_, _ = session.AppendMessage(assistantMsg("first answer"))
 
-		// Fork including the assistant message
-		newFile, err := session.CreateBranchedSession(id2)
+		// Fork including the user message
+		newFile, err := session.CreateBranchedSession(id1)
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		// Path includes an assistant, so file should be written immediately
 		if _, err := os.Stat(newFile); err != nil {
 			t.Fatalf("expected file to exist: %v", err)
 		}
-		content, err := os.ReadFile(newFile)
-		if err != nil {
-			t.Fatal(err)
+
+		_, _ = session.AppendMessage(assistantMsg("new answer"))
+		roles := readSessionFileRoles(t, newFile)
+		want := []string{"session", "message", "message"}
+		if len(roles) != len(want) {
+			t.Fatalf("roles = %v, want %v", roles, want)
 		}
-		headers := 0
-		for _, line := range strings.Split(strings.TrimSpace(string(content)), "\n") {
-			var rec struct {
-				Type string `json:"type"`
+		for i := range want {
+			if roles[i] != want[i] {
+				t.Fatalf("roles = %v, want %v", roles, want)
 			}
-			if err := json.Unmarshal([]byte(line), &rec); err != nil {
-				t.Fatal(err)
-			}
-			if rec.Type == "session" {
-				headers++
-			}
-		}
-		if headers != 1 {
-			t.Fatalf("expected 1 header, got %d", headers)
 		}
 	})
 }

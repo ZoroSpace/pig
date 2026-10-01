@@ -89,7 +89,7 @@ func TestAgentSessionConcurrentSteerWhileStreaming(t *testing.T) {
 	waitForStreaming(t, session)
 
 	// steer should work while streaming
-	if err := session.Steer(context.Background(), "Steering message", nil, nil); err != nil {
+	if _, err := session.Steer(context.Background(), "Steering message", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if session.PendingMessageCount() != 1 {
@@ -110,7 +110,7 @@ func TestAgentSessionConcurrentFollowUpWhileStreaming(t *testing.T) {
 	waitForStreaming(t, session)
 
 	// followUp should work while streaming
-	if err := session.FollowUp(context.Background(), "Follow-up message", nil, nil); err != nil {
+	if _, err := session.FollowUp(context.Background(), "Follow-up message", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if session.PendingMessageCount() != 1 {

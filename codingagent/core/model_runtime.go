@@ -663,6 +663,71 @@ func (r *ModelRuntime) GetModel(providerID, modelID string) (ai.Model, bool) {
 	return r.models.GetModel(providerID, modelID)
 }
 
+// GetModelsOfType returns last-known models of one type from every provider,
+// optionally restricted to one provider (pi: getModelsOfType(type,
+// providerId?)).
+func (r *ModelRuntime) GetModelsOfType(modelType ai.ModelType, providerID string) []ai.Model {
+	all := r.models.GetModelsOfType(modelType)
+	if providerID == "" {
+		return all
+	}
+	var filtered []ai.Model
+	for _, model := range all {
+		if string(model.Provider) == providerID {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered
+}
+
+// GetModelOfType looks up one model of the given type (pi:
+// getModelOfType(type, providerId, id)).
+func (r *ModelRuntime) GetModelOfType(modelType ai.ModelType, providerID, modelID string) (ai.Model, bool) {
+	return r.models.GetModelOfType(modelType, providerID, modelID)
+}
+
+// GetAllModels returns last-known models of every type, optionally restricted
+// to one provider (pi: getAllModels(providerId?)).
+func (r *ModelRuntime) GetAllModels(providerID string) []ai.Model {
+	all := r.models.GetAllModels()
+	if providerID == "" {
+		return all
+	}
+	var filtered []ai.Model
+	for _, model := range all {
+		if string(model.Provider) == providerID {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered
+}
+
+// GetAvailableOfType refreshes availability and returns available models of
+// one type, optionally for one provider (pi: getAvailableOfType(type,
+// providerId?, options?)).
+func (r *ModelRuntime) GetAvailableOfType(ctx context.Context, modelType ai.ModelType, providerID string) ([]ai.Model, error) {
+	if err := r.queueAvailabilityRefresh(ctx); err != nil {
+		return nil, err
+	}
+	available, err := r.models.GetAvailableOfType(ctx, modelType, providerID)
+	if err != nil {
+		r.mu.Lock()
+		r.availabilityError = err.Error()
+		r.mu.Unlock()
+		return nil, err
+	}
+	r.mu.Lock()
+	r.availabilityError = ""
+	r.mu.Unlock()
+	return available, nil
+}
+
+// GetAllAvailable returns models of every type whose providers have working
+// credentials (pi: getAllAvailable(providerId?, options?)).
+func (r *ModelRuntime) GetAllAvailable(ctx context.Context, providerID string) ([]ai.Model, error) {
+	return r.models.GetAllAvailable(ctx, providerID)
+}
+
 // CheckAuth reports provider auth configuration without refreshing OAuth
 // (pi: checkAuth).
 func (r *ModelRuntime) CheckAuth(ctx context.Context, providerID string) (*auth.AuthCheck, error) {

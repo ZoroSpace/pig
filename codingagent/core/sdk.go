@@ -306,7 +306,6 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		thinkingLevel = ai.ClampThinkingLevel(model, ai.ModelThinkingLevel(thinkingLevel))
 	}
 
-	defaultActiveToolNames := []tools.ToolName{"read", "bash", "edit", "write"}
 	configuredDefaultToolNames, hasConfiguredDefaultTools := settingsManager.GetDefaultTools()
 	allowedToolNames := options.Tools
 	var excludedToolNameSet map[string]bool
@@ -323,7 +322,7 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		} else if hasConfiguredDefaultTools {
 			initialActiveToolNamesSource = configuredDefaultToolNames
 		} else {
-			initialActiveToolNamesSource = toolNamesToStrings(defaultActiveToolNames)
+			initialActiveToolNamesSource = DefaultToolNames
 		}
 	}
 	var initialActiveToolNames []string

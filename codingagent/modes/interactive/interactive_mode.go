@@ -71,6 +71,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/agent/harness"
@@ -798,7 +800,7 @@ func (m *InteractiveMode) Init() error {
 					coretools.RawKeyHint("!!", "to run bash (no context)"),
 					hint(core.AppKeybindingMessageFollowUp, "to queue follow-up"),
 					hint(core.AppKeybindingMessageDequeue, "to edit all queued messages"),
-					hint(core.AppKeybindingClipboardPasteImage, "to paste image (with text fallback)"),
+					hint(core.AppKeybindingClipboardPasteImage, "to paste files on macOS, images, or text"),
 					coretools.RawKeyHint("drop files", "to attach"),
 				}, "\n")
 				onboarding := currentTheme.Fg("dim",
@@ -1494,6 +1496,13 @@ func (m *InteractiveMode) handleSessionCommand() {
 	// attribution is grouped separately so the breakdown reconciles with the
 	// session total.
 	usageBreakdown := core.GetUsageCostBreakdown(entries)
+	// A single entry repeats the total, unless it names a model other than
+	// the selected one (pi v0.99.1). No selection never matches (pi prints
+	// the literal "undefined/undefined" key).
+	selectedModelKey := "undefined/undefined"
+	if selectedModel := m.session().Model(); selectedModel != nil {
+		selectedModelKey = fmt.Sprintf("%s/%s", selectedModel.Provider, selectedModel.ID)
+	}
 
 	current := theme.Current()
 	var info strings.Builder
@@ -1549,7 +1558,7 @@ func (m *InteractiveMode) handleSessionCommand() {
 	if stats.Cost > 0 || cacheWaste.MissedTokens > 0 {
 		info.WriteString("\n" + current.Bold("Cost") + "\n")
 		info.WriteString(current.Fg("dim", "Total:") + fmt.Sprintf(" $%.3f", stats.Cost))
-		if len(usageBreakdown) > 1 {
+		if len(usageBreakdown) > 1 || (len(usageBreakdown) > 0 && usageBreakdown[0].Key != selectedModelKey) {
 			for _, entry := range usageBreakdown {
 				info.WriteString(fmt.Sprintf("\n  %s $%.3f %s", current.Fg("dim", entry.Key+":"), entry.Cost,
 					current.Fg("dim", fmt.Sprintf("(%s tokens)", components.FormatTokens(entry.Tokens)))))
@@ -1690,7 +1699,7 @@ func (m *InteractiveMode) handleHotkeysCommand() {
 | §%s§ | Copy last assistant message |
 | §%s§ | Queue follow-up message |
 | §%s§ | Restore queued messages |
-| §%s§ | Paste image or text from clipboard |
+| §%s§ | Paste files on macOS, images, or text from clipboard |
 | §/§ | Slash commands |
 | §!§ | Run bash command |
 | §!!§ | Run bash command (excluded from context) |
@@ -3443,11 +3452,11 @@ func (m *InteractiveMode) flushCompactionQueue(ctx context.Context, willRetry bo
 					return err
 				}
 			} else if message.Mode == "followUp" {
-				if err := m.session().FollowUp(ctx, message.Text, nil, nil); err != nil {
+				if _, err := m.session().FollowUp(ctx, message.Text, nil, nil); err != nil {
 					return err
 				}
 			} else {
-				if err := m.session().Steer(ctx, message.Text, nil, nil); err != nil {
+				if _, err := m.session().Steer(ctx, message.Text, nil, nil); err != nil {
 					return err
 				}
 			}
@@ -8578,15 +8587,112 @@ func (m *InteractiveMode) handleRightClickPaste() {
 // functions; Go tests swap these package vars at call time, same pattern as
 // utils.clipboardRunCommandFn).
 var (
-	clipboardImageReaderFn = utils.ReadClipboardImage
-	clipboardTextReaderFn  = utils.ReadClipboardText
+	clipboardImageReaderFn   = utils.ReadClipboardImage
+	clipboardTextReaderFn    = utils.ReadClipboardText
+	clipboardFilePathsReadFn = utils.ReadClipboardFilePaths
 )
 
-// handleClipboardPaste pastes a clipboard image (attached by path, shown as
-// an "[Image N]" placeholder) or text at the cursor (pi:
-// handleClipboardPaste; the placeholder insertion is pig-only — pi inserts
-// the raw temp path, see docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md).
+// controlCharsRe matches terminal control characters (pi: /\p{Cc}/u).
+var controlCharsRe = regexp.MustCompile(`\p{Cc}`)
+
+// editorComponentCursor is the optional cursor capability (pi: the
+// ActiveEditor interface's getCursor?).
+type editorComponentCursor interface {
+	GetCursor() tui.EditorCursor
+}
+
+// handleClipboardPaste pastes from the clipboard (pi: handleClipboardPaste,
+// v0.99.1): copied files use their original paths, images are attached via
+// temporary files, and plain text is the final fallback. The placeholder
+// insertion for images is pig-only (pi inserts the raw temp path, see
+// docs/feat/CLIPBOARD-IMAGE-PLACEHOLDER.md).
 func (m *InteractiveMode) handleClipboardPaste() {
+	if err := m.pasteClipboardContents(); err != nil {
+		// pi v0.99.1: clipboard errors are shown instead of silently ignored
+		// (may not have permission, etc.). Runs on the paste goroutine, so
+		// the container mutation goes through mutateUI.
+		m.mutateUI(func() {
+			m.ShowError(fmt.Sprintf("Failed to paste from clipboard: %s", pasteErr(err)))
+		})
+	}
+}
+
+// pasteErr unwraps the error message (pi: error.message).
+func pasteErr(err error) string { return err.Error() }
+
+func (m *InteractiveMode) pasteClipboardContents() error {
+	filePaths, err := clipboardFilePathsReadFn()
+	if err != nil {
+		return err
+	}
+	if len(filePaths) > 0 {
+		for _, filePath := range filePaths {
+			if controlCharsRe.MatchString(filePath) {
+				return fmt.Errorf("Clipboard file path contains control characters")
+			}
+		}
+		// The paste goroutine reads editor/bash-mode state and inserts text:
+		// serialize against the render/event loop (pig mutateUI discipline;
+		// pi runs this on the single event loop).
+		m.mutateUI(func() {
+			paths := filePaths
+			if m.isBashMode {
+				quoted := make([]string, len(filePaths))
+				for i, p := range filePaths {
+					quoted[i] = quoteIfNeeded(p)
+				}
+				paths = quoted
+			}
+			separator := "\n"
+			if m.isBashMode {
+				separator = " "
+			}
+			insert := strings.Join(paths, separator)
+			// Space-pad against non-whitespace neighbors so the pasted paths do
+			// not glue onto surrounding tokens (pi: leadingSpace/trailingSpace).
+			var cursor *tui.EditorCursor
+			if c, ok := m.editor.(editorComponentCursor); ok {
+				got := c.GetCursor()
+				cursor = &got
+			}
+			var lineRunes []rune
+			var cursorRunes int
+			if cursor != nil {
+				lines := strings.Split(m.editor.GetText(), "\n")
+				if cursor.Line < len(lines) {
+					lineRunes = []rune(lines[cursor.Line])
+					// pi's cursor.col indexes UTF-16 code units; pig's
+					// EditorCursor.Col is a byte offset. Convert to a rune
+					// index so the neighbor check matches pi's semantics.
+					col := min(cursor.Col, len(lines[cursor.Line]))
+					for col > 0 && col < len(lines[cursor.Line]) && !utf8.RuneStart(lines[cursor.Line][col]) {
+						col--
+					}
+					cursorRunes = utf8.RuneCountInString(lines[cursor.Line][:col])
+				}
+			}
+			characterBeforeCursor := ""
+			if cursor != nil && cursorRunes > 0 && cursorRunes <= len(lineRunes) {
+				characterBeforeCursor = string(lineRunes[cursorRunes-1])
+			}
+			characterAfterCursor := ""
+			if cursor != nil && cursorRunes < len(lineRunes) {
+				characterAfterCursor = string(lineRunes[cursorRunes])
+			}
+			leadingSpace := ""
+			if characterBeforeCursor != "" && !unicode.IsSpace([]rune(characterBeforeCursor)[0]) {
+				leadingSpace = " "
+			}
+			trailingSpace := ""
+			if characterAfterCursor != "" && !unicode.IsSpace([]rune(characterAfterCursor)[0]) {
+				trailingSpace = " "
+			}
+			m.editorInsertTextAtCursor(leadingSpace + insert + trailingSpace)
+			m.ui.RequestRender(false)
+		})
+		return nil
+	}
+
 	image := clipboardImageReaderFn(nil)
 	if image != nil {
 		ext := utils.ExtensionForImageMimeType(image.MimeType)
@@ -8596,12 +8702,12 @@ func (m *InteractiveMode) handleClipboardPaste() {
 		fileName := fmt.Sprintf("pi-clipboard-%s.%s", randomUUID(), ext)
 		filePath := filepath.Join(os.TempDir(), fileName)
 		if err := os.WriteFile(filePath, image.Bytes, 0o644); err != nil {
-			return
+			return err
 		}
 
 		m.editorInsertTextAtCursor(m.recordClipboardImagePath(filePath))
 		m.ui.RequestRender(false)
-		return
+		return nil
 	}
 
 	text := clipboardTextReaderFn()
@@ -8609,6 +8715,7 @@ func (m *InteractiveMode) handleClipboardPaste() {
 		m.editorInsertTextAtCursor(text)
 		m.ui.RequestRender(false)
 	}
+	return nil
 }
 
 // recordClipboardImagePath registers a pasted image temp-file path and

@@ -444,7 +444,7 @@ func (r *AgentSessionRuntime) Fork(ctx context.Context, entryID string, options 
 
 		if _, err := os.Stat(currentSessionFile); err != nil {
 			return nil, fmt.Errorf(
-				"This session has not been saved yet. Wait for the first assistant response before cloning or forking it.",
+				"This session has not been saved yet. Send a message before cloning or forking it.",
 			)
 		}
 		sessionManager, err := OpenSession(currentSessionFile, sessionDir, nil)

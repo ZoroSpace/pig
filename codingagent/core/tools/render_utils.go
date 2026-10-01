@@ -3,8 +3,11 @@
 package tools
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/ZoroSpace/pig/ai/types"
@@ -77,6 +80,92 @@ func Str(value any) (string, bool) {
 // replaceTabs).
 func ReplaceTabs(text string) string {
 	return strings.ReplaceAll(text, "\t", "   ")
+}
+
+// collapsedArgsChars is the collapsed-format cut width (pi:
+// COLLAPSED_ARGS_CHARS).
+const collapsedArgsChars = 100
+
+// FormatToolCallWithArgs renders the generic tool call header: the title
+// followed by the arguments. Collapsed, they are `key=value` pairs on the
+// title line, cut to collapsedArgsChars. Expanded, each is a `key: value`
+// line below the title, with strings shown raw and continuation lines
+// indented (pi: formatToolCallWithArgs).
+func FormatToolCallWithArgs(title string, args any, theme UITheme, expanded bool) string {
+	header := theme.Fg("toolTitle", theme.Bold(title))
+	if args == nil {
+		return header
+	}
+	var entries [][2]any
+	if m, ok := args.(map[string]any); ok {
+		for key, value := range m {
+			entries = append(entries, [2]any{key, value})
+		}
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i][0].(string) < entries[j][0].(string)
+		})
+	} else {
+		entries = [][2]any{{"args", args}}
+	}
+	if len(entries) == 0 {
+		return header
+	}
+	if expanded {
+		var lines []string
+		for _, entry := range entries {
+			key := entry[0].(string)
+			var text string
+			if str, ok := entry[1].(string); ok {
+				text = str
+			} else if entry[1] != nil {
+				if jsonBytes, err := json.MarshalIndent(entry[1], "", "  "); err == nil {
+					text = string(jsonBytes)
+				} else {
+					text = fmt.Sprintf("%v", entry[1])
+				}
+			} else {
+				text = fmt.Sprintf("%v", entry[1])
+			}
+			text = ReplaceTabs(text)
+			text = strings.ReplaceAll(text, "\r", "")
+			lines = append(lines, "  "+key+": "+strings.ReplaceAll(text, "\n", "\n    "))
+		}
+		return header + "\n" + theme.Fg("muted", strings.Join(lines, "\n"))
+	}
+	pairs := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		pairs = append(pairs, entry[0].(string)+"="+stringifyForPreview(entry[1]))
+	}
+	preview := strings.Join(pairs, " ")
+	if len(preview) > collapsedArgsChars {
+		preview = preview[:collapsedArgsChars-3] + "..."
+	}
+	return header + " " + theme.Fg("muted", preview)
+}
+
+// stringifyForPreview is pi's `JSON.stringify(value) ?? String(value)` in the
+// collapsed pair format: compact JSON for structured values, raw for strings,
+// and String() only when stringify returns undefined (functions/symbols).
+func stringifyForPreview(value any) string {
+	if str, ok := value.(string); ok {
+		return mustCompactJSON(str)
+	}
+	if value == nil {
+		return "null"
+	}
+	if jsonBytes, err := json.Marshal(value); err == nil {
+		return string(jsonBytes)
+	}
+	return fmt.Sprintf("%v", value)
+}
+
+// mustCompactJSON JSON-encodes a string value the way JSON.stringify would.
+func mustCompactJSON(str string) string {
+	jsonBytes, err := json.Marshal(str)
+	if err != nil {
+		return str
+	}
+	return string(jsonBytes)
 }
 
 // NormalizeDisplayText strips carriage returns (pi: normalizeDisplayText).

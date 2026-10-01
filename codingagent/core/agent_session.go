@@ -389,10 +389,26 @@ type PromptOptions struct {
 	// Source is the source of input for extension input event handlers.
 	// Defaults to "interactive".
 	Source InputSource
-	// PreflightResult is an internal hook used by RPC mode to observe
-	// prompt preflight acceptance or rejection.
-	PreflightResult func(success bool)
+	// PreflightResult is an internal hook used by RPC mode to observe how an
+	// accepted prompt was dispatched. Not called if the prompt is rejected
+	// (pi v0.99.1: reports "handled" for extension commands and intercepted
+	// input, "queued" for steer/followUp, "started" when the run begins).
+	PreflightResult func(disposition PromptDisposition)
 }
+
+// PromptDisposition reports how an accepted prompt was dispatched (pi:
+// PromptDisposition).
+type PromptDisposition string
+
+const (
+	// PromptDispositionHandled: the input was handled without starting or
+	// queueing a prompt (extension command or input interception).
+	PromptDispositionHandled PromptDisposition = "handled"
+	// PromptDispositionQueued: the input was queued via steer/followUp.
+	PromptDispositionQueued PromptDisposition = "queued"
+	// PromptDispositionStarted: the prompt started an agent run.
+	PromptDispositionStarted PromptDisposition = "started"
+)
 
 // ModelMutationOptions are the options for model/thinking mutations (pi:
 // ModelMutationOptions).
@@ -774,7 +790,7 @@ func (s *AgentSession) ExportToHtml(outputPath string, themeName string) (string
 }
 
 // requestAuth is the resolved request credential bundle (pi: the
-// { model, apiKey?, headers?, env? } return shape of
+// { model, apiKey?, headers?, env?, thinkingLevel } return shape of
 // _getRequiredRequestAuth/_getSummarizationRequestAuth).
 type requestAuth struct {
 	model    *types.Model
@@ -782,6 +798,10 @@ type requestAuth struct {
 	headers  map[string]string
 	env      types.ProviderEnv
 	fallback bool // _getSummarizationRequestAuth's `{ model }` shape
+	// thinkingLevel is the level the summary request uses. Under a plain
+	// model selection this is the session level (pi: virtual selections
+	// carry the routed model's level instead; pig has no virtual models).
+	thinkingLevel types.ThinkingLevel
 }
 
 func (s *AgentSession) getRequiredRequestAuth(ctx context.Context, model *types.Model) (*requestAuth, error) {
@@ -822,13 +842,19 @@ func (s *AgentSession) getSummarizationRequestAuth(ctx context.Context, model *t
 	// pi: `this.agent.streamFunction === streamSimple`; Go funcs aren't
 	// comparable, so identity goes through utils.SameFuncValue. The SDK path
 	// always wraps streamSimple, so this is false there (matches pi).
+	thinkingLevel := types.ThinkingLevel(s.ThinkingLevel())
 	if pigutils.SameFuncValue(s.Agent.StreamFunction, defaultStreamFn) {
-		return s.getRequiredRequestAuth(ctx, model)
+		auth, err := s.getRequiredRequestAuth(ctx, model)
+		if err != nil {
+			return nil, err
+		}
+		auth.thinkingLevel = thinkingLevel
+		return auth, nil
 	}
 
 	result, err := s.modelRuntime.GetAuthForModel(ctx, model, nil)
 	if err != nil || result == nil {
-		return &requestAuth{model: model, fallback: true}, nil
+		return &requestAuth{model: model, fallback: true, thinkingLevel: thinkingLevel}, nil
 	}
 	requestModel := model
 	if result.Auth.BaseURL != "" {
@@ -837,10 +863,11 @@ func (s *AgentSession) getSummarizationRequestAuth(ctx context.Context, model *t
 		requestModel = &copied
 	}
 	return &requestAuth{
-		model:   requestModel,
-		apiKey:  result.Auth.APIKey,
-		headers: withoutDeletedHeaders(result.Auth.Headers),
-		env:     result.Env,
+		model:         requestModel,
+		apiKey:        result.Auth.APIKey,
+		headers:       withoutDeletedHeaders(result.Auth.Headers),
+		env:           result.Env,
+		thinkingLevel: thinkingLevel,
 	}, nil
 }
 
@@ -2492,20 +2519,27 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 	if options != nil && options.ExpandPromptTemplates != nil {
 		expandPromptTemplates = *options.ExpandPromptTemplates
 	}
-	var preflightResult func(bool)
+	var preflightResult func(PromptDisposition)
 	if options != nil {
 		preflightResult = options.PreflightResult
 	}
 	var messages []agent.AgentMessage
 
-	accept := func() {
+	// pi v0.99.1: accepted prompts report how they were dispatched; rejected
+	// prompts report nothing (the throw is the signal).
+	handled := func() {
 		if preflightResult != nil {
-			preflightResult(true)
+			preflightResult(PromptDispositionHandled)
 		}
 	}
-	reject := func() {
+	queued := func() {
 		if preflightResult != nil {
-			preflightResult(false)
+			preflightResult(PromptDispositionQueued)
+		}
+	}
+	started := func() {
+		if preflightResult != nil {
+			preflightResult(PromptDispositionStarted)
 		}
 	}
 
@@ -2514,9 +2548,9 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 		// streaming). Extension commands manage their own LLM interaction via
 		// pi.sendMessage().
 		if expandPromptTemplates && strings.HasPrefix(text, "/") {
-			handled := s.tryExecuteExtensionCommand(ctx, text)
-			if handled {
-				accept()
+			commandHandled := s.tryExecuteExtensionCommand(ctx, text)
+			if commandHandled {
+				handled()
 				return nil
 			}
 		}
@@ -2546,7 +2580,7 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 			return err
 		}
 		if processedInput == nil {
-			accept()
+			handled()
 			return nil
 		}
 		currentText := processedInput.text
@@ -2569,7 +2603,7 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 			} else {
 				s.queueSteer(expandedText, currentImages)
 			}
-			accept()
+			queued()
 			return nil
 		}
 
@@ -2692,7 +2726,7 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 	}()
 
 	if runErr != nil {
-		reject()
+		// pi v0.99.1: rejected prompts report nothing; the error is the signal.
 		return runErr
 	}
 	if messages == nil {
@@ -2700,7 +2734,7 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 		return nil
 	}
 
-	accept()
+	started()
 	return s.runAgentPrompt(ctx, messages)
 }
 
@@ -2911,7 +2945,8 @@ func (s *AgentSession) installAgentForcedPromptProjection() {
 
 // restoreToolsFromTranscript restores the active tool loadout declared by
 // the session transcript, if it declares one (pi:
-// _restoreToolsFromTranscript; v0.86.0).
+// _restoreToolsFromTranscript; v0.86.0; v0.99.1 routes through
+// setActiveToolsByName, which filters unknown names the same way).
 func (s *AgentSession) restoreToolsFromTranscript() {
 	sessionContext := s.SessionManager.BuildSessionContext()
 	var transcript aiutils.TranscriptMessages
@@ -2926,27 +2961,9 @@ func (s *AgentSession) restoreToolsFromTranscript() {
 	}
 	var toolNames []string
 	for _, tool := range current.ToolsAdded {
-		s.mu.Lock()
-		_, ok := s.toolRegistry[tool.Name]
-		s.mu.Unlock()
-		if ok {
-			toolNames = append(toolNames, tool.Name)
-		}
+		toolNames = append(toolNames, tool.Name)
 	}
-	var toolsList []agent.AgentTool
-	for _, name := range toolNames {
-		s.mu.Lock()
-		registered, ok := s.toolRegistry[name]
-		s.mu.Unlock()
-		if ok {
-			toolsList = append(toolsList, registered)
-		}
-	}
-	if toolsList == nil {
-		toolsList = []agent.AgentTool{}
-	}
-	s.Agent.SetTools(toolsList)
-	s.rebuildSystemPrompt(toolNames)
+	s.SetActiveToolsByName(toolNames)
 }
 
 // tryExecuteExtensionCommand tries to execute an extension command. Returns
@@ -3040,7 +3057,7 @@ func mustStripFrontmatter(content string) string {
 // the current assistant turn finishes executing its tool calls, before the
 // next LLM call. Expands skill commands and prompt templates. Errors on
 // extension commands (pi: steer).
-func (s *AgentSession) Steer(ctx context.Context, text string, images []types.ImageContent, options *QueueUserInputOptions) error {
+func (s *AgentSession) Steer(ctx context.Context, text string, images []types.ImageContent, options *QueueUserInputOptions) (PromptDisposition, error) {
 	source := InputSourceInteractive
 	if options != nil && options.Source != "" {
 		source = options.Source
@@ -3052,7 +3069,7 @@ func (s *AgentSession) Steer(ctx context.Context, text string, images []types.Im
 // Delivered only when agent has no more tool calls or steering messages.
 // Expands skill commands and prompt templates. Errors on extension commands
 // (pi: followUp).
-func (s *AgentSession) FollowUp(ctx context.Context, text string, images []types.ImageContent, options *QueueUserInputOptions) error {
+func (s *AgentSession) FollowUp(ctx context.Context, text string, images []types.ImageContent, options *QueueUserInputOptions) (PromptDisposition, error) {
 	source := InputSourceInteractive
 	if options != nil && options.Source != "" {
 		source = options.Source
@@ -3070,12 +3087,13 @@ type QueueUserInputOptions struct {
 
 // queueUserInput validates extension commands, runs the input handler
 // chain, expands skill commands and prompt templates, and queues via the
-// requested behavior (pi: _queueUserInput; v0.86.0 extraction).
-func (s *AgentSession) queueUserInput(ctx context.Context, text string, images []types.ImageContent, behavior string, source InputSource) error {
+// requested behavior (pi: _queueUserInput; v0.86.0 extraction; v0.99.1
+// reports the disposition).
+func (s *AgentSession) queueUserInput(ctx context.Context, text string, images []types.ImageContent, behavior string, source InputSource) (PromptDisposition, error) {
 	if strings.HasPrefix(text, "/") {
 		// Check for extension commands (cannot be queued)
 		if err := s.throwIfExtensionCommand(text); err != nil {
-			return err
+			return "", err
 		}
 	}
 
@@ -3085,10 +3103,10 @@ func (s *AgentSession) queueUserInput(ctx context.Context, text string, images [
 	}
 	processedInput, err := s.runInputHandlers(ctx, text, images, source, streamingBehavior)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if processedInput == nil {
-		return nil
+		return PromptDispositionHandled, nil
 	}
 
 	expandedText := s.expandSkillCommand(ctx, processedInput.text)
@@ -3099,7 +3117,7 @@ func (s *AgentSession) queueUserInput(ctx context.Context, text string, images [
 	} else {
 		s.queueFollowUp(expandedText, processedInput.images)
 	}
-	return nil
+	return PromptDispositionQueued, nil
 }
 
 // queueSteer queues a steering message (already expanded, no extension command
@@ -3671,23 +3689,29 @@ func (s *AgentSession) SetFollowUpMode(mode string) {
 // ============================================================================
 
 // runDefaultCompaction generates pi's built-in compaction summary for manual
-// and automatic compaction (pi: _runDefaultCompaction).
+// and automatic compaction (pi: _runDefaultCompaction). The request auth is
+// resolved here rather than by the callers so it lands after the
+// session_before_compact extension hook (pi: "Resolve the request only when
+// Pi summarizes itself").
 func (s *AgentSession) runDefaultCompaction(
 	ctx context.Context,
 	preparation *CompactionPreparation,
-	requestModel *types.Model,
-	auth *requestAuth,
+	model *types.Model,
 	customInstructions string,
 	reason string,
 ) (*CompactionResult, error) {
+	auth, err := s.getSummarizationRequestAuth(ctx, model)
+	if err != nil {
+		return nil, err
+	}
 	return Compact(
 		ctx,
 		preparation,
-		requestModel,
+		auth.model,
 		auth.apiKey,
 		auth.headers,
 		customInstructions,
-		types.ThinkingLevel(s.ThinkingLevel()),
+		auth.thinkingLevel,
 		s.Agent.StreamFunction,
 		auth.env,
 		retryPolicyFromSettings(s.SettingsManager.GetRetrySettings()),
@@ -3812,11 +3836,6 @@ func (s *AgentSession) Compact(ctx context.Context, customInstructions string) (
 		return fail(fmt.Errorf("%s", FormatNoModelSelectedMessage()))
 	}
 
-	auth, err := s.getSummarizationRequestAuth(compactionCtx, model)
-	if err != nil {
-		return fail(err)
-	}
-
 	pathEntries := s.SessionManager.GetBranch("")
 	// pi: settings resolve after the model check, before the auth resolution.
 	settings, settingsErr := s.SettingsManager.GetCompactionSettings(model)
@@ -3876,7 +3895,8 @@ func (s *AgentSession) Compact(ctx context.Context, customInstructions string) (
 		details = extensionCompaction.Details
 	} else {
 		// Shared default summary generator, also used by automatic compaction.
-		result, err := s.runDefaultCompaction(compactionCtx, preparation, auth.model, auth, customInstructions, "manual")
+		// Auth resolution happens inside, after the hook above (pi v0.99.1).
+		result, err := s.runDefaultCompaction(compactionCtx, preparation, model, customInstructions, "manual")
 		if err != nil {
 			return fail(err)
 		}
@@ -4241,14 +4261,6 @@ func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, wil
 		return fail(autoCtx.Err())
 	}
 
-	auth, err := s.getSummarizationRequestAuth(autoCtx, model)
-	if err != nil {
-		return fail(err)
-	}
-	if autoCtx.Err() != nil {
-		return fail(autoCtx.Err())
-	}
-
 	var extensionCompaction *CompactionResult
 
 	if s.extensionRunner.HasHandlers("session_before_compact") {
@@ -4296,7 +4308,8 @@ func (s *AgentSession) runAutoCompaction(ctx context.Context, reason string, wil
 		details = extensionCompaction.Details
 	} else {
 		// Shared default summary generator, also used by manual compaction.
-		compactResult, err := s.runDefaultCompaction(autoCtx, preparation, auth.model, auth, "", reason)
+		// Auth resolution happens inside, after the hook above (pi v0.99.1).
+		compactResult, err := s.runDefaultCompaction(autoCtx, preparation, model, "", reason)
 		if err != nil {
 			return fail(err)
 		}

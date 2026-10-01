@@ -212,7 +212,7 @@ var Keybindings = func() tui.KeybindingDefinitions {
 			}
 			return keys("ctrl+v")
 		}(),
-		Description: "Paste image from clipboard (text fallback)",
+		Description: "Paste files on macOS, images, or text from clipboard",
 	}
 	defs["app.session.new"] = tui.KeybindingDefinition{DefaultKeys: []tui.KeyId{}, Description: "Start a new session"}
 	defs["app.session.tree"] = tui.KeybindingDefinition{DefaultKeys: []tui.KeyId{}, Description: "Open session tree"}

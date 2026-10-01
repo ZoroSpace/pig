@@ -116,6 +116,52 @@ func ReadClipboardText() string {
 	return ""
 }
 
+// clipboardFilePathsRunCommandFn indirections the osascript invocation for
+// ReadClipboardFilePaths (pig-only test seam; the legacy clipboardRunCommandFn
+// seam belongs to the image path).
+var clipboardFilePathsRunCommandFn = clipboardRunCommandOptionsFn
+
+// ReadClipboardFilePaths reads file paths, such as Finder file copies, from
+// the clipboard (pi: readClipboardFilePaths — the native addon's
+// getFilePaths, which reads NSPasteboard file URLs; a rejected promise maps
+// to a non-nil error). pig has no native clipboard (file header): macOS
+// substitutes osascript reading the «class furl» pasteboard flavor, the same
+// external-tool route as image reading; other platforms have no equivalent
+// reader, matching pi's addon coverage. nil = nothing available (pi null).
+func ReadClipboardFilePaths() ([]string, error) {
+	if clipboardPlatformFn() != "darwin" {
+		return nil, nil
+	}
+	// Finder copies write the file URLs pasteboard flavor; a single copied
+	// item coerces to «class furl», several to «class furl» list. Try the
+	// list form first, then the single form. POSIX path per item, one per
+	// line.
+	script := `set output to ""
+try
+	repeat with f in (the clipboard as «class furl» list)
+		set output to output & (POSIX path of f) & linefeed
+	end repeat
+on error number -1700
+	try
+		set output to (POSIX path of (the clipboard as «class furl»)) & linefeed
+	end try
+end try
+return output`
+	out, ok := clipboardFilePathsRunCommandFn("osascript", []string{"-e", script},
+		&clipboardCommandOptions{TimeoutMs: clipboardCommandTimeoutMs})
+	if !ok {
+		return nil, fmt.Errorf("clipboard file path read failed")
+	}
+	var paths []string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimRight(line, "\r")
+		if line != "" {
+			paths = append(paths, line)
+		}
+	}
+	return paths, nil
+}
+
 // copyViaWindowsClipboard writes the Windows clipboard through WSL interop
 // (pi: copyViaWindowsClipboard). WSL without WSLg has no Linux display, so
 // PowerShell reads the text from a file because `clip.exe` and PowerShell

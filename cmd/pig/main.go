@@ -852,7 +852,7 @@ func Main(args []string) int {
 	// through to ordinary message parsing exactly as pi does for unknown
 	// words.
 
-	cwd, err := os.Getwd()
+	cwd, err := cli.ProcessCwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 		return 1

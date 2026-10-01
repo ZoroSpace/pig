@@ -227,10 +227,10 @@ func (c *ToolExecutionComponent) expandedLocked() bool {
 	return c.expanded
 }
 
-// createCallFallback builds the no-renderer call row (pi:
-// createCallFallback).
+// createCallFallback builds the no-renderer call row: the tool name followed
+// by the streamed arguments (pi: createCallFallback, v0.99.1).
 func (c *ToolExecutionComponent) createCallFallback() tui.Component {
-	return tui.NewText(theme.Fg("toolTitle", theme.Bold(c.toolName)), 0, 0)
+	return tui.NewText(tools.FormatToolCallWithArgs(c.toolName, c.args, theme.Current(), c.expandedLocked()), 0, 0)
 }
 
 // createResultFallback builds the generic result preview (pi:

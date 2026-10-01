@@ -2275,3 +2275,52 @@ func TestModelRegistryCustomModelAndOverrideCarryPromptCacheLifetimes(t *testing
 		t.Fatalf("merged promptCache = %+v", sonnet.PromptCache)
 	}
 }
+
+// pi v0.99.1: the model-runtime/registry facades forward the typed-catalog
+// accessors added by #9948 (getModel(s)OfType / getAllModels /
+// getAvailableOfType / getAllAvailable). The chat-only accessors are covered
+// by the ai-package tests; this locks the core forwarding and the empty
+// catalog shape.
+func TestModelRegistryTypedModelForwarding(t *testing.T) {
+	registry, runtime := createTestModelRegistry(t, NewInMemoryAuthStorage(authStorageData{}), "")
+
+	if got := len(runtime.GetModels("")); got == 0 {
+		t.Fatal("expected builtin chat models in the runtime snapshot")
+	}
+	if got := len(runtime.GetAllModels("")); got < len(runtime.GetModels("")) {
+		t.Fatalf("GetAllModels (%d) must include every chat model (%d)", len(runtime.GetAllModels("")), len(runtime.GetModels("")))
+	}
+	if got := runtime.GetModelsOfType(ai.ModelTypeImage, ""); len(got) == 0 {
+		t.Fatal("expected builtin image models")
+	}
+	if got := runtime.GetModelsOfType(ai.ModelTypeImage, "openrouter"); len(got) == 0 {
+		t.Fatal("expected openrouter image models")
+	}
+	if _, ok := runtime.GetModelOfType(ai.ModelTypeImage, "openrouter", "google/gemini-2.5-flash-image"); !ok {
+		t.Fatal("expected the openrouter image model lookup to hit")
+	}
+	if _, ok := runtime.GetModelOfType(ai.ModelTypeChat, "openrouter", "google/gemini-2.5-flash-image"); ok {
+		t.Fatal("chat lookup must not see an image model")
+	}
+
+	if got := registry.GetModelsOfType(ai.ModelTypeImage, ""); len(got) == 0 {
+		t.Fatal("registry GetModelsOfType must forward to the runtime")
+	}
+	if got := registry.FindOfType(ai.ModelTypeImage, "openrouter", "google/gemini-2.5-flash-image"); got == nil {
+		t.Fatal("registry FindOfType must forward to the runtime")
+	} else if got.GetModelType() != ai.ModelTypeImage {
+		t.Fatalf("model type = %q, want image", got.GetModelType())
+	}
+	if got := registry.GetModelOfType(ai.ModelTypeImage, "openrouter", "missing"); got != nil {
+		t.Fatalf("missing model lookup = %v, want nil", got)
+	}
+
+	// Available* need credentials; the empty store means nothing is available
+	// but the calls must not error.
+	if _, err := registry.GetAvailableOfType(context.Background(), ai.ModelTypeImage, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.GetAllAvailable(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+}

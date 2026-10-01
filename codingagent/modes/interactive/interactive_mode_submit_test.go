@@ -70,11 +70,16 @@ func newSubmitTestMode(t *testing.T) *InteractiveMode {
 func stubClipboardReaders(t *testing.T, image *utils.ClipboardImage, text string) {
 	t.Helper()
 	originalImage, originalText := clipboardImageReaderFn, clipboardTextReaderFn
+	originalFilePaths := clipboardFilePathsReadFn
 	clipboardImageReaderFn = func(*utils.ReadClipboardImageOptions) *utils.ClipboardImage { return image }
 	clipboardTextReaderFn = func() string { return text }
+	// The file-path half (#10136) runs before the image half; isolate the
+	// tests from the real clipboard (which would shell out to osascript).
+	clipboardFilePathsReadFn = func() ([]string, error) { return nil, nil }
 	t.Cleanup(func() {
 		clipboardImageReaderFn = originalImage
 		clipboardTextReaderFn = originalText
+		clipboardFilePathsReadFn = originalFilePaths
 	})
 }
 

@@ -592,3 +592,53 @@ func TestToolExecutionCompactReadLineRangeOrdering(t *testing.T) {
 
 // ptrInt is a local pointer helper for mouse event fields.
 func ptrInt(v int) *int { return &v }
+
+// Issue #9996: strict tool schemas make models send null for omitted
+// optional fields; the read call row must not render a line range for them
+// (pi: "renders read calls with null offset and limit as full-file reads").
+// pig's raw-args parser maps JSON null to a nil pointer, which the range
+// formatter already treats as absent — the test locks that equivalence.
+func TestToolExecutionReadNullOffsetLimitRendersFullFile(t *testing.T) {
+	initTestTheme(t)
+	component := NewToolExecutionComponent("read", "tool-read-null-range",
+		map[string]any{"path": "src/example.ts", "offset": nil, "limit": nil},
+		ToolExecutionOptions{}, tools.CreateReadToolDefinition(mustCwd(t), nil), &toolExecutionFakeTUI{}, mustCwd(t))
+	component.UpdateResult(ToolExecutionResult{Content: textContent("hello")}, false)
+	rendered := renderedPlain(t, component, 120)
+	if !strings.Contains(rendered, "read src/example.ts") {
+		t.Fatalf("call row missing: %q", rendered)
+	}
+	if strings.Contains(rendered, "src/example.ts:") {
+		t.Fatalf("null offset/limit must not render a line range: %q", rendered)
+	}
+}
+
+// pi v0.99.1: the no-renderer call row shows the streamed arguments, not
+// just the bold tool name (pi: createCallFallback via formatToolCallWithArgs;
+// the mcp proxy call row renders through its own pig-only formatter, see
+// docs/feat/MCP.md).
+func TestToolExecutionCallFallbackShowsArguments(t *testing.T) {
+	initTestTheme(t)
+	// A definition without a RenderCall takes the call-fallback path (pi:
+	// getCallRenderer() === undefined → createCallFallback).
+	component := NewToolExecutionComponent("mystery", "tool-fallback-args",
+		map[string]any{"path": "src/example.ts", "count": float64(2)},
+		ToolExecutionOptions{}, createBaseToolDefinition("mystery"), &toolExecutionFakeTUI{}, mustCwd(t))
+	rendered := renderedPlain(t, component, 200)
+	if !strings.Contains(rendered, "mystery") {
+		t.Fatalf("call row missing tool name: %q", rendered)
+	}
+	// Collapsed format: key=value pairs on the title line, cut to 100 chars.
+	if !strings.Contains(rendered, "path=") || !strings.Contains(rendered, "src/example.ts") {
+		t.Fatalf("call row missing collapsed args: %q", rendered)
+	}
+	if strings.Contains(rendered, "count: 2") {
+		t.Fatalf("collapsed format must not use expanded key: value lines: %q", rendered)
+	}
+
+	component.SetExpanded(true)
+	expanded := renderedPlain(t, component, 200)
+	if !strings.Contains(expanded, "path: src/example.ts") || !strings.Contains(expanded, "count: 2") {
+		t.Fatalf("expanded call row missing key: value lines: %q", expanded)
+	}
+}
