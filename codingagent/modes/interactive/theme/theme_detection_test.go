@@ -126,6 +126,68 @@ func TestThemeColorMode(t *testing.T) {
 	})
 }
 
+// Regression (2026-10-01,
+// docs/fix/2026-10-01-truecolor-detection-missing.md): the theme picked its
+// color mode from tui.GetCapabilities().TrueColor, which never detected
+// truecolor, so every theme color was silently quantized to the nearest
+// 256-color palette entry (the user-visible case: the user message bubble
+// rendered light periwinkle instead of the intended light gray-blue).
+func TestThemeColorModeFollowsDetectedCapabilities(t *testing.T) {
+	clearDetectionEnv := func() {
+		for _, key := range []string{"TERM", "TERM_PROGRAM", "TERMINAL_EMULATOR", "COLORTERM", "TMUX", "ITERM_SESSION_ID", "PI_TRUE_COLOR"} {
+			t.Setenv(key, "")
+		}
+		tui.SetCapabilityOverrides(tui.TerminalCapabilityOverrides{})
+		tui.ResetCapabilitiesCache()
+	}
+	t.Cleanup(func() {
+		tui.SetCapabilityOverrides(tui.TerminalCapabilityOverrides{})
+		tui.ResetCapabilitiesCache()
+	})
+
+	t.Run("truecolor terminals get the exact theme colors", func(t *testing.T) {
+		clearDetectionEnv()
+		t.Setenv("TERM_PROGRAM", "iTerm.app")
+		tui.ResetCapabilitiesCache()
+
+		dark := GetThemeByName("dark")
+		if dark == nil {
+			t.Fatal("dark theme not found")
+		}
+		if got := dark.GetBgAnsi(BgUserMessageBg); got != "\x1b[48;2;33;59;73m" {
+			t.Fatalf("dark userMessageBg = %q, want truecolor #213b49", got)
+		}
+		light := GetThemeByName("light")
+		if light == nil {
+			t.Fatal("light theme not found")
+		}
+		if got := light.GetBgAnsi(BgUserMessageBg); got != "\x1b[48;2;223;231;236m" {
+			t.Fatalf("light userMessageBg = %q, want truecolor #dfe7ec", got)
+		}
+	})
+
+	t.Run("256-color terminals get the nearest palette index", func(t *testing.T) {
+		clearDetectionEnv()
+		t.Setenv("TERM", "xterm-256color")
+		tui.ResetCapabilitiesCache()
+
+		dark := GetThemeByName("dark")
+		if dark == nil {
+			t.Fatal("dark theme not found")
+		}
+		if got := dark.GetBgAnsi(BgUserMessageBg); got != "\x1b[48;5;23m" {
+			t.Fatalf("dark userMessageBg = %q, want 256-color index 23", got)
+		}
+		light := GetThemeByName("light")
+		if light == nil {
+			t.Fatal("light theme not found")
+		}
+		if got := light.GetBgAnsi(BgUserMessageBg); got != "\x1b[48;5;189m" {
+			t.Fatalf("light userMessageBg = %q, want 256-color index 189", got)
+		}
+	})
+}
+
 func TestThemeSettingHelpers(t *testing.T) {
 	t.Run("parses and resolves automatic theme settings", func(t *testing.T) {
 		pair := ParseAutoThemeSetting("light/dark")

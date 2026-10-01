@@ -172,7 +172,7 @@ pig 把 pi 自研的 pi-tui **整库移植**，没用任何现成 TUI 框架—�
 - **富渲染**：流式 Markdown、表格、LaTeX 数学公式、Mermaid 图表、语法高亮，全在终端里
 - **会话操作**：`/tree` 会话树导航、`/fork` 从任意历史消息分叉、`/resume` 会话搜索、`/compact` 手动压缩——全部是交互式选择器
 - **鼠标支持**：滚动、选择、点击折叠工具输出（取决于终端能力，自动探测）
-- **主题系统**：与 pi 格式互通的主题文件，light/dark 自定义
+- **主题系统**：与 pi 格式互通的主题文件，light/dark 自定义；终端能力自动探测（真彩终端按精确色渲染，否则就近量化到 256 色）
 
 **对中文用户特别友好**（pig 相对 pi 的增强）：
 
@@ -336,7 +336,7 @@ cp -a ~/.pi/agent ~/.pig/agent
 | 扩展系统（Node sidecar、包管理器） | ✅ | ⏳ 装配位已留，见 [EXTENSION-PLAN](docs/handoffs/EXTENSION-PLAN.md) |
 | 图像转码与缩放（read/贴图/工具结果：BMP/WebP/TIFF→PNG、2000px 自动缩放，Go 原生） | ✅ | ✅ pig 偏差：Go 原生实现替代 photon/WASM，见 [fix 文档](docs/fix/2026-09-22-image-tool-413-oversize-and-history-bloat.md) |
 | `/bug` bug 上报（上传 Pi 的 Radius gateway / 导出 zip） | ✅ | ❌ 不移植：pig 用户直接提 [issue](https://github.com/ZoroSpace/pig/issues) |
-| 终端图片检测、发行打包 | ✅ | ⏳ |
+| 终端能力探测（truecolor 已对齐；图片/超链接检测与发行打包） | ✅ | 🔶 见 [fix](docs/fix/2026-10-01-truecolor-detection-missing.md) |
 
 两个大块按计划押后：
 

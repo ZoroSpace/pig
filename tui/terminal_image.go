@@ -6,12 +6,18 @@
 // registered-metadata placement/crop helpers.
 //
 // Porting scope (declared, README §4 Phase 8):
-//   - The full terminal detection machinery (OSC queries, tmux probing,
-//     iTerm2 protocol, Image component, sixel/iterm rendering) is deferred to
-//     Phase 8 with the image pipeline. GetCapabilities returns a
+//   - The image half of the terminal detection machinery (OSC queries, tmux
+//     probing, iTerm2 protocol, Image component, sixel/iterm rendering) is
+//     deferred to Phase 8 with the image pipeline. GetCapabilities returns a
 //     non-image result until then; SetCapabilities keeps the test seam. The
 //     metadata/registry functions ported here are pure string/escape helpers
 //     with no detection dependency.
+//   - The `trueColor` branch of pi's detectCapabilitiesFromEnvironment *is*
+//     ported (2026-10-01 fix): the theme picked its color mode from it, so
+//     leaving it at false silently quantized every theme color to the
+//     256-color palette. The images/hyperlinks branches stay deferred (pi's
+//     hyperlink branch needs the tmux forwarding probe, the image branch
+//     needs the Phase 8 image pipeline).
 package tui
 
 import (
@@ -24,9 +30,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/samber/lo"
 )
 
 const kittyImagePrefix = "\x1b_G"
@@ -79,19 +88,109 @@ func SetCellDimensions(dims CellDimensions) {
 	currentCellDimensions = &d
 }
 
-// GetCapabilities returns the cached terminal capabilities. Detection is
-// deferred to Phase 8; until then the default (no images) is returned.
-// Capability overrides set via SetCapabilityOverrides are applied on top
-// (pi: getCapabilities spreads capabilityOverrides over detection).
+// GetCapabilities returns the cached terminal capabilities. TrueColor is
+// auto-detected from the environment (detectTrueColorCapability) with the
+// PI_TRUE_COLOR override on top; what a caller forces via
+// SetCapabilityOverrides (user settings' `terminal.*`) wins over both
+// (pi: getCapabilities spreads capabilityOverrides over
+// detectCapabilities). Images/hyperlinks detection is still deferred to
+// Phase 8, so they keep their zero values unless overridden.
 func GetCapabilities() TerminalCapabilities {
 	capabilitiesMu.Lock()
 	defer capabilitiesMu.Unlock()
 	if cachedCapabilities == nil {
-		caps := TerminalCapabilities{}
+		caps := TerminalCapabilities{TrueColor: detectTrueColorCapability()}
+		if override := parseBooleanCapabilityOverride(os.Getenv("PI_TRUE_COLOR")); override != nil {
+			caps.TrueColor = *override
+		}
 		applyCapabilityOverrides(&caps, capabilityOverrides)
 		cachedCapabilities = &caps
 	}
 	return *cachedCapabilities
+}
+
+// parseBooleanCapabilityOverride parses a boolean capability environment
+// override (pi: parseBooleanCapabilityOverride). Only "1"/"0" force a value;
+// anything else — including "auto" and unset — keeps auto-detection.
+func parseBooleanCapabilityOverride(value string) *bool {
+	switch value {
+	case "1":
+		return lo.ToPtr(true)
+	case "0":
+		return lo.ToPtr(false)
+	default:
+		return nil
+	}
+}
+
+// detectTrueColorCapability reports whether the terminal renders 24-bit
+// color. This is the trueColor branch of pi's
+// detectCapabilitiesFromEnvironment; the images/hyperlinks branches of that
+// function are still deferred (see GetCapabilities).
+func detectTrueColorCapability() bool {
+	termProgram := strings.ToLower(os.Getenv("TERM_PROGRAM"))
+	terminalEmulator := strings.ToLower(os.Getenv("TERMINAL_EMULATOR"))
+	term := strings.ToLower(os.Getenv("TERM"))
+	colorTerm := strings.ToLower(os.Getenv("COLORTERM"))
+	hasTrueColorHint := colorTerm == "truecolor" || colorTerm == "24bit" || strings.HasSuffix(term, "-direct")
+	isWindowsConsole := runtime.GOOS == "windows"
+
+	// Multiplexers do not report the outer terminal, so an explicit
+	// $COLORTERM/$TERM hint decides (pi: tmux branch; images stay off under
+	// tmux, which is part of the deferred image half).
+	if os.Getenv("TMUX") != "" || strings.HasPrefix(term, "tmux") {
+		return hasTrueColorHint
+	}
+
+	// screen does not forward OSC 8 hyperlinks, so keep them off there.
+	if strings.HasPrefix(term, "screen") {
+		return hasTrueColorHint
+	}
+
+	if os.Getenv("KITTY_WINDOW_ID") != "" || termProgram == "kitty" {
+		return true
+	}
+
+	if termProgram == "ghostty" || strings.Contains(term, "ghostty") || os.Getenv("GHOSTTY_RESOURCES_DIR") != "" {
+		return true
+	}
+
+	if os.Getenv("WEZTERM_PANE") != "" || termProgram == "wezterm" {
+		return true
+	}
+
+	// Warp supports the Kitty graphics protocol and OSC 8 hyperlinks.
+	if termProgram == "warpterminal" || os.Getenv("WARP_SESSION_ID") != "" || os.Getenv("WARP_TERMINAL_SESSION_UUID") != "" {
+		return true
+	}
+
+	if os.Getenv("ITERM_SESSION_ID") != "" || termProgram == "iterm.app" {
+		return true
+	}
+
+	if os.Getenv("WT_SESSION") != "" {
+		return true
+	}
+
+	if termProgram == "alacritty" || termProgram == "vscode" || termProgram == "zed" {
+		return true
+	}
+
+	if terminalEmulator == "jetbrains-jediterm" {
+		return true
+	}
+
+	// Windows Terminal does not always set WT_SESSION, for example when it
+	// hosts a cmd.exe launched directly from Win+R. Modern Windows consoles
+	// support truecolor; keep hyperlinks off unless we positively detected
+	// support above.
+	if isWindowsConsole {
+		return true
+	}
+
+	// Unknown terminal: be conservative and trust only an explicit hint (pi:
+	// hasTrueColorHint).
+	return hasTrueColorHint
 }
 
 // applyCapabilityOverrides spreads non-empty overrides over caps (pig helper
