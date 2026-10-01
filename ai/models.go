@@ -231,7 +231,7 @@ type Models interface {
 	GetAuthForModel(ctx context.Context, model *Model, overrides *auth.AuthResolutionOverrides) (*auth.AuthResult, error)
 	// Login runs a provider-owned login flow and persists its returned
 	// credential.
-	Login(ctx context.Context, providerID string, authType auth.AuthType, interaction auth.AuthInteraction) (auth.Credential, error)
+	Login(ctx context.Context, providerID string, authType auth.AuthType, interaction auth.AuthInteraction, options *auth.LoginOptions) (auth.Credential, error)
 	// Logout removes the stored credential for a provider.
 	Logout(ctx context.Context, providerID string) error
 	// Stream resolves auth lazily and delegates to the owning provider.
@@ -968,7 +968,7 @@ func (m *modelsImpl) GetAuthForModel(ctx context.Context, model *Model, override
 // Login runs a provider-owned login flow and persists its returned
 // credential. pi guards the race between store mutation and flow abort with
 // a started flag; Go collapses it into ctx cancellation inside Modify.
-func (m *modelsImpl) Login(ctx context.Context, providerID string, authType auth.AuthType, interaction auth.AuthInteraction) (auth.Credential, error) {
+func (m *modelsImpl) Login(ctx context.Context, providerID string, authType auth.AuthType, interaction auth.AuthInteraction, options *auth.LoginOptions) (auth.Credential, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -984,11 +984,11 @@ func (m *modelsImpl) Login(ctx context.Context, providerID string, authType auth
 			return nil, auth.NewModelsError(auth.ModelsErrorAuth, fmt.Sprintf("%s does not support %s login", provider.Name(), authType), nil)
 		}
 		if _, ok := oauth.(interface {
-			Login(ctx context.Context, interaction auth.AuthInteraction) (*auth.OAuthCredential, error)
+			Login(ctx context.Context, interaction auth.AuthInteraction, options *auth.LoginOptions) (*auth.OAuthCredential, error)
 		}); !ok {
 			return nil, auth.NewModelsError(auth.ModelsErrorAuth, fmt.Sprintf("%s does not support %s login", provider.Name(), authType), nil)
 		}
-		stored, err := oauth.Login(ctx, interaction)
+		stored, err := oauth.Login(ctx, interaction, options)
 		if err != nil {
 			return nil, err
 		}

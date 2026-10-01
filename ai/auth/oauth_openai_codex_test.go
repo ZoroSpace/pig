@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -163,7 +164,7 @@ func codexTestDeviceAuthPending() *http.Response {
 func codexTestLoginAsync(ctx context.Context, interaction AuthInteraction) <-chan loginOutcome {
 	resultCh := make(chan loginOutcome, 1)
 	go func() {
-		credential, err := OpenAICodexOAuth{}.Login(ctx, interaction)
+		credential, err := OpenAICodexOAuth{}.Login(ctx, interaction, nil)
 		resultCh <- loginOutcome{credential: credential, err: err}
 	}()
 	return resultCh
@@ -366,7 +367,7 @@ func TestCodexOAuthOffersBrowserLoginFirst(t *testing.T) {
 		},
 	}
 
-	credential, err := OpenAICodexOAuth{}.Login(context.Background(), interaction)
+	credential, err := OpenAICodexOAuth{}.Login(context.Background(), interaction, nil)
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
@@ -410,7 +411,7 @@ func TestCodexOAuthSelectionCancelled(t *testing.T) {
 		},
 		notify: func(AuthEvent) {},
 	}
-	_, err := OpenAICodexOAuth{}.Login(context.Background(), interaction)
+	_, err := OpenAICodexOAuth{}.Login(context.Background(), interaction, nil)
 	if err == nil || err.Error() != "Login cancelled" {
 		t.Fatalf("login error = %v, want Login cancelled", err)
 	}
@@ -708,7 +709,7 @@ func TestCodexOAuthBrowserLoginManualRedirect(t *testing.T) {
 		},
 	}
 
-	credential, err := OpenAICodexOAuth{}.Login(context.Background(), interaction)
+	credential, err := OpenAICodexOAuth{}.Login(context.Background(), interaction, nil)
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
@@ -763,91 +764,71 @@ func TestCodexOAuthBrowserLoginStateMismatch(t *testing.T) {
 		notify: func(event AuthEvent) {},
 	}
 
-	_, err := OpenAICodexOAuth{}.Login(context.Background(), interaction)
+	_, err := OpenAICodexOAuth{}.Login(context.Background(), interaction, nil)
 	if err == nil || err.Error() != "State mismatch" {
 		t.Fatalf("login error = %v, want State mismatch", err)
 	}
 }
 
-// TestCodexOAuthCallbackServerBranches walks the four handler branches (pi:
-// the startLocalOAuthServer handler).
-func TestCodexOAuthCallbackServerBranches(t *testing.T) {
-	server := startCodexLocalOAuthServer("st")
-	defer server.close()
-	if server.dead {
-		t.Skip("port 1455 unavailable; callback server branches need the live listener")
-	}
-	base := "http://" + getCodexCallbackHost() + ":1455"
-
-	// Unknown route → 404 page.
-	response, err := http.Get(base + "/wrong")
+// TestCodexOAuthCallbackServerPortTaken locks pi's new fallback: when port
+// 1455 is occupied (pi: "Port 1455 is shared with the Codex CLI"), the
+// browser flow degrades to the pasted redirect URL instead of failing (pi:
+// "falls back to the pasted redirect URL when the fixed callback port is
+// taken"). Occupy the port unless it already is.
+func TestCodexOAuthCallbackServerPortTaken(t *testing.T) {
+	blocker, err := net.Listen("tcp", getCodexCallbackHost()+":1455")
 	if err != nil {
-		t.Fatal(err)
+		t.Skip("port 1455 already occupied; nothing to block")
 	}
-	body := codexTestReadAll(t, response)
-	if response.StatusCode != http.StatusNotFound || !strings.Contains(body, "Callback route not found.") {
-		t.Errorf("unknown route = %d %q, want 404 with error page", response.StatusCode, body)
+	defer blocker.Close()
+
+	accessToken := codexTestAccessToken("acct")
+	stubCodexOAuthDo(t, func(method, requestURL, contentType, body string) (*http.Response, error) {
+		if requestURL != "https://auth.openai.com/oauth/token" {
+			return nil, fmt.Errorf("Unexpected fetch URL: %s", requestURL)
+		}
+		values, parseErr := url.ParseQuery(body)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		if got := values.Get("code"); got != "pasted-code" {
+			t.Errorf("code = %q, want pasted-code", got)
+		}
+		if got := values.Get("redirect_uri"); got != "http://localhost:1455/auth/callback" {
+			t.Errorf("redirect_uri = %q", got)
+		}
+		return codexTestJSONResponse(200, fmt.Sprintf(`{"access_token":%q,"refresh_token":"refresh","expires_in":3600}`, accessToken)), nil
+	})
+
+	var authURL string
+	interaction := &oauthTestInteraction{
+		prompt: func(prompt AuthPrompt) (string, error) {
+			switch prompt.Type {
+			case "select":
+				return "browser", nil
+			case "manual_code":
+				parsed, parseErr := url.Parse(authURL)
+				if parseErr != nil {
+					return "", parseErr
+				}
+				state := parsed.Query().Get("state")
+				return "http://localhost:1455/auth/callback?code=pasted-code&state=" + state, nil
+			default:
+				return "", fmt.Errorf("Unexpected prompt: %s", prompt.Type)
+			}
+		},
+		notify: func(event AuthEvent) {
+			if event.Type == "auth_url" {
+				authURL = event.URL
+			}
+		},
 	}
 
-	// State mismatch → 400.
-	response, err = http.Get(base + "/auth/callback?code=x&state=nope")
-	if err != nil {
-		t.Fatal(err)
+	credential, loginErr := OpenAICodexOAuth{}.Login(context.Background(), interaction, nil)
+	if loginErr != nil {
+		t.Fatalf("login failed: %v", loginErr)
 	}
-	body = codexTestReadAll(t, response)
-	if response.StatusCode != http.StatusBadRequest || !strings.Contains(body, "State mismatch.") {
-		t.Errorf("state mismatch = %d %q, want 400 with error page", response.StatusCode, body)
+	if got, _ := credential.Extra["accountId"].(string); got != "acct" {
+		t.Errorf("accountId = %q, want acct", got)
 	}
-
-	// Missing code → 400.
-	response, err = http.Get(base + "/auth/callback?state=st")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body = codexTestReadAll(t, response)
-	if response.StatusCode != http.StatusBadRequest || !strings.Contains(body, "Missing authorization code.") {
-		t.Errorf("missing code = %d %q, want 400 with error page", response.StatusCode, body)
-	}
-
-	// Success → 200 page plus code handoff.
-	response, err = http.Get(base + "/auth/callback?code=the-code&state=st")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body = codexTestReadAll(t, response)
-	if response.StatusCode != http.StatusOK || !strings.Contains(body, "OpenAI authentication completed. You can close this window.") {
-		t.Errorf("success = %d %q, want 200 with success page", response.StatusCode, body)
-	}
-	callback := server.waitForCode()
-	if callback.code != "the-code" {
-		t.Errorf("waitForCode = %+v, want the-code", callback)
-	}
-}
-
-func codexTestReadAll(t *testing.T, response *http.Response) string {
-	t.Helper()
-	defer response.Body.Close()
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(body)
-}
-
-// TestCodexOAuthCallbackServerRestart locks the listener lifecycle: closing
-// a server immediately after start must release port 1455 even when Serve
-// has not registered the listener yet (http.Server.Close alone leaks the
-// bind and fails the next login in the same process — observed as a flaky
-// "bind: address already in use" in the anthropic callback tests).
-func TestCodexOAuthCallbackServerRestart(t *testing.T) {
-	first := startCodexLocalOAuthServer("st1")
-	if first.dead {
-		t.Skip("port 1455 unavailable")
-	}
-	first.close()
-	second := startCodexLocalOAuthServer("st2")
-	if second.dead {
-		t.Fatal("restarting the callback server failed: port 1455 not released")
-	}
-	second.close()
 }

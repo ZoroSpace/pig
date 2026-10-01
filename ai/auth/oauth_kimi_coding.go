@@ -365,7 +365,7 @@ func (KimiCodingOAuth) IsSubscription() bool { return true }
 func (KimiCodingOAuth) LoginLabel() string   { return "Sign in with Kimi Code" }
 
 // Login runs the provider-owned login flow.
-func (KimiCodingOAuth) Login(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error) {
+func (KimiCodingOAuth) Login(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
 	return loginKimiCoding(ctx, interaction)
 }
 

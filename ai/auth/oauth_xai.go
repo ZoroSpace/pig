@@ -344,7 +344,7 @@ func (XaiOAuth) IsSubscription() bool { return true }
 func (XaiOAuth) LoginLabel() string   { return "Sign in with SuperGrok or X Premium" }
 
 // Login runs the provider-owned login flow.
-func (XaiOAuth) Login(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error) {
+func (XaiOAuth) Login(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
 	return loginXai(ctx, interaction)
 }
 

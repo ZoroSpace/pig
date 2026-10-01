@@ -1252,10 +1252,10 @@ func (r *ModelRuntime) CancelDeferred(ctx context.Context, model *ai.Model, hand
 }
 
 // Login runs a provider login flow and synchronizes state (pi: login).
-func (r *ModelRuntime) Login(ctx context.Context, providerID string, authType auth.AuthType, interaction auth.AuthInteraction) (auth.Credential, error) {
+func (r *ModelRuntime) Login(ctx context.Context, providerID string, authType auth.AuthType, interaction auth.AuthInteraction, options *auth.LoginOptions) (auth.Credential, error) {
 	var credential auth.Credential
 	err := r.enqueueCredentialOperation(ctx, providerID, func(ctx context.Context) error {
-		stored, err := r.models.Login(ctx, providerID, authType, interaction)
+		stored, err := r.models.Login(ctx, providerID, authType, interaction, options)
 		if err != nil {
 			return err
 		}

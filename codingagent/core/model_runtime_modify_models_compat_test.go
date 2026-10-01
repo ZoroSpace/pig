@@ -66,7 +66,7 @@ func TestModelRuntimeRegistersNativeProvidersWithTheirAuthImplementation(t *test
 		t.Fatal("find(extension-native, native) missing")
 	}
 
-	if _, err := runtime.Login(context.Background(), "extension-native", auth.AuthTypeAPIKey, &promptInteraction{secret: "secret"}); err != nil {
+	if _, err := runtime.Login(context.Background(), "extension-native", auth.AuthTypeAPIKey, &promptInteraction{secret: "secret"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	result, err := registry.GetProviderAuth(context.Background(), "extension-native")

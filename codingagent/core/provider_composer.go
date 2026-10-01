@@ -676,7 +676,7 @@ func (a *adaptedExtensionOAuth) Name() string         { return a.config.Name }
 func (a *adaptedExtensionOAuth) IsSubscription() bool { return a.config.IsSubscription }
 func (a *adaptedExtensionOAuth) LoginLabel() string   { return "" }
 
-func (a *adaptedExtensionOAuth) Login(ctx context.Context, interaction auth.AuthInteraction) (*auth.OAuthCredential, error) {
+func (a *adaptedExtensionOAuth) Login(ctx context.Context, interaction auth.AuthInteraction, options *auth.LoginOptions) (*auth.OAuthCredential, error) {
 	credential, err := a.config.Login(ai.OAuthLoginCallbacks{
 		OnAuth: func(info ai.OAuthAuthInfo) {
 			interaction.Notify(auth.AuthEvent{Type: "auth_url", URL: info.URL, Instructions: info.Instructions})
@@ -1034,8 +1034,8 @@ func (o *composedOAuthAuth) Name() string         { return o.oauth.Name() }
 func (o *composedOAuthAuth) IsSubscription() bool { return o.oauth.IsSubscription() }
 func (o *composedOAuthAuth) LoginLabel() string   { return o.oauth.LoginLabel() }
 
-func (o *composedOAuthAuth) Login(ctx context.Context, interaction auth.AuthInteraction) (*auth.OAuthCredential, error) {
-	return o.oauth.Login(ctx, interaction)
+func (o *composedOAuthAuth) Login(ctx context.Context, interaction auth.AuthInteraction, options *auth.LoginOptions) (*auth.OAuthCredential, error) {
+	return o.oauth.Login(ctx, interaction, options)
 }
 
 func (o *composedOAuthAuth) Refresh(ctx context.Context, credential *auth.OAuthCredential) (*auth.OAuthCredential, error) {

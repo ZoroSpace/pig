@@ -308,7 +308,7 @@ func (MetaOAuth) IsSubscription() bool { return true }
 func (MetaOAuth) LoginLabel() string   { return "Sign in with Meta" }
 
 // Login runs the provider-owned login flow.
-func (MetaOAuth) Login(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error) {
+func (MetaOAuth) Login(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
 	return loginMeta(ctx, interaction)
 }
 

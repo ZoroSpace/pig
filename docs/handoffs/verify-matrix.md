@@ -38,7 +38,7 @@
 
 注：openai-completions 系其余 provider（groq/cerebras/together/baseten/nvidia/moonshot/zai/antling/huggingface/openrouter 等，Phase 2 交付）同样只有协议级真验（deepseek）+ detectCompat 单测，provider 真机未打——不在本矩阵范围（它们早于 A/B 批），销账时顺带登记即可。
 
-## 2. OAuth 流程（三家，全部 🧪 mock）
+## 2. OAuth 流程（S10-2 后共六家 flow，全部 🧪 mock）
 
 | 流程 | 机制 | 结构锁 | 未验项 |
 |---|---|---|---|
@@ -46,6 +46,8 @@
 | kimi-coding | 设备流（auth.kimi.com，JSON） | oauth-kimi 测试 | 同上（设备码获取/轮询/令牌交换/刷新不轮换语义） |
 | xai（SuperGrok/X Premium） | 设备流（auth.x.ai，RFC 8628；`verification_uri` 强制 https、refresh 不轮换沿用旧 token） | oauth_xai.go 结构 + mock | 同上 |
 | openai-codex（ChatGPT Plus/Pro，C2） | 双路登录（browser：PKCE + `localhost:1455/auth/callback` 回调服务器 + manual code 兜底 + state 校验；device：usercode 端点 → 轮询 → authorization_code 再走 PKCE exchange，interval 支持数字/字符串）；refresh；toAuth=access 即 apiKey | openai-codex-oauth 测试 12 函数（fake-timer 时钟 seam 驱动轮询节奏/取消/超时/slow_down 无关的 pending/403·404 pending/失败 body 原文） | 真登录：auth.openai.com 授权页、404 禁用文案真值、轮询真节奏、accountId 提取真 JWT、凭证落盘→请求携带全链路 |
+| openai（ChatGPT 订阅，S10-2 新增） | Sign in with ChatGPT：动态客户端注册（`dynamic_agent_client`）→ 回调带回签发的 `client_id`；PKCE + `127.0.0.1:1455/auth/callback`（与 codex 同端口，同进程先后复用）+ manual 兜底；`ext_agent_host_id=urn:uuid:<deviceId>`（settings 全局 deviceId，首次登录生成）；scope 必含 `chatgpt.tokens.use.direct`；expires 提前 3min；refresh 走签发 client_id | openai-chatgpt-oauth 测试 7 函数（注册参数/签发 client_id 落 Extra/无 direct scope 拒绝/缺 deviceId 拒绝/refresh 轮换+3min 余量） | 真登录：ChatGPT 授权页、动态注册真 client_id、1455 端口与 Codex CLI 冲突场景、凭证落盘→api.openai.com 直连全链路 |
+| openrouter（S10-2 补齐挂账缺口） | PKCE + 一次性 loopback 临时端口 + 随机 UUID 路径 + manual 兜底；code 换**永久 API key**（无 refresh 语义，refresh 原样返回） | openrouter-oauth 测试 13 函数（PKCE challenge=SHA256(verifier) 对拍/一次性 409/无 key 502/手动粘贴/取消关listener） | 真登录：openrouter.ai/auth 授权页、真 key 交换、key 落盘→请求携带全链路 |
 
 **OAuth 真机 probe（手工，任一家）**：`pig` 交互模式 → `/login` → 选目标 provider → 完成流程 → 检查 `~/.pig/agent/auth.json` 新增凭证 → 发一轮真实对话 → 重启 pig 验证刷新路径。
 

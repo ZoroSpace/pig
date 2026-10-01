@@ -4,9 +4,12 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 // oauthTestInteraction stubs the login interaction (pi: the inline
@@ -78,7 +81,7 @@ func TestAnthropicOAuthManualCallbackLogin(t *testing.T) {
 		},
 	}
 
-	credentials, err := AnthropicOAuth{}.Login(context.Background(), interaction)
+	credentials, err := AnthropicOAuth{}.Login(context.Background(), interaction, nil)
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
@@ -150,7 +153,7 @@ func TestAnthropicOAuthManualCodePromptPath(t *testing.T) {
 		},
 	}
 
-	credential, err := AnthropicOAuth{}.Login(context.Background(), interaction)
+	credential, err := AnthropicOAuth{}.Login(context.Background(), interaction, nil)
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
@@ -178,6 +181,74 @@ func TestAnthropicOAuthManualCodePromptPath(t *testing.T) {
 	// pi additionally asserts the prompt's signal is aborted once login
 	// settles; pig's AuthInteraction has no per-prompt signal (declared
 	// deviation in oauth_anthropic.go).
+}
+
+// TestAnthropicOAuthBrowserCallbackShowsSignInPage drives the browser
+// callback path (pi: "completes login through the browser callback and shows
+// the sign-in page"): the shared server completes the exchange before
+// responding, so the page can report failures.
+func TestAnthropicOAuthBrowserCallbackShowsSignInPage(t *testing.T) {
+	var exchangedCode string
+	stubAnthropicPostJSON(t, func(requestURL string, body map[string]any) (string, error) {
+		if strings.Contains(requestURL, "/oauth/token") {
+			if code, ok := body["code"].(string); ok {
+				exchangedCode = code
+			}
+			return `{"access_token":"access","refresh_token":"refresh","expires_in":3600}`, nil
+		}
+		return "", &oauthTestFailure{"Unexpected fetch: " + requestURL}
+	})
+
+	callbackPage := make(chan *http.Response, 1)
+	interaction := &oauthTestInteraction{
+		notify: func(event AuthEvent) {
+			if event.Type != "auth_url" {
+				return
+			}
+			parsed, err := url.Parse(event.URL)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			state := parsed.Query().Get("state")
+			response, err := http.Get("http://127.0.0.1:53692/callback?code=browser-code&state=" + state)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			callbackPage <- response
+		},
+		prompt: func(AuthPrompt) (string, error) {
+			// pig has no per-prompt abort; hold the prompt open so the
+			// browser callback drives the flow (pi rejects the prompt via
+			// its signal once login settles).
+			select {}
+		},
+	}
+
+	credential, err := (AnthropicOAuth{}).Login(context.Background(), interaction, nil)
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	if credential.Access != "access" || credential.Refresh != "refresh" {
+		t.Errorf("credential = %+v", credential.OAuthCredentials)
+	}
+	if exchangedCode != "browser-code" {
+		t.Errorf("exchanged code = %q, want browser-code", exchangedCode)
+	}
+	select {
+	case response := <-callbackPage:
+		defer response.Body.Close()
+		body, readErr := io.ReadAll(response.Body)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if response.StatusCode != http.StatusOK || !strings.Contains(string(body), "Signed in to Anthropic.") {
+			t.Errorf("callback page = %d %q", response.StatusCode, string(body))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("callback page never responded")
+	}
 }
 
 // TestAnthropicOAuthClientIDDecoded guards the base64-obfuscated client id

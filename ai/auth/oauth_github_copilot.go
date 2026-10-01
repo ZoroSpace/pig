@@ -677,7 +677,7 @@ func (GitHubCopilotOAuth) Name() string         { return "GitHub Copilot" }
 func (GitHubCopilotOAuth) IsSubscription() bool { return true }
 func (GitHubCopilotOAuth) LoginLabel() string   { return "" }
 
-func (GitHubCopilotOAuth) Login(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error) {
+func (GitHubCopilotOAuth) Login(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
 	return githubCopilotLogin(ctx, interaction)
 }
 

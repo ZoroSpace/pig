@@ -127,7 +127,7 @@ func TestModelRuntimePublishesLocallyConsistentAvailabilityBeforeLoginAndLogoutR
 	runtime := runtimeWithSyncProvider(t, newSyncProvider("dynamic", &sync.Mutex{}, nil), credentials, &sync.Mutex{}, nil)
 	ctx := context.Background()
 
-	if _, err := runtime.Login(ctx, "dynamic", auth.AuthTypeAPIKey, noopAuthInteraction); err != nil {
+	if _, err := runtime.Login(ctx, "dynamic", auth.AuthTypeAPIKey, noopAuthInteraction, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !runtime.HasConfiguredAuth("dynamic") {
@@ -189,7 +189,7 @@ func TestModelRuntimeOrdersSameProviderCredentialOperationsThroughLocalSynchroni
 	ctx := context.Background()
 	loginDone := make(chan error, 1)
 	go func() {
-		_, err := runtime.Login(ctx, "ordered", auth.AuthTypeAPIKey, noopAuthInteraction)
+		_, err := runtime.Login(ctx, "ordered", auth.AuthTypeAPIKey, noopAuthInteraction, nil)
 		loginDone <- err
 	}()
 	<-started
@@ -265,8 +265,14 @@ func TestModelRuntimeAllowsDifferentProvidersToRunCredentialFlowsConcurrently(t 
 	ctx := context.Background()
 	oneDone := make(chan error, 1)
 	twoDone := make(chan error, 1)
-	go func() { _, err := runtime.Login(ctx, "one", auth.AuthTypeAPIKey, noopAuthInteraction); oneDone <- err }()
-	go func() { _, err := runtime.Login(ctx, "two", auth.AuthTypeAPIKey, noopAuthInteraction); twoDone <- err }()
+	go func() {
+		_, err := runtime.Login(ctx, "one", auth.AuthTypeAPIKey, noopAuthInteraction, nil)
+		oneDone <- err
+	}()
+	go func() {
+		_, err := runtime.Login(ctx, "two", auth.AuthTypeAPIKey, noopAuthInteraction, nil)
+		twoDone <- err
+	}()
 
 	waitAll(t, 2*time.Second, firstStarted, secondStarted)
 	close(blocked)
@@ -321,7 +327,7 @@ func TestModelRuntimeDoesNotWaitForUnrelatedProviderAvailabilityDuringLocalSynch
 	mu.Unlock()
 
 	ctx := context.Background()
-	if _, err := runtime.Login(ctx, "target", auth.AuthTypeAPIKey, noopAuthInteraction); err != nil {
+	if _, err := runtime.Login(ctx, "target", auth.AuthTypeAPIKey, noopAuthInteraction, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !runtime.HasConfiguredAuth("target") {
@@ -396,7 +402,7 @@ func TestModelRuntimeDoesNotRunNetworkRefreshInsideTheCredentialOperationChain(t
 	runtime.Refresh(context.Background(), &ai.ModelsRefreshOptions{AllowNetwork: lo.ToPtr(false), Providers: []string{registered.ID()}})
 
 	ctx := context.Background()
-	if _, err := runtime.Login(ctx, "local-only", auth.AuthTypeAPIKey, noopAuthInteraction); err != nil {
+	if _, err := runtime.Login(ctx, "local-only", auth.AuthTypeAPIKey, noopAuthInteraction, nil); err != nil {
 		t.Fatal(err)
 	}
 	mu.Lock()
@@ -484,7 +490,7 @@ func TestModelRuntimeWaitsForACommittedCredentialMutationToSettleBeforeReporting
 	loginDone := make(chan error, 1)
 	settled := false
 	go func() {
-		_, err := runtime.Login(loginCtx, "delayed-commit", auth.AuthTypeAPIKey, noopAuthInteraction)
+		_, err := runtime.Login(loginCtx, "delayed-commit", auth.AuthTypeAPIKey, noopAuthInteraction, nil)
 		mu.Lock()
 		settled = true
 		mu.Unlock()
@@ -598,7 +604,7 @@ func TestModelRuntimeReportsATypedErrorWhenCancellationInterruptsPostCommitSynch
 	loginCtx, cancel := context.WithCancel(context.Background())
 	loginDone := make(chan error, 1)
 	go func() {
-		_, err := runtime.Login(loginCtx, "cancelled-sync", auth.AuthTypeAPIKey, noopAuthInteraction)
+		_, err := runtime.Login(loginCtx, "cancelled-sync", auth.AuthTypeAPIKey, noopAuthInteraction, nil)
 		loginDone <- err
 	}()
 	<-cacheRefreshStarted
@@ -648,7 +654,7 @@ func TestModelRuntimeReportsCommittedCredentialsWhenLocalSynchronizationFails(t 
 	failCacheRefresh = true
 	mu.Unlock()
 
-	_, err := runtime.Login(context.Background(), "broken-sync", auth.AuthTypeAPIKey, noopAuthInteraction)
+	_, err := runtime.Login(context.Background(), "broken-sync", auth.AuthTypeAPIKey, noopAuthInteraction, nil)
 	var syncErr *CredentialSynchronizationError
 	if !errors.As(err, &syncErr) {
 		t.Fatalf("error = %v, want CredentialSynchronizationError", err)

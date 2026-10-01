@@ -16,6 +16,10 @@ func OpenAIProvider() ai.Provider {
 		BaseURL: "https://api.openai.com/v1",
 		Auth: auth.ProviderAuth{
 			APIKey: auth.EnvAPIKeyAuth("OpenAI API key", []string{"OPENAI_API_KEY"}),
+			// pi v0.99.1 wires the openai provider's OAuth to the new
+			// Sign in with ChatGPT flow (pi: lazyOAuth + loadOpenAIChatGPTOAuth;
+			// Go flows are statically linked, no lazy wrapper).
+			OAuth: auth.OpenAIChatGPTOAuth{},
 		},
 		Models: GetBuiltinModels(types.ProviderOpenAI),
 		API:    api.OpenAIResponses{},

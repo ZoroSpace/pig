@@ -12,11 +12,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ZoroSpace/pig/ai/types"
@@ -38,7 +36,7 @@ const (
 	anthropicCallbackPath = "/callback"
 	anthropicRedirectURI  = "http://localhost:53692" + anthropicCallbackPath
 	anthropicOAuthScopes  = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
-	anthropicCallbackPort = "53692"
+	anthropicCallbackPort = 53692
 )
 
 // anthropicOAuthPostJSON is the token-endpoint transport seam (pi: the global
@@ -88,113 +86,6 @@ func parseAuthorizationInput(input string) (code string, state string) {
 // carry their chain in Error()).
 func formatErrorDetails(err error) string {
 	return err.Error()
-}
-
-// anthropicCallbackResult is what the callback server hands to the login
-// flow (pi: the { code, state } | null waitForCode resolution).
-type anthropicCallbackResult struct {
-	code  string
-	state string
-}
-
-// anthropicCallbackServer is the localhost callback listener (pi:
-// CallbackServerInfo).
-type anthropicCallbackServer struct {
-	server      *http.Server
-	listener    net.Listener
-	redirectURI string
-	cancelWait  func()
-	waitCh      chan anthropicCallbackResult
-	settleOnce  sync.Once
-}
-
-// close releases the port even when Serve has not registered the listener
-// yet (http.Server.Close only sees listeners after Serve starts; closing
-// the raw listener first avoids a leaked bind that breaks the next login
-// in the same process).
-func (s *anthropicCallbackServer) close() {
-	if s.listener != nil {
-		_ = s.listener.Close()
-	}
-	if s.server != nil {
-		_ = s.server.Close()
-	}
-}
-
-func startAnthropicCallbackServer(ctx context.Context, expectedState string) (*anthropicCallbackServer, error) {
-	host := getAnthropicCallbackHost(nil)
-	waitCh := make(chan anthropicCallbackResult, 1)
-	server := &anthropicCallbackServer{
-		redirectURI: anthropicRedirectURI,
-		waitCh:      waitCh,
-	}
-	mux := http.NewServeMux()
-	mux.HandleFunc(anthropicCallbackPath, func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if recover() != nil {
-				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte("Internal error"))
-			}
-		}()
-		query := r.URL.Query()
-		code := query.Get("code")
-		state := query.Get("state")
-		if errParam := query.Get("error"); errParam != "" {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(OAuthErrorHTML("Anthropic authentication did not complete.", "Error: "+errParam)))
-			return
-		}
-		if code == "" || state == "" {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(OAuthErrorHTML("Missing code or state parameter.", "")))
-			return
-		}
-		if state != expectedState {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(OAuthErrorHTML("State mismatch.", "")))
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(OAuthSuccessHTML("Anthropic authentication completed. You can close this window.")))
-		server.settle(anthropicCallbackResult{code: code, state: state})
-	})
-	httpServer := &http.Server{Addr: host + ":" + anthropicCallbackPort, Handler: mux}
-	server.server = httpServer
-	listener, err := net.Listen("tcp", host+":"+anthropicCallbackPort)
-	if err != nil {
-		return nil, err
-	}
-	server.cancelWait = func() {
-		server.settleOnce.Do(func() {
-			waitCh <- anthropicCallbackResult{}
-		})
-	}
-	server.listener = listener
-	go func() {
-		_ = httpServer.Serve(listener)
-	}()
-	go func() {
-		// Shut the listener down when the login flow ends.
-		<-ctx.Done()
-		server.close()
-	}()
-	return server, nil
-}
-
-func (s *anthropicCallbackServer) settle(result anthropicCallbackResult) {
-	s.settleOnce.Do(func() {
-		s.waitCh <- result
-	})
-}
-
-// waitForCode resolves with the callback result, or the zero value after
-// cancelWait (pi: waitForCode + cancelWait).
-func (s *anthropicCallbackServer) waitForCode() anthropicCallbackResult {
-	return <-s.waitCh
 }
 
 // postJSON performs one JSON POST with a 30s timeout (pi: postJson; pi's
@@ -261,22 +152,30 @@ func exchangeAnthropicAuthorizationCode(ctx context.Context, code string, state 
 }
 
 // loginAnthropic runs the Claude Pro/Max login flow (pi: loginAnthropic).
-// pi races the callback server against a cancellable manual prompt; Go's
-// AuthInteraction has no per-prompt abort, so a prompt that returns after the
-// callback settles is simply ignored (declared deviation — the UI layer
-// cancels its own dialog).
-func loginAnthropic(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error) {
+// The callback wait races the manual prompt inside
+// WaitForCallbackOrManualInput; pig's AuthInteraction has no per-prompt
+// abort, so a prompt that returns after the callback settles is simply
+// ignored (declared deviation — the UI layer cancels its own dialog).
+func loginAnthropic(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
 	verifier, challenge, err := GeneratePKCE()
 	if err != nil {
 		return nil, err
 	}
-	flowCtx, cancelFlow := context.WithCancel(ctx)
-	defer cancelFlow()
-	server, err := startAnthropicCallbackServer(flowCtx, verifier)
-	if err != nil {
-		return nil, err
+	// pi: .catch(() => undefined) — a bind failure (port taken) degrades to
+	// manual entry.
+	var callback *OAuthCallbackServer[string]
+	if server, serverErr := StartOAuthCallbackServer[string](OAuthCallbackServerOptions[string]{
+		ProviderName: "Anthropic",
+		Host:         getAnthropicCallbackHost(nil),
+		Port:         anthropicCallbackPort,
+		Path:         anthropicCallbackPath,
+		State:        verifier,
+		Complete:     func(_ context.Context, callbackCode string) (string, error) { return callbackCode, nil },
+		Ctx:          ctx,
+	}); serverErr == nil {
+		callback = server
+		defer callback.Close()
 	}
-	defer server.close()
 
 	authParams := url.Values{}
 	authParams.Set("code", "true")
@@ -293,39 +192,21 @@ func loginAnthropic(ctx context.Context, interaction AuthInteraction) (*OAuthCre
 		Instructions: "Complete login in your browser. If the browser is on another machine, paste the final redirect URL here.",
 	})
 
-	type manualOutcome struct {
-		input string
-		err   error
+	result, err := WaitForCallbackOrManualInput[string](interaction, callback,
+		"Complete login in your browser, or paste the authorization code / redirect URL here:", anthropicRedirectURI)
+	if err != nil {
+		return nil, err
 	}
-	manualCh := make(chan manualOutcome, 1)
-	go func() {
-		input, promptErr := interaction.Prompt(AuthPrompt{
-			Type:        "manual_code",
-			Message:     "Complete login in your browser, or paste the authorization code / redirect URL here:",
-			Placeholder: anthropicRedirectURI,
-		})
-		manualCh <- manualOutcome{input: input, err: promptErr}
-	}()
-
 	var code, state string
-	select {
-	case outcome := <-manualCh:
-		server.cancelWait()
-		if outcome.err != nil {
-			return nil, outcome.err
-		}
-		callback := server.waitForCode()
-		if callback.code != "" {
-			code, state = callback.code, callback.state
-			break
-		}
-		parsedCode, parsedState := parseAuthorizationInput(outcome.input)
-		if parsedState != "" && parsedState != verifier {
+	if result.Type == "callback" {
+		code = result.Value
+		state = verifier
+	} else {
+		code, state = parseAuthorizationInput(result.Input)
+		if state != "" && state != verifier {
 			return nil, fmt.Errorf("OAuth state mismatch")
 		}
-		code, state = parsedCode, orDefaultString(parsedState, verifier)
-	case callback := <-server.waitCh:
-		code, state = callback.code, callback.state
+		state = orDefaultString(state, verifier)
 	}
 
 	if code == "" {
@@ -384,8 +265,8 @@ func (AnthropicOAuth) IsSubscription() bool { return true }
 func (AnthropicOAuth) LoginLabel() string   { return "" }
 
 // Login runs the provider-owned login flow.
-func (AnthropicOAuth) Login(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error) {
-	return loginAnthropic(ctx, interaction)
+func (AnthropicOAuth) Login(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
+	return loginAnthropic(ctx, interaction, options)
 }
 
 // Refresh exchanges the refresh token.

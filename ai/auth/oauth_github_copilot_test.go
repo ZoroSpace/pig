@@ -264,7 +264,7 @@ func TestGitHubCopilotLoginReportsDeviceCode(t *testing.T) {
 	var credential *OAuthCredential
 	var loginErr error
 	go func() {
-		credential, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), interaction)
+		credential, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), interaction, nil)
 		close(done)
 	}()
 	// The waitBeforeFirstPoll sleep registers only after the device-code
@@ -316,7 +316,7 @@ func TestGitHubCopilotLoginEnablesUnconfiguredKnownModels(t *testing.T) {
 	done := make(chan struct{})
 	var loginErr error
 	go func() {
-		_, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), interaction)
+		_, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), interaction, nil)
 		close(done)
 	}()
 	awaitCopilotSleep(t, sleepCalls) // waitBeforeFirstPoll registered
@@ -362,7 +362,7 @@ func TestGitHubCopilotLoginRetriesThrottledPolicyAfterRetryAfter(t *testing.T) {
 	interaction := &copilotTestLoginInteraction{}
 	done := make(chan struct{})
 	go func() {
-		_, _ = GitHubCopilotOAuth{}.Login(context.Background(), interaction)
+		_, _ = GitHubCopilotOAuth{}.Login(context.Background(), interaction, nil)
 		close(done)
 	}()
 	awaitCopilotSleep(t, sleepCalls) // waitBeforeFirstPoll registered
@@ -408,7 +408,7 @@ func TestGitHubCopilotLoginContinuesPolicyAfterTransportFailure(t *testing.T) {
 	done := make(chan struct{})
 	var loginErr error
 	go func() {
-		_, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), interaction)
+		_, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), interaction, nil)
 		close(done)
 	}()
 	awaitCopilotSleep(t, sleepCalls) // waitBeforeFirstPoll registered
@@ -431,7 +431,7 @@ func TestGitHubCopilotLoginRejectsUntrustedVerificationURI(t *testing.T) {
 	})
 	called := false
 	interaction := &copilotTestLoginInteraction{onDeviceCode: func(AuthEvent) { called = true }}
-	_, err := GitHubCopilotOAuth{}.Login(context.Background(), interaction)
+	_, err := GitHubCopilotOAuth{}.Login(context.Background(), interaction, nil)
 	if err == nil || !strings.Contains(err.Error(), "Untrusted verification_uri") {
 		t.Fatalf("login error = %v, want Untrusted verification_uri", err)
 	}
@@ -473,7 +473,7 @@ func TestGitHubCopilotLoginNormalizesVerificationURI(t *testing.T) {
 	}
 	done := make(chan struct{})
 	go func() {
-		_, _ = GitHubCopilotOAuth{}.Login(context.Background(), interaction)
+		_, _ = GitHubCopilotOAuth{}.Login(context.Background(), interaction, nil)
 		close(done)
 	}()
 	<-sleepCalls
@@ -540,7 +540,7 @@ func TestGitHubCopilotLoginPollTimingAndSlowDown(t *testing.T) {
 	interaction := &copilotTestLoginInteraction{}
 	done := make(chan struct{})
 	go func() {
-		_, _ = GitHubCopilotOAuth{}.Login(context.Background(), interaction)
+		_, _ = GitHubCopilotOAuth{}.Login(context.Background(), interaction, nil)
 		close(done)
 	}()
 
@@ -618,7 +618,7 @@ func TestGitHubCopilotLoginTimesOutAfterRepeatedSlowDown(t *testing.T) {
 	done := make(chan struct{})
 	var loginErr error
 	go func() {
-		_, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), interaction)
+		_, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), interaction, nil)
 		close(done)
 	}()
 
@@ -761,7 +761,7 @@ func TestGitHubCopilotLoginStopsPolicyWhenBudgetExceeded(t *testing.T) {
 	var credential *OAuthCredential
 	var loginErr error
 	go func() {
-		credential, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), &copilotTestLoginInteraction{})
+		credential, loginErr = GitHubCopilotOAuth{}.Login(context.Background(), &copilotTestLoginInteraction{}, nil)
 		close(done)
 	}()
 	<-sleepCalls // waitBeforeFirstPoll registered

@@ -34,7 +34,7 @@ type fakeAuthOAuth struct{ name string }
 func (f *fakeAuthOAuth) Name() string         { return f.name }
 func (f *fakeAuthOAuth) IsSubscription() bool { return false }
 func (f *fakeAuthOAuth) LoginLabel() string   { return "" }
-func (f *fakeAuthOAuth) Login(context.Context, auth.AuthInteraction) (*auth.OAuthCredential, error) {
+func (f *fakeAuthOAuth) Login(context.Context, auth.AuthInteraction, *auth.LoginOptions) (*auth.OAuthCredential, error) {
 	return nil, nil
 }
 func (f *fakeAuthOAuth) Refresh(context.Context, *auth.OAuthCredential) (*auth.OAuthCredential, error) {

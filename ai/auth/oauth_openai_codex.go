@@ -16,12 +16,10 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ZoroSpace/pig/ai/utils"
@@ -43,7 +41,7 @@ const (
 	codexDeviceCodeLoginMethod     = "device_code"
 	codexScope                     = "openid profile email offline_access"
 	codexJWTClaimPath              = "https://api.openai.com/auth"
-	codexOAuthCallbackPort         = "1455"
+	codexOAuthCallbackPort         = 1455
 	codexOAuthCallbackPath         = "/auth/callback"
 	codexOAuthClientRequestTimeout = 0 // pi's fetch has no timeout; ctx governs
 )
@@ -453,114 +451,6 @@ func codexCreateAuthorizationFlow(originator string) (verifier string, state str
 	return verifier, state, codexAuthorizeURL + "?" + params.Encode(), nil
 }
 
-// codexCallbackResult is what the callback server hands to the login flow
-// (pi: the { code } | null waitForCode resolution).
-type codexCallbackResult struct {
-	code string
-}
-
-// codexOAuthServer is the localhost callback listener (pi:
-// OAuthServerInfo). pi models listen failure as a server whose waitForCode
-// resolves null, degrading the flow to manual entry; pig models it with a
-// dead flag.
-type codexOAuthServer struct {
-	server   *http.Server
-	listener net.Listener
-	state    string
-	waitCh   chan codexCallbackResult
-	once     sync.Once
-	dead     bool
-}
-
-func (s *codexOAuthServer) settle(result codexCallbackResult) {
-	s.once.Do(func() {
-		if s.dead {
-			return
-		}
-		s.waitCh <- result
-	})
-}
-
-// waitForCode resolves with the callback result, or the zero value after
-// cancelWait / listen failure (pi: waitForCode + cancelWait).
-func (s *codexOAuthServer) waitForCode() codexCallbackResult {
-	if s.dead {
-		return codexCallbackResult{}
-	}
-	return <-s.waitCh
-}
-
-func (s *codexOAuthServer) cancelWait() {
-	s.settle(codexCallbackResult{})
-}
-
-func (s *codexOAuthServer) close() {
-	// Close the raw listener first: http.Server.Close only releases
-	// listeners Serve has registered, so a close racing Serve startup would
-	// leak the port and break the next bind (regression-locked by
-	// TestCodexOAuthCallbackServerRestart).
-	if s.listener != nil {
-		_ = s.listener.Close()
-	}
-	if s.server != nil {
-		_ = s.server.Close()
-	}
-}
-
-// startCodexLocalOAuthServer listens on 1455 and serves the callback route
-// (pi: startLocalOAuthServer). The handler reproduces pi's four branches:
-// unknown route → 404 page, state mismatch → 400, missing code → 400,
-// success → 200 page plus code handoff; a handler panic yields the 500 page.
-func startCodexLocalOAuthServer(state string) *codexOAuthServer {
-	server := &codexOAuthServer{state: state, waitCh: make(chan codexCallbackResult, 1)}
-	mux := http.NewServeMux()
-	mux.HandleFunc(codexOAuthCallbackPath, func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if recover() != nil {
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(OAuthErrorHTML("Internal error while processing OAuth callback.", "")))
-			}
-		}()
-		query := r.URL.Query()
-		if query.Get("state") != server.state {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(OAuthErrorHTML("State mismatch.", "")))
-			return
-		}
-		code := query.Get("code")
-		if code == "" {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(OAuthErrorHTML("Missing authorization code.", "")))
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(OAuthSuccessHTML("OpenAI authentication completed. You can close this window.")))
-		server.settle(codexCallbackResult{code: code})
-	})
-	// pi: any other pathname gets a 404 with the error page.
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(OAuthErrorHTML("Callback route not found.", "")))
-	})
-
-	host := getCodexCallbackHost()
-	listener, err := net.Listen("tcp", host+":"+codexOAuthCallbackPort)
-	if err != nil {
-		// pi: listen errors resolve a dead server (waitForCode → null).
-		server.dead = true
-		return server
-	}
-	httpServer := &http.Server{Handler: mux}
-	server.server = httpServer
-	server.listener = listener
-	go func() { _ = httpServer.Serve(listener) }()
-	return server
-}
-
 // codexGetAccountID pulls the ChatGPT account id from the token's JWT
 // payload (pi: getAccountId).
 func codexGetAccountID(accessToken string) string {
@@ -625,29 +515,28 @@ func codexLoginDeviceCode(ctx context.Context, interaction AuthInteraction) (*OA
 	return codexExchangeCredentials(ctx, code.authorizationCode, code.codeVerifier, codexDeviceRedirectURI)
 }
 
-// codexLoginBrowser runs the browser flow: a localhost callback server
-// racing a manual-code prompt (pi: loginOpenAICodex). pi cancels the pending
-// prompt via manualAbort when the callback settles; pig's AuthInteraction
-// has no per-prompt abort, so a prompt that returns after the callback is
-// ignored (same declared deviation as the anthropic port).
-func codexLoginBrowser(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error) {
+// codexLoginBrowser runs the browser flow: a shared loopback callback server
+// racing a manual-code prompt (pi: loginOpenAICodex). Port 1455 is shared
+// with the Codex CLI; when it is taken, fall back to the pasted redirect URL
+// (pi: .catch(() => undefined)).
+func codexLoginBrowser(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
 	verifier, state, authURL, err := codexCreateAuthorizationFlow("pi")
 	if err != nil {
 		return nil, err
 	}
-	server := startCodexLocalOAuthServer(state)
-	defer server.close()
-
-	// pi: interaction.signal abort → server.cancelWait.
-	stopAbortWatch := make(chan struct{})
-	defer close(stopAbortWatch)
-	go func() {
-		select {
-		case <-ctx.Done():
-			server.cancelWait()
-		case <-stopAbortWatch:
-		}
-	}()
+	var callback *OAuthCallbackServer[string]
+	if server, serverErr := StartOAuthCallbackServer[string](OAuthCallbackServerOptions[string]{
+		ProviderName: "OpenAI",
+		Host:         getCodexCallbackHost(),
+		Port:         codexOAuthCallbackPort,
+		Path:         codexOAuthCallbackPath,
+		State:        state,
+		Complete:     func(_ context.Context, callbackCode string) (string, error) { return callbackCode, nil },
+		Ctx:          ctx,
+	}); serverErr == nil {
+		callback = server
+		defer callback.Close()
+	}
 
 	interaction.Notify(AuthEvent{
 		Type:         "auth_url",
@@ -655,49 +544,16 @@ func codexLoginBrowser(ctx context.Context, interaction AuthInteraction) (*OAuth
 		Instructions: "A browser window should open. Complete login to finish.",
 	})
 
-	type codexManualOutcome struct {
-		input string
-		err   error
+	result, err := WaitForCallbackOrManualInput[string](interaction, callback,
+		"Complete login in your browser, or paste the authorization code / redirect URL here:", codexRedirectURI)
+	if err != nil {
+		return nil, err
 	}
-	manualCh := make(chan codexManualOutcome, 1)
-	go func() {
-		input, promptErr := interaction.Prompt(AuthPrompt{
-			Type:        "manual_code",
-			Message:     "Complete login in your browser, or paste the authorization code / redirect URL here:",
-			Placeholder: codexRedirectURI,
-		})
-		manualCh <- codexManualOutcome{input: input, err: promptErr}
-		server.cancelWait()
-	}()
-
 	var code string
-	var pending codexManualOutcome
-	havePending := false
-	select {
-	case out := <-manualCh:
-		pending, havePending = out, true
-	case callback := <-server.waitCh:
-		// pi: a manual error that already surfaced wins over the callback.
-		select {
-		case out := <-manualCh:
-			pending, havePending = out, true
-		default:
-		}
-		if pending.err != nil {
-			return nil, pending.err
-		}
-		code = callback.code
-	}
-
-	if code == "" {
-		// pi: await manualPromise fallback.
-		if !havePending {
-			pending = <-manualCh
-		}
-		if pending.err != nil {
-			return nil, pending.err
-		}
-		parsedCode, parsedState := codexParseAuthorizationInput(pending.input)
+	if result.Type == "callback" {
+		code = result.Value
+	} else {
+		parsedCode, parsedState := codexParseAuthorizationInput(result.Input)
 		if parsedState != "" && parsedState != state {
 			return nil, errors.New("State mismatch")
 		}
@@ -720,7 +576,7 @@ func (OpenAICodexOAuth) LoginLabel() string   { return "" }
 
 // Login runs the provider-owned login flow, dispatching on the method
 // select (pi: login).
-func (OpenAICodexOAuth) Login(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error) {
+func (OpenAICodexOAuth) Login(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
 	method, err := interaction.Prompt(AuthPrompt{
 		Type:    "select",
 		Message: "Select OpenAI Codex login method:",
@@ -736,7 +592,7 @@ func (OpenAICodexOAuth) Login(ctx context.Context, interaction AuthInteraction) 
 	case codexDeviceCodeLoginMethod:
 		return codexLoginDeviceCode(ctx, interaction)
 	case codexBrowserLoginMethod:
-		return codexLoginBrowser(ctx, interaction)
+		return codexLoginBrowser(ctx, interaction, options)
 	default:
 		return nil, fmt.Errorf("Unknown OpenAI Codex login method: %s", method)
 	}

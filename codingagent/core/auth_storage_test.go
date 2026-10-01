@@ -1098,7 +1098,7 @@ type refreshableOAuth struct{}
 func (o *refreshableOAuth) Name() string         { return "OAuth" }
 func (o *refreshableOAuth) IsSubscription() bool { return false }
 func (o *refreshableOAuth) LoginLabel() string   { return "" }
-func (o *refreshableOAuth) Login(ctx context.Context, interaction auth.AuthInteraction) (*auth.OAuthCredential, error) {
+func (o *refreshableOAuth) Login(ctx context.Context, interaction auth.AuthInteraction, options *auth.LoginOptions) (*auth.OAuthCredential, error) {
 	return nil, errors.New("not used")
 }
 

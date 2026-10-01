@@ -136,7 +136,7 @@ func TestMetaOAuthLoginMintsAPIKey(t *testing.T) {
 	interaction := &oauthTestInteraction{notify: appendEvent}
 	resultCh := make(chan loginOutcome, 1)
 	go func() {
-		credential, err := MetaOAuth{}.Login(context.Background(), interaction)
+		credential, err := MetaOAuth{}.Login(context.Background(), interaction, nil)
 		resultCh <- loginOutcome{credential: credential, err: err}
 	}()
 

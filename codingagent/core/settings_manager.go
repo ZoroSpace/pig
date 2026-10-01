@@ -2239,6 +2239,22 @@ func (m *SettingsManager) SetEnableAnalytics(enabled bool) {
 	m.save()
 }
 
+// GetOrCreateDeviceId returns the stable ID of this installation, e.g. sent
+// to OpenAI as its agent host ID (pi: getOrCreateDeviceId). Created on first
+// use. Project settings are ignored so a committed project settings file
+// cannot give every clone the same ID.
+func (m *SettingsManager) GetOrCreateDeviceId() string {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if value, _ := settingsString(m.globalSettings, "deviceId"); value == "" {
+		m.globalSettings["deviceId"] = randomUUID()
+		m.markModified("deviceId", "")
+		m.save()
+	}
+	value, _ := settingsString(m.globalSettings, "deviceId")
+	return value
+}
+
 // randomUUID generates a random UUIDv4 (pi: crypto.randomUUID from node
 // crypto; pig has no shared v4 helper yet — generated here).
 func randomUUID() string {

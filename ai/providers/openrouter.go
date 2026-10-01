@@ -16,12 +16,17 @@ func OpenRouterProvider() ai.Provider {
 		BaseURL: "https://openrouter.ai/api/v1",
 		Auth: auth.ProviderAuth{
 			APIKey: auth.EnvAPIKeyAuth("OpenRouter API key", []string{"OPENROUTER_API_KEY"}),
-			// oauth: lazyOAuth({ name: "OpenRouter OAuth", loginLabel:
+			// pi: lazyOAuth({ name: "OpenRouter OAuth", loginLabel:
 			// "Sign in with OpenRouter", load: loadOpenRouterOAuth }) —
-			// arrives with the OAuth flows (auth/oauth/load.ts, README
-			// Phase 2).
+			// filled in by S10-2 (Go flows are statically linked).
+			OAuth: auth.OpenRouterOAuth{},
 		},
-		Models: GetBuiltinModels(ai.ProviderOpenRouter),
+		// pi: models = OPENROUTER_MODELS + OPENROUTER_IMAGE_MODELS +
+		// OPENROUTER_CLASSIFIER_MODELS — the #9948 mixed catalog; chat-only
+		// narrowing happens at Models.GetModels (pi: getModels filter).
+		Models: append(append(GetBuiltinModels(ai.ProviderOpenRouter),
+			GetBuiltinImageModels(ai.ProviderOpenRouter)...),
+			GetBuiltinClassifierModels(ai.ProviderOpenRouter)...),
 		// api: openAICompletionsApi() (pi: openAICompletionsApi(), lazy-loaded;
 		// Go adapters compile in).
 		API: api.OpenAICompletions{},

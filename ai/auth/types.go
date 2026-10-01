@@ -312,6 +312,15 @@ type ApiKeyAuthChecker interface {
 	Check(input ApiKeyAuthInput) (*AuthCheck, error)
 }
 
+// LoginOptions is app-supplied context for OAuth login (pi: LoginOptions).
+type LoginOptions struct {
+	// GetDeviceId returns the stable ID of this app installation, e.g. sent
+	// to OpenAI as its agent host ID. Called only by login flows that need
+	// it, so apps can create the ID on first use and must return the same
+	// ID on every later call.
+	GetDeviceId func() string
+}
+
 // OAuthAuth is OAuth auth. The Refresh/ToAuth split lets Models own the
 // locked refresh pattern: Refresh produces a credential, ToAuth derives
 // request auth from whatever credential ends up stored.
@@ -326,7 +335,7 @@ type OAuthAuth interface {
 	// loginLabel).
 	LoginLabel() string
 	// Login runs the provider-owned login flow.
-	Login(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error)
+	Login(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error)
 	// Refresh exchanges the refresh token. Network call; errors on failure
 	// (invalid_grant etc.). Models runs it under the store lock.
 	Refresh(ctx context.Context, credential *OAuthCredential) (*OAuthCredential, error)

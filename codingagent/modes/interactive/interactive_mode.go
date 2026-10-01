@@ -7867,7 +7867,11 @@ func (m *InteractiveMode) notifyAuthDialog(dialog *components.LoginDialogCompone
 // loginProvider).
 func (m *InteractiveMode) loginProvider(dialog *components.LoginDialogComponent, providerID string, method auth.AuthType) error {
 	interaction := &loginDialogInteraction{m: m, dialog: dialog}
-	_, err := m.session().GetModelRuntime().Login(dialog.Context(), providerID, method, interaction)
+	// pi: { getDeviceId: () => this.settingsManager.getOrCreateDeviceId() }.
+	settingsManager := m.session().SettingsManager
+	_, err := m.session().GetModelRuntime().Login(dialog.Context(), providerID, method, interaction, &auth.LoginOptions{
+		GetDeviceId: settingsManager.GetOrCreateDeviceId,
+	})
 	return err
 }
 

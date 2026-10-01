@@ -227,14 +227,22 @@ func TestModelRuntimeProjectsProviderOwnedMethodsNamesAndStatus(t *testing.T) {
 		}
 	}
 	oauthOptions := authOptions(t, runtime, "oauth")
-	if len(oauthOptions) != 6 {
-		t.Fatalf("oauth options = %d, want the six builtin oauth providers (A2 anthropic/kimi + B2 xai + C2 codex + P2-T1 github-copilot + S7 meta)", len(oauthOptions))
+	if len(oauthOptions) != 8 {
+		t.Fatalf("oauth options = %d, want the eight builtin oauth providers (A2 anthropic/kimi + B2 xai + C2 codex + P2-T1 github-copilot + S7 meta + S10-2 openai/openrouter)", len(oauthOptions))
 	}
 	for _, option := range oauthOptions {
 		id := option.provider.ID()
-		if id != "anthropic" && id != "kimi-coding" && id != "xai" && id != "openai-codex" && id != "github-copilot" && id != "meta" {
+		if id != "anthropic" && id != "kimi-coding" && id != "xai" && id != "openai-codex" && id != "github-copilot" && id != "meta" && id != "openai" && id != "openrouter" {
 			t.Fatalf("unexpected oauth builtin: %s", id)
 		}
+	}
+	// S10-2: the openai provider's OAuth is the new ChatGPT subscription flow
+	// (pi v0.99.1); openrouter carries its PKCE flow.
+	if got := oauthFound["openai"]; got != "OpenAI (ChatGPT subscription)" {
+		t.Errorf("openai oauth method = %q, want OpenAI (ChatGPT subscription)", got)
+	}
+	if got := oauthFound["openrouter"]; got != "OpenRouter OAuth" {
+		t.Errorf("openrouter oauth method = %q, want OpenRouter OAuth", got)
 	}
 }
 
