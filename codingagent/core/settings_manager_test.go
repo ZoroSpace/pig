@@ -995,13 +995,13 @@ func TestSettingsManagerCJKSegmenter(t *testing.T) {
 }
 
 // A valid `logoStyle` setting applies; the default and invalid stored values
-// resolve to "plain" (the startup-logo never-error contract).
+// resolve to "blocks" (the startup-logo never-error contract).
 func TestSettingsManagerLogoStyle(t *testing.T) {
-	t.Run("defaults to plain", func(t *testing.T) {
+	t.Run("defaults to blocks", func(t *testing.T) {
 		agentDir, projectDir := settingsTestDirs(t)
 		manager := CreateSettingsManager(projectDir, agentDir, nil)
-		if got := manager.GetLogoStyle(); got != LogoStylePlain {
-			t.Fatalf("logoStyle = %q, want plain", got)
+		if got := manager.GetLogoStyle(); got != LogoStyleBlocks {
+			t.Fatalf("logoStyle = %q, want blocks", got)
 		}
 	})
 
@@ -1023,12 +1023,12 @@ func TestSettingsManagerLogoStyle(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid stored value resolves to plain", func(t *testing.T) {
+	t.Run("invalid stored value resolves to blocks", func(t *testing.T) {
 		agentDir, projectDir := settingsTestDirs(t)
 		writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"logoStyle":"rainbow"}`)
 		manager := CreateSettingsManager(projectDir, agentDir, nil)
-		if got := manager.GetLogoStyle(); got != LogoStylePlain {
-			t.Fatalf("logoStyle = %q, want plain", got)
+		if got := manager.GetLogoStyle(); got != LogoStyleBlocks {
+			t.Fatalf("logoStyle = %q, want blocks", got)
 		}
 	})
 

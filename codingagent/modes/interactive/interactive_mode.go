@@ -9012,13 +9012,13 @@ func pigLogoForegroundAnsi(mode tui.TerminalColorMode, columns int) ([]string, b
 // hints. Deviation from pi (pi: the 2-line half-block mark in
 // components/pi-logo.ts plus the version and hints on its lines): the user
 // asked for a prominent figlet logo instead. The logoStyle setting picks the
-// rendering (pig-only; see core.LogoStyle): "plain" (default) draws the mark
-// in the theme's dim color (matching the startup hint line), "gradient"
-// carries a per-start gradient (see pigLogoBrandGradient) as a left-to-right
-// ramp rather than pi's solid colors, "blocks" renders a half-block pixel
-// wordmark in pi's fixed brand colors (see buildPigLogoBlocks). Plain and
-// gradient trail the version on the bottom art line; blocks follows pi's
-// header layout with the version on the top line.
+// rendering (pig-only; see core.LogoStyle): "blocks" (default) renders a
+// half-block pixel wordmark in pi's fixed brand colors (see
+// buildPigLogoBlocks), "plain" draws the figlet mark in the theme's dim
+// color (matching the startup hint line), "gradient" carries a per-start
+// gradient (see pigLogoBrandGradient) as a left-to-right ramp rather than
+// pi's solid colors. Plain and gradient trail the version on the bottom art
+// line; blocks follows pi's header layout with the version on the top line.
 func buildPigLogo(t *theme.Theme, version string, style string) string {
 	if style == core.LogoStyleBlocks {
 		return buildPigLogoBlocks(t, version)
@@ -9085,16 +9085,39 @@ func buildPigLogoGradient(t *theme.Theme, art []string, version string) string {
 // the blocks fallback can be tested without env manipulation.
 var pigLogoIsAppleTerminal = tui.IsAppleTerminalSession
 
-// pigLogoBlocksGrid is the pixel wordmark: "p" coral, "i" blue, "g" yellow,
-// "." empty — 9 pixels wide and 4 tall, drawn two pixel rows per text line
-// with half blocks. p is a bowl over a full-height stem, i is dot-gap-stem,
-// g is an open-topped bowl whose tail hooks back under it (distinguishing it
-// from a q, whose stem stays on the right).
+// pigLogoBlocksPieces is the editable color table of the blocks wordmark:
+// one entry per tetromino piece, in drawing order. To recolor the mark, edit
+// the RGB triples here — each piece is independent. The defaults repeat pi's
+// fixed brand colors (components/pi-logo.ts: coral, blue, yellow) across the
+// six pieces; like pi's mark they stay fixed across themes and only follow
+// the terminal's color mode.
+var pigLogoBlocksPieces = []struct {
+	name string
+	rgb  [3]int
+}{
+	{"p top L", [3]int{228, 138, 122}}, // coral
+	{"p side T", [3]int{79, 142, 179}}, // blue
+	{"i bar", [3]int{234, 182, 93}},    // yellow
+	{"g top L", [3]int{228, 138, 122}}, // coral
+	{"g side T", [3]int{79, 142, 179}}, // blue
+	{"g base I", [3]int{234, 182, 93}}, // yellow
+}
+
+// pigLogoBlocksGrid is the pixel wordmark as six tetromino pieces on a 7x5
+// grid ("." empty), one char per piece indexing pigLogoBlocksPieces: a/b/c
+// are p's top L, side T and i's bar, d/e/f are g's top L, side T and base
+// bar. p and i are pi's 4x4 mark (components/pi-logo.ts LOGO_PIXELS)
+// verbatim — coral top L over a blue side T, with the yellow bar nesting
+// into p's open bowl. g repeats the same shapes to the right (coral top L
+// with the left corner folding down, blue right wall folded inward at the
+// middle) and closes the letter with the yellow base bar under its right
+// two columns. It is drawn two pixel rows per text line with half blocks.
 var pigLogoBlocksGrid = []string{
-	"ppp.i..yy",
-	"p.p...y.y",
-	"ppp.i..yy",
-	"p...i..y.",
+	"aaa.ddd",
+	"b.a.d.e",
+	"bb.c.ee",
+	"b..c..e",
+	".....ff",
 }
 
 // pigLogoBlockColors returns the brand colors of pi's half-block mark
@@ -9128,35 +9151,47 @@ func buildPigLogoBlocks(t *theme.Theme, version string) string {
 	if pigLogoIsAppleTerminal() {
 		return buildPigLogoBlocksWordmark(t, version)
 	}
-	coral, blue, yellow, ok := pigLogoBlockColors()
-	if !ok {
-		// Unreachable; degrade to the theme-colored wordmark.
-		return t.Fg("dim", "pig v"+version)
-	}
 	mode := t.GetColorMode()
-	fg := map[byte]string{
-		'p': tui.ForegroundAnsi(coral, mode),
-		'i': tui.ForegroundAnsi(blue, mode),
-		'y': tui.ForegroundAnsi(yellow, mode),
+	fg := make([]string, len(pigLogoBlocksPieces))
+	bg := make([]string, len(pigLogoBlocksPieces))
+	for i, piece := range pigLogoBlocksPieces {
+		color, err := tui.NewRgbColor(piece.rgb[0], piece.rgb[1], piece.rgb[2])
+		if err != nil {
+			// Unreachable for literals; degrade to the theme-colored wordmark.
+			return t.Fg("dim", "pig v"+version)
+		}
+		fg[i] = tui.ForegroundAnsi(color, mode)
+		bg[i] = tui.BackgroundAnsi(color, mode)
 	}
+	pieceOf := func(ch byte) int { return int(ch - 'a') }
 
-	lines := make([]string, 2)
+	lines := make([]string, (len(pigLogoBlocksGrid)+1)/2)
 	for line := range lines {
 		upperRow := pigLogoBlocksGrid[line*2]
-		lowerRow := pigLogoBlocksGrid[line*2+1]
+		var lowerRow string
+		if line*2+1 < len(pigLogoBlocksGrid) {
+			lowerRow = pigLogoBlocksGrid[line*2+1]
+		}
 		var sb strings.Builder
 		for col := 0; col < len(upperRow); col++ {
-			upper, lower := upperRow[col], lowerRow[col]
+			upper, lower := upperRow[col], byte('.')
+			if col < len(lowerRow) {
+				lower = lowerRow[col]
+			}
 			switch {
 			case upper == '.' && lower == '.':
 				sb.WriteByte(' ')
 			case lower == '.':
 				// Upper half only: ▀ with the pixel's foreground.
-				sb.WriteString(tui.StyleTextWithAnsi("▀", fg[upper], "", tui.TextAttributes{}))
+				sb.WriteString(tui.StyleTextWithAnsi("▀", fg[pieceOf(upper)], "", tui.TextAttributes{}))
 			case upper == '.':
-				sb.WriteString(tui.StyleTextWithAnsi("▄", fg[lower], "", tui.TextAttributes{}))
+				sb.WriteString(tui.StyleTextWithAnsi("▄", fg[pieceOf(lower)], "", tui.TextAttributes{}))
+			case upper == lower:
+				sb.WriteString(tui.StyleTextWithAnsi("█", fg[pieceOf(upper)], "", tui.TextAttributes{}))
 			default:
-				sb.WriteString(tui.StyleTextWithAnsi("█", fg[upper], "", tui.TextAttributes{}))
+				// Two pieces meet in one cell; pi packs both colors into ▀
+				// (upper pixel as fg, lower as bg).
+				sb.WriteString(tui.StyleTextWithAnsi("▀", fg[pieceOf(upper)], bg[pieceOf(lower)], tui.TextAttributes{}))
 			}
 		}
 		lines[line] = sb.String()

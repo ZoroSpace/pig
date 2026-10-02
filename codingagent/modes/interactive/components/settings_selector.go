@@ -92,10 +92,15 @@ var logoStyleLabels = []struct {
 }
 
 // logoStyleLabel returns the picker label for a logo style (unknown styles
-// render as the plain default, matching the settings resolver).
+// render as the blocks default, matching the settings resolver).
 func logoStyleLabel(style string) string {
 	for _, pair := range logoStyleLabels {
 		if pair.Value == style {
+			return pair.Label
+		}
+	}
+	for _, pair := range logoStyleLabels {
+		if pair.Value == core.LogoStyleBlocks {
 			return pair.Label
 		}
 	}

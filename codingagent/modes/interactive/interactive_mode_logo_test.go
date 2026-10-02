@@ -448,43 +448,59 @@ func TestPigLogoGradientSampledOncePerProcess(t *testing.T) {
 	}
 }
 
-// expectedPigLogoBlocksCells lists the decoded fg color and glyph of every
-// non-empty cell of the half-block wordmark, line by line: the "p" cells are
-// coral, the "i" cells blue, the "g" cells yellow (pi's brand colors,
-// components/pi-logo.ts).
-var expectedPigLogoBlocksCells = [][]struct {
-	r, g, b int
-	glyph   string
-}{
+// pigLogoBlockCell is one decoded half-block cell: the fg color and glyph,
+// plus the bg color when two pieces meet in the cell and their colors are
+// packed into ▀ (upper pixel as fg, lower as bg; pi does the same).
+type pigLogoBlockCell struct {
+	r, g, b       int
+	bgR, bgG, bgB int
+	hasBg         bool
+	glyph         string
+}
+
+// expectedPigLogoBlocksCells lists every non-empty cell of the half-block
+// wordmark, line by line: p is a coral top L over a blue side T, i is the
+// yellow bar (pi's 4x4 mark, components/pi-logo.ts), and g repeats the same
+// shapes with a yellow base bar (colors editable in pigLogoBlocksPieces).
+var expectedPigLogoBlocksCells = [][]pigLogoBlockCell{
 	{
-		{228, 138, 122, "█"}, {228, 138, 122, "▀"}, {228, 138, 122, "█"},
-		{79, 142, 179, "▀"},
-		{234, 182, 93, "▄"}, {234, 182, 93, "▀"}, {234, 182, 93, "█"},
+		{r: 228, g: 138, b: 122, bgR: 79, bgG: 142, bgB: 179, hasBg: true, glyph: "▀"},
+		{r: 228, g: 138, b: 122, glyph: "▀"},
+		{r: 228, g: 138, b: 122, glyph: "█"},
+		{r: 228, g: 138, b: 122, glyph: "█"},
+		{r: 228, g: 138, b: 122, glyph: "▀"},
+		{r: 228, g: 138, b: 122, bgR: 79, bgG: 142, bgB: 179, hasBg: true, glyph: "▀"},
 	},
 	{
-		{228, 138, 122, "█"}, {228, 138, 122, "▀"}, {228, 138, 122, "▀"},
-		{79, 142, 179, "█"},
-		{234, 182, 93, "█"}, {234, 182, 93, "▀"},
+		{r: 79, g: 142, b: 179, glyph: "█"},
+		{r: 79, g: 142, b: 179, glyph: "▀"},
+		{r: 234, g: 182, b: 93, glyph: "█"},
+		{r: 79, g: 142, b: 179, glyph: "▀"},
+		{r: 79, g: 142, b: 179, glyph: "█"},
+	},
+	{
+		{r: 234, g: 182, b: 93, glyph: "▀"},
+		{r: 234, g: 182, b: 93, glyph: "▀"},
 	},
 }
 
 // TestBuildPigLogoBlocksMark locks the bare-text shape of the blocks
-// wordmark: two lines, version on the top line (pi's header layout, unlike
-// the figlet styles' bottom-line version), and every cell drawn in the
-// letter's brand color in truecolor mode.
+// wordmark: three lines (7x5 pixel grid), version on the top line (pi's
+// header layout, unlike the figlet styles' bottom-line version), and every
+// cell drawn in its piece's brand color in truecolor mode.
 func TestBuildPigLogoBlocksMark(t *testing.T) {
 	logo := buildPigLogo(newLogoTestThemeWithMode(t, theme.ColorModeTruecolor), "0.85.1", core.LogoStyleBlocks)
 	lines := strings.Split(logo, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("blocks logo has %d lines, want 2:\n%q", len(lines), logo)
+	if len(lines) != 3 {
+		t.Fatalf("blocks logo has %d lines, want 3:\n%q", len(lines), logo)
 	}
-	wantBare := []string{"█▀█ ▀ ▄▀█ v0.85.1", "█▀▀ █  █▀"}
+	wantBare := []string{"▀▀█ █▀▀ v0.85.1", "█▀ █ ▀█", "     ▀▀"}
 	for i, line := range lines {
 		if bare := sgrSequence.ReplaceAllString(line, ""); bare != wantBare[i] {
 			t.Errorf("line %d = %q, want %q", i, bare, wantBare[i])
 		}
 	}
-	cell := regexp.MustCompile(`\x1b\[38;2;(\d+);(\d+);(\d+)m([▀▄█])`)
+	cell := regexp.MustCompile(`\x1b\[38;2;(\d+);(\d+);(\d+)m(?:\x1b\[48;2;(\d+);(\d+);(\d+)m)?([▀▄█])`)
 	for i, line := range lines {
 		matches := cell.FindAllStringSubmatch(line, -1)
 		if len(matches) != len(expectedPigLogoBlocksCells[i]) {
@@ -502,8 +518,16 @@ func TestBuildPigLogoBlocksMark(t *testing.T) {
 			if got := (tui.RgbColor{R: channel(match[1]), G: channel(match[2]), B: channel(match[3])}); got != (tui.RgbColor{R: want.r, G: want.g, B: want.b}) {
 				t.Errorf("line %d cell %d = %+v, want (%d,%d,%d)", i, j, got, want.r, want.g, want.b)
 			}
-			if match[4] != want.glyph {
-				t.Errorf("line %d cell %d glyph = %q, want %q", i, j, match[4], want.glyph)
+			if match[4] != "" != want.hasBg {
+				t.Errorf("line %d cell %d hasBg = %v, want %v", i, j, match[4] != "", want.hasBg)
+			}
+			if want.hasBg {
+				if got := (tui.RgbColor{R: channel(match[4]), G: channel(match[5]), B: channel(match[6])}); got != (tui.RgbColor{R: want.bgR, G: want.bgG, B: want.bgB}) {
+					t.Errorf("line %d cell %d bg = %+v, want (%d,%d,%d)", i, j, got, want.bgR, want.bgG, want.bgB)
+				}
+			}
+			if match[7] != want.glyph {
+				t.Errorf("line %d cell %d glyph = %q, want %q", i, j, match[7], want.glyph)
 			}
 		}
 	}

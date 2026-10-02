@@ -2253,8 +2253,8 @@ func (m *SettingsManager) SetShowResourceStats(show bool) {
 var logoStyles = []string{LogoStylePlain, LogoStyleGradient, LogoStyleBlocks}
 
 // GetLogoStyle returns the startup-logo rendering (pig-only; no pi
-// counterpart). An invalid stored value resolves to "plain", so a hand-edited
-// settings.json can never break startup rendering.
+// counterpart). An invalid stored value resolves to the default "blocks",
+// so a hand-edited settings.json can never break startup rendering.
 func (m *SettingsManager) GetLogoStyle() string {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -2265,7 +2265,7 @@ func (m *SettingsManager) GetLogoStyle() string {
 			}
 		}
 	}
-	return LogoStylePlain
+	return LogoStyleBlocks
 }
 
 // SetLogoStyle records the startup-logo rendering (pig-only). Invalid values
