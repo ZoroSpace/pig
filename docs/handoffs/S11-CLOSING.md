@@ -1,4 +1,4 @@
-# S11 收尾批：Version bump 1.0.0 + 双向兼容四门 + tmux 冒烟（📋 开工稿，2026-10-02 由 S11-3 批预写）
+# S11 收尾批：Version bump 1.0.0 + 双向兼容四门 + tmux 冒烟（✅ 收口终稿，2026-10-02）
 
 S11 总计划：`docs/handoffs/SYNC-S11-v1.0.0.md`。S11-1/2/3 源码面已全部收口（pi v1.0.0 的 8 个 tui+interactive commit 全部消化），本批是 S11 的关账批。**前置拍板项**：§0.2-1 MCP OAuth 整族是否回填（S11-4）——若拍板做，S11-4 在本批之前开工（候选清单见 §4）；若拍板不做，本批直接开工。
 
@@ -36,3 +36,50 @@ S11 总计划：`docs/handoffs/SYNC-S11-v1.0.0.md`。S11-1/2/3 源码面已全�
 ## 5. 验收门
 
 build / vet / gofmt 干净；全量 `go test ./... -race -count=1 -timeout 600s` **单次**（输出落盘 `/tmp/pig-test-out-s11-final.log`）；双向兼容四门实测记录回填本文件；AGENTS.md S11 段补收尾 ✅ 行并更新「pig 基线现跟踪 pi v1.0.0」。
+
+## 6. 进度快照（2026-10-02 中断续作 handoff，token 用尽）
+
+S11-4 未拍板 → 按开工稿分支「不做」处理，直接开工收尾批。已完成：
+
+1. **Version bump ✅**：`codingagent/config.go:186` → `"1.0.0"`，`config_test.go:22` wantPiBaseline 同步，`TestVersionTracksPiBaseline` 绿。
+2. **全量 -race 单次 rc=0，31 包 ✅**（/tmp/pig-test-out-s11-final.log）。
+3. **双向兼容 v3 四门 ✅ 全通**（实验环境 /tmp/pig-s11-final/：mock OpenAI-completions SSE 端点 :8931〔已按端口 kill 清理〕、共享 agent 目录 `$exp/agent`（models.json 挂 mock provider + trust.json seed work 目录）、pi@1.0.0 npm dist 装 /tmp/pig-s11-final/pi-dist、两侧同 cwd `$exp/work`）：
+   - 门 1 pi 写 → pig 读：pi `-p` 真跑落盘 → pig `--continue` 续跑，mock 捕获 n=4（system+pi user/assistant+新 user），历史完整进上下文。cwd 编码 `--private-tmp-…` 证明 ProcessCwd 修复双向生效。
+   - 门 2 pig 写 → pi 读：pig `-p` 落盘 → pi CLI `--continue -p` n=4；pi 再追加 → pig `--continue` n=6；再闭环 n=8，逐条 user content 全对。
+   - 门 3a pi 写 context_edit → pig 读：null omit 整条省略 + `{content:"…"}` string 归一 text block，pig 投影与 pi 自读**语义逐字段一致**（diff 仅 JSON 缩进 + model 键大小写 + usage cost 序列化差异）。
+   - 门 3b pig 写 → pi 读：null omit + blocks 数组替换，pi 投影与 pig 自读 `JSON.stringify` **逐字节一致**。
+   - 探针：/tmp/pig-s11-final/probe（Go，go.mod replace 指向本仓）+ gate3-pi.js（node）；**教训：探针 AppendMessage 必须传值类型**——`hasConversationLocked` 的类型 switch 只认 `types.UserMessage/AssistantMessage` 值形态，指针形态永不 flush（真实调用方均为值形态，无存量 bug，已核实 agent loop emit 与 agent_session 两处调用点）。
+   - 门 4 v4 声明核对 ✅（结论变更见下）。
+4. **门 4 结论（重要）**：pi v1.0.0 **整体删除了 `packages/agent/src/harness/session/jsonl/`（8 文件 -1894 行）**，v4 runtime 存储随 durable 包收编（`packages/durable/src/storage/jsonl/`，属「durable 不做」裁决区，v0.99.1→v1.0.0 该处仅 sidecar task-record 校验一处小改，与 pig 无关）。因此 v4 门声明更新为：**pi v1.0.0 无 agent 侧 v4 写入器残留，frozen 区对照对象消失；pig v4 写入器（S1 冻结区）本批零改动 ⇒ v4 互操作结论对 v1.0.0 成立（声明核对，非实测）**。S1 的真实代码互操作结论不变。
+
+### 剩余工作（下个会话接手）
+
+1. **tmux 冒烟 7 项**（本文件 §3 清单，全部未跑）。
+2. AGENTS.md S11 段补收尾 ✅ 行 + 「pig 基线现跟踪 pi v1.0.0」。
+3. 收口 commit（改动：config.go/config_test.go + 本文件回填 + AGENTS.md）。
+
+## 7. tmux 冒烟结果（§3 清单 7 项，2026-10-02 续作会话全部执行）
+
+实验环境 `/tmp/pig-s11-smoke/`（与 §3 门实验隔离）：mock OpenAI-completions SSE :8931（ping / callmcp→tool_call / tool 回包后收尾三模式，日志 mock-requests.log）+ MCP stdio helper（`mcp-stdio.js`，node 绝对路径——tmux server 环境无 nvm PATH）+ 各场景独立 agent dir（settings 均钉 `defaultProvider/defaultModel = mock/mock-1`，用户拍板验证不用 deepseek-v4-pro；本次全程零真实 API 调用）。trust.json 必须 seed **`/private/tmp/...` 解析后路径**（ProcessCwd symlink 语义，只写 /tmp 会弹 trust 缺失告警）。各场景专属 tmux session 名 s11*，收口全部 kill-session；mock 按端口 lsof 定位 kill。
+
+1. **fullscreen 默认 ✅**：无 `tuiMode` 键启动 → `tmux display-message #{alternate_on}` = 1（alt-screen）；footer 显示 (mock) mock-1。/settings 搜 "tui"：「TUI mode  fullscreen」+ 新描述 "Interface layout; regular mode uses the terminal's normal scrollback" ✅。`--tui-mode regular` → alternate_on=0 ✅。
+2. **quietStartup 三态 ✅**：`"header"` 启动 → header（blocks logo + v1.0.0 + 键位提示 + onboarding）可见、模型行/资源列表隐藏、compact onboarding **无** " and loaded resources" 尾巴；`true` → 全隐（只剩编辑器框/cwd/footer）；/settings "Quiet startup" Enter 三值循环 header→false→true→header，持久化保真（true/false 写 boolean、"header" 写 string）✅。
+3. **system theme ✅（部分）**：`theme:"system"` tmux 启动渲染正常（回落路径无回归，logo 真彩序列正常）；pastel 算法由 `TestSystemTheme/keeps_pastel_...`（#10255 Frappe 16 色）锁定且绿。**Frappe 类 palette 真终端下 accent 不再更艳**属 tmux 原理性无法复现（tmux 不答 OSC 4 调色板查询），与 S10-3 light palette dogfooding 项一并留真机验证。
+4. **MCP 结果预览 ✅**：mock 回 tool_call（`{"tool":"smoke__bigjson","args":{}}`）→ mcp 代理工具执行 → 卡片调用行 `mcp bigjson (smoke)`（MCP 渲染器可见性）+ 收起态预览**恰好 5 视觉行** JSON + `... (19 more lines, ctrl+o to expand)` hint，不再占满整屏 ✅。
+5. **user message 渲染 ✅**：对话往返正常（用户消息 1 列 padding + 文本完整 + OSC 133 zone；默认 dark 主题无 userMessageBg token → 无 bg 序列 = 预期输出）。
+6. **copy code 登录 ✅（无凭证可达链路全通）**：/login → Sign in with an account → provider 选择器（"not configured" 文案）→ Anthropic → **认证方式选择器渲染**（Browser login / Copy code login (headless)）→ 选 copy code → PKCE 授权 URL（redirect_uri=platform.claude.com/oauth/code/callback）+ "Paste the code Anthropic shows..." 输入框；浏览器启动走 fake `open`（fakebin）拦截未弹真浏览器；负路径：粘 `bogus-code#wrong-state` → "Error: Failed to login to Anthropic: OAuth state mismatch"，auth.json 保持 `{}` 无凭证落盘。完整浏览器步留真机凭证 dogfooding（verify-matrix）。
+7. **正常退出 / resume ✅**：ctrl+d 退出 EXIT=0、alt-screen 退出、fullscreen exit output=transcript 默认把对话全文落到 scrollback + "To resume this session" 提示；`--continue` 恢复 → fullscreen 下完整 transcript（用户消息+pong）还原。
+
+**冒烟发现并当批修复 2 个问题**（回归测试均 stash 红→绿，详见 docs/fix/）：
+
+- **`showAuthSelect` 挂载/恢复不触发渲染**（docs/fix/2026-10-02-auth-select-stale-frame.md）——pi interactive-mode.ts 的两个 `ui.requestRender()` 在移植时丢失：选择器挂进 editorContainer 且焦点已切换，但空闲 TUI 永不重绘，画面冻结在旧帧（/login → Anthropic 后看似卡死，实际按键打进看不见的 selector）。SIGQUIT dump（经 pane_pid 取真 pig pid）实证 login goroutine 停在 `<-resultCh` 且挂载已完成。修：两处补 `RequestRender(false)`；回归 `TestShowAuthSelectRequestsRender`（focusRecordingTUI）。**修后 item 6 全链路真机通**。
+- **TestThemeStyles 受宿主 COLORFGBG 影响**（docs/fix/2026-10-02-theme-style-colorfgbg-env.md）——本会话 shell 新增 `COLORFGBG=0;15`（light 分类）使 palette-only 子测翻转；pi 同样潜在敏感（CI 环境恰好无此变量）。测试加固 `t.Setenv("COLORFGBG", "")`，产品代码零改动。
+
+**基建教训（入档）**：① MCP 官方 go-sdk v1.8.0 客户端在 initialize 前发 `server/discover` 探针，自建 stdio server 对未知 method 带 id 的请求必须回包（哪怕空 result），否则客户端永阻到 connect 超时；② tmux server 的 PATH 不含登录 shell 后挂的路径（nvm），MCP stdio server 的 command 需绝对路径；③ `pgrep -f` 首个命中是 tmux/zsh 包装进程，SIGQUIT 取 dump 必须经 `tmux display-message #{pane_pid}` 再取子进程；④ macOS `sample` 解不开 Go goroutine 栈，Go 侧栈只有 SIGQUIT 一路；⑤ 全量回归对环境变量敏感（COLORFGBG），跨会话接手先 `env` 对照。
+
+## 8. 验收门终态
+
+- go build / vet / gofmt 干净（含本批两处修复）。
+- 全量 `go test ./... -race -count=1 -timeout 600s` **单次** rc=0 31 包（/tmp/pig-test-out-s11-final2.log；中间一次 rc=1 为上条 COLORFGBG 环境漂移，已加固复跑全绿）。
+- Version 1.0.0（TestVersionTracksPiBaseline 绿）；pig 基线跟踪 pi v1.0.0。
+- S11 系（S11-1/2/3 + 收尾批）全部关账；S11-4（MCP OAuth）未拍板不开工，候选清单保留在 §4。

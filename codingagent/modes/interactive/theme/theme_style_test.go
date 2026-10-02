@@ -53,6 +53,12 @@ func loadStyleTheme(t *testing.T, base string, edit func(*styleThemeFile)) *Them
 }
 
 func TestThemeStyles(t *testing.T) {
+	// pig-only hardening: the palette-only subtest expects "no terminal info
+	// → follow the theme's own base"; a host COLORFGBG (e.g. "0;15" = light)
+	// would otherwise be consulted by DetectTerminalTheme's fallback chain
+	// and flip the expectation (found in the S11 closing smoke session's
+	// shell env). pi's suite has the same latent env sensitivity.
+	t.Setenv("COLORFGBG", "")
 	t.Cleanup(func() { SetTerminalColors(tui.TerminalColors{}) })
 
 	t.Run("renders theme tokens the same as the generic text styler", func(t *testing.T) {

@@ -7869,6 +7869,7 @@ func (m *InteractiveMode) showAuthSelect(dialog *components.LoginDialogComponent
 			m.editorContainer.Clear()
 			m.editorContainer.AddChild(dialog)
 			m.ui.SetFocus(dialog)
+			m.ui.RequestRender(false)
 		})
 	}
 	labels := make([]string, 0, len(prompt.Options))
@@ -7898,6 +7899,7 @@ func (m *InteractiveMode) showAuthSelect(dialog *components.LoginDialogComponent
 		m.editorContainer.Clear()
 		m.editorContainer.AddChild(selector)
 		m.ui.SetFocus(selector)
+		m.ui.RequestRender(false)
 	})
 	result := <-resultCh
 	if result.err != nil {

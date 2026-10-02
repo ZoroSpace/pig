@@ -461,3 +461,81 @@ func TestMaybeWarnAboutAnthropicSubscriptionAuthGates(t *testing.T) {
 		t.Fatalf("warning shown for non-anthropic provider:\n%s", rendered2)
 	}
 }
+
+// --- showAuthSelect render requests (pig fix 2026-10-02, found in the S11
+// closing tmux smoke) ---
+//
+// pi's showAuthSelect (interactive-mode.ts) calls ui.requestRender() after
+// mounting the selector and again inside restoreDialog. The pig port dropped
+// both: the selector mounted into editorContainer and took focus, but an idle
+// TUI never repainted — the screen kept showing the login dialog while
+// keystrokes went to the invisible selector (/login → Anthropic froze the
+// frame on "Login to Anthropic").
+
+// focusRecordingTUI records SetFocus targets on top of the render counter.
+type focusRecordingTUI struct {
+	countingRenderTUI
+	focusMu sync.Mutex
+	focus   tui.Component
+}
+
+func (s *focusRecordingTUI) SetFocus(c tui.Component) {
+	s.focusMu.Lock()
+	defer s.focusMu.Unlock()
+	s.focus = c
+}
+
+func (s *focusRecordingTUI) focused() tui.Component {
+	s.focusMu.Lock()
+	defer s.focusMu.Unlock()
+	return s.focus
+}
+
+func TestShowAuthSelectRequestsRender(t *testing.T) {
+	m := newLoginTestMode(t)
+	stub := &focusRecordingTUI{}
+	m.ui = stub
+	dialog := components.NewLoginDialogComponent(m.ui, "anthropic", func(bool, string) {}, "Anthropic", "")
+	prompt := auth.AuthPrompt{
+		Type:    "select",
+		Message: "Select Anthropic login method:",
+		Options: []auth.AuthPromptOption{
+			{ID: "browser", Label: "Browser login (default)"},
+			{ID: "copy_code", Label: "Copy code login (headless)"},
+		},
+	}
+	type selectResult struct {
+		id  string
+		err error
+	}
+	resultCh := make(chan selectResult, 1)
+	go func() {
+		id, err := m.showAuthSelect(dialog, prompt)
+		resultCh <- selectResult{id, err}
+	}()
+
+	// Mount: the selector must be focused AND a render requested.
+	waitFor(t, 2*time.Second, "selector to be mounted and focused", func() bool {
+		_, ok := stub.focused().(*components.ExtensionSelectorComponent)
+		return ok
+	})
+	baseline := stub.requests.Load()
+	if baseline == 0 {
+		t.Fatal("showAuthSelect mounted the selector without requesting a render (stale frame keeps showing the login dialog)")
+	}
+
+	// Cancel path: Escape goes to the focused selector; restoreDialog must
+	// also request a render so the dialog reappears.
+	focused := stub.focused().(*components.ExtensionSelectorComponent)
+	focused.HandleInput("\x1b")
+	res := <-resultCh
+	if res.err == nil || res.err.Error() != "Login cancelled" {
+		t.Fatalf("cancel result = (%q, %v), want Login cancelled error", res.id, res.err)
+	}
+	if _, ok := stub.focused().(*components.LoginDialogComponent); !ok {
+		t.Fatalf("focus not restored to the login dialog after cancel (focused=%T)", stub.focused())
+	}
+	if stub.requests.Load() <= baseline {
+		t.Fatalf("restoreDialog did not request a render (requests=%d, baseline=%d)", stub.requests.Load(), baseline)
+	}
+}
