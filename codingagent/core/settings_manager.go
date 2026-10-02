@@ -162,12 +162,15 @@ const (
 // LogoStyle selects how the startup logo is drawn (pig-only; pi has a
 // fixed half-block mark instead). "plain" draws the figlet art in the
 // theme's text color; "gradient" samples a fresh two-hue ramp per process
-// start (see interactive_mode.go's randomPigLogoGradient).
+// start (see interactive_mode.go's randomPigLogoGradient); "blocks" renders
+// a half-block pixel wordmark in pi's fixed brand colors (see
+// buildPigLogoBlocks).
 type LogoStyle = string
 
 const (
 	LogoStylePlain    LogoStyle = "plain"
 	LogoStyleGradient LogoStyle = "gradient"
+	LogoStyleBlocks   LogoStyle = "blocks"
 )
 
 // DefaultProjectTrust selects the default project trust decision.
@@ -2247,7 +2250,7 @@ func (m *SettingsManager) SetShowResourceStats(show bool) {
 }
 
 // logoStyles lists the valid startup-logo renderings (pig-only setting).
-var logoStyles = []string{LogoStylePlain, LogoStyleGradient}
+var logoStyles = []string{LogoStylePlain, LogoStyleGradient, LogoStyleBlocks}
 
 // GetLogoStyle returns the startup-logo rendering (pig-only; no pi
 // counterpart). An invalid stored value resolves to "plain", so a hand-edited

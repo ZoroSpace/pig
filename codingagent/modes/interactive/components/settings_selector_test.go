@@ -138,7 +138,8 @@ func TestSettingsSelectorCyclesLogoStyle(t *testing.T) {
 	}
 	list.HandleInput("\r")
 	list.HandleInput("\r")
-	if want := []string{core.LogoStyleGradient, core.LogoStylePlain}; !reflect.DeepEqual(changes, want) {
+	list.HandleInput("\r")
+	if want := []string{core.LogoStyleGradient, core.LogoStyleBlocks, core.LogoStylePlain}; !reflect.DeepEqual(changes, want) {
 		t.Fatalf("logo style changes = %v, want %v", changes, want)
 	}
 }

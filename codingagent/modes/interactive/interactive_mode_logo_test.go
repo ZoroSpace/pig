@@ -447,3 +447,97 @@ func TestPigLogoGradientSampledOncePerProcess(t *testing.T) {
 		t.Error("logo ignored the resampled ramp")
 	}
 }
+
+// expectedPigLogoBlocksCells lists the decoded fg color and glyph of every
+// non-empty cell of the half-block wordmark, line by line: the "p" cells are
+// coral, the "i" cells blue, the "g" cells yellow (pi's brand colors,
+// components/pi-logo.ts).
+var expectedPigLogoBlocksCells = [][]struct {
+	r, g, b int
+	glyph   string
+}{
+	{
+		{228, 138, 122, "█"}, {228, 138, 122, "▀"}, {228, 138, 122, "█"},
+		{79, 142, 179, "▀"},
+		{234, 182, 93, "▄"}, {234, 182, 93, "▀"}, {234, 182, 93, "█"},
+	},
+	{
+		{228, 138, 122, "█"}, {228, 138, 122, "▀"}, {228, 138, 122, "▀"},
+		{79, 142, 179, "█"},
+		{234, 182, 93, "█"}, {234, 182, 93, "▀"},
+	},
+}
+
+// TestBuildPigLogoBlocksMark locks the bare-text shape of the blocks
+// wordmark: two lines, version on the top line (pi's header layout, unlike
+// the figlet styles' bottom-line version), and every cell drawn in the
+// letter's brand color in truecolor mode.
+func TestBuildPigLogoBlocksMark(t *testing.T) {
+	logo := buildPigLogo(newLogoTestThemeWithMode(t, theme.ColorModeTruecolor), "0.85.1", core.LogoStyleBlocks)
+	lines := strings.Split(logo, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("blocks logo has %d lines, want 2:\n%q", len(lines), logo)
+	}
+	wantBare := []string{"█▀█ ▀ ▄▀█ v0.85.1", "█▀▀ █  █▀"}
+	for i, line := range lines {
+		if bare := sgrSequence.ReplaceAllString(line, ""); bare != wantBare[i] {
+			t.Errorf("line %d = %q, want %q", i, bare, wantBare[i])
+		}
+	}
+	cell := regexp.MustCompile(`\x1b\[38;2;(\d+);(\d+);(\d+)m([▀▄█])`)
+	for i, line := range lines {
+		matches := cell.FindAllStringSubmatch(line, -1)
+		if len(matches) != len(expectedPigLogoBlocksCells[i]) {
+			t.Fatalf("line %d has %d styled cells, want %d: %q", i, len(matches), len(expectedPigLogoBlocksCells[i]), line)
+		}
+		for j, match := range matches {
+			want := expectedPigLogoBlocksCells[i][j]
+			channel := func(value string) int {
+				parsed, err := strconv.Atoi(value)
+				if err != nil {
+					t.Fatalf("bad channel %q", value)
+				}
+				return parsed
+			}
+			if got := (tui.RgbColor{R: channel(match[1]), G: channel(match[2]), B: channel(match[3])}); got != (tui.RgbColor{R: want.r, G: want.g, B: want.b}) {
+				t.Errorf("line %d cell %d = %+v, want (%d,%d,%d)", i, j, got, want.r, want.g, want.b)
+			}
+			if match[4] != want.glyph {
+				t.Errorf("line %d cell %d glyph = %q, want %q", i, j, match[4], want.glyph)
+			}
+		}
+	}
+}
+
+// TestBuildPigLogoBlocksVersionColor checks the version tag on the top line
+// renders in the theme's dim color (pi renders its version dim too).
+func TestBuildPigLogoBlocksVersionColor(t *testing.T) {
+	tl := newLogoTestThemeWithMode(t, theme.ColorModeTruecolor)
+	logo := buildPigLogo(tl, "0.85.1", core.LogoStyleBlocks)
+	top := strings.Split(logo, "\n")[0]
+	if !strings.Contains(top, tl.Fg("dim", " v0.85.1")) {
+		t.Errorf("version tag not dim-colored on the top line: %q", top)
+	}
+}
+
+// TestBuildPigLogoBlocksAppleTerminalFallback covers the pi supportsPiLogo
+// fallback: Apple Terminal draws half blocks with gaps between rows, so it
+// gets the plain "pig" text wordmark in the letter colors instead.
+func TestBuildPigLogoBlocksAppleTerminalFallback(t *testing.T) {
+	original := pigLogoIsAppleTerminal
+	pigLogoIsAppleTerminal = func() bool { return true }
+	t.Cleanup(func() { pigLogoIsAppleTerminal = original })
+
+	logo := buildPigLogo(newLogoTestThemeWithMode(t, theme.ColorModeTruecolor), "0.85.1", core.LogoStyleBlocks)
+	if strings.ContainsAny(logo, "▀▄█") {
+		t.Fatalf("Apple Terminal fallback must not draw half blocks: %q", logo)
+	}
+	if bare := sgrSequence.ReplaceAllString(logo, ""); bare != "pig v0.85.1" {
+		t.Errorf("fallback wordmark = %q, want %q", bare, "pig v0.85.1")
+	}
+	for _, color := range []string{"\x1b[38;2;228;138;122m", "\x1b[38;2;79;142;179m", "\x1b[38;2;234;182;93m"} {
+		if !strings.Contains(logo, color) {
+			t.Errorf("fallback wordmark missing letter color %s: %q", color, logo)
+		}
+	}
+}

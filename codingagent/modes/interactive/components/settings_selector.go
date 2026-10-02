@@ -88,6 +88,7 @@ var logoStyleLabels = []struct {
 }{
 	{"plain", "plain (theme text color)"},
 	{"gradient", "gradient (new random colors each start)"},
+	{"blocks", "blocks (pi-style colored pixels)"},
 }
 
 // logoStyleLabel returns the picker label for a logo style (unknown styles
@@ -147,7 +148,7 @@ type SettingsConfig struct {
 	Warnings                   core.WarningSettings
 	CJKSegmenter               string // pig-only: "bigram" | "sst" | "gse"
 	ShowResourceStats          bool   // pig-only: footer resource segment (MEM now, more later)
-	LogoStyle                  string // pig-only: "plain" | "gradient" startup logo
+	LogoStyle                  string // pig-only: "plain" | "gradient" | "blocks" startup logo
 }
 
 // SettingsCallbacks carries the change handlers (pi: SettingsCallbacks).
@@ -1198,7 +1199,7 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 	items[resourceStatsIndex+1] = &tui.SettingItem{
 		Id:           "logo-style",
 		Label:        "Startup logo",
-		Description:  "Startup mark rendering: plain theme color, or a gradient with new random colors on every start",
+		Description:  "Startup mark rendering: plain theme color, a gradient with new random colors on every start, or pi-style colored blocks",
 		CurrentValue: logoStyleLabel(config.LogoStyle),
 	}
 	for _, pair := range logoStyleLabels {

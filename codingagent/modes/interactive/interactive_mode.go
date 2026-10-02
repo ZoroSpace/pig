@@ -9015,9 +9015,14 @@ func pigLogoForegroundAnsi(mode tui.TerminalColorMode, columns int) ([]string, b
 // rendering (pig-only; see core.LogoStyle): "plain" (default) draws the mark
 // in the theme's dim color (matching the startup hint line), "gradient"
 // carries a per-start gradient (see pigLogoBrandGradient) as a left-to-right
-// ramp rather than pi's solid colors. Either way the version tag trails the
-// bottom art line, so the version keeps following the theme (dark/light).
+// ramp rather than pi's solid colors, "blocks" renders a half-block pixel
+// wordmark in pi's fixed brand colors (see buildPigLogoBlocks). Plain and
+// gradient trail the version on the bottom art line; blocks follows pi's
+// header layout with the version on the top line.
 func buildPigLogo(t *theme.Theme, version string, style string) string {
+	if style == core.LogoStyleBlocks {
+		return buildPigLogoBlocks(t, version)
+	}
 	// figlet output, uniform 19 columns (trailing spaces included; the last
 	// line is one column short).
 	art := []string{
@@ -9074,4 +9079,110 @@ func buildPigLogoGradient(t *theme.Theme, art []string, version string) string {
 	}
 	lines[len(lines)-1] += t.Fg("text", " v"+version)
 	return strings.Join(lines, "\n")
+}
+
+// pigLogoIsAppleTerminal mirrors tui.IsAppleTerminalSession behind a seam so
+// the blocks fallback can be tested without env manipulation.
+var pigLogoIsAppleTerminal = tui.IsAppleTerminalSession
+
+// pigLogoBlocksGrid is the pixel wordmark: "p" coral, "i" blue, "g" yellow,
+// "." empty — 9 pixels wide and 4 tall, drawn two pixel rows per text line
+// with half blocks. p is a bowl over a full-height stem, i is dot-gap-stem,
+// g is an open-topped bowl whose tail hooks back under it (distinguishing it
+// from a q, whose stem stays on the right).
+var pigLogoBlocksGrid = []string{
+	"ppp.i..yy",
+	"p.p...y.y",
+	"ppp.i..yy",
+	"p...i..y.",
+}
+
+// pigLogoBlockColors returns the brand colors of pi's half-block mark
+// (components/pi-logo.ts): coral, blue, yellow. Like pi's mark, they stay
+// fixed across themes and only follow the terminal's color mode. ok is false
+// when the RGB construction fails, which cannot happen for these literals;
+// callers degrade to theme-colored text.
+func pigLogoBlockColors() (coral, blue, yellow tui.Color, ok bool) {
+	coral, err := tui.NewRgbColor(228, 138, 122)
+	if err != nil {
+		return tui.Color{}, tui.Color{}, tui.Color{}, false
+	}
+	blue, err = tui.NewRgbColor(79, 142, 179)
+	if err != nil {
+		return tui.Color{}, tui.Color{}, tui.Color{}, false
+	}
+	yellow, err = tui.NewRgbColor(234, 182, 93)
+	if err != nil {
+		return tui.Color{}, tui.Color{}, tui.Color{}, false
+	}
+	return coral, blue, yellow, true
+}
+
+// buildPigLogoBlocks renders the startup logo as a half-block pixel wordmark
+// in pi's style (components/pi-logo.ts): solid brand colors following the
+// terminal's color mode, two pixel rows per text line. The version trails
+// the top line in the theme's dim color, matching pi's header layout.
+// Apple Terminal draws half blocks with gaps between the rows (pi:
+// supportsPiLogo), so it gets the plain text wordmark instead.
+func buildPigLogoBlocks(t *theme.Theme, version string) string {
+	if pigLogoIsAppleTerminal() {
+		return buildPigLogoBlocksWordmark(t, version)
+	}
+	coral, blue, yellow, ok := pigLogoBlockColors()
+	if !ok {
+		// Unreachable; degrade to the theme-colored wordmark.
+		return t.Fg("dim", "pig v"+version)
+	}
+	mode := t.GetColorMode()
+	fg := map[byte]string{
+		'p': tui.ForegroundAnsi(coral, mode),
+		'i': tui.ForegroundAnsi(blue, mode),
+		'y': tui.ForegroundAnsi(yellow, mode),
+	}
+
+	lines := make([]string, 2)
+	for line := range lines {
+		upperRow := pigLogoBlocksGrid[line*2]
+		lowerRow := pigLogoBlocksGrid[line*2+1]
+		var sb strings.Builder
+		for col := 0; col < len(upperRow); col++ {
+			upper, lower := upperRow[col], lowerRow[col]
+			switch {
+			case upper == '.' && lower == '.':
+				sb.WriteByte(' ')
+			case lower == '.':
+				// Upper half only: ▀ with the pixel's foreground.
+				sb.WriteString(tui.StyleTextWithAnsi("▀", fg[upper], "", tui.TextAttributes{}))
+			case upper == '.':
+				sb.WriteString(tui.StyleTextWithAnsi("▄", fg[lower], "", tui.TextAttributes{}))
+			default:
+				sb.WriteString(tui.StyleTextWithAnsi("█", fg[upper], "", tui.TextAttributes{}))
+			}
+		}
+		lines[line] = sb.String()
+	}
+	lines[0] += t.Fg("dim", " v"+version)
+	return strings.Join(lines, "\n")
+}
+
+// buildPigLogoBlocksWordmark is the fallback for terminals that cannot render
+// half blocks (pi: piWordmark): "pig" as plain text with each letter in its
+// block color, the version trailing in the theme's dim color.
+func buildPigLogoBlocksWordmark(t *theme.Theme, version string) string {
+	coral, blue, yellow, ok := pigLogoBlockColors()
+	if !ok {
+		// Unreachable; degrade to the theme-colored wordmark.
+		return t.Fg("dim", "pig v"+version)
+	}
+	mode := t.GetColorMode()
+	letters := []struct{ text, fg string }{
+		{"p", tui.ForegroundAnsi(coral, mode)},
+		{"i", tui.ForegroundAnsi(blue, mode)},
+		{"g", tui.ForegroundAnsi(yellow, mode)},
+	}
+	var sb strings.Builder
+	for _, letter := range letters {
+		sb.WriteString(tui.StyleTextWithAnsi(letter.text, letter.fg, "", tui.TextAttributes{}))
+	}
+	return sb.String() + t.Fg("dim", " v"+version)
 }

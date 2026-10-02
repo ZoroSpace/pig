@@ -1014,6 +1014,15 @@ func TestSettingsManagerLogoStyle(t *testing.T) {
 		}
 	})
 
+	t.Run("stored blocks setting applies", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"logoStyle":"blocks"}`)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+		if got := manager.GetLogoStyle(); got != LogoStyleBlocks {
+			t.Fatalf("logoStyle = %q, want blocks", got)
+		}
+	})
+
 	t.Run("invalid stored value resolves to plain", func(t *testing.T) {
 		agentDir, projectDir := settingsTestDirs(t)
 		writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"logoStyle":"rainbow"}`)
