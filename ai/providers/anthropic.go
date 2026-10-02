@@ -7,6 +7,7 @@ import (
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/api"
 	"github.com/ZoroSpace/pig/ai/auth"
+	"github.com/ZoroSpace/pig/ai/types"
 )
 
 // AnthropicProvider is the built-in Anthropic provider (pi:
@@ -75,7 +76,32 @@ func (anthropicAPIKeyAuthImpl) Resolve(input auth.ApiKeyAuthInput) (*auth.AuthRe
 			return &auth.AuthResult{Auth: auth.ModelAuth{APIKey: apiKey}, Source: envVar}, nil
 		}
 	}
-	return nil, nil
+
+	// Workload identity federation: the adapter exchanges the identity token
+	// for a short-lived access token and refreshes it itself. Last in line so
+	// keys and ANTHROPIC_AUTH_TOKEN keep winning, as in the SDK. The ids are
+	// provider config rather than auth, so they travel in `env` (pi #10242).
+	federation := types.ProviderEnv{}
+	for _, envVar := range []string{ai.AnthropicFederationRuleIDEnv, ai.AnthropicOrganizationIDEnv, ai.AnthropicIdentityTokenFileEnv} {
+		value, ok := input.Ctx.Env(envVar)
+		if err := input.Context.Err(); err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, nil
+		}
+		federation[envVar] = value
+	}
+	for _, envVar := range []string{ai.AnthropicServiceAccountIDEnv, ai.AnthropicWorkspaceIDEnv} {
+		value, ok := input.Ctx.Env(envVar)
+		if err := input.Context.Err(); err != nil {
+			return nil, err
+		}
+		if ok {
+			federation[envVar] = value
+		}
+	}
+	return &auth.AuthResult{Auth: auth.ModelAuth{}, Env: federation, Source: "workload identity federation"}, nil
 }
 
 // Login prompts for the key (pi: login member).

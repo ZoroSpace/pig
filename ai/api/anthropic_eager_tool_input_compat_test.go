@@ -4,8 +4,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
@@ -36,21 +34,9 @@ var eagerTestTool = types.Tool{
 	Parameters:  json.RawMessage(`{"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}`),
 }
 
-var eagerSchemaCompatibilityTool = types.Tool{
-	Name:        "lookup",
-	Description: "Look up a value",
-	Parameters:  json.RawMessage(`{"type":"object","properties":{"value":{"type":"string"}},"required":["value"],"additionalProperties":false,"title":"LookupInput"}`),
-}
-
-var eagerStrictTool = types.Tool{
-	Name:        "lookup",
-	Description: "Look up a value",
-	Parameters:  json.RawMessage(`{"type":"object","properties":{"value":{"type":"string"},"optional":{"type":"number"}},"required":["value"],"title":"StrictLookupInput"}`),
-	ConstrainedSampling: map[string]any{
-		"type":   "json_schema",
-		"strict": "prefer",
-	},
-}
+// S11-1: the strict-schema payload test moved to
+// anthropic_strict_tool_schema_test.go (pi moved it from this file into
+// anthropic-strict-tool-schema.test.ts).
 
 func eagerTestContext(tools []types.Tool) *types.TranscriptContext {
 	messages := []types.Message{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Use the tool"}, Timestamp: 1}}
@@ -96,15 +82,6 @@ func firstEagerTool(t *testing.T, body map[string]any) map[string]any {
 	return tool
 }
 
-func firstEagerToolInputSchema(t *testing.T, body map[string]any) map[string]any {
-	t.Helper()
-	schema, ok := firstEagerTool(t, body)["input_schema"].(map[string]any)
-	if !ok {
-		t.Fatalf("Expected first tool input schema in request body, got %#v", firstEagerTool(t, body)["input_schema"])
-	}
-	return schema
-}
-
 func TestAnthropicEagerToolInputSendsPerToolByDefault(t *testing.T) {
 	captured := captureEagerRequest(t, nil, eagerTestContext([]types.Tool{eagerTestTool}))
 	if got, _ := firstEagerTool(t, captured.body)["eager_input_streaming"].(bool); !got {
@@ -133,52 +110,4 @@ func TestAnthropicEagerToolInputNoBetaWithoutTools(t *testing.T) {
 	if got := captured.req.Header.Get("anthropic-beta"); got != "" {
 		t.Errorf("anthropic-beta = %q, want no header", got)
 	}
-}
-
-func TestAnthropicEagerToolInputStrictSchemas(t *testing.T) {
-	legacyCaptured := captureEagerRequest(t, &types.AnthropicMessagesCompat{SupportsStrictTools: boolPtr(true)}, eagerTestContext([]types.Tool{eagerSchemaCompatibilityTool}))
-	wantSchema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"value": map[string]any{"type": "string"},
-		},
-		"required": []any{"value"},
-	}
-	if got := firstEagerToolInputSchema(t, legacyCaptured.body); !reflect.DeepEqual(got, wantSchema) {
-		t.Errorf("legacy input_schema = %#v, want %#v", got, wantSchema)
-	}
-
-	strictCaptured := captureEagerRequest(t, &types.AnthropicMessagesCompat{SupportsStrictTools: boolPtr(true)}, eagerTestContext([]types.Tool{eagerStrictTool}))
-	strictTool := firstEagerTool(t, strictCaptured.body)
-	if got, _ := strictTool["strict"].(bool); !got {
-		t.Errorf("strict = %#v, want true", strictTool["strict"])
-	}
-	schema := firstEagerToolInputSchema(t, strictCaptured.body)
-	if got, present := schema["additionalProperties"]; !present || got != false {
-		t.Errorf("additionalProperties = %#v, want false", schema["additionalProperties"])
-	}
-	required := strings.Join(stringifySchemaStrings(schema["required"]), ",")
-	if required != "value,optional" {
-		t.Errorf("required = %#v, want [value optional]", schema["required"])
-	}
-	properties, _ := schema["properties"].(map[string]any)
-	optional, _ := properties["optional"].(map[string]any)
-	anyOf, _ := optional["anyOf"].([]any)
-	if len(anyOf) != 2 {
-		t.Errorf("optional property = %#v, want anyOf [number, null]", optional)
-	}
-	if schema["title"] != "StrictLookupInput" {
-		t.Errorf("title = %#v, want StrictLookupInput", schema["title"])
-	}
-}
-
-func stringifySchemaStrings(value any) []string {
-	arr, _ := value.([]any)
-	var out []string
-	for _, entry := range arr {
-		if s, ok := entry.(string); ok {
-			out = append(out, s)
-		}
-	}
-	return out
 }

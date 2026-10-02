@@ -49,6 +49,15 @@ func TestIsContextOverflowDetectsZaiPromptTooLongErrors(t *testing.T) {
 	}
 }
 
+// S11-1: regression for pi #10208 — the CN endpoint returns code 1261 with a
+// different message.
+func TestIsContextOverflowDetectsZaiCNEndpointPromptExceedsMaxLengthErrors(t *testing.T) {
+	message := createErrorMessageWithProvider(`400 {"code":"1261","message":"Prompt exceeds max length"}`, "zai")
+	if !IsContextOverflow(&message, 1048576) {
+		t.Fatal("want overflow")
+	}
+}
+
 func TestIsContextOverflowDetectsTogetherAIContextLengthErrors(t *testing.T) {
 	message := createErrorMessage(
 		"400 The input (516368 tokens) is longer than the model's context length (262144 tokens).",

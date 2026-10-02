@@ -1344,7 +1344,7 @@ func convertBedrockToolConfig(tools []types.Tool, toolChoice *BedrockToolChoice,
 	var bedrockTools []bedrockTool
 	for i := range tools {
 		tool := &tools[i]
-		strict, err := ResolveJSONSchemaStrictSampling(tool, supportsStrictMode)
+		strict, err := ResolveJSONSchemaStrictSampling(tool, supportsStrictMode, nil)
 		if err != nil {
 			return nil, err
 		}

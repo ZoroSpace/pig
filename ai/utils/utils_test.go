@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestShortHash(t *testing.T) {
@@ -131,6 +132,35 @@ func TestRetryProviderRequest(t *testing.T) {
 	}, ProviderRetryOptions{MaxRetries: 3})
 	if err == nil || attempts != 1 {
 		t.Fatalf("non-provider error retried: attempts=%d err=%v", attempts, err)
+	}
+}
+
+// S11-1: pi #9571 — an unparseable Retry-After falls through to the
+// exponential backoff instead of sleeping 0.
+func TestGetRetryDelayMSUnparseableRetryAfterFallsBackToExponential(t *testing.T) {
+	for _, headers := range []http.Header{
+		{"Retry-After": {"garbage"}},
+		{"Retry-After-Ms": {"NaN"}, "Retry-After": {"garbage"}},
+	} {
+		err := &ProviderHTTPError{Status: 429, Headers: headers}
+		delay, delayErr := getRetryDelayMS(err, 0, nil)
+		if delayErr != nil {
+			t.Fatalf("%v: unexpected error %v", headers, delayErr)
+		}
+		// Index 0: 500ms jittered down by up to 25% (375–500ms); a parsed
+		// garbage value would give 0, the old behavior.
+		if delay < 375*time.Millisecond || delay > 500*time.Millisecond {
+			t.Fatalf("%v: delay = %v, want the 375–500ms exponential window", headers, delay)
+		}
+	}
+
+	// A NaN/Infinity retry-after-ms also falls through (JS Number.isFinite).
+	delay, err := getRetryDelayMS(&ProviderHTTPError{Status: 429, Headers: http.Header{"Retry-After-Ms": {"Infinity"}}}, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delay < 375*time.Millisecond || delay > 500*time.Millisecond {
+		t.Fatalf("delay = %v, want the exponential window", delay)
 	}
 }
 

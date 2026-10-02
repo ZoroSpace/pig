@@ -18,6 +18,11 @@ type UnsupportedStrictJSONSchemaError struct{ Message string }
 
 func (e *UnsupportedStrictJSONSchemaError) Error() string { return e.Message }
 
+// UnsupportedStrictSchemaKeywordCheck returns true when a provider's strict
+// mode rejects this schema keyword with this value (pi:
+// UnsupportedStrictSchemaKeywordCheck).
+type UnsupportedStrictSchemaKeywordCheck func(key string, value any) bool
+
 var UNSUPPORTED_STRICT_SCHEMA_KEYS = []string{
 	"$ref", "$defs", "definitions", "allOf", "oneOf", "patternProperties",
 	"dependentSchemas", "dependencies", "unevaluatedProperties", "propertyNames",
@@ -100,7 +105,7 @@ func schemaAllowsNull(schema any) bool {
 	return false
 }
 
-func makeJSONSchemaNodeStrict(schema any, orders map[uintptr][]string) error {
+func makeJSONSchemaNodeStrict(schema any, orders map[uintptr][]string, isUnsupportedKeyword UnsupportedStrictSchemaKeywordCheck) error {
 	m, ok := schema.(map[string]any)
 	if !ok {
 		return &UnsupportedStrictJSONSchemaError{Message: "boolean schemas are unsupported"}
@@ -108,6 +113,17 @@ func makeJSONSchemaNodeStrict(schema any, orders map[uintptr][]string) error {
 	for _, key := range UNSUPPORTED_STRICT_SCHEMA_KEYS {
 		if _, present := m[key]; present {
 			return &UnsupportedStrictJSONSchemaError{Message: key + " schemas are unsupported"}
+		}
+	}
+	if isUnsupportedKeyword != nil {
+		for key, value := range m {
+			if isUnsupportedKeyword(key, value) {
+				encoded, err := json.Marshal(value)
+				if err != nil {
+					return err
+				}
+				return &UnsupportedStrictJSONSchemaError{Message: key + ": " + string(encoded) + " is unsupported"}
+			}
 		}
 	}
 	if anyOf, present := m["anyOf"]; present {
@@ -119,7 +135,7 @@ func makeJSONSchemaNodeStrict(schema any, orders map[uintptr][]string) error {
 			if isStructuredSchema(variant) {
 				return &UnsupportedStrictJSONSchemaError{Message: "object and array unions are unsupported"}
 			}
-			if err := makeJSONSchemaNodeStrict(variant, orders); err != nil {
+			if err := makeJSONSchemaNodeStrict(variant, orders, isUnsupportedKeyword); err != nil {
 				return err
 			}
 		}
@@ -128,7 +144,7 @@ func makeJSONSchemaNodeStrict(schema any, orders map[uintptr][]string) error {
 		if _, isTuple := items.([]any); isTuple {
 			return &UnsupportedStrictJSONSchemaError{Message: "tuple schemas are unsupported"}
 		}
-		if err := makeJSONSchemaNodeStrict(items, orders); err != nil {
+		if err := makeJSONSchemaNodeStrict(items, orders, isUnsupportedKeyword); err != nil {
 			return err
 		}
 	}
@@ -192,7 +208,7 @@ func makeJSONSchemaNodeStrict(schema any, orders map[uintptr][]string) error {
 		if !present {
 			continue
 		}
-		if err := makeJSONSchemaNodeStrict(property, orders); err != nil {
+		if err := makeJSONSchemaNodeStrict(property, orders, isUnsupportedKeyword); err != nil {
 			return err
 		}
 		if !requiredSet[key] && !schemaAllowsNull(property) {
@@ -272,7 +288,7 @@ func collectJSONKeyOrdersToken(tok json.Token, node any, dec *json.Decoder, orde
 // MakeStrictJSONSchema converts a tool schema to the strict subset expected by
 // provider constrained sampling (pi: makeStrictJsonSchema). Property order
 // follows the schema document (pi: Object.keys).
-func MakeStrictJSONSchema(schema json.RawMessage) (map[string]any, error) {
+func MakeStrictJSONSchema(schema json.RawMessage, isUnsupportedKeyword UnsupportedStrictSchemaKeywordCheck) (map[string]any, error) {
 	var cloned any
 	if err := json.Unmarshal(schema, &cloned); err != nil {
 		return nil, err
@@ -284,7 +300,7 @@ func MakeStrictJSONSchema(schema json.RawMessage) (map[string]any, error) {
 	if err := collectJSONKeyOrders(cloned, json.NewDecoder(bytes.NewReader(schema)), orders); err != nil {
 		return nil, err
 	}
-	if err := makeJSONSchemaNodeStrict(cloned, orders); err != nil {
+	if err := makeJSONSchemaNodeStrict(cloned, orders, isUnsupportedKeyword); err != nil {
 		return nil, err
 	}
 	m := cloned.(map[string]any)
@@ -300,7 +316,7 @@ func GetJSONSchemaToolParameters(tool *types.Tool, strict bool) (json.RawMessage
 	if !strict {
 		return tool.Parameters, nil
 	}
-	m, err := MakeStrictJSONSchema(tool.Parameters)
+	m, err := MakeStrictJSONSchema(tool.Parameters, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -419,8 +435,10 @@ func inferGrammarInputProperty(tool *types.Tool) (string, error) {
 // constrained sampling must be strict (pi:
 // resolveJsonSchemaStrictSampling). A nil result means no strict constraint;
 // an error means the tool requires strict sampling the provider cannot offer
-// (pi throws in both cases).
-func ResolveJSONSchemaStrictSampling(tool *types.Tool, supportsStrictMode bool) (*bool, error) {
+// (pi throws in both cases). isUnsupportedKeyword lets a provider reject
+// extra keywords its strict mode does not accept, so "prefer" tools fall
+// back to non-strict.
+func ResolveJSONSchemaStrictSampling(tool *types.Tool, supportsStrictMode bool, isUnsupportedKeyword UnsupportedStrictSchemaKeywordCheck) (*bool, error) {
 	config, ok := tool.ConstrainedSampling.(map[string]any)
 	if !ok {
 		return nil, nil
@@ -430,7 +448,7 @@ func ResolveJSONSchemaStrictSampling(tool *types.Tool, supportsStrictMode bool) 
 	}
 	strict, _ := config["strict"].(string)
 	if supportsStrictMode {
-		if _, err := MakeStrictJSONSchema(tool.Parameters); err == nil {
+		if _, err := MakeStrictJSONSchema(tool.Parameters, isUnsupportedKeyword); err == nil {
 			v := true
 			return &v, nil
 		} else if _, isUnsupported := err.(*UnsupportedStrictJSONSchemaError); !isUnsupported {

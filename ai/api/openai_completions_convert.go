@@ -386,7 +386,7 @@ func convertTools(tools []types.Tool, compat *resolvedOpenAICompletionsCompat) [
 			})
 			continue
 		}
-		strict, err := ResolveJSONSchemaStrictSampling(&tool, compat.supportsStrictMode)
+		strict, err := ResolveJSONSchemaStrictSampling(&tool, compat.supportsStrictMode, nil)
 		if err != nil {
 			// pi throws; the caller surfaces it as a stream error. Fall back to
 			// a plain function tool so the request still leaves.

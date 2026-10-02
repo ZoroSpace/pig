@@ -91,38 +91,49 @@ func isRetryableError(err error) bool {
 
 // getRetryDelayMS computes the backoff for one retry, honoring server-requested
 // delays (pi: getRetryDelayMs). It returns an error when a server-requested
-// delay exceeds the cap.
+// delay exceeds the cap. An unparseable Retry-After falls through to the
+// exponential backoff (pi #9571: Number.isFinite gate).
 func getRetryDelayMS(err *ProviderHTTPError, retryIndex int, maxRetryDelayMS *int64) (time.Duration, error) {
 	if err.Headers != nil {
 		if retryAfterMS := err.Headers.Get("retry-after-ms"); retryAfterMS != "" {
 			value, parseErr := strconv.ParseFloat(retryAfterMS, 64)
-			if parseErr == nil {
+			// Go's ParseFloat accepts "NaN"/"Infinity"; pi's Number.isFinite
+			// rejects those too, so both fall through to Retry-After.
+			if parseErr == nil && !isNaNOrInf(value) {
 				return validateServerRetryDelayMS(value, maxRetryDelayMS, err.Error())
 			}
 		}
 		if retryAfter := err.Headers.Get("retry-after"); retryAfter != "" {
 			seconds, parseErr := strconv.ParseFloat(retryAfter, 64)
 			var delayMS float64
+			finite := false
 			if parseErr == nil {
 				delayMS = seconds * 1000
+				finite = !isNaNOrInf(delayMS)
 			} else if t, timeErr := http.ParseTime(retryAfter); timeErr == nil {
 				delayMS = float64(time.Until(t).Milliseconds())
-			} else {
-				// pi: Date.parse failure yields NaN; setTimeout(NaN) sleeps 0.
-				delayMS = 0
+				finite = true
 			}
-			return validateServerRetryDelayMS(delayMS, maxRetryDelayMS, err.Error())
+			// pi: an unparseable Retry-After (NaN delay) now falls through to
+			// the exponential backoff instead of sleeping 0 (#9571).
+			if finite {
+				return validateServerRetryDelayMS(delayMS, maxRetryDelayMS, err.Error())
+			}
 		}
 	}
 	exponentialDelay := math.Min(0.5*math.Pow(2, float64(retryIndex)), 8) * 1000
 	return time.Duration(exponentialDelay*(1-rand.Float64()*0.25)) * time.Millisecond, nil
 }
 
+// isNaNOrInf mirrors JS Number.isFinite's rejection set.
+func isNaNOrInf(value float64) bool {
+	return math.IsNaN(value) || math.IsInf(value, 0)
+}
+
 // validateServerRetryDelayMS fails a server-requested delay above the cap so
 // higher-level retry logic can surface it (pi:
-// validateServerRetryDelayMs). A delay at or below 0 (e.g. unparseable
-// retry-after) passes the cap check unchanged, sleeping 0 like pi's
-// setTimeout(Math.max(0, NaN)).
+// validateServerRetryDelayMs). A delay at or below 0 passes the cap check
+// unchanged, sleeping 0 (pi: setTimeout(Math.max(0, delay))).
 func validateServerRetryDelayMS(delayMS float64, maxRetryDelayMS *int64, providerErrorMessage string) (time.Duration, error) {
 	maxDelayMS := int64(defaultMaxRetryDelayMS)
 	if maxRetryDelayMS != nil {

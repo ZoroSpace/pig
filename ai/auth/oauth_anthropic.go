@@ -37,6 +37,15 @@ const (
 	anthropicRedirectURI  = "http://localhost:53692" + anthropicCallbackPath
 	anthropicOAuthScopes  = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
 	anthropicCallbackPort = 53692
+	// Claude Code's OAuth client also accepts this redirect_uri; the page
+	// shows the authorization code to copy, which works when the browser runs
+	// on another machine (pi: COPY_CODE_REDIRECT_URI, #10194).
+	anthropicCopyCodeRedirectURI = "https://platform.claude.com/oauth/code/callback"
+)
+
+const (
+	anthropicBrowserLoginMethod  = "browser"
+	anthropicCopyCodeLoginMethod = "copy_code"
 )
 
 // anthropicOAuthPostJSON is the token-endpoint transport seam (pi: the global
@@ -226,6 +235,48 @@ func orDefaultString(value string, fallback string) string {
 	return fallback
 }
 
+// loginAnthropicCopyCode runs the headless copy-code login flow (pi:
+// loginAnthropicCopyCode): the auth URL uses the platform.claude.com redirect
+// page, and the user pastes the displayed "code#state" value.
+func loginAnthropicCopyCode(ctx context.Context, interaction AuthInteraction) (*OAuthCredential, error) {
+	verifier, challenge, err := GeneratePKCE()
+	if err != nil {
+		return nil, err
+	}
+	authParams := url.Values{}
+	authParams.Set("code", "true")
+	authParams.Set("client_id", anthropicOAuthClientID)
+	authParams.Set("response_type", "code")
+	authParams.Set("redirect_uri", anthropicCopyCodeRedirectURI)
+	authParams.Set("scope", anthropicOAuthScopes)
+	authParams.Set("code_challenge", challenge)
+	authParams.Set("code_challenge_method", "S256")
+	authParams.Set("state", verifier)
+	interaction.Notify(AuthEvent{
+		Type:         "auth_url",
+		URL:          anthropicAuthorizeURL + "?" + authParams.Encode(),
+		Instructions: "Complete login in your browser, then copy the code Anthropic shows and paste it here.",
+	})
+
+	input, err := interaction.Prompt(AuthPrompt{
+		Type:        "manual_code",
+		Message:     "Paste the code Anthropic shows after you sign in:",
+		Placeholder: "code#state",
+	})
+	if err != nil {
+		return nil, err
+	}
+	code, state := parseAuthorizationInput(input)
+	if state != "" && state != verifier {
+		return nil, fmt.Errorf("OAuth state mismatch")
+	}
+	if code == "" {
+		return nil, fmt.Errorf("Missing authorization code")
+	}
+	interaction.Notify(AuthEvent{Type: "progress", Message: "Exchanging authorization code for tokens..."})
+	return exchangeAnthropicAuthorizationCode(ctx, code, orDefaultString(state, verifier), verifier, anthropicCopyCodeRedirectURI)
+}
+
 // refreshAnthropicToken exchanges the refresh token (pi:
 // refreshAnthropicToken).
 func refreshAnthropicToken(ctx context.Context, refreshToken string) (*OAuthCredential, error) {
@@ -264,9 +315,28 @@ func (AnthropicOAuth) Name() string         { return "Anthropic (Claude Pro/Max)
 func (AnthropicOAuth) IsSubscription() bool { return true }
 func (AnthropicOAuth) LoginLabel() string   { return "" }
 
-// Login runs the provider-owned login flow.
+// Login runs the provider-owned login flow, asking for the method first (pi:
+// login with the method select prompt — browser default, copy code headless).
 func (AnthropicOAuth) Login(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
-	return loginAnthropic(ctx, interaction, options)
+	method, err := interaction.Prompt(AuthPrompt{
+		Type:    "select",
+		Message: "Select Anthropic login method:",
+		Options: []AuthPromptOption{
+			{ID: anthropicBrowserLoginMethod, Label: "Browser login (default)"},
+			{ID: anthropicCopyCodeLoginMethod, Label: "Copy code login (headless)"},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	switch method {
+	case anthropicCopyCodeLoginMethod:
+		return loginAnthropicCopyCode(ctx, interaction)
+	case anthropicBrowserLoginMethod:
+		return loginAnthropic(ctx, interaction, options)
+	default:
+		return nil, fmt.Errorf("Unknown Anthropic login method: %s", method)
+	}
 }
 
 // Refresh exchanges the refresh token.

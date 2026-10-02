@@ -65,6 +65,9 @@ func TestAnthropicOAuthManualCallbackLogin(t *testing.T) {
 			}
 		},
 		prompt: func(prompt AuthPrompt) (string, error) {
+			if prompt.Type == "select" {
+				return "browser", nil
+			}
 			if prompt.Type != "manual_code" {
 				return "", &oauthTestUnexpectedPrompt{prompt.Type}
 			}
@@ -100,6 +103,100 @@ func (e *oauthTestUnexpectedPrompt) Error() string { return "Unexpected prompt: 
 type oauthTestFailure struct{ message string }
 
 func (e *oauthTestFailure) Error() string { return e.message }
+
+// S11-1 (#10194): the login flow asks for the method first and the copy-code
+// branch exchanges the pasted code against the platform.claude.com redirect.
+func TestAnthropicOAuthCopyCodeLoginFlow(t *testing.T) {
+	var selectPrompts []AuthPrompt
+	var authURL string
+	stubAnthropicPostJSON(t, func(requestURL string, body map[string]any) (string, error) {
+		if requestURL != "https://platform.claude.com/v1/oauth/token" {
+			t.Errorf("url = %q", requestURL)
+		}
+		if body["grant_type"] != "authorization_code" {
+			t.Errorf("grant_type = %v", body["grant_type"])
+		}
+		if body["code"] != "copied-code" {
+			t.Errorf("code = %v", body["code"])
+		}
+		parsed, err := url.Parse(authURL)
+		if err != nil {
+			t.Errorf("auth url: %v", err)
+		} else if body["state"] != parsed.Query().Get("state") {
+			t.Errorf("state = %v, want %q", body["state"], parsed.Query().Get("state"))
+		}
+		if body["redirect_uri"] != "https://platform.claude.com/oauth/code/callback" {
+			t.Errorf("redirect_uri = %v", body["redirect_uri"])
+		}
+		return `{"access_token":"access-token","refresh_token":"refresh-token","expires_in":3600}`, nil
+	})
+
+	interaction := &oauthTestInteraction{
+		notify: func(event AuthEvent) {
+			if event.Type == "auth_url" {
+				authURL = event.URL
+			}
+		},
+		prompt: func(prompt AuthPrompt) (string, error) {
+			if prompt.Type == "select" {
+				selectPrompts = append(selectPrompts, prompt)
+				return "copy_code", nil
+			}
+			if prompt.Type != "manual_code" {
+				return "", &oauthTestUnexpectedPrompt{prompt.Type}
+			}
+			parsed, err := url.Parse(authURL)
+			if err != nil {
+				return "", err
+			}
+			if prompt.Placeholder != "code#state" {
+				t.Errorf("placeholder = %q", prompt.Placeholder)
+			}
+			return "copied-code#" + parsed.Query().Get("state"), nil
+		},
+	}
+
+	credentials, err := AnthropicOAuth{}.Login(context.Background(), interaction, nil)
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	if credentials.Access != "access-token" || credentials.Refresh != "refresh-token" {
+		t.Errorf("credentials = %+v", credentials.OAuthCredentials)
+	}
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parsed.Query().Get("redirect_uri"); got != "https://platform.claude.com/oauth/code/callback" {
+		t.Errorf("auth redirect_uri = %q", got)
+	}
+	if len(selectPrompts) != 1 {
+		t.Fatalf("select prompts = %d, want 1", len(selectPrompts))
+	}
+	select_ := selectPrompts[0]
+	if select_.Message != "Select Anthropic login method:" {
+		t.Errorf("select message = %q", select_.Message)
+	}
+	if len(select_.Options) != 2 ||
+		select_.Options[0].ID != "browser" || select_.Options[0].Label != "Browser login (default)" ||
+		select_.Options[1].ID != "copy_code" || select_.Options[1].Label != "Copy code login (headless)" {
+		t.Errorf("select options = %+v", select_.Options)
+	}
+}
+
+// S11-1 (#10194): cancelling the method select cancels the login.
+func TestAnthropicOAuthLoginMethodSelectCancel(t *testing.T) {
+	interaction := &oauthTestInteraction{
+		notify: func(AuthEvent) {},
+		prompt: func(AuthPrompt) (string, error) {
+			return "", &oauthTestFailure{"Login cancelled"}
+		},
+	}
+	_, err := AnthropicOAuth{}.Login(context.Background(), interaction, nil)
+	if err == nil || err.Error() != "Login cancelled" {
+		t.Fatalf("err = %v, want Login cancelled", err)
+	}
+}
 
 func TestAnthropicOAuthRefreshOmitsScope(t *testing.T) {
 	stubAnthropicPostJSON(t, func(requestURL string, body map[string]any) (string, error) {
@@ -146,6 +243,9 @@ func TestAnthropicOAuthManualCodePromptPath(t *testing.T) {
 		notify: func(event AuthEvent) { events = append(events, event) },
 		prompt: func(prompt AuthPrompt) (string, error) {
 			prompts = append(prompts, prompt)
+			if prompt.Type == "select" {
+				return "browser", nil
+			}
 			if prompt.Type == "manual_code" {
 				return "the-code", nil
 			}
@@ -218,7 +318,10 @@ func TestAnthropicOAuthBrowserCallbackShowsSignInPage(t *testing.T) {
 			}
 			callbackPage <- response
 		},
-		prompt: func(AuthPrompt) (string, error) {
+		prompt: func(prompt AuthPrompt) (string, error) {
+			if prompt.Type == "select" {
+				return "browser", nil
+			}
 			// pig has no per-prompt abort; hold the prompt open so the
 			// browser callback drives the flow (pi rejects the prompt via
 			// its signal once login settles).

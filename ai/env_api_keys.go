@@ -20,6 +20,14 @@ const (
 	AnthropicAuthTokenEnv  = "ANTHROPIC_AUTH_TOKEN"
 	AnthropicOAuthTokenEnv = "ANTHROPIC_OAUTH_TOKEN"
 	AnthropicAPIKeyEnv     = "ANTHROPIC_API_KEY"
+	// Workload identity federation variables the Anthropic SDK documents
+	// (#10242). The ids are provider config rather than auth: they travel in
+	// ProviderEnv and the adapter performs the token exchange.
+	AnthropicFederationRuleIDEnv  = "ANTHROPIC_FEDERATION_RULE_ID"
+	AnthropicOrganizationIDEnv    = "ANTHROPIC_ORGANIZATION_ID"
+	AnthropicServiceAccountIDEnv  = "ANTHROPIC_SERVICE_ACCOUNT_ID"
+	AnthropicIdentityTokenFileEnv = "ANTHROPIC_IDENTITY_TOKEN_FILE"
+	AnthropicWorkspaceIDEnv       = "ANTHROPIC_WORKSPACE_ID"
 )
 
 // AmbientAuthMarker is the pseudo API key GetEnvApiKey returns when a provider

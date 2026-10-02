@@ -393,12 +393,16 @@ func ConvertResponsesMessages(model *types.Model, llmContext *types.TranscriptCo
 						}
 
 						// For different-model messages, set id to undefined to avoid pairing validation.
-						// OpenAI tracks which fc_xxx IDs were paired with rs_xxx reasoning items.
+						// OpenAI tracks which item IDs were paired with rs_xxx reasoning items.
 						// By omitting the id, we avoid triggering that validation (like cross-provider does).
-						// When replaying custom-tool calls as a function_call, also drop non-fc_* ids such as
-						// ctc_* custom-tool ids because function_call item ids must be fc_*.
-						itemIDIsFC := hasItemID && strings.HasPrefix(itemID, "fc_")
-						if (isDifferentModel && itemIDIsFC) || (!hasCustomInputProperty && !itemIDIsFC) {
+						// Also drop ids that do not match the replayed item type: function_call ids must be fc_*
+						// and custom_tool_call ids must be ctc_*. Foreign tool call ids are normalized to fc_*, and
+						// a call can switch between the two types when grammar tool support differs.
+						itemIDPrefix := "fc_"
+						if hasCustomInputProperty {
+							itemIDPrefix = "ctc_"
+						}
+						if isDifferentModel || !hasItemID || !strings.HasPrefix(itemID, itemIDPrefix) {
 							hasItemID = false
 							itemID = ""
 						}
@@ -545,7 +549,7 @@ func ConvertResponsesTools(tools []types.Tool, options *ConvertResponsesToolsOpt
 			continue
 		}
 
-		constrainedStrict, err := ResolveJSONSchemaStrictSampling(&tool, supportsStrictMode)
+		constrainedStrict, err := ResolveJSONSchemaStrictSampling(&tool, supportsStrictMode, nil)
 		if err != nil {
 			panic(err)
 		}

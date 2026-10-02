@@ -282,6 +282,44 @@ func insertThinkingLevelMessages(converted convertedAnthropicMessages, activeEff
 	return messages
 }
 
+// anthropicStrictUnsupportedKeywords are keywords Anthropic strict tool use
+// rejects with a 400 for the whole request (pi:
+// ANTHROPIC_STRICT_UNSUPPORTED_KEYWORDS).
+// https://platform.claude.com/docs/en/build-with-claude/structured-outputs#json-schema-limitations
+var anthropicStrictUnsupportedKeywords = map[string]bool{
+	"minimum": true, "maximum": true,
+	"exclusiveMinimum": true, "exclusiveMaximum": true,
+	"multipleOf": true, "maxItems": true, "uniqueItems": true,
+	"minContains": true, "maxContains": true,
+	"minProperties": true, "maxProperties": true,
+}
+
+// anthropicStrictStringFormats are the string formats Anthropic strict mode
+// accepts (pi: ANTHROPIC_STRICT_STRING_FORMATS).
+var anthropicStrictStringFormats = map[string]bool{
+	"date-time": true, "time": true, "date": true, "duration": true,
+	"email": true, "hostname": true, "uri": true, "ipv4": true, "ipv6": true,
+	"uuid": true,
+}
+
+// isAnthropicStrictUnsupportedKeyword rejects the keywords above; minItems is
+// only accepted for 0 and 1, and format must be one of the supported string
+// formats (pi: nil).
+func isAnthropicStrictUnsupportedKeyword(key string, value any) bool {
+	if anthropicStrictUnsupportedKeywords[key] {
+		return true
+	}
+	if key == "minItems" {
+		number, ok := value.(float64)
+		return !ok || (number != 0 && number != 1)
+	}
+	if key == "format" {
+		format, ok := value.(string)
+		return !ok || !anthropicStrictStringFormats[format]
+	}
+	return false
+}
+
 // convertAnthropicTools converts tools to Anthropic tool params (pi:
 // convertTools).
 func convertAnthropicTools(tools []types.Tool, isOAuthToken bool, supportsEagerToolInputStreaming bool, supportsStrictTools bool, cacheControl *anthropicCacheControl) ([]map[string]any, error) {
@@ -291,7 +329,7 @@ func convertAnthropicTools(tools []types.Tool, isOAuthToken bool, supportsEagerT
 
 	out := make([]map[string]any, 0, len(tools))
 	for index, tool := range tools {
-		strict, err := ResolveJSONSchemaStrictSampling(&tool, supportsStrictTools)
+		strict, err := ResolveJSONSchemaStrictSampling(&tool, supportsStrictTools, isAnthropicStrictUnsupportedKeyword)
 		if err != nil {
 			return nil, err
 		}

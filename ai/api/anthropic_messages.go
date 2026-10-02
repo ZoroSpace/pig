@@ -147,8 +147,10 @@ func (AnthropicMessages) Stream(ctx context.Context, model *types.Model, llmCont
 
 // StreamSimple dispatches one simple streaming request (pi: streamSimple).
 func (AnthropicMessages) StreamSimple(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
-	if err := assertAnthropicRequestAuth(string(model.Provider), options.APIKey, options.Headers); err != nil {
-		return immediateErrorStream(model, err)
+	if getAnthropicFederation(model, options.APIKey, options.Headers, options.Env) == nil {
+		if err := assertAnthropicRequestAuth(string(model.Provider), options.APIKey, options.Headers); err != nil {
+			return immediateErrorStream(model, err)
+		}
 	}
 	base := BuildBaseOptions(model, llmContext, options, options.APIKey)
 	opts := &AnthropicOptions{StreamOptions: base}
@@ -413,10 +415,7 @@ func mergeClientHeaders(headerSources ...types.ProviderHeaders) types.ProviderHe
 // assertAnthropicRequestAuth fails when no API key or auth header is present
 // (pi: assertRequestAuth).
 func assertAnthropicRequestAuth(provider string, apiKey string, headers types.ProviderHeaders) error {
-	if apiKey != "" {
-		return nil
-	}
-	if hasHeader(headers, "authorization") || hasHeader(headers, "x-api-key") || hasHeader(headers, "cf-aig-authorization") {
+	if hasAnthropicRequestAuth(apiKey, headers) {
 		return nil
 	}
 	return fmt.Errorf("No API key for provider: %s", provider)
@@ -755,8 +754,14 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 			if options != nil {
 				apiKey = options.APIKey
 			}
-			if err := assertAnthropicRequestAuth(string(model.Provider), apiKey, options.Headers); err != nil {
-				return err
+			// Workload identity federation replaces the auth assert when the
+			// ANTHROPIC_* federation env vars are configured (pi: the same
+			// getAnthropicFederation guard around assertRequestAuth).
+			federation := getAnthropicFederation(model, apiKey, options.Headers, options.Env)
+			if federation == nil {
+				if err := assertAnthropicRequestAuth(string(model.Provider), apiKey, options.Headers); err != nil {
+					return err
+				}
 			}
 
 			var copilotDynamicHeaders map[string]string
@@ -771,7 +776,7 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 				cacheSessionID = options.SessionID
 			}
 
-			created := createAnthropicClient(model, apiKey, options.Headers, options.Fetch, copilotDynamicHeaders, cacheSessionID)
+			created := createAnthropicClient(model, apiKey, options.Headers, options.Fetch, copilotDynamicHeaders, cacheSessionID, federation)
 
 			params, err := buildAnthropicParams(model, normalizedContext, created.isOAuthToken, options)
 			if err != nil {
@@ -1146,6 +1151,12 @@ type anthropicClient struct {
 	headers   map[string]string
 	fetch     types.FetchFunction
 	timeout   time.Duration
+	// federation carries the workload identity config; when set, the client
+	// bearer-authenticates with an access token exchanged (and cached) from
+	// the identity token file (pi: the SDK's config-based credentials path).
+	federation      *anthropicFederationConfig
+	federationKey   string
+	federationCache *anthropicFederationTokenCache
 }
 
 // anthropicCreatedClient is createAnthropicClient's result (pi: the
@@ -1156,7 +1167,7 @@ type anthropicCreatedClient struct {
 }
 
 // createAnthropicClient builds the client (pi: createClient).
-func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders types.ProviderHeaders, fetch types.FetchFunction, dynamicHeaders map[string]string, sessionId string) anthropicCreatedClient {
+func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders types.ProviderHeaders, fetch types.FetchFunction, dynamicHeaders map[string]string, sessionId string, federation *anthropicFederationConfig) anthropicCreatedClient {
 	// Copilot: Bearer auth.
 	if model.Provider == types.ProviderID("github-copilot") {
 		defaults := types.ProviderHeaders{
@@ -1204,7 +1215,7 @@ func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders typ
 		}
 	}
 
-	// API key or header-owned auth.
+	// API key, header-owned auth, or workload identity federation.
 	compat := getAnthropicCompat(model)
 	sessionAffinityHeaders := types.ProviderHeaders{}
 	if sessionId != "" && compat.sendSessionAffinityHeaders {
@@ -1224,6 +1235,23 @@ func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders typ
 		modelHeadersAsProviderHeaders(model),
 		optionsHeaders,
 	)
+	if federation != nil {
+		// pi hands the SDK a federation-config client (apiKey/authToken null)
+		// and clones it per request with withOptions({defaultHeaders}), which
+		// shares the SDK token cache; pig stores the shared token cache in a
+		// process-level entry keyed like pi's federationClient.
+		return anthropicCreatedClient{
+			client: &anthropicClient{
+				baseURL:         model.BaseURL,
+				headers:         resolveAnthropicHeaders(merged),
+				fetch:           fetch,
+				federation:      federation,
+				federationKey:   federationCacheKey(model.BaseURL, federation),
+				federationCache: &theAnthropicFederationTokenCache,
+			},
+			isOAuthToken: false,
+		}
+	}
 	return anthropicCreatedClient{
 		client: &anthropicClient{
 			baseURL: model.BaseURL,
@@ -1293,13 +1321,35 @@ func (c *anthropicClient) createMessage(ctx context.Context, params map[string]a
 		req.Header.Set(name, value)
 	}
 	// Auth: x-api-key by default, Authorization: Bearer for OAuth/Copilot.
-	if c.authToken != "" {
+	if c.federation != nil {
+		// Workload identity federation: bearer-authenticate with an access
+		// token exchanged from the identity token file (pi: the SDK's
+		// credentials path).
+		token, err := c.federationCache.getToken(ctx, c.federationKey, c.fetch, func(requestCtx context.Context) (*anthropicFederatedToken, error) {
+			return exchangeAnthropicFederatedToken(requestCtx, c.baseURL, c.federation, c.fetch)
+		})
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+	} else if c.authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.authToken)
 	} else if c.apiKey != "" {
 		req.Header.Set("x-api-key", c.apiKey)
 	}
 	if betas, ok := params["betas"].([]string); ok && len(betas) > 0 {
 		req.Header.Set("anthropic-beta", strings.Join(betas, ","))
+	}
+	if c.federation != nil {
+		// pi's SDK appends oauth-2025-04-20 to any existing anthropic-beta on
+		// token-cache-authenticated requests (prepareRequest).
+		if existing := req.Header.Get("anthropic-beta"); existing != "" {
+			if !anthropicBetaListContains(existing, anthropicOAuthAPIBetaHeader) {
+				req.Header.Set("anthropic-beta", existing+","+anthropicOAuthAPIBetaHeader)
+			}
+		} else {
+			req.Header.Set("anthropic-beta", anthropicOAuthAPIBetaHeader)
+		}
 	}
 
 	var resp *http.Response
