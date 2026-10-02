@@ -523,6 +523,9 @@ func buildSessionOptions(parsed *cli.Args, scopedModels []core.ScopedModel, hasE
 	// Model from CLI
 	// - supports --provider <name> --model <pattern>
 	// - supports --model <provider>/<pattern>
+	if parsed.Provider != nil && parsed.Model == nil {
+		result.diagnostics = append(result.diagnostics, core.AgentSessionRuntimeDiagnostic{Type: "error", Message: fmt.Sprintf("--provider requires --model (for example: --provider %s --model <pattern>)", *parsed.Provider)})
+	}
 	if parsed.Model != nil {
 		resolved := core.ResolveCliModel(core.ResolveCliModelOptions{
 			CliProvider:  lo.FromPtr(parsed.Provider),

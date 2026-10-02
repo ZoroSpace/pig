@@ -341,6 +341,10 @@ type AgentSessionConfig struct {
 	// InitialActiveToolNames are the initial active built-in tool names.
 	// Default: [read, bash, edit, write].
 	InitialActiveToolNames []string
+	// UsesDefaultTools marks that the initial tools come from the
+	// defaultTools setting (#10245). When true, reload activates tools newly
+	// added to the setting. Tools removed from it stay active.
+	UsesDefaultTools bool
 	// AllowedToolNames is an optional allowlist of tool names. When
 	// provided, only these tool names are exposed.
 	AllowedToolNames []string
@@ -604,6 +608,7 @@ type AgentSession struct {
 	cwd                            string
 	extensionRunnerRef             *ExtensionRunnerRef
 	initialActiveToolNames         []string
+	usesDefaultTools               bool
 	allowedToolNames               map[string]struct{}
 	excludedToolNames              map[string]struct{}
 	baseToolsOverride              map[string]agent.AgentTool
@@ -677,6 +682,7 @@ func NewAgentSession(config AgentSessionConfig) *AgentSession {
 		s.customTools = append(s.customTools, createMCPProxyToolDefinition(config.MCPManager))
 	}
 	s.initialActiveToolNames = config.InitialActiveToolNames
+	s.usesDefaultTools = config.UsesDefaultTools
 	if config.AllowedToolNames != nil {
 		s.allowedToolNames = map[string]struct{}{}
 		for _, name := range config.AllowedToolNames {
@@ -4957,14 +4963,48 @@ func (s *AgentSession) Reload(ctx context.Context, options *ReloadOptions) error
 		return err
 	}
 	oldRunner.Invalidate("This extension ctx is stale after session replacement or reload. Do not use a captured pig or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().")
+	// Snapshot the resolved defaultTools selection before the settings
+	// reload (#10245): only names newly added by the setting get activated.
+	previousDefaultTools := map[string]struct{}{}
+	if s.usesDefaultTools {
+		names, ok := s.SettingsManager.GetDefaultTools()
+		if !ok {
+			names = DefaultToolNames
+		}
+		for _, name := range names {
+			previousDefaultTools[name] = struct{}{}
+		}
+	}
 	s.SettingsManager.Reload()
 	s.syncQueueModesFromSettings()
 	ai.ResetApiProviders()
 	if err := s.resourceLoader.Reload(nil); err != nil {
 		return err
 	}
+	// Activate tools newly added to defaultTools. Removed ones stay active,
+	// and tools disabled during the session stay disabled unless the setting
+	// newly adds them.
+	var addedDefaultTools []string
+	if s.usesDefaultTools {
+		names, ok := s.SettingsManager.GetDefaultTools()
+		if !ok {
+			names = DefaultToolNames
+		}
+		for _, name := range names {
+			if _, seen := previousDefaultTools[name]; !seen {
+				addedDefaultTools = append(addedDefaultTools, name)
+			}
+		}
+	}
+	activeToolNames := s.GetActiveToolNames()
+	if len(addedDefaultTools) > 0 {
+		concat := make([]string, 0, len(activeToolNames)+len(addedDefaultTools))
+		concat = append(concat, activeToolNames...)
+		concat = append(concat, addedDefaultTools...)
+		activeToolNames = concat
+	}
 	s.buildRuntime(buildRuntimeOptions{
-		activeToolNames:          s.GetActiveToolNames(),
+		activeToolNames:          activeToolNames,
 		flagValues:               previousFlagValues,
 		includeAllExtensionTools: true,
 	})

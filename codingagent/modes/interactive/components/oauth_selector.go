@@ -209,7 +209,7 @@ func (s *OAuthSelectorComponent) updateList() {
 func (s *OAuthSelectorComponent) formatStatusIndicator(provider AuthSelectorProvider) string {
 	currentTheme := theme.Current()
 	if provider.Status == nil {
-		return currentTheme.Fg("muted", " • unconfigured")
+		return currentTheme.Fg("muted", " • not configured")
 	}
 	if provider.Status.Type != provider.AuthType {
 		label := "API key configured"

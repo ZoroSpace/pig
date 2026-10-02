@@ -24,8 +24,8 @@ func TestOAuthSelectorRendersUnconfiguredWithoutCheckmark(t *testing.T) {
 	})
 
 	output := utils.StripAnsi(strings.Join(selector.Render(120), "\n"))
-	if !strings.Contains(output, "unconfigured") {
-		t.Fatalf("output = %q, want it to contain %q", output, "unconfigured")
+	if !strings.Contains(output, "not configured") {
+		t.Fatalf("output = %q, want it to contain %q", output, "not configured")
 	}
 	if strings.Contains(output, "✓ configured") {
 		t.Fatalf("output = %q, want no %q", output, "✓ configured")
@@ -56,8 +56,8 @@ func TestOAuthSelectorShowsEnvironmentAPIKeyAuthAsConfigured(t *testing.T) {
 	if !strings.Contains(output, "✓ env: OPENAI_API_KEY") {
 		t.Fatalf("output = %q, want it to contain %q", output, "✓ env: OPENAI_API_KEY")
 	}
-	if strings.Contains(output, "unconfigured") {
-		t.Fatalf("output = %q, want no %q", output, "unconfigured")
+	if strings.Contains(output, "not configured") {
+		t.Fatalf("output = %q, want no %q", output, "not configured")
 	}
 }
 

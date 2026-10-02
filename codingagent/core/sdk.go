@@ -308,6 +308,9 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 
 	configuredDefaultToolNames, hasConfiguredDefaultTools := settingsManager.GetDefaultTools()
 	allowedToolNames := options.Tools
+	if allowedToolNames == nil && options.NoTools == "all" {
+		allowedToolNames = []string{}
+	}
 	var excludedToolNameSet map[string]bool
 	if options.ExcludeTools != nil {
 		excludedToolNameSet = make(map[string]bool, len(options.ExcludeTools))
@@ -331,6 +334,13 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 			continue
 		}
 		initialActiveToolNames = append(initialActiveToolNames, name)
+	}
+	// pi's filter always yields a defined array: an explicitly empty source
+	// (--tools="" / noTools) must stay an empty, non-nil list so the session
+	// treats it as "no initial tools" instead of "unset" (restore-from-
+	// transcript and the default four would otherwise kick in).
+	if initialActiveToolNamesSource != nil && initialActiveToolNames == nil {
+		initialActiveToolNames = []string{}
 	}
 
 	// Create convertToLlm wrapper that filters images if blockImages is
@@ -424,6 +434,7 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		ModelRuntime:           modelRuntime,
 		CacheWarmer:            cacheWarmer,
 		InitialActiveToolNames: initialActiveToolNames,
+		UsesDefaultTools:       options.Tools == nil && options.NoTools == "",
 		AllowedToolNames:       allowedToolNames,
 		ExcludedToolNames:      options.ExcludeTools,
 		ExtensionRunnerRef:     extensionRunnerRef,

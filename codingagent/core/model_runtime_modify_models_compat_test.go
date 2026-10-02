@@ -442,3 +442,54 @@ func TestModelRuntimeAppliesLegacyOAuthModifyModelsAfterAsyncCredentialInitializ
 		t.Fatal("credential-model should be gone after logout")
 	}
 }
+
+// Regression for #9962 (#10190): initial model selection reads the snapshot
+// before the availability refresh finishes, so a native provider with a
+// stored credential must be marked configured at registration time
+// (pi: "marks a native provider with a stored credential as configured when
+// it registers", fddc968b9).
+func TestModelRuntimeMarksNativeProviderWithStoredCredentialAsConfiguredOnRegister(t *testing.T) {
+	runtime := CreateModelRuntime(context.Background(), &CreateModelRuntimeOptions{
+		Credentials: NewInMemoryAuthStorage(credData(
+			"extension-native", oauthCred("access", "refresh", time.Now().Add(3_600_000).UnixMilli()),
+		)),
+		ModelsStore:       &InMemoryCodingAgentModelsStore{},
+		ModelsPath:        lo.ToPtr(""),
+		AllowModelNetwork: false,
+	})
+	nativeModel := lifecycleModel("native")
+	nativeModel.Provider = "extension-native"
+	provider := ai.CreateProvider(&ai.CreateProviderOptions{
+		ID:     "extension-native",
+		Name:   "Extension Native",
+		Auth:   auth.ProviderAuth{OAuth: &refreshableOAuth{}},
+		Models: []ai.Model{nativeModel},
+		API:    notUsedStreams{},
+	})
+
+	if err := runtime.RegisterNativeProvider(provider); err != nil {
+		t.Fatal(err)
+	}
+	if !runtime.HasConfiguredAuth("extension-native") {
+		t.Fatal("expected extension-native to be configured right after registration")
+	}
+	if !runtime.IsUsingOAuth("extension-native") {
+		t.Fatal("expected extension-native to be marked as OAuth")
+	}
+	found := false
+	for _, model := range runtime.GetAvailableSnapshot() {
+		if model.Provider == "extension-native" && model.ID == "native" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("extension-native/native missing from available snapshot")
+	}
+
+	allowNetwork := false
+	runtime.Refresh(context.Background(), &ai.ModelsRefreshOptions{AllowNetwork: &allowNetwork})
+	if !runtime.HasConfiguredAuth("extension-native") {
+		t.Fatal("expected extension-native to stay configured after refresh")
+	}
+}

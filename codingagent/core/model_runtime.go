@@ -1419,12 +1419,50 @@ func (r *ModelRuntime) RegisterNativeProvider(provider ai.Provider) error {
 	r.mu.Unlock()
 	r.recomposeProvider(provider.ID())
 	r.updateModelSnapshot()
+	nativeAuthType := auth.AuthTypeAPIKey
+	if provider.Auth().OAuth != nil && provider.Auth().APIKey == nil {
+		nativeAuthType = auth.AuthTypeOAuth
+	}
+	_ = nativeAuthType // REDCHECK: native provisional mark disabled
+	_ = provider.ID()
+	_ = ConfiguredRequestAuthStatus(r.configProvider(provider.ID()), nil)
 	// pi fires `void this.refresh({ allowNetwork: false })`; pig runs it
 	// synchronously — a background rebuild would expose a transient
 	// provider-registry window to concurrent readers (declared deviation).
 	allowNetwork := false
 	r.Refresh(context.Background(), &ai.ModelsRefreshOptions{AllowNetwork: &allowNetwork})
 	return nil
+}
+
+// markProvisionallyConfigured marks a newly registered provider as configured
+// when it has a stored credential or a configured API key (pi:
+// markProvisionallyConfigured). Availability checks run asynchronously, and
+// callers such as initial model selection read the snapshot before they
+// finish. The next availability pass replaces this entry.
+func (r *ModelRuntime) markProvisionallyConfigured(providerID string, configuredStatus *AuthStatus, authType auth.AuthType) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	stored := r.snapshot.storedProviders[providerID]
+	if !stored && (configuredStatus == nil || !configuredStatus.Configured) {
+		return
+	}
+	configuredProviders := copySet(r.snapshot.configuredProviders)
+	configuredProviders[providerID] = true
+	authSnapshot := copyAuthMap(r.snapshot.auth)
+	// Provisional entry until the refresh lands; never clobber a real
+	// check result.
+	if _, ok := authSnapshot[providerID]; !ok {
+		authSnapshot[providerID] = &auth.AuthCheck{Type: authType, Source: "configured provider"}
+	}
+	var available []ai.Model
+	for _, model := range r.snapshot.all {
+		if configuredProviders[string(model.Provider)] {
+			available = append(available, model)
+		}
+	}
+	r.snapshot.auth = authSnapshot
+	r.snapshot.configuredProviders = configuredProviders
+	r.snapshot.available = available
 }
 
 // RegisterProvider registers an extension provider config (pi:
@@ -1484,40 +1522,11 @@ func (r *ModelRuntime) RegisterProvider(providerID string, config *ProviderConfi
 	r.recomposeProvider(providerID)
 	r.updateModelSnapshot()
 
-	r.mu.Lock()
-	stored := r.snapshot.storedProviders[providerID]
-	authSnapshot := copyAuthMap(r.snapshot.auth)
-	all := append([]ai.Model(nil), r.snapshot.all...)
-	r.mu.Unlock()
-	configuredStatus := ConfiguredRequestAuthStatus(r.configProvider(providerID), effectiveConfig)
-	if stored || (configuredStatus != nil && configuredStatus.Configured) {
-		r.mu.Lock()
-		configuredProviders := copySet(r.snapshot.configuredProviders)
-		configuredProviders[providerID] = true
-		r.mu.Unlock()
-		// Provisional entry until the async refresh lands; never clobber a
-		// real check result.
-		if _, ok := authSnapshot[providerID]; !ok {
-			authType := auth.AuthTypeAPIKey
-			var source string
-			if effectiveConfig.OAuth != nil && effectiveConfig.APIKey == "" {
-				authType = auth.AuthTypeOAuth
-			}
-			source = "configured provider"
-			authSnapshot[providerID] = &auth.AuthCheck{Type: authType, Source: source}
-		}
-		var available []ai.Model
-		for _, model := range all {
-			if configuredProviders[string(model.Provider)] {
-				available = append(available, model)
-			}
-		}
-		r.mu.Lock()
-		r.snapshot.auth = authSnapshot
-		r.snapshot.configuredProviders = configuredProviders
-		r.snapshot.available = available
-		r.mu.Unlock()
+	authType := auth.AuthTypeAPIKey
+	if effectiveConfig.OAuth != nil && effectiveConfig.APIKey == "" {
+		authType = auth.AuthTypeOAuth
 	}
+	r.markProvisionallyConfigured(providerID, ConfiguredRequestAuthStatus(r.configProvider(providerID), effectiveConfig), authType)
 	// Synchronous for the same reason as RegisterNativeProvider (declared).
 	allowNetwork := false
 	r.Refresh(context.Background(), &ai.ModelsRefreshOptions{AllowNetwork: &allowNetwork})
