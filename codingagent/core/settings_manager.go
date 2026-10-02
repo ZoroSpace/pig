@@ -79,7 +79,7 @@ import (
 //	showCacheMissNotices?: boolean                       — default false - show cache cost and provider recovery notices
 //	externalEditor?: string                              — takes precedence over VISUAL/EDITOR
 //	shellPath?: string                                   — supports leading ~ expansion
-//	quietStartup?: boolean
+//	quietStartup?: boolean | "header"                    — default false; "header" keeps only the startup header
 //	defaultProjectTrust?: DefaultProjectTrust            — default "ask"; global only
 //	shellCommandPrefix?: string
 //	npmCommand?: string[]
@@ -2171,22 +2171,55 @@ func (m *SettingsManager) SetShellPath(path string) {
 	m.save()
 }
 
-// GetQuietStartup returns the quiet startup toggle (pi: getQuietStartup).
-func (m *SettingsManager) GetQuietStartup() bool {
+// QuietStartupMode enumerates the quietStartup setting values (pi:
+// QuietStartup = boolean | "header"). The zero value shows all startup
+// output.
+type QuietStartupMode string
+
+const (
+	// QuietStartupOff is quietStartup: false — show all startup output.
+	QuietStartupOff QuietStartupMode = ""
+	// QuietStartupOn is quietStartup: true — hide all startup output.
+	QuietStartupOn QuietStartupMode = "true"
+	// QuietStartupHeader is quietStartup: "header" — keep only the startup
+	// header (logo, version, key hints).
+	QuietStartupHeader QuietStartupMode = "header"
+)
+
+// GetQuietStartup returns the quiet startup mode (pi: getQuietStartup —
+// true or "header" pass through, anything else falls back to false).
+func (m *SettingsManager) GetQuietStartup() QuietStartupMode {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	quiet, ok := settingsBool(m.settings, "quietStartup")
+	value, ok := m.settings["quietStartup"]
 	if !ok {
-		return false
+		return QuietStartupOff
 	}
-	return quiet
+	switch v := value.(type) {
+	case bool:
+		if v {
+			return QuietStartupOn
+		}
+	case string:
+		if v == string(QuietStartupHeader) {
+			return QuietStartupHeader
+		}
+	}
+	return QuietStartupOff
 }
 
-// SetQuietStartup records the quiet startup toggle (pi: setQuietStartup).
-func (m *SettingsManager) SetQuietStartup(quiet bool) {
+// SetQuietStartup records the quiet startup mode (pi: setQuietStartup).
+func (m *SettingsManager) SetQuietStartup(quiet QuietStartupMode) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	m.globalSettings["quietStartup"] = quiet
+	switch quiet {
+	case QuietStartupOn:
+		m.globalSettings["quietStartup"] = true
+	case QuietStartupHeader:
+		m.globalSettings["quietStartup"] = string(QuietStartupHeader)
+	default:
+		m.globalSettings["quietStartup"] = false
+	}
 	m.markModified("quietStartup", "")
 	m.save()
 }
@@ -2772,16 +2805,16 @@ func (m *SettingsManager) SetShowTerminalProgress(enabled bool) {
 	m.save()
 }
 
-// GetTuiMode returns the renderer mode (pi: getTuiMode — non-"fullscreen" →
-// "regular").
+// GetTuiMode returns the renderer mode (pi: getTuiMode — non-"regular" →
+// "fullscreen"; fullscreen is the default since pi v1.0.0).
 func (m *SettingsManager) GetTuiMode() TuiMode {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	mode, _ := settingsString(m.settings, "tuiMode")
-	if mode == TuiModeFullscreen {
-		return TuiModeFullscreen
+	if mode == TuiModeRegular {
+		return TuiModeRegular
 	}
-	return TuiModeRegular
+	return TuiModeFullscreen
 }
 
 // SetTuiMode records the renderer mode (pi: setTuiMode).

@@ -29,7 +29,7 @@ func createSourceInfo(filePath string, source string, scope utils.SourceScope, o
 }
 
 type resourcesFixtureOptions struct {
-	quietStartup              bool
+	quietStartup              core.QuietStartupMode
 	verbose                   bool
 	toolOutputExpanded        bool
 	cwd                       string
@@ -100,7 +100,7 @@ func skillFixture(filePath string, name string) core.Skill {
 func TestShowLoadedResourcesCompactByDefault(t *testing.T) {
 	initTestTheme(t)
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup: false,
+		quietStartup: core.QuietStartupOff,
 		skills:       []core.Skill{skillFixture("/tmp/skill/SKILL.md", "commit")},
 	})
 
@@ -116,7 +116,7 @@ func TestShowLoadedResourcesCompactByDefault(t *testing.T) {
 func TestShowLoadedResourcesFullWhenExpanded(t *testing.T) {
 	initTestTheme(t)
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup:       false,
+		quietStartup:       core.QuietStartupOff,
 		toolOutputExpanded: true,
 		skills:             []core.Skill{skillFixture("/tmp/skill/SKILL.md", "commit")},
 	})
@@ -136,7 +136,7 @@ func TestShowLoadedResourcesFullWhenExpanded(t *testing.T) {
 func TestShowLoadedResourcesVerboseStartup(t *testing.T) {
 	initTestTheme(t)
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup:       true,
+		quietStartup:       core.QuietStartupOn,
 		verbose:            true,
 		toolOutputExpanded: false,
 		skills:             []core.Skill{skillFixture("/tmp/skill/SKILL.md", "commit")},
@@ -158,7 +158,7 @@ func TestShowLoadedResourcesAbbreviatesExtensions(t *testing.T) {
 		{path: "/tmp/extensions/btw.ts"},
 	}
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup: false,
+		quietStartup: core.QuietStartupOff,
 	})
 
 	mode.showLoadedResources(&showLoadedResourcesOptions{Force: false, Extensions: extensions})
@@ -210,7 +210,7 @@ func mixedExtensionFixtures() []extensionFixture {
 func TestShowLoadedResourcesMixedCompact(t *testing.T) {
 	initTestTheme(t)
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup: false,
+		quietStartup: core.QuietStartupOff,
 	})
 
 	mode.showLoadedResources(&showLoadedResourcesOptions{Force: false, Extensions: mixedExtensionFixtures()})
@@ -236,7 +236,7 @@ func TestShowLoadedResourcesDisambiguatesParents(t *testing.T) {
 		{path: "/tmp/gamma/one/index.ts", sourceInfo: createSourceInfo("/tmp/gamma/one/index.ts", "cli", utils.SourceScopeTemporary, utils.SourceOriginTopLevel, "/tmp/gamma")},
 	}
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup: false,
+		quietStartup: core.QuietStartupOff,
 	})
 
 	mode.showLoadedResources(&showLoadedResourcesOptions{Force: false, Extensions: extensions})
@@ -252,7 +252,7 @@ func compactExtensionTest(t *testing.T, extensions []extensionFixture, want stri
 	t.Helper()
 	initTestTheme(t)
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup: false,
+		quietStartup: core.QuietStartupOff,
 	})
 	mode.showLoadedResources(&showLoadedResourcesOptions{Force: false, Extensions: extensions})
 	got := normalizeRenderedOutput(renderAllChildren(mode.loadedResourcesContainer, 220))
@@ -336,7 +336,7 @@ func TestShowLoadedResourcesWindowsNpmSiblingLabels(t *testing.T) {
 func TestShowLoadedResourcesMixedExpanded(t *testing.T) {
 	initTestTheme(t)
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup:       false,
+		quietStartup:       core.QuietStartupOff,
 		toolOutputExpanded: true,
 	})
 
@@ -370,7 +370,7 @@ func TestShowLoadedResourcesContextPathsRelative(t *testing.T) {
 	home := homeDir(t)
 	cwd := home + "/Development/pi-mono"
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup: false,
+		quietStartup: core.QuietStartupOff,
 		cwd:          cwd,
 		contextFiles: []core.AgentsFile{
 			{Path: home + "/.pig/agent/AGENTS.md"},
@@ -391,7 +391,7 @@ func TestShowLoadedResourcesSystemPromptFirst(t *testing.T) {
 	initTestTheme(t)
 	cwd := "/tmp/project"
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup:              false,
+		quietStartup:              core.QuietStartupOff,
 		cwd:                       cwd,
 		systemPromptSource:        cwd + "/.pig/SYSTEM.md",
 		appendSystemPromptSources: []string{cwd + "/.pig/APPEND_SYSTEM.md"},
@@ -411,7 +411,7 @@ func TestShowLoadedResourcesContextPathsExpanded(t *testing.T) {
 	home := homeDir(t)
 	cwd := home + "/Development/pi-mono"
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup:       false,
+		quietStartup:       core.QuietStartupOff,
 		toolOutputExpanded: true,
 		cwd:                cwd,
 		contextFiles: []core.AgentsFile{
@@ -433,7 +433,7 @@ func TestShowLoadedResourcesContextPathsExpanded(t *testing.T) {
 func TestShowLoadedResourcesQuietReloadNoListing(t *testing.T) {
 	initTestTheme(t)
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup: true,
+		quietStartup: core.QuietStartupOn,
 		skills:       []core.Skill{skillFixture("/tmp/skill/SKILL.md", "commit")},
 	})
 
@@ -453,7 +453,7 @@ func TestShowLoadedResourcesQuietReloadNoListing(t *testing.T) {
 func TestShowLoadedResourcesQuietDiagnostics(t *testing.T) {
 	initTestTheme(t)
 	mode := createResourcesTestMode(t, resourcesFixtureOptions{
-		quietStartup: true,
+		quietStartup: core.QuietStartupOn,
 		skills:       []core.Skill{skillFixture("/tmp/skill/SKILL.md", "commit")},
 		skillDiagnostics: []core.ResourceDiagnostic{
 			{Type: "warning", Message: "duplicate skill name"},
@@ -465,6 +465,45 @@ func TestShowLoadedResourcesQuietDiagnostics(t *testing.T) {
 	output := renderAllChildren(mode.loadedResourcesContainer, 220)
 	assertContains(t, output, "[Skill conflicts]")
 	assertNotContains(t, output, "[Skills]")
+}
+
+// pi: "hides resource listing but keeps the startup header with header-only
+// quiet startup".
+func TestShowLoadedResourcesHeaderOnlyQuietStartup(t *testing.T) {
+	initTestTheme(t)
+	mode := createResourcesTestMode(t, resourcesFixtureOptions{
+		quietStartup: core.QuietStartupHeader,
+		skills:       []core.Skill{skillFixture("/tmp/skill/SKILL.md", "commit")},
+	})
+
+	mode.showLoadedResources(&showLoadedResourcesOptions{Force: false})
+
+	if len(mode.loadedResourcesContainer.Children) != 0 {
+		t.Fatalf("expected no children on header-only quiet startup, got:\n%s",
+			renderAllChildren(mode.loadedResourcesContainer, 220))
+	}
+	if !mode.shouldShowStartupHeader() {
+		t.Fatal("expected startup header to be visible in header-only mode")
+	}
+	if mode.shouldShowStartupDetails() {
+		t.Fatal("expected startup details to be hidden in header-only mode")
+	}
+}
+
+// pi: "hides the startup header with full quiet startup unless verbose".
+func TestShowLoadedResourcesQuietHeaderVisibility(t *testing.T) {
+	initTestTheme(t)
+	quiet := createResourcesTestMode(t, resourcesFixtureOptions{quietStartup: core.QuietStartupOn})
+	if quiet.shouldShowStartupHeader() {
+		t.Fatal("expected startup header to be hidden with quietStartup: true")
+	}
+	verbose := createResourcesTestMode(t, resourcesFixtureOptions{
+		quietStartup: core.QuietStartupHeader,
+		verbose:      true,
+	})
+	if !verbose.shouldShowStartupDetails() {
+		t.Fatal("expected startup details to be shown when verbose overrides header-only mode")
+	}
 }
 
 // homeDir returns the user home directory (pi: homedir()).

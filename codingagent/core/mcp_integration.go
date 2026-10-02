@@ -182,8 +182,9 @@ type mcpProxyToolInput struct {
 // manager. RenderCall surfaces the specific action/server/tool name in the
 // call row (pig-only; the original nil-renderer fallback showed only the
 // bold "mcp" label, hiding which MCP tool a call targeted). RenderResult
-// stays nil: tool-execution's fallback result preview (text content with
-// expand/collapse) is the desired shape.
+// mirrors pi v1.0.0's mcp renderResult (extensions/mcp/tools.ts): collapsed
+// previews are limited to visual (wrapped) lines, because MCP results are
+// often one long JSON line (0582d9c11).
 func createMCPProxyToolDefinition(manager *pigmcp.Manager) *tools.ToolDefinition {
 	return &tools.ToolDefinition{
 		Name:  mcpProxyToolName,
@@ -194,6 +195,7 @@ func createMCPProxyToolDefinition(manager *pigmcp.Manager) *tools.ToolDefinition
 		PromptSnippet: "Call MCP server tools via this proxy: search first ({\"search\": \"query\"}), then invoke ({\"tool\": \"server__tool\", \"args\": {...}}).",
 		Parameters:    json.RawMessage(mcpProxyToolSchema),
 		RenderCall:    mcpRenderCall,
+		RenderResult:  mcpRenderResult,
 		Execute: func(ctx context.Context, _ string, params any, _ agent.AgentToolUpdateCallback, _ tools.ToolExecuteContext) (agent.AgentToolResult, error) {
 			input, err := decodeMCPProxyParams(params)
 			if err != nil {
@@ -275,6 +277,84 @@ func formatMCPProxyCall(themeArg tools.UITheme, args map[string]any) string {
 	default:
 		return label
 	}
+}
+
+// mcpOutputPreviewLines is the collapsed MCP result preview height in visual
+// (wrapped) lines (pi: OUTPUT_PREVIEW_LINES in extensions/mcp/tools.ts).
+const mcpOutputPreviewLines = 5
+
+// mcpResultRenderComponent is the reused result component (pi: the
+// lastComponent Container reuse in renderResult).
+type mcpResultRenderComponent struct {
+	tui.Container
+}
+
+// mcpResultPreview is the collapsed result preview limited to visual lines,
+// cached per width (pi: VisualLinePreview keep:"start"). Limiting logical
+// lines instead lets a single long line (such as minified JSON) wrap across
+// the whole screen.
+type mcpResultPreview struct {
+	theme       tools.UITheme
+	styledText  string
+	cachedWidth int
+	cachedLines []string
+	cached      bool
+}
+
+func (m *mcpResultPreview) Render(width int) []string {
+	if !m.cached || m.cachedWidth != width {
+		preview := tools.TruncateToVisualLines(m.styledText, mcpOutputPreviewLines, width, 0, tools.VisualTruncateKeepStart)
+		lines := append([]string{}, preview.VisualLines...)
+		if preview.SkippedCount > 0 {
+			hint := m.theme.Fg("muted", fmt.Sprintf("... (%d more lines,", preview.SkippedCount)) +
+				" " + tools.KeyHint("app.tools.expand", "to expand") + m.theme.Fg("muted", ")")
+			lines = append(lines, tui.TruncateToWidth(hint, width, "...", false))
+		}
+		m.cachedLines = lines
+		m.cachedWidth = width
+		m.cached = true
+	}
+	return m.cachedLines
+}
+
+func (m *mcpResultPreview) Invalidate() {
+	m.cached = false
+	m.cachedLines = nil
+}
+
+// mcpRenderResult is the proxy tool's result renderer (pig-only; pi v1.0.0's
+// renderResult in extensions/mcp/tools.ts). Declared deviation: pi appends a
+// "Full output: <path>" line from details.fullOutputPath — pig's MCP layer
+// has no full-output file, so that line has no counterpart.
+func mcpRenderResult(result tools.ToolRenderResult, options tools.ToolRenderResultOptions, themeArg tools.UITheme, context tools.ToolRenderContext) tui.Component {
+	var component *mcpResultRenderComponent
+	if c, ok := context.LastComponent.(*mcpResultRenderComponent); ok {
+		component = c
+	} else {
+		component = &mcpResultRenderComponent{}
+	}
+	component.Clear()
+	output := strings.TrimSpace(tools.GetTextOutput(&result, context.ShowImages))
+	if output == "" {
+		return component
+	}
+	color := "toolOutput"
+	if context.IsError {
+		color = "error"
+	}
+	styledLines := strings.Split(tools.ReplaceTabs(output), "\n")
+	styledParts := make([]string, 0, len(styledLines))
+	for _, line := range styledLines {
+		styledParts = append(styledParts, themeArg.Fg(color, line))
+	}
+	styled := strings.Join(styledParts, "\n")
+	component.AddChild(tui.NewSpacer(1))
+	if options.Expanded {
+		component.AddChild(tui.NewText(styled, 0, 0))
+	} else {
+		component.AddChild(&mcpResultPreview{theme: themeArg, styledText: styled})
+	}
+	return component
 }
 
 func mcpStatusResult(manager *pigmcp.Manager) agent.AgentToolResult {

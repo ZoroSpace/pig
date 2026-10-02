@@ -21,11 +21,24 @@ type VisualTruncateResult struct {
 	SkippedCount int
 }
 
-// TruncateToVisualLines truncates text to a maximum number of visual lines
-// from the end, accounting for line wrapping at the given width (pi:
-// truncateToVisualLines). paddingX: use 0 when the result is placed in a
-// Box (Box adds its own padding), 1 for a plain Container.
-func TruncateToVisualLines(text string, maxVisualLines int, width int, paddingX int) VisualTruncateResult {
+// VisualTruncateKeep selects which visual lines survive truncation.
+type VisualTruncateKeep string
+
+const (
+	// VisualTruncateKeepEnd keeps the last visual lines (bash-style: the
+	// newest output matters).
+	VisualTruncateKeepEnd VisualTruncateKeep = "end"
+	// VisualTruncateKeepStart keeps the first visual lines (MCP-style result
+	// previews; pi VisualLinePreview keep:"start").
+	VisualTruncateKeepStart VisualTruncateKeep = "start"
+)
+
+// TruncateToVisualLines truncates text to a maximum number of visual lines,
+// accounting for line wrapping at the given width (pi: truncateToVisualLines).
+// keep selects whether the first or last lines survive. paddingX: use 0 when
+// the result is placed in a Box (Box adds its own padding), 1 for a plain
+// Container.
+func TruncateToVisualLines(text string, maxVisualLines int, width int, paddingX int, keep VisualTruncateKeep) VisualTruncateResult {
 	if text == "" {
 		return VisualTruncateResult{}
 	}
@@ -38,8 +51,12 @@ func TruncateToVisualLines(text string, maxVisualLines int, width int, paddingX 
 		return VisualTruncateResult{VisualLines: allVisualLines, SkippedCount: 0}
 	}
 
-	// Take the last N visual lines
-	truncatedLines := allVisualLines[len(allVisualLines)-maxVisualLines:]
+	var truncatedLines []string
+	if keep == VisualTruncateKeepStart {
+		truncatedLines = allVisualLines[:maxVisualLines]
+	} else {
+		truncatedLines = allVisualLines[len(allVisualLines)-maxVisualLines:]
+	}
 	return VisualTruncateResult{
 		VisualLines:  truncatedLines,
 		SkippedCount: len(allVisualLines) - maxVisualLines,

@@ -50,16 +50,17 @@ func (c *UserMessageComponent) SetOutputPad(padding int) {
 
 func (c *UserMessageComponent) rebuild() {
 	c.Clear()
-	contentBox := tui.NewBox(c.outputPad, 1, func(content string) string {
-		return theme.Bg("userMessageBg", content)
-	})
-	contentBox.AddChild(tui.NewMarkdown(
+	// The Markdown pads and colors its own background: a Box around it would
+	// keep a second full-width copy of every line, with identical output
+	// (pi e792ba131).
+	c.AddChild(tui.NewMarkdown(
 		c.text,
-		0,
-		0,
+		c.outputPad,
+		1,
 		c.markdownTheme,
 		&tui.DefaultTextStyle{
-			Color: func(content string) string { return theme.Fg("userMessageText", content) },
+			Color:   func(content string) string { return theme.Fg("userMessageText", content) },
+			BgColor: func(content string) string { return theme.Bg("userMessageBg", content) },
 		},
 		&tui.MarkdownOptions{
 			PreserveOrderedListMarkers: true,
@@ -67,7 +68,6 @@ func (c *UserMessageComponent) rebuild() {
 			Transform:                  CreateMarkdownTransform("user", false, c.markdownTransformers),
 		},
 	))
-	c.AddChild(contentBox)
 }
 
 // Render wraps the output in shell-prompt OSC 133 zones (pi: render).

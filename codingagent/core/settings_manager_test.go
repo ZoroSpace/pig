@@ -531,33 +531,33 @@ func TestSettingsManagerExternalEditor(t *testing.T) {
 }
 
 func TestSettingsManagerTuiMode(t *testing.T) {
-	t.Run("defaults to regular and persists fullscreen mode", func(t *testing.T) {
+	t.Run("defaults to fullscreen and persists regular mode", func(t *testing.T) {
 		agentDir, projectDir := settingsTestDirs(t)
 		manager := CreateSettingsManager(projectDir, agentDir, nil)
-
-		if got := manager.GetTuiMode(); got != TuiModeRegular {
-			t.Fatalf("tuiMode = %q", got)
-		}
-
-		manager.SetTuiMode(TuiModeFullscreen)
-		manager.Flush()
 
 		if got := manager.GetTuiMode(); got != TuiModeFullscreen {
 			t.Fatalf("tuiMode = %q", got)
 		}
+
+		manager.SetTuiMode(TuiModeRegular)
+		manager.Flush()
+
+		if got := manager.GetTuiMode(); got != TuiModeRegular {
+			t.Fatalf("tuiMode = %q", got)
+		}
 		savedSettings := readSettingsJSON(t, filepath.Join(agentDir, "settings.json"))
-		if got := settingsJSONString(t, savedSettings, "tuiMode"); got != "fullscreen" {
+		if got := settingsJSONString(t, savedSettings, "tuiMode"); got != "regular" {
 			t.Fatalf("tuiMode = %q", got)
 		}
 	})
 
-	t.Run("falls back to regular for unsupported values", func(t *testing.T) {
+	t.Run("falls back to fullscreen for unsupported values", func(t *testing.T) {
 		agentDir, projectDir := settingsTestDirs(t)
 		writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), `{"tuiMode":"other"}`)
 
 		manager := CreateSettingsManager(projectDir, agentDir, nil)
 
-		if got := manager.GetTuiMode(); got != TuiModeRegular {
+		if got := manager.GetTuiMode(); got != TuiModeFullscreen {
 			t.Fatalf("tuiMode = %q", got)
 		}
 	})
@@ -568,8 +568,60 @@ func TestSettingsManagerTuiMode(t *testing.T) {
 
 		manager := CreateSettingsManager(projectDir, agentDir, nil)
 
-		if got := manager.GetTuiMode(); got != TuiModeRegular {
+		if got := manager.GetTuiMode(); got != TuiModeFullscreen {
 			t.Fatalf("tuiMode = %q", got)
+		}
+	})
+}
+
+func TestSettingsManagerQuietStartupTriState(t *testing.T) {
+	cases := []struct {
+		name string
+		json string
+		want QuietStartupMode
+	}{
+		{"unset", `{}`, QuietStartupOff},
+		{"false", `{"quietStartup":false}`, QuietStartupOff},
+		{"true", `{"quietStartup":true}`, QuietStartupOn},
+		{"header", `{"quietStartup":"header"}`, QuietStartupHeader},
+		{"invalid string falls back to false", `{"quietStartup":"other"}`, QuietStartupOff},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			agentDir, projectDir := settingsTestDirs(t)
+			writeSettingsFile(t, filepath.Join(agentDir, "settings.json"), tc.json)
+
+			manager := CreateSettingsManager(projectDir, agentDir, nil)
+
+			if got := manager.GetQuietStartup(); got != tc.want {
+				t.Fatalf("quietStartup = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("set preserves the JSON value shape", func(t *testing.T) {
+		agentDir, projectDir := settingsTestDirs(t)
+		manager := CreateSettingsManager(projectDir, agentDir, nil)
+
+		manager.SetQuietStartup(QuietStartupOn)
+		manager.Flush()
+		saved := readSettingsJSON(t, filepath.Join(agentDir, "settings.json"))
+		if got := settingsJSONBool(t, saved, "quietStartup"); !got {
+			t.Fatalf("quietStartup = %v, want boolean true", saved["quietStartup"])
+		}
+
+		manager.SetQuietStartup(QuietStartupHeader)
+		manager.Flush()
+		saved = readSettingsJSON(t, filepath.Join(agentDir, "settings.json"))
+		if got := settingsJSONString(t, saved, "quietStartup"); got != "header" {
+			t.Fatalf("quietStartup = %q, want %q", got, "header")
+		}
+
+		manager.SetQuietStartup(QuietStartupOff)
+		manager.Flush()
+		saved = readSettingsJSON(t, filepath.Join(agentDir, "settings.json"))
+		if got := settingsJSONBool(t, saved, "quietStartup"); got {
+			t.Fatalf("quietStartup = %v, want boolean false", saved["quietStartup"])
 		}
 	})
 }

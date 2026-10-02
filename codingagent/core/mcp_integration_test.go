@@ -18,6 +18,7 @@ import (
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
+	themePkg "github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	pigmcp "github.com/ZoroSpace/pig/integrations/mcp"
 	"github.com/ZoroSpace/pig/tui"
 )
@@ -397,5 +398,83 @@ func TestMCPProxyRenderCallReusesLastComponent(t *testing.T) {
 	component := mcpRenderCall(map[string]any{"tool": "amap-maps__maps_weather"}, theme, tools.ToolRenderContext{LastComponent: last})
 	if component != tui.Component(last) {
 		t.Fatalf("renderer must reuse the LastComponent render slot")
+	}
+}
+
+// ---- proxy tool result renderer (pi v1.0.0 0582d9c11) ----
+
+// The collapsed MCP result preview is limited to visual (wrapped) lines: MCP
+// results are often one long JSON line that used to wrap across the whole
+// screen (pi #10255-adjacent fix 0582d9c11).
+func TestMCPProxyRenderResultCollapsesToVisualLines(t *testing.T) {
+	// KeyHint renders through the global theme (renderers_bash parity).
+	themePkg.InitTheme("dark", false)
+	theme := mcpIdentityTheme{}
+	result := tools.ToolRenderResult{Content: []types.Content{
+		&types.TextContent{Kind: types.KindText, Text: strings.Repeat("x", 300)},
+	}}
+	component := mcpRenderResult(result, tools.ToolRenderResultOptions{}, theme, tools.ToolRenderContext{})
+	container, ok := component.(*mcpResultRenderComponent)
+	if !ok {
+		t.Fatalf("expected *mcpResultRenderComponent, got %T", component)
+	}
+	rendered := container.Render(40)
+	// 1 spacer + 5 visual preview lines + 1 hint.
+	if len(rendered) != 7 {
+		t.Fatalf("rendered %d lines at width 40, want 7:\n%s", len(rendered), strings.Join(rendered, "\n"))
+	}
+	output := strings.Join(rendered, "\n")
+	if !strings.Contains(output, "... (3 more lines,") {
+		t.Fatalf("hint missing hidden-line count:\n%s", output)
+	}
+}
+
+func TestMCPProxyRenderResultExpandedShowsAll(t *testing.T) {
+	themePkg.InitTheme("dark", false)
+	theme := mcpIdentityTheme{}
+	result := tools.ToolRenderResult{Content: []types.Content{
+		&types.TextContent{Kind: types.KindText, Text: strings.Repeat("x", 300)},
+	}}
+	component := mcpRenderResult(result, tools.ToolRenderResultOptions{Expanded: true}, theme, tools.ToolRenderContext{})
+	container, ok := component.(*mcpResultRenderComponent)
+	if !ok {
+		t.Fatalf("expected *mcpResultRenderComponent, got %T", component)
+	}
+	rendered := container.Render(40)
+	output := strings.Join(rendered, "\n")
+	if strings.Contains(output, "more lines") {
+		t.Fatalf("expanded view must not carry a hint:\n%s", output)
+	}
+	if total := strings.Count(strings.ReplaceAll(output, "\n", ""), "x"); total != 300 {
+		t.Fatalf("expanded view shows %d of 300 chars", total)
+	}
+}
+
+func TestMCPProxyRenderResultReusesLastComponent(t *testing.T) {
+	themePkg.InitTheme("dark", false)
+	theme := mcpIdentityTheme{}
+	last := &mcpResultRenderComponent{}
+	last.AddChild(tui.NewText("old", 0, 0))
+	result := tools.ToolRenderResult{Content: []types.Content{
+		&types.TextContent{Kind: types.KindText, Text: "done"},
+	}}
+	component := mcpRenderResult(result, tools.ToolRenderResultOptions{}, theme, tools.ToolRenderContext{LastComponent: last})
+	if component != tui.Component(last) {
+		t.Fatalf("renderer must reuse the LastComponent render slot")
+	}
+	if len(last.Children) != 2 { // spacer + text; "old" cleared
+		t.Fatalf("expected 2 children after clear+rebuild, got %d", len(last.Children))
+	}
+}
+
+func TestMCPProxyRenderResultEmptyKeepsComponent(t *testing.T) {
+	theme := mcpIdentityTheme{}
+	component := mcpRenderResult(tools.ToolRenderResult{}, tools.ToolRenderResultOptions{}, theme, tools.ToolRenderContext{})
+	container, ok := component.(*mcpResultRenderComponent)
+	if !ok {
+		t.Fatalf("expected *mcpResultRenderComponent, got %T", component)
+	}
+	if len(container.Children) != 0 {
+		t.Fatalf("empty result must not add children, got %d", len(container.Children))
 	}
 }

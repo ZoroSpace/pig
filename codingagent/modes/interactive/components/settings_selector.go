@@ -135,7 +135,7 @@ type SettingsConfig struct {
 	EditorPaddingX             int64
 	OutputPad                  int // 0 | 1
 	AutocompleteMaxVisible     int64
-	QuietStartup               bool
+	QuietStartup               core.QuietStartupMode
 	DefaultProjectTrust        core.DefaultProjectTrust
 	ClearOnShrink              bool
 	ShowTerminalProgress       bool
@@ -179,7 +179,7 @@ type SettingsCallbacks struct {
 	OnEditorPaddingXChange             func(padding int64)
 	OnOutputPadChange                  func(padding int)
 	OnAutocompleteMaxVisibleChange     func(maxVisible int64)
-	OnQuietStartupChange               func(enabled bool)
+	OnQuietStartupChange               func(quiet core.QuietStartupMode)
 	OnDefaultProjectTrustChange        func(defaultProjectTrust core.DefaultProjectTrust)
 	OnClearOnShrinkChange              func(enabled bool)
 	OnShowTerminalProgressChange       func(enabled bool)
@@ -786,9 +786,9 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 		{
 			Id:           "quiet-startup",
 			Label:        "Quiet startup",
-			Description:  "Disable verbose printing at startup",
-			CurrentValue: boolSettingValue(config.QuietStartup),
-			Values:       []string{"true", "false"},
+			Description:  "Disable verbose printing at startup (header: keep only the startup header)",
+			CurrentValue: string(config.QuietStartup),
+			Values:       []string{"true", "header", "false"},
 		},
 		{
 			Id:           "install-telemetry",
@@ -974,7 +974,7 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 		{
 			Id:           "tui-mode",
 			Label:        "TUI mode",
-			Description:  "Interface layout; fullscreen mode is experimental",
+			Description:  "Interface layout; regular mode uses the terminal's normal scrollback",
 			CurrentValue: string(config.TuiMode),
 			Values:       []string{"regular", "fullscreen"},
 		},
@@ -1298,7 +1298,13 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 				}
 			case "quiet-startup":
 				if callbacks.OnQuietStartupChange != nil {
-					callbacks.OnQuietStartupChange(newValue == "true")
+					if newValue == "header" {
+						callbacks.OnQuietStartupChange(core.QuietStartupHeader)
+					} else if newValue == "true" {
+						callbacks.OnQuietStartupChange(core.QuietStartupOn)
+					} else {
+						callbacks.OnQuietStartupChange(core.QuietStartupOff)
+					}
 				}
 			case "install-telemetry":
 				if callbacks.OnEnableInstallTelemetryChange != nil {

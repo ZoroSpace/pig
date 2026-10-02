@@ -128,6 +128,39 @@ func TestGenerateSystemThemeColors(t *testing.T) {
 		}
 	})
 
+	// https://github.com/earendil-works/pi/issues/10255
+	t.Run("keeps pastel palette colors pastel at other lightnesses", func(t *testing.T) {
+		var frappePalette []tui.RgbColor
+		for _, hex := range []string{
+			"#51576d", "#e78284", "#a6d189", "#e5c890", "#8caaee", "#f4b8e4", "#81c8be", "#b5bfe2",
+			"#626880", "#e67172", "#8ec772", "#d9ba73", "#7b9ef0", "#f2a4db", "#5abfb5", "#a5adce",
+		} {
+			frappePalette = append(frappePalette, mustRgb(t, hex))
+		}
+		frappe := SystemThemeInput{
+			Background: rgbPointer(mustRgb(t, "#303446")),
+			Foreground: rgbPointer(mustRgb(t, "#c6d0f5")),
+			Palette:    frappePalette,
+		}
+		oklchChroma := func(c tui.RgbColor) float64 {
+			return tui.ColorToOklch(tui.Color{Kind: tui.ColorKindRgb, R: c.R, G: c.G, B: c.B}).C
+		}
+		pink := frappe.Palette[5]
+		accent := resolvedToken(frappe, "accent")
+		// The accent is darker than the pink, but must not gain chroma (it was 2x before the cap).
+		if oklchLightness(accent) >= oklchLightness(pink)-0.05 {
+			t.Errorf("accent lightness %v not below pink %v - 0.05", oklchLightness(accent), oklchLightness(pink))
+		}
+		if c := oklchChroma(accent); c > oklchChroma(pink)*1.03 {
+			t.Errorf("accent chroma %v exceeds pink chroma %v * 1.03", c, oklchChroma(pink))
+		}
+		for _, panel := range []ThemeToken{"userMessageBg", "customMessageBg"} {
+			if c := oklchChroma(resolvedToken(frappe, panel)); c > 0.1 {
+				t.Errorf("%s chroma %v > 0.1", panel, c)
+			}
+		}
+	})
+
 	t.Run("renders grayscale at zero saturation", func(t *testing.T) {
 		dracula := terminals["dracula"]
 		zero := 0.0

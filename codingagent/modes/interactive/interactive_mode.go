@@ -696,7 +696,7 @@ func (m *InteractiveMode) Init() error {
 	m.changelogMarkdown = m.getChangelogForDisplay()
 
 	// Model scope notice (pi: console.log before the TUI starts).
-	if scoped := m.session().ScopedModels(); len(scoped) > 0 && (m.options.Verbose || !m.settingsManager().GetQuietStartup()) {
+	if scoped := m.session().ScopedModels(); len(scoped) > 0 && m.shouldShowStartupDetails() {
 		modelList := make([]string, 0, len(scoped))
 		for _, sm := range scoped {
 			entry := sm.Model.ID
@@ -769,7 +769,8 @@ func (m *InteractiveMode) Init() error {
 	m.themeController.WaitTerminalColors()
 
 	// Add header with keybindings from config (unless silenced)
-	if m.options.Verbose || !m.settingsManager().GetQuietStartup() {
+	if m.shouldShowStartupHeader() {
+		showDetails := m.shouldShowStartupDetails()
 		// The header strings are built inside the closures so a theme change
 		// (or the system theme receiving the terminal's colors) rebuilds them
 		// with the new colors on invalidate (pi: ThemedText).
@@ -817,7 +818,8 @@ func (m *InteractiveMode) Init() error {
 				hint(core.AppKeybindingToolsExpand, "more"),
 			}, currentTheme.Fg("muted", " · "))
 			compactOnboarding := currentTheme.Fg("dim",
-				"Press "+coretools.KeyText(core.AppKeybindingToolsExpand)+" to show full startup help and loaded resources.")
+				"Press "+coretools.KeyText(core.AppKeybindingToolsExpand)+" to show full startup help"+
+					compactOnboardingDetailsSuffix(showDetails)+".")
 			onboarding := currentTheme.Fg("dim",
 				"Pig can explain its own features and look up its docs. Ask it how to use or extend Pig.")
 			return logo + "\n" + compactInstructions + "\n" + compactOnboarding + "\n\n" + onboarding
@@ -1006,6 +1008,29 @@ func errorMessageOf(err error) string {
 // getStartupExpansionState — options.verbose || toolOutputExpanded).
 func (m *InteractiveMode) getStartupExpansionState() bool {
 	return m.options.Verbose || m.toolOutputExpanded
+}
+
+// shouldShowStartupHeader reports whether the startup header (logo, version,
+// key hints) is shown; hidden only by quietStartup: true (pi:
+// shouldShowStartupHeader).
+func (m *InteractiveMode) shouldShowStartupHeader() bool {
+	return m.options.Verbose || m.settingsManager().GetQuietStartup() != core.QuietStartupOn
+}
+
+// shouldShowStartupDetails reports whether the startup details (model scope
+// line, loaded resources) are shown; hidden by quietStartup: true or "header"
+// (pi: shouldShowStartupDetails).
+func (m *InteractiveMode) shouldShowStartupDetails() bool {
+	return m.options.Verbose || m.settingsManager().GetQuietStartup() == core.QuietStartupOff
+}
+
+// compactOnboardingDetailsSuffix builds the conditional suffix of the compact
+// onboarding hint (pi: `${showDetails ? " and loaded resources" : ""}`).
+func compactOnboardingDetailsSuffix(showDetails bool) string {
+	if showDetails {
+		return " and loaded resources"
+	}
+	return ""
 }
 
 // setupKeyHandlers registers the editor-level app handlers (pi:
@@ -4792,7 +4817,7 @@ func (m *InteractiveMode) showLoadedResources(options *showLoadedResourcesOption
 	// separate container.
 	m.loadedResourcesContainer.Clear()
 
-	showListing := options.Force || m.options.Verbose || !m.settingsManager().GetQuietStartup()
+	showListing := options.Force || m.shouldShowStartupDetails()
 	showDiagnostics := showListing || options.ShowDiagnosticsWhenQuiet
 	if !showListing && !showDiagnostics {
 		return
@@ -6337,8 +6362,8 @@ func (m *InteractiveMode) showSettingsSelector() {
 				OnEnableInstallTelemetryChange: func(enabled bool) {
 					m.settingsManager().SetEnableInstallTelemetry(enabled)
 				},
-				OnQuietStartupChange: func(enabled bool) {
-					m.settingsManager().SetQuietStartup(enabled)
+				OnQuietStartupChange: func(quiet core.QuietStartupMode) {
+					m.settingsManager().SetQuietStartup(quiet)
 				},
 				OnShowResourceStatsChange: func(enabled bool) {
 					m.settingsManager().SetShowResourceStats(enabled)

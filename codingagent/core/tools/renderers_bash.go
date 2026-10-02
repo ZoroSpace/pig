@@ -65,7 +65,7 @@ func (b *bashPreviewComponent) Render(width int) []string {
 	// Cache the complete output including the expand hint: this renders on
 	// every frame for every bash result in the transcript (pi v0.99.1).
 	if !b.cached || b.cachedWidth != width {
-		preview := TruncateToVisualLines(b.styledOutput, bashPreviewLines, width, 0)
+		preview := TruncateToVisualLines(b.styledOutput, bashPreviewLines, width, 0, VisualTruncateKeepEnd)
 		lines := []string{""}
 		if preview.SkippedCount > 0 {
 			hint := b.theme.Fg("muted", fmt.Sprintf("... (%d earlier lines,", preview.SkippedCount)) +

@@ -1704,7 +1704,10 @@ func SliceWithWidth(line string, startCol int, length int, strict bool) SliceRes
 	for i < len(line) {
 		if ansi := ExtractAnsiCode(line, i); ansi != nil {
 			if currentCol >= startCol && currentCol < endCol {
-				result.WriteString(ansi.Code)
+				// pi #10169: keep original order — codes from before the
+				// range must precede codes at the boundary.
+				result.WriteString(pendingAnsi + ansi.Code)
+				pendingAnsi = ""
 			} else if currentCol < startCol {
 				pendingAnsi += ansi.Code
 			}

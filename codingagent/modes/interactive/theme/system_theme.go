@@ -528,10 +528,32 @@ func okhslOf(c tui.RgbColor) tui.OkhslChannels {
 	return tui.ColorToOkhsl(color)
 }
 
+// sourceColor is a terminal color's OKHSL channels and its OKLCH chroma
+// (pi: SourceColor).
+type sourceColor struct {
+	tui.OkhslChannels
+	chroma float64
+}
+
+// sourceOf reads a color's OKHSL channels and OKLCH chroma.
+func sourceOf(c tui.RgbColor) sourceColor {
+	color, err := tui.NewRgbColor(c.R, c.G, c.B)
+	if err != nil {
+		return sourceColor{}
+	}
+	return sourceColor{OkhslChannels: tui.ColorToOkhsl(color), chroma: tui.ColorToOklch(color).C}
+}
+
 // anchored is a source color's hue at another OKHSL lightness. Its saturation
 // applies at its own lightness and falls off toward black and white along the
 // family's saturation curve, never rising above it.
-func anchored(source tui.OkhslChannels, f family, lightness, saturation float64) tui.RgbColor {
+//
+// OKHSL saturation is relative to the most chroma sRGB allows at a lightness,
+// so the same saturation can mean more chroma elsewhere: Catppuccin Frappe's
+// pink #f4b8e4 (chroma 0.089) would become #eb76d1 (0.180) at the lightness
+// the accent needs. Chroma is therefore also capped at the source's, with the
+// same falloff (pi: #10293).
+func anchored(source sourceColor, f family, lightness, saturation float64) tui.RgbColor {
 	anchor := saturationCurve(f, source.L)
 	falloff := 1.0
 	if anchor > 0 {
@@ -540,6 +562,14 @@ func anchored(source tui.OkhslChannels, f family, lightness, saturation float64)
 	color, err := tui.NewOkhslColor(source.H, source.S*falloff*saturation, lightness)
 	if err != nil {
 		return tui.RgbColor{}
+	}
+	chromaCap := source.chroma * falloff * saturation
+	if channels := tui.ColorToOklch(color); channels.C > chromaCap {
+		capped, err := tui.NewOklchColor(channels.L, chromaCap, source.H)
+		if err != nil {
+			return tui.RgbColor{}
+		}
+		return tui.ColorToRgb(capped)
 	}
 	return tui.ColorToRgb(color)
 }
@@ -644,11 +674,11 @@ func GenerateSystemThemeColors(input SystemThemeInput) SystemThemeColors {
 	if background == nil {
 		return indexedColors(saturation, appearancePointer(input.AppearanceHint))
 	}
-	var palette map[int]tui.OkhslChannels
+	var palette map[int]sourceColor
 	if len(input.Palette) == 16 {
-		palette = make(map[int]tui.OkhslChannels, 16)
+		palette = make(map[int]sourceColor, 16)
 		for i, color := range input.Palette {
-			palette[i] = okhslOf(color)
+			palette[i] = sourceOf(color)
 		}
 	}
 
@@ -864,7 +894,7 @@ func GenerateSystemThemeColors(input SystemThemeInput) SystemThemeColors {
 					result[string(token)] = ""
 					continue
 				}
-				text = anchored(okhslOf(*foreground), families["neutral"], tui.OklabToOkhslLightness(needed), saturation)
+				text = anchored(sourceOf(*foreground), families["neutral"], tui.OklabToOkhslLightness(needed), saturation)
 				hasText = true
 			}
 		}

@@ -1297,4 +1297,62 @@ func TestCombinedAutocompleteProviderSlashCommandFilter(t *testing.T) {
 			t.Fatalf("items = %v, want skill:to-sidecar included", items)
 		}
 	})
+
+	// pi #10218: commands complete after leading whitespace and accepting a
+	// completion preserves it.
+	t.Run("completes commands after leading whitespace and preserves it", func(t *testing.T) {
+		provider := NewCombinedAutocompleteProvider(
+			[]SlashCommandOrItem{AutocompleteItem{Value: "model"}}, "/tmp", "")
+		for _, tc := range []struct{ line, expected string }{
+			{" /", " /model "},
+			{"  /mod", "  /model "},
+			{"\t/mod", "\t/model "},
+		} {
+			result := provider.GetSuggestions(context.Background(), []string{tc.line}, 0, len(tc.line), AutocompleteGetSuggestionsOptions{})
+			if result == nil {
+				t.Fatalf("expected suggestions for %q", tc.line)
+			}
+			wantPrefix := strings.TrimLeftFunc(tc.line, isJsSpaceRune)
+			if result.Prefix != wantPrefix {
+				t.Fatalf("prefix = %q, want %q", result.Prefix, wantPrefix)
+			}
+			if len(result.Items) != 1 || result.Items[0].Value != "model" {
+				t.Fatalf("items = %v, want [model]", result.Items)
+			}
+			applied := provider.ApplyCompletion([]string{tc.line}, 0, len(tc.line), result.Items[0], result.Prefix)
+			if applied.Lines[0] != tc.expected {
+				t.Fatalf("applied line = %q, want %q", applied.Lines[0], tc.expected)
+			}
+			if applied.CursorCol != len(tc.expected) {
+				t.Fatalf("cursorCol = %d, want %d", applied.CursorCol, len(tc.expected))
+			}
+		}
+	})
+
+	t.Run("completes command arguments after leading whitespace", func(t *testing.T) {
+		gotArgumentPrefix := ""
+		provider := NewCombinedAutocompleteProvider(
+			[]SlashCommandOrItem{SlashCommand{
+				Name: "model",
+				GetArgumentCompletions: func(argumentPrefix string) []AutocompleteItem {
+					gotArgumentPrefix = argumentPrefix
+					return []AutocompleteItem{{Value: "sonnet", Label: "sonnet"}}
+				},
+			}}, "/tmp", "")
+		line := "  /model son"
+		result := provider.GetSuggestions(context.Background(), []string{line}, 0, len(line), AutocompleteGetSuggestionsOptions{})
+		if result == nil {
+			t.Fatal("expected argument suggestions")
+		}
+		if gotArgumentPrefix != "son" {
+			t.Fatalf("argumentPrefix = %q, want son", gotArgumentPrefix)
+		}
+		if result.Prefix != "son" {
+			t.Fatalf("prefix = %q, want son", result.Prefix)
+		}
+		applied := provider.ApplyCompletion([]string{line}, 0, len(line), result.Items[0], result.Prefix)
+		if applied.Lines[0] != "  /model sonnet" {
+			t.Fatalf("applied line = %q, want %q", applied.Lines[0], "  /model sonnet")
+		}
+	})
 }

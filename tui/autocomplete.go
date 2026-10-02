@@ -493,11 +493,15 @@ func (p *CombinedAutocompleteProvider) GetSuggestions(ctx context.Context, lines
 		return &AutocompleteSuggestions{Items: suggestions, Prefix: *atPrefix}
 	}
 
-	if !options.Force && strings.HasPrefix(textBeforeCursor, "/") {
-		spaceIndex := strings.Index(textBeforeCursor, " ")
+	// pi #10218: complete slash commands after leading whitespace; the
+	// prefix is computed from the trimmed text so accepting a completion
+	// replaces the command text only, not the whitespace before it.
+	commandText := strings.TrimLeftFunc(textBeforeCursor, isJsSpaceRune)
+	if !options.Force && strings.HasPrefix(commandText, "/") {
+		spaceIndex := strings.Index(commandText, " ")
 
 		if spaceIndex == -1 {
-			prefix := textBeforeCursor[1:]
+			prefix := commandText[1:]
 			commandItems := make([]AutocompleteItem, 0, len(p.commands))
 			for _, cmd := range p.commands {
 				name := autocompleteCommandName(cmd)
@@ -563,11 +567,11 @@ func (p *CombinedAutocompleteProvider) GetSuggestions(ctx context.Context, lines
 				return nil
 			}
 
-			return &AutocompleteSuggestions{Items: mapped, Prefix: textBeforeCursor}
+			return &AutocompleteSuggestions{Items: mapped, Prefix: commandText}
 		}
 
-		commandName := textBeforeCursor[1:spaceIndex]
-		argumentText := textBeforeCursor[spaceIndex+1:]
+		commandName := commandText[1:spaceIndex]
+		argumentText := commandText[spaceIndex+1:]
 
 		var command *SlashCommand
 		for _, cmd := range p.commands {

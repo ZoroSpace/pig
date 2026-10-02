@@ -44,7 +44,7 @@ func (b *bashPreviewRenderer) Render(width int) []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if !b.cached || b.cachedWidth != width {
-		result := tools.TruncateToVisualLines(b.styledInput, bashPreviewLinesComponent, width, 1)
+		result := tools.TruncateToVisualLines(b.styledInput, bashPreviewLinesComponent, width, 1, tools.VisualTruncateKeepEnd)
 		b.cachedLines = result.VisualLines
 		b.cachedWidth = width
 		b.cached = true
