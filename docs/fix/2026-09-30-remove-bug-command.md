@@ -105,6 +105,8 @@ pig 此前 1:1 移植了 pi 的 `/bug`：交互式采集 bug 描述 → 可选�
 
 结束 `tmux kill-session -t pig-rmbug-x7`，未动 kill-server。
 
+**2026-10-02 追加（清理欠账）**：当时只清了 tmux 会话，mock 服务器是脱离终端启动的（PPID 孤儿化为 1），带着已删除脚本的内存副本多活了两天（`ps` 可见 `Python /tmp/pig-rmbug/mock_server.py`，监听 127.0.0.1:18557，临时目录已删）。已 `kill` 清掉。**教训：凡 mock 端点/探针进程，清理时不能只杀 tmux 会话——`pkill -f` 会被自身命令行误伤，须用记录的端口 `lsof -ti :<port> | xargs kill` 或按启动方式显式定位收尾。**
+
 ## 声明
 
 **pi 的 bug-report 上报链（Radius 上传 / zip 打包 / `SummarizeForBugReport` / crash-log 的 /bug 指针）pig 不跟进；后续 pi 上游对 /bug / bug-report 面的任何改动**永不迁移**（用户 2026-09-30 追加确认），基线同步批遇到该面（含 pi 对 `bug-report.ts`/`bug-report-upload.ts`/`crash-log.ts` 中 `/bug` 相关的任何上游改动）一律跳过，不再重新判断，也不得把 /bug 相关能力重新加回 pig。** `docs/feat/SLASH-COMMANDS-COMPLETION.md` 的「pi 22 条内置命令」是当时事实，不改，以本文档为准。
