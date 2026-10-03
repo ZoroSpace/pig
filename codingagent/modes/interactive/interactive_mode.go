@@ -2454,14 +2454,36 @@ func asAssistantMessage(message agent.AgentMessage) *types.AssistantMessage {
 	return nil
 }
 
+// asToolResultMessage normalizes a tool result that may enter the interface
+// as a value or a pointer (pig: session entries decode as values, live
+// events may be either; the pointer-only assertion here kept restored tool
+// cards in the pending/muted state with no output, see
+// docs/fix/2026-10-03-restored-tool-results-dropped.md).
+func asToolResultMessage(message agent.AgentMessage) *types.ToolResultMessage {
+	switch v := message.(type) {
+	case *types.ToolResultMessage:
+		return v
+	case types.ToolResultMessage:
+		return &v
+	}
+	return nil
+}
+
 // addMessageToChat renders a message into the transcript (pi:
 // addMessageToChat).
 func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *addMessageOptions) {
 	switch message.MessageRole() {
 	case harness.RoleBashExecution:
+		// Value/pointer double form (09-11 fix convention): session entries
+		// decode as values (core/session_manager.go), live bash runs are
+		// pointers (AgentSession.pendingBashMessages).
 		bash, ok := message.(*harness.BashExecutionMessage)
 		if !ok {
-			return
+			v, ok := message.(harness.BashExecutionMessage)
+			if !ok {
+				return
+			}
+			bash = &v
 		}
 		component := components.NewBashExecutionComponent(bash.Command, m.ui, bash.ExcludeFromContext != nil && *bash.ExcludeFromContext)
 		if bash.Output != "" {
@@ -2664,9 +2686,11 @@ func (m *InteractiveMode) renderSessionItems(items []renderSessionItem, options 
 				}
 			}
 		} else if message.MessageRole() == types.RoleToolResult {
-			// Match tool results to pending tool components
-			toolResult, ok := message.(*types.ToolResultMessage)
-			if !ok {
+			// Match tool results to pending tool components. Value/pointer
+			// double form (09-11 fix convention): session entries decode as
+			// values (core/session_manager.go), live events may carry either.
+			toolResult := asToolResultMessage(message)
+			if toolResult == nil {
 				continue
 			}
 			if component := renderedPendingTools[toolResult.ToolCallID]; component != nil {

@@ -48,7 +48,7 @@
 		"mdQuote": "muted",
 		"mdQuoteBorder": "muted",
 		"mdHr": "muted",
-		"mdListBullet": "violet",
+		"mdListBullet": "text",
 		"toolDiffAdded": "green",
 		"toolDiffRemoved": "red",
 		"toolDiffContext": "muted",

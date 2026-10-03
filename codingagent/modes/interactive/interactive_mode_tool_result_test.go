@@ -15,10 +15,12 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/agent"
+	"github.com/ZoroSpace/pig/agent/harness"
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/codingagent/core"
 	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/components"
+	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	codingagentutils "github.com/ZoroSpace/pig/codingagent/utils"
 )
 
@@ -167,6 +169,119 @@ func assertAnyMountedFrameContainsProbe(t *testing.T, mode *InteractiveMode, pha
 		}
 	}
 	t.Fatalf("%s: no mounted tool card frame contains %q (cards=%d)", phase, toolResultProbe, len(mounted))
+}
+
+// firstSGR returns the leading SGR sequence of s ("" when there is none).
+func firstSGR(s string) string {
+	if !strings.HasPrefix(s, "\x1b[") {
+		return ""
+	}
+	end := strings.IndexByte(s, 'm')
+	if end < 0 {
+		return ""
+	}
+	return s[:end+1]
+}
+
+// TestRestoreRendersToolResultsOnRestoredCards locks the session-restore
+// seam of renderSessionItems: it matched only *pointer* ToolResultMessage
+// while the session-file decoder produces values (core/session_manager.go),
+// so every restored transcript kept its tool cards in the pending state —
+// no output text, and the frame colored "muted" instead of the state color
+// (the same pointer/value family as docs/fix/2026-09-11-tool-execution-live-
+// output-empty.md; see docs/fix/2026-10-03-restored-tool-results-dropped.md).
+func TestRestoreRendersToolResultsOnRestoredCards(t *testing.T) {
+	initTestTheme(t)
+	session := createInteractiveTestSession(t, &fixtureResourceLoader{}, nil)
+	mode := newSeamTestMode(session, nil)
+
+	const restoreToolCallID = "toolu_restore_probe"
+	if _, err := session.SessionManager.AppendMessage(types.UserMessage{
+		Role:    types.RoleUser,
+		Content: types.UserContent{String: "run the probe"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.SessionManager.AppendMessage(types.AssistantMessage{
+		Role: types.RoleAssistant,
+		Content: []types.Content{types.ToolCall{
+			Kind: types.KindToolCall, ID: restoreToolCallID, Name: "bash",
+			Arguments: map[string]any{"command": "echo restore-probe"},
+		}},
+		API: "openai-completions", Provider: "test", Model: "test-model",
+		Usage: types.Usage{Cost: types.Cost{}}, StopReason: types.StopReasonToolUse,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.SessionManager.AppendMessage(types.ToolResultMessage{
+		Role: types.RoleToolResult, ToolCallID: restoreToolCallID, ToolName: "bash",
+		Content: []types.Content{types.TextContent{Kind: types.KindText, Text: toolResultProbe}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Restore path (pi: renderInitialMessages → renderSessionItems).
+	mode.renderSessionEntries(session.SessionManager.BuildContextEntries(), nil)
+
+	mounted := mountedToolComponents(mode)
+	if len(mounted) != 1 {
+		t.Fatalf("restored cards = %d, want 1", len(mounted))
+	}
+	assertAnyMountedFrameContainsProbe(t, mode, "session restore")
+
+	// The frame carries the state color: a card whose result arrived is no
+	// longer "muted"/pending (the user-visible symptom was a dark frame
+	// instead of the success color). The rule lines are the frame.
+	frame := mounted[0].Render(120)
+	wantSuccess := firstSGR(theme.Current().Fg("success", "x"))
+	mutedColor := firstSGR(theme.Current().Fg("muted", "x"))
+	rules := 0
+	for _, line := range frame {
+		plain := codingagentutils.StripAnsi(line)
+		if plain == "" || strings.Trim(plain, "─") != "" {
+			continue
+		}
+		rules++
+		if got := firstSGR(line); got != wantSuccess {
+			t.Fatalf("restored card rule color = %q, want success %q (muted is %q)", got, wantSuccess, mutedColor)
+		}
+	}
+	if rules == 0 {
+		t.Fatalf("restored card rendered no rule lines:\n%s", strings.Join(frame, "\n"))
+	}
+}
+
+// TestRestoreRendersBashExecutionMessages locks the same double-form seam for
+// `!command` blocks: addMessageToChat asserted *BashExecutionMessage while
+// restored entries decode as values, so resumed transcripts dropped them.
+func TestRestoreRendersBashExecutionMessages(t *testing.T) {
+	initTestTheme(t)
+	session := createInteractiveTestSession(t, &fixtureResourceLoader{}, nil)
+	mode := newSeamTestMode(session, nil)
+
+	const bashProbeCommand = "echo restored-bash-probe"
+	exitCode := 0
+	if _, err := session.SessionManager.AppendMessage(harness.BashExecutionMessage{
+		Role: harness.RoleBashExecution, Command: bashProbeCommand, Output: "restored-bash-probe",
+		ExitCode: &exitCode, Timestamp: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	mode.renderSessionEntries(session.SessionManager.BuildContextEntries(), nil)
+
+	var found *components.BashExecutionComponent
+	for _, child := range mode.chatContainer.Children {
+		if component, ok := child.(*components.BashExecutionComponent); ok {
+			found = component
+		}
+	}
+	if found == nil {
+		t.Fatal("restored bash execution block not mounted")
+	}
+	if got := found.GetCommand(); got != bashProbeCommand {
+		t.Fatalf("bash execution command = %q, want %q", got, bashProbeCommand)
+	}
 }
 
 // TestHandleEventLiveToolOutputReachesMountedComponent is the

@@ -60,6 +60,19 @@ func TestBuiltinGitHubLight(t *testing.T) {
 		}
 	})
 
+	t.Run("list markers use the body text color (pig-only)", func(t *testing.T) {
+		// pig-only (2026-10-03, user request): the list marker (ordered-list
+		// numbers and `-` bullets share this token) is black/dark instead of
+		// Primer's violet.
+		theme := GetThemeByName("github-light")
+		if theme == nil {
+			t.Fatal("github-light theme not found")
+		}
+		if got := tui.ColorToHex(theme.Colors()[ColorMdListBullet]); got != "#1f2328" {
+			t.Fatalf("mdListBullet = %q, want #1f2328", got)
+		}
+	})
+
 	t.Run("defines the optional pig-only rule tokens", func(t *testing.T) {
 		theme := GetThemeByName("github-light")
 		if theme == nil {
