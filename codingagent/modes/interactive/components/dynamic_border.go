@@ -30,8 +30,8 @@ func NewDynamicBorder(color func(string) string) *DynamicBorder {
 	return &DynamicBorder{color: color}
 }
 
-// NewDynamicBorderCorner builds a rule with a left corner glyph (pig-only:
-// the block frame's top/bottom rules, joined by a LeftRail on the left).
+// NewDynamicBorderCorner builds a rule with left corner glyphs (pig-only:
+// the block frame's top/bottom rules — ┌───┐ / └───┘).
 func NewDynamicBorderCorner(color func(string) string, corner rune) *DynamicBorder {
 	b := NewDynamicBorder(color)
 	b.corner = corner

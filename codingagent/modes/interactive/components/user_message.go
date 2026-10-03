@@ -70,7 +70,7 @@ func (c *UserMessageComponent) rebuild() {
 	// keep a second full-width copy of every line, with identical output
 	// (pi e792ba131). pig-only: vertical padding 0 — the border rules give
 	// the block its frame, keeping the pre-border block height (pi: 1).
-	c.AddChild(NewLeftRail(tui.NewMarkdown(
+	c.AddChild(NewFrameBody(tui.NewMarkdown(
 		c.text,
 		c.outputPad,
 		0,
@@ -83,7 +83,7 @@ func (c *UserMessageComponent) rebuild() {
 			PreserveBackslashEscapes:   true,
 			Transform:                  CreateMarkdownTransform("user", false, c.markdownTransformers),
 		},
-	), ruleColor))
+	)))
 	c.AddChild(NewDynamicBorderCorner(ruleColor, '└'))
 }
 

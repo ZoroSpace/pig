@@ -161,7 +161,7 @@ func NewToolExecutionComponent(
 	}
 	c.topBorder = NewDynamicBorderCorner(borderColor, '┌')
 	c.bottomBorder = NewDynamicBorderCorner(borderColor, '└')
-	contentRail := func(child tui.Component) tui.Component { return NewLeftRail(child, borderColor) }
+	contentRail := func(child tui.Component) tui.Component { return NewFrameBody(child) }
 
 	if c.hasRendererDefinition() {
 		if c.getRenderShell() == "self" {

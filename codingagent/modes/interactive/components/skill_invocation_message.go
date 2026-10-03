@@ -81,6 +81,6 @@ func (c *SkillInvocationMessageComponent) updateDisplay() {
 
 	borderColor := func(t string) string { return theme.Fg("customMessageLabel", t) }
 	c.AddChild(NewDynamicBorderCorner(borderColor, '┌'))
-	c.AddChild(NewLeftRail(contentBox, borderColor))
+	c.AddChild(NewFrameBody(contentBox))
 	c.AddChild(NewDynamicBorderCorner(borderColor, '└'))
 }

@@ -299,15 +299,13 @@ func TestUserMessageComponentPadding(t *testing.T) {
 
 	paddedComponent := NewUserMessageComponent("hello", nil, 1, nil, nil)
 	paddedLines := paddedComponent.Render(40)
-	// pig-only: the block frame prefixes content lines with the left rail
-	// bar, then the markdown's own output pad.
-	if !someLineStartsWith(paddedLines, "┆ hello") {
+	if !someLineStartsWith(paddedLines, " hello") {
 		t.Fatalf("padded lines missing: %v", paddedLines)
 	}
 
 	unpaddedComponent := NewUserMessageComponent("hello", nil, 0, nil, nil)
 	unpaddedLines := unpaddedComponent.Render(40)
-	if !someLineStartsWith(unpaddedLines, "┆hello") {
+	if !someLineStartsWith(unpaddedLines, "hello") {
 		t.Fatalf("unpadded lines missing: %v", unpaddedLines)
 	}
 }

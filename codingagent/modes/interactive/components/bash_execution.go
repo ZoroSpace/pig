@@ -102,7 +102,7 @@ func NewBashExecutionComponent(command string, ui tui.TUI, excludeFromContext bo
 	c.AddChild(NewDynamicBorderCorner(borderColor, '┌'))
 
 	// Content container (holds dynamic content between borders)
-	c.AddChild(NewLeftRail(c.contentContainer, borderColor))
+	c.AddChild(NewFrameBody(c.contentContainer))
 
 	// Command header
 	c.contentContainer.AddChild(tui.NewText(theme.Fg(colorKey, theme.Bold("$ "+command)), 1, 0))

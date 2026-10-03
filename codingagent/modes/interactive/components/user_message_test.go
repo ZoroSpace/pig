@@ -19,7 +19,7 @@ func TestUserMessageComponent(t *testing.T) {
 		// of the pi full-width background fill. Vertical padding is 0 so the
 		// block keeps its pre-border height: 3 lines for a one-line message
 		// (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS). The left
-		// frame: solid rules with corners, dashed rail bars — ┌─┐ / ┆ ┆ / └─┘.
+		// frame: solid corner rules ┌─┐ / └─┘, content unbarred.
 		component := NewUserMessageComponent("hello", nil, 1, nil, nil)
 		lines := component.Render(20)
 
@@ -35,8 +35,8 @@ func TestUserMessageComponent(t *testing.T) {
 		if strings.Contains(lines[0], osc133ZoneEnd) {
 			t.Fatalf("line 0 must not contain zone end: %q", lines[0])
 		}
-		if got := utils.StripAnsi(lines[1]); !strings.HasPrefix(got, "┆") || !strings.HasSuffix(got, "┆") || !strings.Contains(got, "hello") {
-			t.Fatalf("line 1 missing left rail or text: %q", got)
+		if got := utils.StripAnsi(lines[1]); !strings.Contains(got, "hello") {
+			t.Fatalf("line 1 missing text: %q", got)
 		}
 		if !strings.HasPrefix(lines[2], osc133ZoneEnd+osc133ZoneFinal) {
 			t.Fatalf("line 2 missing final markers: %q", lines[2])
@@ -69,7 +69,7 @@ func TestUserMessageComponent(t *testing.T) {
 		if len(calls) != 2 || calls[0] != "formula" || calls[1] != "suffix" {
 			t.Fatalf("calls = %v", calls)
 		}
-		if contextSeen.MessageType != "user" || contextSeen.IsStreaming || contextSeen.AvailableWidth != 75 {
+		if contextSeen.MessageType != "user" || contextSeen.IsStreaming || contextSeen.AvailableWidth != 77 {
 			t.Fatalf("context = %+v", contextSeen)
 		}
 	})
