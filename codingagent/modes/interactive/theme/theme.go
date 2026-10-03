@@ -798,10 +798,8 @@ var (
 	builtinThemesErr  error
 )
 
-// BuiltinThemeNames lists the bundled theme JSONs in selector order (pig-only
-// extension: one-dark-pro / github-light join pi's dark / light; the originals
-// stay available).
-var BuiltinThemeNames = []string{"dark", "light", "one-dark-pro", "github-light"}
+// BuiltinThemeNames lists the bundled theme JSONs (pi: dark / light).
+var BuiltinThemeNames = []string{"dark", "light"}
 
 // isBuiltinThemeName reports whether name is one of the bundled themes.
 func isBuiltinThemeName(name string) bool {

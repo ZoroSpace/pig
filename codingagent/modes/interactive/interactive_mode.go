@@ -3150,9 +3150,9 @@ func (m *InteractiveMode) updateEditorBorderColor() {
 }
 
 // userMessageRuleColor resolves the color for the sent-message block's
-// border rules: a fixed per-theme blue independent of the thinking level
-// (pig-only, user decision 2026-10-03; github-light pairs it with the input
-// box's pale blue). Themes without the token fall back to the border color.
+// border rules: themes that define the pig-only userMessageRule token pin
+// it there; the rest fall back to the border color (pig-only, user decision
+// 2026-10-03).
 func (m *InteractiveMode) userMessageRuleColor() func(string) string {
 	return func(s string) string { return theme.FgOptional("userMessageRule", "border", s) }
 }

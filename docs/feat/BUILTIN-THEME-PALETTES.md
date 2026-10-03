@@ -1,5 +1,7 @@
 # BUILTIN-THEME-PALETTES：新增内置主题 One Dark Pro / GitHub Light（用户插入小批，2026-10-03）
 
+> **⚠️ 已撤销（2026-10-03 同日，用户拍板）**：两个主题整体删除——`one-dark-pro` / `github-light` 不再是内置主题，内置集合回归 pi 原样 `dark` / `light`（默认仍为 system）。`BuiltinThemeNames` 回落两项、first_time_setup 选项恢复 System→Dark→Light、assets/testdata JSON 已删。pig-only 可选 token 机制（HasFgToken/FgOptional）保留为通用能力：规则线 token（userMessageRule/toolSuccessRule/toolErrorRule）现无内置主题定义，全部经 FgOptional 回落状态色；用户此前对两主题的微调（accent/mdListBullet 等）随之失效。存量 settings 里 `"theme": "one-dark-pro"` / `"github-light"` 会静默回落 system（InitTheme 既有语义）。本文其余内容仅存档。
+
 ## 需求
 
 用户要求：dark 主题改为 One Dark Pro 配色、light 主题改为 GitHub Light 配色；随后改口——**不替换**现有 `dark.json` / `light.json`（保留 pi 原色板），新建两份主题 JSON，代码里接入新的。
