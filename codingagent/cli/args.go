@@ -192,7 +192,7 @@ func ParseArgs(args []string) Args {
 			result.SessionDir = &args[i]
 		case arg == "--models" && i+1 < len(args):
 			i++
-			result.Models = splitAndTrim(args[i], ",")
+			result.Models = splitTrimFilter(args[i], ",")
 		case arg == "--no-tools" || arg == "-nt":
 			result.NoTools = boolPtr(true)
 		case arg == "--no-builtin-tools" || arg == "-nbt":

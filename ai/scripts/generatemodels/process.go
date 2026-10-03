@@ -46,7 +46,7 @@ var togetherToggleReasoningEffortCompat = withCompat(togetherToggleReasoningComp
 
 var togetherReasoningOnlyModels = stringSet("deepseek-ai/DeepSeek-R1", "MiniMaxAI/MiniMax-M2.7")
 var togetherReasoningEffortModels = stringSet("openai/gpt-oss-20b", "openai/gpt-oss-120b")
-var togetherToggleReasoningEffortModels = stringSet("deepseek-ai/DeepSeek-V4-Pro")
+var togetherToggleReasoningEffortModels = stringSet("deepseek-ai/DeepSeek-V4-Pro-0813")
 
 var togetherFixedReasoningLevelMap = ai.ThinkingLevelMap{
 	ai.ModelThinkingOff:     nil,
@@ -1171,7 +1171,11 @@ func processCloudflareModels(data ModelsDevCatalog) []*ai.Model {
 			case "anthropic":
 				apiKind = ai.ApiAnthropicMessages
 				baseURL = api.CloudflareAIGatewayAnthropicBaseURL
-				id = nativeID
+				// The /anthropic passthrough forwards the model ID to
+				// Anthropic unchanged. models.dev lists dotted versions
+				// (claude-opus-5.5), but Anthropic only accepts dashed IDs
+				// (claude-opus-5-5).
+				id = strings.ReplaceAll(nativeID, ".", "-")
 			case "workers-ai":
 				apiKind = ai.ApiOpenAICompletions
 				baseURL = api.CloudflareAIGatewayCompatBaseURL

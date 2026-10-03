@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -145,8 +146,9 @@ func (s *chatGPTCallbackServer) close() {
 }
 
 // startChatGPTCallbackServer listens on 1455 and serves the callback route
-// (pi: startCallbackServer). A bind failure returns an error and the flow
-// degrades to manual entry.
+// (pi: startCallbackServer). A bind failure returns an error; the login fails
+// closed rather than degrading to manual entry, because the browser callback
+// would reach whatever else holds the port.
 func startChatGPTCallbackServer(expectedState string) (*chatGPTCallbackServer, error) {
 	server := &chatGPTCallbackServer{
 		waitCh: make(chan chatGPTAuthorizationResult, 1),
@@ -353,17 +355,17 @@ func loginOpenAIChatGPT(ctx context.Context, interaction AuthInteraction, option
 	if err != nil {
 		return nil, err
 	}
-	var callback *chatGPTCallbackServer
-	if server, serverErr := startChatGPTCallbackServer(state); serverErr == nil {
-		callback = server
-		defer callback.close()
-	} else {
-		interaction.Notify(AuthEvent{
-			Type: "info",
-			Message: fmt.Sprintf("Could not listen on %s; paste the final redirect URL to continue. %s",
-				chatGPTRedirectURI, serverErr.Error()),
-		})
+	// Without this server, the browser's callback would reach whatever else
+	// holds the port (another pending login or the Codex CLI), which rejects
+	// it as a state mismatch. Fail with a clear error instead.
+	callback, serverErr := startChatGPTCallbackServer(state)
+	if serverErr != nil {
+		if !errors.Is(serverErr, syscall.EADDRINUSE) {
+			return nil, serverErr
+		}
+		return nil, fmt.Errorf("Port %d is in use, probably by an unfinished login in another pig session or by the Codex CLI. Cancel that login and try again.", chatGPTCallbackPort)
 	}
+	defer callback.close()
 
 	params := url.Values{}
 	params.Set("client_id", chatGPTDynamicClientID)

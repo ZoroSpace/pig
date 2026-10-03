@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -289,4 +290,42 @@ func TestChatGPTOAuthRefreshUsesIssuedClientIDAndStoresReplacementScopes(t *test
 	if got, _ := credential.Extra["scopes"].([]string); len(got) != len(strings.Fields(chatGPTTestRequiredScope)) {
 		t.Errorf("scopes = %v", got)
 	}
+}
+
+// TestChatGPTOAuthFailsWhenCallbackPortIsTaken pins the fail-closed behavior
+// (pi #10265): when port 1455 is held by another pending login, the login
+// fails with a clear error instead of degrading to manual paste — the browser
+// callback would reach the other listener and be rejected as a state mismatch.
+func TestChatGPTOAuthFailsWhenCallbackPortIsTaken(t *testing.T) {
+	listener, err := net.Listen("tcp", net.JoinHostPort(chatGPTCallbackHost, fmt.Sprintf("%d", chatGPTCallbackPort)))
+	if err != nil {
+		t.Skipf("cannot occupy port %d: %v", chatGPTCallbackPort, err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	interaction := &chatGPTFailClosedInteraction{}
+	_, loginErr := loginOpenAIChatGPT(context.Background(), interaction, &LoginOptions{GetDeviceId: func() string { return chatGPTTestDeviceID }})
+	if loginErr == nil {
+		t.Fatal("login succeeded while the callback port was held by another listener")
+	}
+	if !strings.Contains(loginErr.Error(), fmt.Sprintf("Port %d is in use", chatGPTCallbackPort)) {
+		t.Fatalf("login error = %v, want a port-in-use error", loginErr)
+	}
+	if interaction.notified != 0 || interaction.prompted != 0 {
+		t.Fatalf("login notified %d events and prompted %d times; want fail-closed before either", interaction.notified, interaction.prompted)
+	}
+}
+
+// chatGPTFailClosedInteraction records any interaction; the fail-closed path
+// must reach neither Notify nor Prompt.
+type chatGPTFailClosedInteraction struct {
+	notified int
+	prompted int
+}
+
+func (i *chatGPTFailClosedInteraction) Notify(event AuthEvent) { i.notified++ }
+
+func (i *chatGPTFailClosedInteraction) Prompt(prompt AuthPrompt) (string, error) {
+	i.prompted++
+	return "", fmt.Errorf("no manual paste expected")
 }

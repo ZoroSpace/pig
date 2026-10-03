@@ -1498,7 +1498,8 @@ type AnthropicMessagesCompat struct {
 	// false.
 	SupportsMidConvoSystemMessages *bool `json:"supportsMidConvoSystemMessages,omitempty"`
 	// SupportsMidConvoToolChanges: whether the exact model accepts
-	// mid-conversation tool_addition and tool_removal blocks. Requires
+	// mid-conversation tool_addition blocks with inline tool definitions
+	// (inline-tools-2026-09-15) and tool_removal blocks. Requires
 	// SupportsMidConvoSystemMessages. Default: false.
 	SupportsMidConvoToolChanges *bool `json:"supportsMidConvoToolChanges,omitempty"`
 	// AllowedFallbackModels: models Anthropic may fall back to on

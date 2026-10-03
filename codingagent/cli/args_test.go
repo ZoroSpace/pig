@@ -80,3 +80,16 @@ func TestParseArgsModeFlag(t *testing.T) {
 		}
 	})
 }
+
+func TestParseArgsModelsIgnoresEmptyEntries(t *testing.T) {
+	// pi #10334: a trailing comma produced an empty pattern that matched every
+	// model by substring and added an extra model to the cycle.
+	result := ParseArgs([]string{"--models", "kimi,gpt-5.5,"})
+	if len(result.Models) != 2 || result.Models[0] != "kimi" || result.Models[1] != "gpt-5.5" {
+		t.Fatalf("models = %v, want [kimi gpt-5.5]", result.Models)
+	}
+	result = ParseArgs([]string{"--models", ","})
+	if len(result.Models) != 0 {
+		t.Fatalf("models = %v, want empty", result.Models)
+	}
+}

@@ -1763,7 +1763,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.2, Output: 1.2, CacheRead: 0.02, CacheWrite: 0.25},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 0.4, Output: 1.8, CacheRead: 0.04, CacheWrite: 0.5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -1793,7 +1798,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 4, Output: 20, CacheRead: 0.4, CacheWrite: 5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 8, Output: 30, CacheRead: 0.8, CacheWrite: 10}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -1820,7 +1830,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 2.5}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2, Output: 12, CacheRead: 0.2, CacheWrite: 2.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4, Output: 18, CacheRead: 0.4, CacheWrite: 5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -1847,7 +1862,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 20, Output: 75, CacheRead: 2, CacheWrite: 25}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -1877,7 +1897,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.75, CacheRead: 0.02, CacheWrite: 0.25}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -1907,7 +1932,47 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4, Output: 15, CacheRead: 0.4, CacheWrite: 5}, InputTokensAbove: 272000},
+				},
+			},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &BedrockCompat{
+				SupportsStrictMode: lo.ToPtr(true),
+			},
+		},
+		"global.openai.gpt-6.1-sol": {
+			ID:        "global.openai.gpt-6.1-sol",
+			Name:      "GPT-6.1 Sol (Global)",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4, Output: 15, CacheRead: 0.2, CacheWrite: 5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -2046,6 +2111,86 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsStrictMode: lo.ToPtr(true),
 			},
 		},
+		"in.anthropic.claude-haiku-4-5-20251001-v1:0": {
+			ID:        "in.anthropic.claude-haiku-4-5-20251001-v1:0",
+			Name:      "Claude Haiku 4.5 (India)",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.1, Output: 5.5, CacheRead: 0.11, CacheWrite: 1.375}},
+			ContextWindow: 200000,
+			MaxTokens:     64000,
+		},
+		"in.anthropic.claude-opus-5": {
+			ID:        "in.anthropic.claude-opus-5",
+			Name:      "Claude Opus 5 (India)",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+				ModelThinkingMax:   lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5.5, Output: 27.5, CacheRead: 0.55, CacheWrite: 6.875}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+		},
+		"in.anthropic.claude-sonnet-5": {
+			ID:        "in.anthropic.claude-sonnet-5",
+			Name:      "Claude Sonnet 5 (India)",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+				ModelThinkingMax:   lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75}},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+		},
 		"in.openai.gpt-5.6-luna": {
 			ID:        "in.openai.gpt-5.6-luna",
 			Name:      "GPT-5.6 Luna (India)",
@@ -2069,7 +2214,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 0.44, Output: 1.98, CacheRead: 0.044, CacheWrite: 0.55}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -2099,7 +2249,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 19.8, CacheRead: 0.44, CacheWrite: 5.5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -2894,7 +3049,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 0.44, Output: 1.98, CacheRead: 0.044, CacheWrite: 0.55}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -2924,7 +3084,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4.4, Output: 22, CacheRead: 0.44, CacheWrite: 5.5}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 4.4, Output: 22, CacheRead: 0.44, CacheWrite: 5.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 8.8, Output: 33, CacheRead: 0.88, CacheWrite: 11}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -2954,7 +3119,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 19.8, CacheRead: 0.44, CacheWrite: 5.5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -2984,7 +3154,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 11, Output: 55, CacheRead: 1.1, CacheWrite: 13.75}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 11, Output: 55, CacheRead: 1.1, CacheWrite: 13.75},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 22, Output: 82.5, CacheRead: 2.2, CacheWrite: 27.5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -3014,7 +3189,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.11, Output: 0.55, CacheRead: 0.011, CacheWrite: 0.1375}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.11, Output: 0.55, CacheRead: 0.011, CacheWrite: 0.1375},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.825, CacheRead: 0.022, CacheWrite: 0.275}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -3044,7 +3224,47 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 16.5, CacheRead: 0.44, CacheWrite: 5.5}, InputTokensAbove: 272000},
+				},
+			},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &BedrockCompat{
+				SupportsStrictMode: lo.ToPtr(true),
+			},
+		},
+		"openai.gpt-6.1-sol": {
+			ID:        "openai.gpt-6.1-sol",
+			Name:      "GPT-6.1 Sol",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.11, CacheWrite: 2.75},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 16.5, CacheRead: 0.22, CacheWrite: 5.5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -3959,7 +4179,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.22, Output: 1.32, CacheRead: 0.022, CacheWrite: 0.275},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 0.44, Output: 1.98, CacheRead: 0.044, CacheWrite: 0.55}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -3989,7 +4214,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 4.4, Output: 22, CacheRead: 0.44, CacheWrite: 5.5}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 4.4, Output: 22, CacheRead: 0.44, CacheWrite: 5.5},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 8.8, Output: 33, CacheRead: 0.88, CacheWrite: 11}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -4016,7 +4246,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2.2, Output: 13.2, CacheRead: 0.22, CacheWrite: 2.75},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 19.8, CacheRead: 0.44, CacheWrite: 5.5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 		},
@@ -4043,7 +4278,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 11, Output: 55, CacheRead: 1.1, CacheWrite: 13.75}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 11, Output: 55, CacheRead: 1.1, CacheWrite: 13.75},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 22, Output: 82.5, CacheRead: 2.2, CacheWrite: 27.5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -4073,7 +4313,12 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.11, Output: 0.55, CacheRead: 0.011, CacheWrite: 0.1375}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.11, Output: 0.55, CacheRead: 0.011, CacheWrite: 0.1375},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.825, CacheRead: 0.022, CacheWrite: 0.275}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -4103,7 +4348,47 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75}},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.22, CacheWrite: 2.75},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 16.5, CacheRead: 0.44, CacheWrite: 5.5}, InputTokensAbove: 272000},
+				},
+			},
+			ContextWindow: 1050000,
+			MaxTokens:     128000,
+			Compat: &BedrockCompat{
+				SupportsStrictMode: lo.ToPtr(true),
+			},
+		},
+		"us.openai.gpt-6.1-sol": {
+			ID:        "us.openai.gpt-6.1-sol",
+			Name:      "GPT-6.1 Sol (US)",
+			API:       Api("bedrock-converse-stream"),
+			Provider:  ProviderID("amazon-bedrock"),
+			BaseURL:   "https://bedrock-runtime.us-east-1.amazonaws.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingXHigh: lo.ToPtr("xhigh"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					MaxPerMessage: 20,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 2.2, Output: 11, CacheRead: 0.11, CacheWrite: 2.75},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 4.4, Output: 16.5, CacheRead: 0.22, CacheWrite: 5.5}, InputTokensAbove: 272000},
+				},
+			},
 			ContextWindow: 1050000,
 			MaxTokens:     128000,
 			Compat: &BedrockCompat{
@@ -7209,8 +7494,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking:      lo.ToPtr(true),
 			},
 		},
-		"claude-fable-5.1": {
-			ID:        "claude-fable-5.1",
+		"claude-fable-5-1": {
+			ID:        "claude-fable-5-1",
 			Name:      "Claude Fable 5.1",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
@@ -7241,8 +7526,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking:      lo.ToPtr(true),
 			},
 		},
-		"claude-haiku-4.5": {
-			ID:        "claude-haiku-4.5",
+		"claude-haiku-4-5": {
+			ID:        "claude-haiku-4-5",
 			Name:      "Claude Haiku 4.5 (latest)",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
@@ -7267,8 +7552,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
-		"claude-opus-4.5": {
-			ID:        "claude-opus-4.5",
+		"claude-opus-4-5": {
+			ID:        "claude-opus-4-5",
 			Name:      "Claude Opus 4.5 (latest)",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
@@ -7293,8 +7578,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
-		"claude-opus-4.6": {
-			ID:        "claude-opus-4.6",
+		"claude-opus-4-6": {
+			ID:        "claude-opus-4-6",
 			Name:      "Claude Opus 4.6",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
@@ -7323,8 +7608,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking:      lo.ToPtr(true),
 			},
 		},
-		"claude-opus-4.7": {
-			ID:        "claude-opus-4.7",
+		"claude-opus-4-7": {
+			ID:        "claude-opus-4-7",
 			Name:      "Claude Opus 4.7",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
@@ -7355,8 +7640,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking:      lo.ToPtr(true),
 			},
 		},
-		"claude-opus-4.8": {
-			ID:        "claude-opus-4.8",
+		"claude-opus-4-8": {
+			ID:        "claude-opus-4-8",
 			Name:      "Claude Opus 4.8",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
@@ -7419,8 +7704,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking:      lo.ToPtr(true),
 			},
 		},
-		"claude-opus-5.5": {
-			ID:        "claude-opus-5.5",
+		"claude-opus-5-5": {
+			ID:        "claude-opus-5-5",
 			Name:      "Claude Opus 5.5",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
@@ -7451,8 +7736,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				ForceAdaptiveThinking:      lo.ToPtr(true),
 			},
 		},
-		"claude-sonnet-4.5": {
-			ID:        "claude-sonnet-4.5",
+		"claude-sonnet-4-5": {
+			ID:        "claude-sonnet-4-5",
 			Name:      "Claude Sonnet 4.5 (latest)",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
@@ -7477,8 +7762,8 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
-		"claude-sonnet-4.6": {
-			ID:        "claude-sonnet-4.6",
+		"claude-sonnet-4-6": {
+			ID:        "claude-sonnet-4-6",
 			Name:      "Claude Sonnet 4.6",
 			API:       ApiAnthropicMessages,
 			Provider:  ProviderCloudflareAIGateway,
@@ -8448,7 +8733,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.3, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.3, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     16384,
 			Compat: &OpenAICompletionsCompat{
@@ -8913,7 +9198,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.3, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.3, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     16384,
 			Compat: &OpenAICompletionsCompat{
@@ -9445,7 +9730,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     384000,
 			Compat: &AnthropicMessagesCompat{
@@ -9836,7 +10121,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 0.66, CacheRead: 0.007, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     384000,
 			Compat: &AnthropicMessagesCompat{
@@ -15279,6 +15564,83 @@ var MODELS = map[ProviderID]map[string]Model{
 		},
 	},
 	ProviderNVIDIA: {
+		"deepseek-ai/deepseek-v4.1-flash": {
+			ID:        "deepseek-ai/deepseek-v4.1-flash",
+			Name:      "DeepSeek V4.1 Flash",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderNVIDIA,
+			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     nil,
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     384000,
+			Headers: map[string]string{
+				"NVCF-POLL-SECONDS": "3600",
+			},
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:                               lo.ToPtr(false),
+				SupportsDeveloperRole:                       lo.ToPtr(false),
+				SupportsReasoningEffort:                     lo.ToPtr(false),
+				MaxTokensField:                              lo.ToPtr(MaxTokensPlain),
+				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
+				ThinkingFormat:                              lo.ToPtr(ThinkingFormatDeepSeek),
+				SupportsStrictMode:                          lo.ToPtr(false),
+				SupportsLongCacheRetention:                  lo.ToPtr(false),
+			},
+		},
+		"google/diffusiongemma-26b-a4b-it": {
+			ID:        "google/diffusiongemma-26b-a4b-it",
+			Name:      "DiffusionGemma 26B A4B IT",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderNVIDIA,
+			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 250000,
+			MaxTokens:     32768,
+			Headers: map[string]string{
+				"NVCF-POLL-SECONDS": "3600",
+			},
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:              lo.ToPtr(false),
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				SupportsReasoningEffort:    lo.ToPtr(false),
+				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:         lo.ToPtr(false),
+				SupportsLongCacheRetention: lo.ToPtr(false),
+			},
+		},
 		"google/gemma-3-12b-it": {
 			ID:        "google/gemma-3-12b-it",
 			Name:      "Gemma 3 12B IT",
@@ -15645,30 +16007,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 256000,
 			MaxTokens:     65536,
-			Headers: map[string]string{
-				"NVCF-POLL-SECONDS": "3600",
-			},
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsReasoningEffort:    lo.ToPtr(false),
-				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
-				SupportsStrictMode:         lo.ToPtr(false),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
-		"nvidia/nemotron-3-super-120b-a12b": {
-			ID:            "nvidia/nemotron-3-super-120b-a12b",
-			Name:          "Nemotron 3 Super",
-			API:           ApiOpenAICompletions,
-			Provider:      ProviderNVIDIA,
-			BaseURL:       "https://integrate.api.nvidia.com/v1",
-			Type:          ModelTypeChat,
-			Reasoning:     true,
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0.8, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     262144,
 			Headers: map[string]string{
 				"NVCF-POLL-SECONDS": "3600",
 			},
@@ -18372,6 +18710,44 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsStrictMode:                          lo.ToPtr(true),
 			},
 		},
+		"fledge-alpha-free": {
+			ID:        "fledge-alpha-free",
+			Name:      "Fledge Alpha Free",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenCode,
+			BaseURL:   "https://opencode.ai/zen/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  nil,
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   nil,
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:         lo.ToPtr(false),
+				SupportsDeveloperRole: lo.ToPtr(false),
+				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:    lo.ToPtr(true),
+			},
+		},
 		"gemini-3-flash": {
 			ID:        "gemini-3-flash",
 			Name:      "Gemini 3 Flash",
@@ -19849,6 +20225,25 @@ var MODELS = map[ProviderID]map[string]Model{
 		"ling-3.0-flash-fin-free": {
 			ID:            "ling-3.0-flash-fin-free",
 			Name:          "Ling 3.0 Flash Fin Free",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenCode,
+			BaseURL:       "https://opencode.ai/zen/v1",
+			Type:          ModelTypeChat,
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     32768,
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:         lo.ToPtr(false),
+				SupportsDeveloperRole: lo.ToPtr(false),
+				MaxTokensField:        lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:    lo.ToPtr(true),
+			},
+		},
+		"ling-3.1-flash-free": {
+			ID:            "ling-3.1-flash-free",
+			Name:          "Ling 3.1 Flash Free",
 			API:           ApiOpenAICompletions,
 			Provider:      ProviderOpenCode,
 			BaseURL:       "https://opencode.ai/zen/v1",
@@ -22397,6 +22792,25 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
+		"apodex/apodex-1.1-mini:free": {
+			ID:            "apodex/apodex-1.1-mini:free",
+			Name:          "Apodex: Apodex 1.1 Mini (free)",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     235929,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
 		"arcee-ai/trinity-large-thinking": {
 			ID:        "arcee-ai/trinity-large-thinking",
 			Name:      "Arcee AI: Trinity Large Thinking",
@@ -22764,8 +23178,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.29, Output: 1.14, CacheRead: 0.11, CacheWrite: 0}},
-			ContextWindow: 163840,
-			MaxTokens:     147456,
+			ContextWindow: 128000,
+			MaxTokens:     115200,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -22845,9 +23259,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1, CacheRead: 0.135, CacheWrite: 0}},
-			ContextWindow: 131072,
-			MaxTokens:     65536,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.27, Output: 1, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 163840,
+			MaxTokens:     147456,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -22911,9 +23325,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.28, CacheRead: 0.028, CacheWrite: 0}},
-			ContextWindow: 1048576,
-			MaxTokens:     131072,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.028, Output: 0.056, CacheRead: 0.0056, CacheWrite: 0}},
+			ContextWindow: 1024000,
+			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:                       lo.ToPtr(false),
 				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
@@ -22940,7 +23354,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.01, Output: 1.28, CacheRead: 0.01, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0188, Output: 1.28, CacheRead: 0.0188, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
@@ -23008,7 +23422,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95526, Output: 1.91052, CacheRead: 0.079605, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.2088, Output: 0.4176, CacheRead: 0.0174, CacheWrite: 0}},
 			ContextWindow: 1024000,
 			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
@@ -23037,9 +23451,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.66, Output: 1.98, CacheRead: 0.022, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 4.2, CacheRead: 0.14, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     393216,
+			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:                       lo.ToPtr(false),
 				RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
@@ -23076,7 +23490,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0198, Output: 0.396, CacheRead: 0.00291, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
@@ -24198,7 +24612,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.09, Output: 0.3, CacheRead: 0.05, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0675, Output: 0.225, CacheRead: 0.0375, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
@@ -24407,9 +24821,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.18, CacheRead: 0.012, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.042, Output: 0.1232, CacheRead: 0.0084, CacheWrite: 0}},
 			ContextWindow: 262144,
-			MaxTokens:     235929,
+			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -24456,6 +24870,25 @@ var MODELS = map[ProviderID]map[string]Model{
 				},
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.021, Output: 0.0616, CacheRead: 0.0042, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     32768,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"inclusionai/ling-3.1-flash": {
+			ID:            "inclusionai/ling-3.1-flash",
+			Name:          "inclusionAI: Ling 3.1 Flash",
+			API:           ApiOpenAICompletions,
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeChat,
+			Reasoning:     true,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
@@ -24877,7 +25310,7 @@ var MODELS = map[ProviderID]map[string]Model{
 			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.4, Output: 2.2, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.55, Output: 2.2, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     40000,
 			Compat: &OpenAICompletionsCompat{
@@ -25696,9 +26129,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingOff: nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.5, CacheRead: 0.15, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.5, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
-			MaxTokens:     98304,
+			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -25754,7 +26187,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.65, Output: 3.41, CacheRead: 0.15, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.16, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
@@ -25825,7 +26258,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.99, Output: 13, CacheRead: 0.8, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -26033,9 +26466,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.6, Output: 2.4, CacheRead: 0.12, CacheWrite: 0}},
-			ContextWindow: 202800,
-			MaxTokens:     182520,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.5, Output: 2.2, CacheRead: 0.1, CacheWrite: 0}},
+			ContextWindow: 262144,
+			MaxTokens:     16384,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -26080,9 +26513,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.06, Output: 0.16, CacheRead: 0.03, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0595, Output: 0.17, CacheRead: 0.02975, CacheWrite: 0}},
 			ContextWindow: 262144,
-			MaxTokens:     32768,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -28798,80 +29231,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
-		"openai/gpt-6.1-sol-pro:batch": {
-			ID:        "openai/gpt-6.1-sol-pro:batch",
-			Name:      "OpenAI: GPT-6.1 Sol Pro (batch)",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderOpenRouter,
-			BaseURL:   "https://openrouter.ai/api/v1",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     nil,
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.05, CacheWrite: 1.25}},
-			ContextWindow: 1050000,
-			MaxTokens:     128000,
-			Compat: &OpenAICompletionsCompat{
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
-				SupportsStrictMode:         lo.ToPtr(true),
-				SendSessionAffinityHeaders: lo.ToPtr(true),
-			},
-		},
-		"openai/gpt-6.1-sol:batch": {
-			ID:        "openai/gpt-6.1-sol:batch",
-			Name:      "OpenAI: GPT-6.1 Sol (batch)",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderOpenRouter,
-			BaseURL:   "https://openrouter.ai/api/v1",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     nil,
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 5, CacheRead: 0.05, CacheWrite: 1.25}},
-			ContextWindow: 1050000,
-			MaxTokens:     128000,
-			Compat: &OpenAICompletionsCompat{
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
-				SupportsStrictMode:         lo.ToPtr(true),
-				SendSessionAffinityHeaders: lo.ToPtr(true),
-			},
-		},
 		"openai/gpt-audio": {
 			ID:            "openai/gpt-audio",
 			Name:          "OpenAI: GPT Audio",
@@ -29755,9 +30114,9 @@ var MODELS = map[ProviderID]map[string]Model{
 			Type:          ModelTypeChat,
 			Reasoning:     true,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 0.52, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 131072,
-			MaxTokens:     8192,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 0.5, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 40960,
+			MaxTokens:     16384,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -30009,8 +30368,8 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 1.2, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     235929,
+			ContextWindow: 131072,
+			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -30307,9 +30666,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1625, Output: 1.3, CacheRead: 0, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 1, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 262144,
-			MaxTokens:     65536,
+			MaxTokens:     235929,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -30730,9 +31089,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0249, Output: 4.35, CacheRead: 0.0199, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     235929,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.42, Output: 3, CacheRead: 0.085, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -31341,9 +31700,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1, Output: 4.05, CacheRead: 0.17, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4.05, CacheRead: 0.16, CacheWrite: 0}},
 			ContextWindow: 524288,
-			MaxTokens:     471859,
+			MaxTokens:     262144,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -31465,6 +31824,35 @@ var MODELS = map[ProviderID]map[string]Model{
 				SendSessionAffinityHeaders: lo.ToPtr(true),
 			},
 		},
+		"typesafe/jev-router": {
+			ID:        "typesafe/jev-router",
+			Name:      "TypeSafe: Jev Router",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: -1000000, Output: -1000000, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     4096,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
 		"unbiased/pareto": {
 			ID:        "unbiased/pareto",
 			Name:      "Pareto",
@@ -31486,6 +31874,35 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2.5, Output: 7.5, CacheRead: 0.25, CacheWrite: 0}},
 			ContextWindow: 262144,
+			MaxTokens:     131072,
+			Compat: &OpenAICompletionsCompat{
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
+				SupportsStrictMode:         lo.ToPtr(true),
+				SendSessionAffinityHeaders: lo.ToPtr(true),
+			},
+		},
+		"unbiased/pareto-26.10-preview": {
+			ID:        "unbiased/pareto-26.10-preview",
+			Name:      "Pareto 26.10 Preview",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeChat,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.8, Output: 3.2, CacheRead: 0.03, CacheWrite: 0}},
+			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
@@ -32069,7 +32486,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 0.9, CacheRead: 0.055, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 0.9, CacheRead: 0.05, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     32768,
 			Compat: &OpenAICompletionsCompat{
@@ -32220,9 +32637,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.26, CacheWrite: 0}},
-			ContextWindow: 1048575,
-			MaxTokens:     943717,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.4, Output: 4.4, CacheRead: 0.14, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -32604,7 +33021,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0198, Output: 0.396, CacheRead: 0.00291, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.02, Output: 0.6, CacheRead: 0.01, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
@@ -32632,9 +33049,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.134, Output: 3.5, CacheRead: 0.134, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.22, Output: 4.2, CacheRead: 0.14, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     393216,
+			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -32660,7 +33077,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0099, Output: 0.13068, CacheRead: 0.001386, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.0188, Output: 1.28, CacheRead: 0.0188, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     943718,
 			Compat: &OpenAICompletionsCompat{
@@ -32775,7 +33192,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3654, Output: 9.1343, CacheRead: 0.4, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.9895, Output: 13, CacheRead: 0.45, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -33041,9 +33458,9 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.02, Output: 0.2475, CacheRead: 0.01, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.035, Output: 0.5, CacheRead: 0.035, CacheWrite: 0}},
 			ContextWindow: 1048576,
-			MaxTokens:     943718,
+			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsDeveloperRole:      lo.ToPtr(false),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenRouter),
@@ -33069,7 +33486,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingMax:     lo.ToPtr("max"),
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.13, Output: 4, CacheRead: 0.13, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.12, Output: 4, CacheRead: 0.08, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -34734,9 +35151,9 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
-		"deepseek-ai/DeepSeek-V4-Pro": {
-			ID:        "deepseek-ai/DeepSeek-V4-Pro",
-			Name:      "DeepSeek V4 Pro",
+		"deepseek-ai/DeepSeek-V4-Pro-0813": {
+			ID:        "deepseek-ai/DeepSeek-V4-Pro-0813",
+			Name:      "DeepSeek V4 Pro 0813",
 			API:       ApiOpenAICompletions,
 			Provider:  ProviderTogether,
 			BaseURL:   "https://api.together.ai/v1",
@@ -34750,40 +35167,13 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingXHigh:   nil,
 			},
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.74, Output: 3.48, CacheRead: 0.2, CacheWrite: 0}},
-			ContextWindow: 512000,
-			MaxTokens:     384000,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsReasoningEffort:    lo.ToPtr(true),
-				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatTogether),
-				SupportsStrictMode:         lo.ToPtr(false),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
-		"deepseek-ai/DeepSeek-V4-Pro-0813": {
-			ID:        "deepseek-ai/DeepSeek-V4-Pro-0813",
-			Name:      "DeepSeek V4 Pro 0813",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderTogether,
-			BaseURL:   "https://api.together.ai/v1",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-			},
-			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.32, Output: 3.96, CacheRead: 0.13, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     384000,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
 				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsReasoningEffort:    lo.ToPtr(false),
+				SupportsReasoningEffort:    lo.ToPtr(true),
 				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
 				ThinkingFormat:             lo.ToPtr(ThinkingFormatTogether),
 				SupportsStrictMode:         lo.ToPtr(false),
@@ -34817,43 +35207,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     384000,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsReasoningEffort:    lo.ToPtr(false),
-				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatTogether),
-				SupportsStrictMode:         lo.ToPtr(false),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
-		"google/gemma-4-31B-it": {
-			ID:        "google/gemma-4-31B-it",
-			Name:      "Gemma 4 31B Instruct",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderTogether,
-			BaseURL:   "https://api.together.ai/v1",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.39, Output: 0.97, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 262144,
-			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
 				SupportsStore:              lo.ToPtr(false),
 				SupportsDeveloperRole:      lo.ToPtr(false),
@@ -34969,37 +35322,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 131072,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsReasoningEffort:    lo.ToPtr(true),
-				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:             lo.ToPtr(ThinkingFormatOpenAI),
-				SupportsStrictMode:         lo.ToPtr(false),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
-		"openai/gpt-oss-20b": {
-			ID:        "openai/gpt-oss-20b",
-			Name:      "GPT OSS 20B",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderTogether,
-			BaseURL:   "https://api.together.ai/v1",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     nil,
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     nil,
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.05, Output: 0.2, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 131072,
 			MaxTokens:     131072,
 			Compat: &OpenAICompletionsCompat{
@@ -36787,6 +37109,32 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.007, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     32768,
+			Compat: &AnthropicMessagesCompat{
+				AllowEmptySignature: lo.ToPtr(true),
+			},
+		},
+		"deepseek/deepseek-v4.1-flash-fast": {
+			ID:        "deepseek/deepseek-v4.1-flash-fast",
+			Name:      "DeepSeek V4.1 Flash Fast",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderVercelAIGateway,
+			BaseURL:   "https://ai-gateway.vercel.sh",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.006, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     1000000,
 			Compat: &AnthropicMessagesCompat{
 				AllowEmptySignature: lo.ToPtr(true),
 			},
@@ -40686,7 +41034,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.14, Output: 0.28, CacheRead: 0.0028, CacheWrite: 0}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 1.28, CacheRead: 0.04, CacheWrite: 0}},
 			ContextWindow: 1048576,
 			MaxTokens:     131072,
 			Compat: &AnthropicMessagesCompat{
@@ -42039,6 +42387,30 @@ var MODELS = map[ProviderID]map[string]Model{
 // separate Go counterpart — the generator emits one file.
 var IMAGE_MODELS = map[ProviderID]map[string]Model{
 	ProviderOpenRouter: {
+		"black-forest-labs/flux-3-image": {
+			ID:        "black-forest-labs/flux-3-image",
+			Name:      "Black Forest Labs: FLUX.3 Image",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
 		"black-forest-labs/flux.2-flex": {
 			ID:        "black-forest-labs/flux.2-flex",
 			Name:      "Black Forest Labs: FLUX.2 Flex",
@@ -42144,6 +42516,30 @@ var IMAGE_MODELS = map[ProviderID]map[string]Model{
 			Type:      ModelTypeImage,
 			Reasoning: false,
 			Input:     []ModelInput{ModelInputImage, ModelInputText},
+			Output:    []ModelInput{ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 0,
+			MaxTokens:     0,
+		},
+		"bytedance-seed/seedream-5-0-flash": {
+			ID:        "bytedance-seed/seedream-5-0-flash",
+			Name:      "ByteDance Seed: Seedream 5.0 Flash",
+			API:       Api("openrouter-images"),
+			Provider:  ProviderOpenRouter,
+			BaseURL:   "https://openrouter.ai/api/v1",
+			Type:      ModelTypeImage,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
 			Output:    []ModelInput{ModelInputImage},
 			InputLimits: &ModelInputLimits{
 				Images: &ModelImageInputLimits{
@@ -43397,6 +43793,32 @@ var IMAGE_MODELS = map[ProviderID]map[string]Model{
 // separate Go counterpart — the generator emits one file.
 var CLASSIFIER_MODELS = map[ProviderID]map[string]Model{
 	ProviderCloudflareWorkersAI: {
+		"@cf/cloudflare/clef": {
+			ID:            "@cf/cloudflare/clef",
+			Name:          "Clef",
+			API:           Api("cloudflare-workers-ai-system-one"),
+			Provider:      ProviderCloudflareWorkersAI,
+			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.24, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 65536,
+			MaxTokens:     0,
+		},
+		"@cf/cloudflare/clef-flash": {
+			ID:            "@cf/cloudflare/clef-flash",
+			Name:          "Clef Flash",
+			API:           Api("cloudflare-workers-ai-system-one"),
+			Provider:      ProviderCloudflareWorkersAI,
+			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.09, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 65536,
+			MaxTokens:     0,
+		},
 		"typesafe/jev": {
 			ID:            "typesafe/jev",
 			Name:          "Jev",
@@ -43440,6 +43862,19 @@ var CLASSIFIER_MODELS = map[ProviderID]map[string]Model{
 		},
 	},
 	ProviderOpenRouter: {
+		"inception/mercury-decide:free": {
+			ID:            "inception/mercury-decide:free",
+			Name:          "Inception: Mercury Decide (free)",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 32768,
+			MaxTokens:     0,
+		},
 		"jaredpalmer/kev-4b": {
 			ID:            "jaredpalmer/kev-4b",
 			Name:          "Jared Palmer: Kev 4B",
@@ -43451,6 +43886,19 @@ var CLASSIFIER_MODELS = map[ProviderID]map[string]Model{
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.042, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 8192,
+			MaxTokens:     0,
+		},
+		"liquid/d1": {
+			ID:            "liquid/d1",
+			Name:          "LiquidAI: D1",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0, CacheRead: 0.04, CacheWrite: 0}},
+			ContextWindow: 65536,
 			MaxTokens:     0,
 		},
 		"respan/span-01": {
@@ -43490,6 +43938,19 @@ var CLASSIFIER_MODELS = map[ProviderID]map[string]Model{
 			Input:         []ModelInput{ModelInputText},
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 4096,
+			MaxTokens:     0,
+		},
+		"togethercomputer/tev1-4b-experimental": {
+			ID:            "togethercomputer/tev1-4b-experimental",
+			Name:          "Together: Tev1 4B Experimental",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderOpenRouter,
+			BaseURL:       "https://openrouter.ai/api/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.042, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 32768,
 			MaxTokens:     0,
 		},
 		"typesafe/jev-1.13": {
@@ -43548,6 +44009,32 @@ var CLASSIFIER_MODELS = map[ProviderID]map[string]Model{
 		},
 	},
 	ProviderVercelAIGateway: {
+		"convaiinnovations/laya": {
+			ID:            "convaiinnovations/laya",
+			Name:          "Laya",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh/typesafe/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 8192,
+			MaxTokens:     0,
+		},
+		"convaiinnovations/laya-free": {
+			ID:            "convaiinnovations/laya-free",
+			Name:          "Laya (Free)",
+			API:           Api("typesafe-system-one"),
+			Provider:      ProviderVercelAIGateway,
+			BaseURL:       "https://ai-gateway.vercel.sh/typesafe/v1",
+			Type:          ModelTypeClassifier,
+			Reasoning:     false,
+			Input:         []ModelInput{ModelInputText},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 8192,
+			MaxTokens:     0,
+		},
 		"liquid/d1": {
 			ID:            "liquid/d1",
 			Name:          "Liquid d1",
@@ -43557,8 +44044,8 @@ var CLASSIFIER_MODELS = map[ProviderID]map[string]Model{
 			Type:          ModelTypeClassifier,
 			Reasoning:     false,
 			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
-			ContextWindow: 32000,
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.04, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 65536,
 			MaxTokens:     0,
 		},
 		"typesafe-ai/jev": {
@@ -43580,4 +44067,4 @@ var CLASSIFIER_MODELS = map[ProviderID]map[string]Model{
 // MODELSGeneratedAt is the generation timestamp shared by all built-in
 // provider catalogs, Unix milliseconds (pi: providers/data/.manifest.json
 // generatedAt). 0 means unknown; pi models the unknown case as undefined.
-var MODELSGeneratedAt int64 = 1790765733482
+var MODELSGeneratedAt int64 = 1791038816413

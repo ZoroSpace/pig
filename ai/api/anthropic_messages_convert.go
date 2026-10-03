@@ -33,8 +33,9 @@ type convertedAnthropicMessages struct {
 }
 
 // convertAnthropicMessages converts history into Anthropic message params
-// (pi: convertMessages).
-func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken bool, cacheControl *anthropicCacheControl, allowEmptySignature bool, managedProvider string, nativeToolChanges bool) (convertedAnthropicMessages, error) {
+// (pi: convertMessages). convertToolDefinitions converts tool definitions for
+// native tool_addition blocks; it is nil when tool changes are not native.
+func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken bool, cacheControl *anthropicCacheControl, allowEmptySignature bool, managedProvider string, convertToolDefinitions func([]types.Tool) ([]map[string]any, error)) (convertedAnthropicMessages, error) {
 	var params []map[string]any
 	converted := convertedAnthropicMessages{assistantLevels: map[int]AnthropicEffort{}}
 	// Later system messages are held back and emitted directly before the
@@ -62,8 +63,18 @@ func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken 
 			if len(text) > 0 {
 				blocks = append(blocks, map[string]any{"type": "text", "text": utils.SanitizeSurrogates(text)})
 			}
-			if nativeToolChanges {
+			if convertToolDefinitions != nil {
+				added := system.ToolsAdded
+				redefined := map[string]bool{}
+				for _, tool := range added {
+					redefined[tool.Name] = true
+				}
 				for _, ref := range system.ToolsRemoved {
+					// A new definition under the same name replaces the old
+					// one, so no removal is needed.
+					if redefined[ref.Name] {
+						continue
+					}
 					name := ref.Name
 					if isOAuthToken {
 						name = toClaudeCodeName(ref.Name)
@@ -73,14 +84,14 @@ func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken 
 						"tool": map[string]any{"type": "tool_reference", "name": name},
 					})
 				}
-				for _, tool := range system.ToolsAdded {
-					name := tool.Name
-					if isOAuthToken {
-						name = toClaudeCodeName(tool.Name)
-					}
+				definitions, err := convertToolDefinitions(added)
+				if err != nil {
+					return converted, err
+				}
+				for _, definition := range definitions {
 					blocks = append(blocks, map[string]any{
 						"type": "tool_addition",
-						"tool": map[string]any{"type": "tool_reference", "name": name},
+						"tool": map[string]any{"type": "tool_definition", "definition": definition},
 					})
 				}
 			}

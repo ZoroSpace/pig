@@ -97,3 +97,12 @@ func TestRetryAssistantCallPropagatesProduceError(t *testing.T) {
 		t.Fatalf("err = %v, want sentinel", err)
 	}
 }
+
+func TestIsRetryableAssistantErrorMatchesModelAtCapacity(t *testing.T) {
+	// Regression for pi #10278: "Selected model is at capacity" provider
+	// errors end the turn instead of being retried.
+	message := retryTestMessage("", types.StopReasonError, "Selected model is at capacity. Please try again later.")
+	if !IsRetryableAssistantError(message) {
+		t.Fatal("model-at-capacity error should be retryable")
+	}
+}

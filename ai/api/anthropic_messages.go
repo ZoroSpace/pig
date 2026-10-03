@@ -69,15 +69,15 @@ const (
 	serverSideFallbackBeta          = "server-side-fallback-2026-07-01"
 	midConversationOutputConfigBeta = "mid-conversation-output-config-2026-07-01"
 	thinkingBindingControlsBeta     = "thinking-binding-controls-2026-08-01"
-	midConversationToolChangesBeta  = "mid-conversation-tool-changes-2026-07-01"
+	inlineToolsBeta                 = "inline-tools-2026-09-15"
 )
 
 // deferredToolPlaceholderName is the stable deferred tool declared whenever
-// native tool changes are in use. Anthropic adds hidden prompt scaffolding as
-// soon as any tool has defer_loading; declaring this placeholder from the
-// first request keeps that scaffolding in the cached prefix, so the first
-// real late tool does not invalidate the cache (measured: full miss without
-// it). It is never activated and the model cannot see it (pi:
+// native tool changes are in use. Anthropic adds hidden prompt scaffolding for
+// mid-conversation tool changes; declaring this placeholder from the first
+// request keeps that scaffolding in the cached prefix, so the first tool
+// change does not invalidate the cache (measured: full miss without it). It
+// is never activated and the model cannot see it (pi:
 // DEFERRED_TOOL_PLACEHOLDER).
 const deferredToolPlaceholderName = "__pi_deferred_placeholder__"
 
@@ -1435,7 +1435,7 @@ func getBetaFeatures(model *types.Model, llmContext *types.TranscriptContext, is
 		features = append(features, midConversationOutputConfigBeta, thinkingBindingControlsBeta)
 	}
 	if nativeToolChanges {
-		features = append(features, midConversationToolChangesBeta)
+		features = append(features, inlineToolsBeta)
 	}
 	seen := map[string]struct{}{}
 	deduped := make([]string, 0, len(features))
@@ -1484,17 +1484,24 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 	if initialSystemMessage != nil {
 		conversationMessages = transformedMessages[1:]
 	}
-	// Native tool changes reference tools by name, so a redefined name cannot
-	// be expressed, and Anthropic rejects a tool list where every tool is
-	// deferred, so there must be an initial active tool to anchor the deferred
-	// ones. Otherwise the current tool list is sent.
+	// Native tool changes keep the request-level tool list fixed and define
+	// every later tool by value in a tool_addition block, which also expresses
+	// same-name redefinitions. Anthropic rejects a tool list where every tool
+	// is deferred, so there must be an initial active tool to anchor the
+	// placeholder. Otherwise the current tool list is sent.
 	var initialTools []types.Tool
 	if initialSystemMessage != nil {
 		initialTools = initialSystemMessage.ToolsAdded
 	}
 	nativeToolChanges := compat.supportsMidConvoSystemMessages && compat.supportsMidConvoToolChanges &&
-		len(initialTools) > 0 && !utils.HasToolRedefinitions(llmContext.Messages)
-	converted, err := convertAnthropicMessages(conversationMessages, isOAuthToken, cacheControl, compat.allowEmptySignature, managedEffortProvider(model), nativeToolChanges)
+		len(initialTools) > 0
+	var convertToolDefinitions func([]types.Tool) ([]map[string]any, error)
+	if nativeToolChanges {
+		convertToolDefinitions = func(tools []types.Tool) ([]map[string]any, error) {
+			return convertAnthropicTools(tools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, nil)
+		}
+	}
+	converted, err := convertAnthropicMessages(conversationMessages, isOAuthToken, cacheControl, compat.allowEmptySignature, managedEffortProvider(model), convertToolDefinitions)
 	if err != nil {
 		return nil, err
 	}
@@ -1551,33 +1558,13 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 		toolCacheControl = cacheControl
 	}
 	if nativeToolChanges {
-		// Initial tools stay active with the cache breakpoint on the last one.
-		// Every later declaration is deferred and only surfaced by its
-		// tool_addition block; removed tools stay declared and are withdrawn
-		// by tool_removal. The request-level list therefore only grows,
-		// keeping the cached prefix intact across tool changes.
-		initialNames := map[string]bool{}
-		for _, tool := range initialTools {
-			initialNames[tool.Name] = true
-		}
-		var laterTools []types.Tool
-		for _, tool := range utils.GetDeclaredTools(llmContext.Messages) {
-			if !initialNames[tool.Name] {
-				laterTools = append(laterTools, tool)
-			}
-		}
+		// Initial tools stay active with the cache breakpoint on the last one,
+		// followed by the placeholder. The list never changes afterwards: later
+		// tools are defined by value in tool_addition blocks and withdrawn by
+		// tool_removal, so the cached prefix survives every tool change.
 		initialConverted, err := convertAnthropicTools(initialTools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, toolCacheControl)
 		if err != nil {
 			return nil, err
-		}
-		laterConverted, err := convertAnthropicTools(laterTools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, nil)
-		if err != nil {
-			return nil, err
-		}
-		deferredLater := make([]map[string]any, 0, len(laterConverted))
-		for _, toolParam := range laterConverted {
-			toolParam["defer_loading"] = true
-			deferredLater = append(deferredLater, toolParam)
 		}
 		placeholder := map[string]any{
 			"name":        deferredToolPlaceholderName,
@@ -1590,7 +1577,6 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 			"defer_loading": true,
 		}
 		tools := append(append([]map[string]any{}, initialConverted...), placeholder)
-		tools = append(tools, deferredLater...)
 		params["tools"] = tools
 	} else {
 		tools := utils.GetCurrentTools(llmContext.Messages)

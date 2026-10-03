@@ -55,14 +55,16 @@ func processBedrockModels(data ModelsDevCatalog) []*ai.Model {
 		}
 
 		model := &ai.Model{
-			ID:            modelID,
-			Name:          orString(m.Name, modelID),
-			API:           ai.ApiBedrockConverseStream,
-			Provider:      ai.ProviderAmazonBedrock,
-			BaseURL:       getBedrockBaseUrl(modelID),
-			Reasoning:     boolVal(m.Reasoning),
-			Input:         input,
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			ID:        modelID,
+			Name:      orString(m.Name, modelID),
+			API:       ai.ApiBedrockConverseStream,
+			Provider:  ai.ProviderAmazonBedrock,
+			BaseURL:   getBedrockBaseUrl(modelID),
+			Reasoning: boolVal(m.Reasoning),
+			Input:     input,
+			// modelsDevCostOf keeps models.dev pricing tiers, e.g. the
+			// long-context tier for OpenAI models (pi #10326).
+			Cost:          modelsDevCostOf(m.Cost),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		}

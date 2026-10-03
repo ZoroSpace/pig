@@ -365,8 +365,12 @@ func GetDeclaredTools(messages TranscriptMessages) []tool {
 }
 
 // HasToolRedefinitions reports whether a tool name was declared twice with
-// different definitions. Transports that reference tools by name (Anthropic
-// tool_addition/tool_removal) cannot express that.
+// different definitions. A transport that can only reference previously
+// declared tools by name cannot replay such a history.
+//
+// Deprecated: no built-in transport needs this anymore — Anthropic expresses
+// redefinitions with inline tool_definition blocks. Kept for API
+// compatibility and will be removed in a future release.
 func HasToolRedefinitions(messages TranscriptMessages) bool {
 	declared := make(map[string]tool)
 	for _, message := range messages {

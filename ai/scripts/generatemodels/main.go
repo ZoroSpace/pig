@@ -660,6 +660,35 @@ func opencodeClassifierModels() []*ai.Model {
 // https://developers.cloudflare.com/ai/models/typesafe/jev/
 func cloudflareWorkersAIClassifierModels() []*ai.Model {
 	return []*ai.Model{
+		// Cloudflare-hosted Clef decision models. They accept images, but
+		// classifier contexts carry text or JSON state only, so the catalog
+		// advertises text.
+		// Pricing: https://developers.cloudflare.com/workers-ai/models/clef/
+		// and https://developers.cloudflare.com/workers-ai/models/clef-flash/
+		{
+			Type:     ai.ModelTypeClassifier,
+			ID:       "@cf/cloudflare/clef",
+			Name:     "Clef",
+			API:      ai.ClassifierApiCloudflareWorkersAI,
+			Provider: ai.ProviderCloudflareWorkersAI,
+			// pi: CLOUDFLARE_WORKERS_AI_REST_BASE_URL — the System One
+			// envelope hangs off the REST base without the /v1 segment.
+			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai",
+			Input:         []ai.ModelInput{ai.ModelInputText},
+			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 0.24}},
+			ContextWindow: 65536,
+		},
+		{
+			Type:          ai.ModelTypeClassifier,
+			ID:            "@cf/cloudflare/clef-flash",
+			Name:          "Clef Flash",
+			API:           ai.ClassifierApiCloudflareWorkersAI,
+			Provider:      ai.ProviderCloudflareWorkersAI,
+			BaseURL:       "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai",
+			Input:         []ai.ModelInput{ai.ModelInputText},
+			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 0.09}},
+			ContextWindow: 65536,
+		},
 		{
 			Type:     ai.ModelTypeClassifier,
 			ID:       "typesafe/jev",

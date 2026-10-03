@@ -74,36 +74,41 @@ func TestBedrockThinkingPayload(t *testing.T) {
 		return thinking, outputConfig, anthropicBeta
 	}
 
+	// adaptiveWithBinding asserts the adaptive thinking shape shared by every
+	// block-binding-capable model (pi: ADAPTIVE_WITH_BINDING) plus the binding
+	// beta (pi #10324).
+	assertAdaptiveWithBinding := func(t *testing.T, payload *bedrockConverseInput, effort string) {
+		t.Helper()
+		thinking, outputConfig, beta := adaptiveFields(t, payload)
+		if len(thinking) != 3 ||
+			thinking["type"] != "adaptive" ||
+			thinking["display"] != "summarized" {
+			t.Fatalf("thinking = %v, want {adaptive, summarized, block_binding}", thinking)
+		}
+		blockBinding, ok := thinking["block_binding"].(map[string]any)
+		if !ok || blockBinding["prefix_mismatch_behavior"] != "drop_block" {
+			t.Fatalf("thinking.block_binding = %v, want {prefix_mismatch_behavior: drop_block}", thinking["block_binding"])
+		}
+		if len(outputConfig) != 1 || outputConfig["effort"] != effort {
+			t.Fatalf("output_config = %v, want {effort: %s}", outputConfig, effort)
+		}
+		if len(beta) != 1 || beta[0] != "thinking-binding-controls-2026-08-01" {
+			t.Fatalf("anthropic_beta = %v, want [thinking-binding-controls-2026-08-01]", beta)
+		}
+	}
+
 	t.Run("uses adaptive thinking for Claude Opus 4.8 when reasoning is enabled", func(t *testing.T) {
 		model := bedrockOpusModel(t, "global.anthropic.claude-opus-4-8-v1", "Claude Opus 4.8 (Global)")
 		payload := captureBedrockThinkingPayload(t, model, nil)
 
-		thinking, outputConfig, beta := adaptiveFields(t, payload)
-		if len(thinking) != 2 || thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
-			t.Fatalf("thinking = %v, want {adaptive, summarized}", thinking)
-		}
-		if len(outputConfig) != 1 || outputConfig["effort"] != "high" {
-			t.Fatalf("output_config = %v, want {effort: high}", outputConfig)
-		}
-		if beta != nil {
-			t.Fatalf("anthropic_beta = %v, want unset", beta)
-		}
+		assertAdaptiveWithBinding(t, payload, "high")
 	})
 
 	t.Run("maps xhigh reasoning to effort=xhigh for Claude Opus 4.8", func(t *testing.T) {
 		model := bedrockOpusModel(t, "global.anthropic.claude-opus-4-8-v1", "Claude Opus 4.8 (Global)")
 		payload := captureBedrockThinkingPayload(t, model, &BedrockOptions{Reasoning: "xhigh"})
 
-		thinking, outputConfig, beta := adaptiveFields(t, payload)
-		if len(thinking) != 2 || thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
-			t.Fatalf("thinking = %v", thinking)
-		}
-		if outputConfig["effort"] != "xhigh" {
-			t.Fatalf("output_config = %v, want {effort: xhigh}", outputConfig)
-		}
-		if beta != nil {
-			t.Fatalf("anthropic_beta = %v, want unset", beta)
-		}
+		assertAdaptiveWithBinding(t, payload, "xhigh")
 	})
 
 	t.Run("uses adaptive thinking for Claude Fable 5 when reasoning is enabled", func(t *testing.T) {
@@ -113,16 +118,7 @@ func TestBedrockThinkingPayload(t *testing.T) {
 		}
 		payload := captureBedrockThinkingPayload(t, &model, nil)
 
-		thinking, outputConfig, beta := adaptiveFields(t, payload)
-		if len(thinking) != 2 || thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
-			t.Fatalf("thinking = %v", thinking)
-		}
-		if len(outputConfig) != 1 || outputConfig["effort"] != "high" {
-			t.Fatalf("output_config = %v", outputConfig)
-		}
-		if beta != nil {
-			t.Fatalf("anthropic_beta = %v, want unset", beta)
-		}
+		assertAdaptiveWithBinding(t, payload, "high")
 	})
 
 	t.Run("uses adaptive thinking for Claude Sonnet 5 when reasoning is enabled", func(t *testing.T) {
@@ -132,16 +128,7 @@ func TestBedrockThinkingPayload(t *testing.T) {
 		}
 		payload := captureBedrockThinkingPayload(t, &model, nil)
 
-		thinking, outputConfig, beta := adaptiveFields(t, payload)
-		if len(thinking) != 2 || thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
-			t.Fatalf("thinking = %v", thinking)
-		}
-		if len(outputConfig) != 1 || outputConfig["effort"] != "high" {
-			t.Fatalf("output_config = %v", outputConfig)
-		}
-		if beta != nil {
-			t.Fatalf("anthropic_beta = %v, want unset", beta)
-		}
+		assertAdaptiveWithBinding(t, payload, "high")
 	})
 
 	t.Run("uses adaptive thinking for Claude Opus 5 when reasoning is enabled", func(t *testing.T) {
@@ -151,16 +138,7 @@ func TestBedrockThinkingPayload(t *testing.T) {
 		}
 		payload := captureBedrockThinkingPayload(t, &model, nil)
 
-		thinking, outputConfig, beta := adaptiveFields(t, payload)
-		if len(thinking) != 2 || thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
-			t.Fatalf("thinking = %v", thinking)
-		}
-		if len(outputConfig) != 1 || outputConfig["effort"] != "high" {
-			t.Fatalf("output_config = %v", outputConfig)
-		}
-		if beta != nil {
-			t.Fatalf("anthropic_beta = %v, want unset", beta)
-		}
+		assertAdaptiveWithBinding(t, payload, "high")
 	})
 
 	t.Run("maps xhigh reasoning to effort=xhigh for Claude Opus 5", func(t *testing.T) {
@@ -170,13 +148,7 @@ func TestBedrockThinkingPayload(t *testing.T) {
 		}
 		payload := captureBedrockThinkingPayload(t, &model, &BedrockOptions{Reasoning: "xhigh"})
 
-		thinking, outputConfig, _ := adaptiveFields(t, payload)
-		if len(thinking) != 2 || thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
-			t.Fatalf("thinking = %v", thinking)
-		}
-		if outputConfig["effort"] != "xhigh" {
-			t.Fatalf("output_config = %v, want {effort: xhigh}", outputConfig)
-		}
+		assertAdaptiveWithBinding(t, payload, "xhigh")
 	})
 
 	t.Run("maps xhigh reasoning to effort=xhigh for Claude Fable 5", func(t *testing.T) {
@@ -187,11 +159,42 @@ func TestBedrockThinkingPayload(t *testing.T) {
 		payload := captureBedrockThinkingPayload(t, &model, &BedrockOptions{Reasoning: "xhigh"})
 
 		thinking, outputConfig, _ := adaptiveFields(t, payload)
-		if len(thinking) != 2 || thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
+		if len(thinking) != 3 || thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
 			t.Fatalf("thinking = %v", thinking)
 		}
 		if outputConfig["effort"] != "xhigh" {
 			t.Fatalf("output_config = %v, want {effort: xhigh}", outputConfig)
+		}
+	})
+
+	t.Run("sends block_binding and the binding beta for Claude Opus 5.5", func(t *testing.T) {
+		// https://github.com/earendil-works/pi/issues/10324
+		model, ok := ai.MODELS["amazon-bedrock"]["global.anthropic.claude-opus-5-5"]
+		if !ok {
+			t.Fatal("expected global.anthropic.claude-opus-5-5 in the builtin catalog")
+		}
+		payload := captureBedrockThinkingPayload(t, &model, nil)
+
+		assertAdaptiveWithBinding(t, payload, "high")
+	})
+
+	t.Run("omits block_binding for 4.6 models", func(t *testing.T) {
+		// Bedrock rejects block_binding on 4.6 models: "Extra inputs are not
+		// permitted" (#10324).
+		for _, modelID := range []string{"global.anthropic.claude-opus-4-6-v1", "global.anthropic.claude-sonnet-4-6"} {
+			model, ok := ai.MODELS["amazon-bedrock"][modelID]
+			if !ok {
+				t.Fatalf("expected %s in the builtin catalog", modelID)
+			}
+			payload := captureBedrockThinkingPayload(t, &model, nil)
+
+			thinking, _, beta := adaptiveFields(t, payload)
+			if len(thinking) != 2 || thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
+				t.Fatalf("%s: thinking = %v, want {adaptive, summarized} without block_binding", modelID, thinking)
+			}
+			if beta != nil {
+				t.Fatalf("%s: anthropic_beta = %v, want unset", modelID, beta)
+			}
 		}
 	})
 

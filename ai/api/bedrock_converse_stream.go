@@ -164,6 +164,11 @@ const bedrockEmptyTextPlaceholder = "<empty>"
 // path uses for redacted thinking.
 const bedrockRedactedThinkingPlaceholder = "[Reasoning redacted]"
 
+// bedrockThinkingBindingControlsBeta is sent alongside
+// thinking.block_binding for adaptive Claude models (pi:
+// THINKING_BINDING_CONTROLS_BETA).
+const thinkingBindingControlsBetaBedrock = "thinking-binding-controls-2026-08-01"
+
 // BedrockConverseStream implements ProviderStreams for the
 // bedrock-converse-stream API (pi: the { stream, streamSimple } module
 // object).
@@ -954,6 +959,20 @@ func supportsNativeXhighEffort(model *types.Model) bool {
 	})
 }
 
+// supportsThinkingBlockBinding checks if the model accepts
+// `thinking.block_binding`. Opus 4.6 and Sonnet 4.6 reject it with
+// "thinking.adaptive.block_binding: Extra inputs are not permitted" (pi:
+// supportsThinkingBlockBinding).
+func supportsThinkingBlockBinding(model *types.Model) bool {
+	return anyBedrockCandidate(model.ID, model.Name, func(s string) bool {
+		return strings.Contains(s, "opus-4-7") ||
+			strings.Contains(s, "opus-4-8") ||
+			strings.Contains(s, "opus-5") ||
+			strings.Contains(s, "sonnet-5") ||
+			strings.Contains(s, "fable-5")
+	})
+}
+
 func anyBedrockCandidate(modelID, modelName string, match func(string) bool) bool {
 	for _, candidate := range getModelMatchCandidates(modelID, modelName) {
 		if match(candidate) {
@@ -1474,22 +1493,34 @@ func buildAdditionalModelRequestFields(model *types.Model, options *BedrockOptio
 	if isAnthropicClaudeModel(model) {
 		// GovCloud Bedrock currently rejects the Claude thinking.display
 		// field. Omit it there until the GovCloud Converse schema catches up.
+		isGovCloud := isGovCloudBedrockTarget(model, options)
 		var display *string
-		if !isGovCloudBedrockTarget(model, options) {
+		if !isGovCloud {
 			thinkingDisplay := options.ThinkingDisplay
 			if thinkingDisplay == "" {
 				thinkingDisplay = BedrockThinkingDisplaySummarized
 			}
 			display = lo.ToPtr(string(thinkingDisplay))
 		}
+		// Replayed signed thinking blocks are bound to the system prompt and
+		// tools they were created with. Bedrock 400s on replay after either
+		// changes unless stale blocks are dropped, matching the Anthropic
+		// provider. Skipped on GovCloud like display.
+		useBlockBinding := !isGovCloud && supportsThinkingBlockBinding(model)
 		result := map[string]any{}
 		if supportsAdaptiveThinking(model.ID, model.Name) {
 			thinking := map[string]any{"type": "adaptive"}
 			if display != nil {
 				thinking["display"] = *display
 			}
+			if useBlockBinding {
+				thinking["block_binding"] = map[string]any{"prefix_mismatch_behavior": "drop_block"}
+			}
 			result["thinking"] = thinking
 			result["output_config"] = map[string]any{"effort": bedrockMapThinkingLevelToEffort(model, options.Reasoning)}
+			if useBlockBinding {
+				result["anthropic_beta"] = []string{thinkingBindingControlsBetaBedrock}
+			}
 			return result
 		}
 
