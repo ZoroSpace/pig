@@ -1,6 +1,6 @@
 // skill_invocation_message.go (pi: components/skill-invocation-message.ts)
 // — renders a skill invocation message with collapsed/expanded state. Uses
-// the same background color as custom messages for visual consistency.
+// the same accent styling as custom messages for visual consistency.
 // Only renders the skill block itself - user message is rendered
 // separately.
 package components
@@ -13,17 +13,19 @@ import (
 )
 
 // SkillInvocationMessageComponent renders a skill invocation (pi: class
-// SkillInvocationMessageComponent extends Box).
+// SkillInvocationMessageComponent extends Box; pig frames it with
+// state-colored borders instead of the pi background fill —
+// docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS).
 type SkillInvocationMessageComponent struct {
-	tui.Box
+	tui.Container
 
 	expanded      bool
 	skillBlock    *core.ParsedSkillBlock
 	markdownTheme tui.MarkdownTheme
 }
 
-// NewSkillInvocationMessageComponent builds the component (pi:
-// constructor; markdownTheme nil = getMarkdownTheme()).
+// NewSkillInvocationMessageComponent builds the component (pi: constructor;
+// markdownTheme nil = getMarkdownTheme()).
 func NewSkillInvocationMessageComponent(skillBlock *core.ParsedSkillBlock, markdownTheme *tui.MarkdownTheme) *SkillInvocationMessageComponent {
 	c := &SkillInvocationMessageComponent{skillBlock: skillBlock}
 	if markdownTheme != nil {
@@ -31,7 +33,6 @@ func NewSkillInvocationMessageComponent(skillBlock *core.ParsedSkillBlock, markd
 	} else {
 		c.markdownTheme = theme.GetMarkdownTheme()
 	}
-	c.Box = *tui.NewBox(1, 1, func(t string) string { return theme.Bg("customMessageBg", t) })
 	c.updateDisplay()
 	return c
 }
@@ -44,7 +45,7 @@ func (c *SkillInvocationMessageComponent) SetExpanded(expanded bool) {
 
 // Invalidate re-renders (pi: invalidate override).
 func (c *SkillInvocationMessageComponent) Invalidate() {
-	c.Box.Invalidate()
+	c.Container.Invalidate()
 	c.updateDisplay()
 }
 
@@ -67,12 +68,19 @@ func (c *SkillInvocationMessageComponent) updateDisplay() {
 			theme.Fg("dim", " ("+tools.KeyText("app.tools.expand")+" to expand)")
 		content.AddChild(tui.NewText(line, 0, 0))
 	}
+
+	contentBox := tui.NewBox(1, 0, nil)
 	// pi v0.86.0: a left click anywhere on the message toggles it.
-	c.AddChild(tui.NewMouseRegion(content, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
+	contentBox.AddChild(tui.NewMouseRegion(content, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
 		if event.Type != tui.MouseEventTypeClick || event.Button != tui.MouseButtonLeft {
 			return nil
 		}
 		c.SetExpanded(!c.expanded)
 		return &tui.TuiMouseEventResult{Handled: true}
 	}))
+
+	borderColor := func(t string) string { return theme.Fg("customMessageLabel", t) }
+	c.AddChild(NewDynamicBorder(borderColor))
+	c.AddChild(contentBox)
+	c.AddChild(NewDynamicBorder(borderColor))
 }

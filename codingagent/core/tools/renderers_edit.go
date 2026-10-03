@@ -197,25 +197,18 @@ func formatEditResult(theme UITheme, args any, preview *EditPreview, result Tool
 	return ""
 }
 
-// getEditHeaderBg resolves the header background (pi: getEditHeaderBg).
-func getEditHeaderBg(theme UITheme, preview *EditPreview, settledError bool) func(string) string {
-	if preview != nil {
-		if preview.IsErrorForm {
-			return func(text string) string { return theme.Bg("toolErrorBg", text) }
-		}
-		return func(text string) string { return theme.Bg("toolSuccessBg", text) }
-	}
-	if settledError {
-		return func(text string) string { return theme.Bg("toolErrorBg", text) }
-	}
-	return func(text string) string { return theme.Bg("toolPendingBg", text) }
-}
+// getEditHeaderBg resolved the header background (pi: getEditHeaderBg).
+// pig-only (2026-10-03): the edit call header no longer fills its background
+// — the outer tool-execution frame carries the state color instead
+// (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS), so this is kept only
+// as documentation of the pi mapping: preview error form / settled error →
+// toolErrorBg, preview ok → toolSuccessBg, pending → toolPendingBg.
 
 // buildEditCallComponent repopulates the call component (pi:
 // buildEditCallComponent).
 func buildEditCallComponent(theme UITheme, component *EditCallRenderComponent, args any, cwd string) *EditCallRenderComponent {
-	preview, _, _, settled := component.snapshot()
-	component.SetBgFn(getEditHeaderBg(theme, preview, settled))
+	preview, _, _, _ := component.snapshot()
+	component.SetBgFn(nil)
 	component.Clear()
 	component.AddChild(tui.NewText(formatEditCall(theme, args, cwd), 0, 0))
 

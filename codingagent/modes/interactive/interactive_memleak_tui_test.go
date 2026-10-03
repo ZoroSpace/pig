@@ -48,7 +48,7 @@ func TestMemLeakProbeTuiFrames(t *testing.T) {
 	before := memSnapshotHeap(t)
 	const turns = 200
 	for i := 0; i < turns; i++ {
-		user := components.NewUserMessageComponent("probe question "+string(rune('a'+i%26)), &mdThemeProbe, 1, nil)
+		user := components.NewUserMessageComponent("probe question "+string(rune('a'+i%26)), &mdThemeProbe, 1, nil, nil)
 		assistant := components.NewAssistantMessageComponent(testAssistantMessageForProbe(text), &components.AssistantMessageOptions{
 			MarkdownTheme: &mdThemeProbe,
 		})
@@ -72,7 +72,7 @@ func TestMemLeakProbeTuiFrames(t *testing.T) {
 	// pre-build a transcript equal to ~50 turns
 	mutateChat(screenB, func() {
 		for i := 0; i < 50; i++ {
-			chatB.AddChild(components.NewUserMessageComponent("probe", &mdThemeProbe, 1, nil))
+			chatB.AddChild(components.NewUserMessageComponent("probe", &mdThemeProbe, 1, nil, nil))
 			chatB.AddChild(components.NewAssistantMessageComponent(testAssistantMessageForProbe(text), &components.AssistantMessageOptions{
 				MarkdownTheme: &mdThemeProbe,
 			}))

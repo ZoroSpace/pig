@@ -65,7 +65,9 @@ func (c *CustomEntryComponent) rebuild() {
 				} else {
 					messageText = "renderer panicked"
 				}
-				box := tui.NewBox(1, 1, func(text string) string { return theme.Bg("customMessageBg", text) })
+				// pig-only: no background fill on the failure box (see
+				// docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS).
+				box := tui.NewBox(1, 1, nil)
 				box.AddChild(tui.NewText(theme.Fg("error", "["+c.entry.CustomType+"] renderer failed: "+messageText), 0, 0))
 				component = box
 			}

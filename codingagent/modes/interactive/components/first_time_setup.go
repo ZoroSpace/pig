@@ -31,6 +31,9 @@ type firstTimeSetupThemeOption struct {
 
 var firstTimeSetupThemeOptions = []firstTimeSetupThemeOption{
 	{value: theme.SystemThemeName, label: "System (matches your terminal colors)"},
+	// pig-only: the promoted built-in palettes, ahead of pi's dark/light.
+	{value: "one-dark-pro", label: "One Dark Pro"},
+	{value: "github-light", label: "GitHub Light"},
 	{value: "dark", label: "Dark"},
 	{value: "light", label: "Light"},
 }

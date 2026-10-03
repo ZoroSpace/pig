@@ -26,7 +26,7 @@ func TestMemLeakProbeStreaming(t *testing.T) {
 	container := &tui.Container{}
 	before := memSnapshotHeap(t)
 	for i := 0; i < turns; i++ {
-		user := components.NewUserMessageComponent("probe question "+strings.Repeat("p", 100), &mdThemeProbe, 1, nil)
+		user := components.NewUserMessageComponent("probe question "+strings.Repeat("p", 100), &mdThemeProbe, 1, nil, nil)
 		_ = user.Render(120)
 		container.AddChild(user)
 		container.AddChild(tui.NewSpacer(1))

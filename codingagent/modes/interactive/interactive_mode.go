@@ -2543,11 +2543,11 @@ func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *
 			// Render user message separately if present
 			if skillBlock.UserMessage != nil && *skillBlock.UserMessage != "" {
 				m.chatContainer.AddChild(tui.NewSpacer(1))
-				userComponent := components.NewUserMessageComponent(m.renderClipboardImageText(*skillBlock.UserMessage), lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers())
+				userComponent := components.NewUserMessageComponent(m.renderClipboardImageText(*skillBlock.UserMessage), lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers(), m.userMessageRuleColor())
 				m.chatContainer.AddChild(userComponent)
 			}
 		} else {
-			userComponent := components.NewUserMessageComponent(displayText, lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers())
+			userComponent := components.NewUserMessageComponent(displayText, lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers(), m.userMessageRuleColor())
 			m.chatContainer.AddChild(userComponent)
 		}
 		if options != nil && options.PopulateHistory {
@@ -3123,6 +3123,14 @@ func (m *InteractiveMode) updateEditorBorderColor() {
 		m.activeStatusIndicator.Invalidate()
 	}
 	m.ui.RequestRender(false)
+}
+
+// userMessageRuleColor resolves the color for the sent-message block's
+// border rules: a fixed per-theme blue independent of the thinking level
+// (pig-only, user decision 2026-10-03; github-light pairs it with the input
+// box's pale blue). Themes without the token fall back to the border color.
+func (m *InteractiveMode) userMessageRuleColor() func(string) string {
+	return func(s string) string { return theme.FgOptional("userMessageRule", "border", s) }
 }
 
 // cycleThinkingLevel cycles the thinking level (pi: cycleThinkingLevel).

@@ -49,7 +49,7 @@ func TestMemLeakProbeFrames(t *testing.T) {
 			MarkdownTheme: &mdThemeProbe,
 		})
 		mutateChat(screen, func() {
-			chat.AddChild(components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil))
+			chat.AddChild(components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil, nil))
 			chat.AddChild(tui.NewSpacer(1))
 			chat.AddChild(assistant)
 		})
@@ -121,7 +121,7 @@ func TestMemLeakProbeFramesNoRender(t *testing.T) {
 			MarkdownTheme: &mdThemeProbe,
 		})
 		mutateChat(screen, func() {
-			chat.AddChild(components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil))
+			chat.AddChild(components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil, nil))
 			chat.AddChild(tui.NewSpacer(1))
 			chat.AddChild(assistant)
 		})

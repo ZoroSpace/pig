@@ -41,9 +41,20 @@ type ToolExecutionResult struct {
 type ToolExecutionComponent struct {
 	tui.Container
 
-	contentBox          *tui.Box
-	contentText         *tui.Text
-	contentTextRegion   *tui.MouseRegion
+	contentBox        *tui.Box
+	contentText       *tui.Text
+	contentTextRegion *tui.MouseRegion
+	// topBorder/bottomBorder frame the default and fallback shells with a
+	// state-colored rule instead of the pi full-width background fill
+	// (pig-only deviation, 2026-10-03: border-only blocks, see
+	// docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS).
+	topBorder    *DynamicBorder
+	bottomBorder *DynamicBorder
+	// borderStateKey is the theme token coloring both borders ("muted"
+	// while streaming, "success"/"error" once settled). Read at render time
+	// without locking — same threading model as the child-tree mutations in
+	// updateDisplay.
+	borderStateKey      string
 	selfRenderContainer *tui.Container
 	// selfRenderHeight is the last rendered height of the self-render
 	// container, used to route mouse events (pi: selfRenderHeight).
@@ -128,20 +139,41 @@ func NewToolExecutionComponent(
 	// Always create all shell variants. contentBox is used for default
 	// renderer-based composition. selfRenderContainer is used when the tool
 	// renders its own framing. contentText is reserved for generic fallback
-	// rendering when no tool definition exists.
-	c.contentBox = tui.NewBox(1, 1, func(text string) string { return theme.Bg("toolPendingBg", text) })
-	c.contentText = tui.NewText("", 1, 1, func(text string) string { return theme.Bg("toolPendingBg", text) })
+	// rendering when no tool definition exists. The default and fallback
+	// shells get state-colored top/bottom borders (pig-only; pi fills the
+	// box background instead). Vertical padding 0: the rules give the frame,
+	// keeping the pre-border block height (pi: 1).
+	c.contentBox = tui.NewBox(1, 0, nil)
+	c.contentText = tui.NewText("", 1, 0)
 	c.contentTextRegion = c.createResultRegion(c.contentText)
 	c.selfRenderContainer = &tui.Container{}
+	c.borderStateKey = "muted"
+	// Rule tokens are optional per-theme pig-only tokens
+	// (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS); themes without
+	// them fall back to the state tokens.
+	ruleTokens := map[string]string{
+		"muted":   "toolPendingRule",
+		"success": "toolSuccessRule",
+		"error":   "toolErrorRule",
+	}
+	borderColor := func(s string) string {
+		return theme.FgOptional(ruleTokens[c.borderStateKey], c.borderStateKey, s)
+	}
+	c.topBorder = NewDynamicBorder(borderColor)
+	c.bottomBorder = NewDynamicBorder(borderColor)
 
 	if c.hasRendererDefinition() {
 		if c.getRenderShell() == "self" {
 			c.AddChild(c.selfRenderContainer)
 		} else {
+			c.AddChild(c.topBorder)
 			c.AddChild(c.contentBox)
+			c.AddChild(c.bottomBorder)
 		}
 	} else {
+		c.AddChild(c.topBorder)
 		c.AddChild(c.contentTextRegion)
+		c.AddChild(c.bottomBorder)
 	}
 
 	c.updateDisplay()
@@ -403,15 +435,15 @@ func (c *ToolExecutionComponent) HandleMouse(event *tui.TuiMouseEvent) *tui.TuiM
 	return c.selfRenderContainer.HandleMouse(&shifted)
 }
 
-// updateDisplay rebuilds the child tree (pi: updateDisplay).
+// updateDisplay rebuilds the child tree (pi: updateDisplay). The pig
+// border-only shells color the frame by state instead of filling the box
+// background (pi: bgFn pending/success/error → pig: muted/success/error).
 func (c *ToolExecutionComponent) updateDisplay() {
-	bgFn := func(text string) string { return theme.Bg("toolPendingBg", text) }
-	if !c.isPartial {
-		if c.result != nil && c.result.IsError {
-			bgFn = func(text string) string { return theme.Bg("toolErrorBg", text) }
-		} else {
-			bgFn = func(text string) string { return theme.Bg("toolSuccessBg", text) }
-		}
+	c.borderStateKey = "success"
+	if c.isPartial {
+		c.borderStateKey = "muted"
+	} else if c.result != nil && c.result.IsError {
+		c.borderStateKey = "error"
 	}
 
 	hasContent := false
@@ -421,7 +453,6 @@ func (c *ToolExecutionComponent) updateDisplay() {
 		if selfShell {
 			c.selfRenderContainer.Clear()
 		} else {
-			c.contentBox.SetBgFn(bgFn)
 			c.contentBox.Clear()
 		}
 		// Box and Container have parallel AddChild surfaces (Box owns its
@@ -483,7 +514,6 @@ func (c *ToolExecutionComponent) updateDisplay() {
 			}
 		}
 	} else {
-		c.contentText.SetCustomBgFn(bgFn)
 		c.contentText.SetText(c.formatToolExecution())
 		hasContent = true
 	}

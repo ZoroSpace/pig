@@ -1,6 +1,6 @@
 // compaction_summary_message.go (pi: components/compaction-summary-message.ts)
 // — renders a compaction message with collapsed/expanded state. Uses the
-// same background color as custom messages for visual consistency.
+// same accent styling as custom messages for visual consistency.
 package components
 
 import (
@@ -13,9 +13,11 @@ import (
 )
 
 // CompactionSummaryMessageComponent renders a compaction summary (pi:
-// class CompactionSummaryMessageComponent extends Box).
+// class CompactionSummaryMessageComponent extends Box; pig frames it with
+// state-colored borders instead of the pi background fill —
+// docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS).
 type CompactionSummaryMessageComponent struct {
-	tui.Box
+	tui.Container
 
 	expanded      bool
 	message       *harness.CompactionSummaryMessage
@@ -31,7 +33,6 @@ func NewCompactionSummaryMessageComponent(message *harness.CompactionSummaryMess
 	} else {
 		c.markdownTheme = theme.GetMarkdownTheme()
 	}
-	c.Box = *tui.NewBox(1, 1, func(t string) string { return theme.Bg("customMessageBg", t) })
 	c.updateDisplay()
 	return c
 }
@@ -44,7 +45,7 @@ func (c *CompactionSummaryMessageComponent) SetExpanded(expanded bool) {
 
 // Invalidate re-renders (pi: invalidate override).
 func (c *CompactionSummaryMessageComponent) Invalidate() {
-	c.Box.Invalidate()
+	c.Container.Invalidate()
 	c.updateDisplay()
 }
 
@@ -88,12 +89,18 @@ func (c *CompactionSummaryMessageComponent) updateDisplay() {
 		))
 	}
 
+	contentBox := tui.NewBox(1, 0, nil)
 	// pi v0.86.0: a left click anywhere on the message toggles it.
-	c.AddChild(tui.NewMouseRegion(content, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
+	contentBox.AddChild(tui.NewMouseRegion(content, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
 		if event.Type != tui.MouseEventTypeClick || event.Button != tui.MouseButtonLeft {
 			return nil
 		}
 		c.SetExpanded(!c.expanded)
 		return &tui.TuiMouseEventResult{Handled: true}
 	}))
+
+	borderColor := func(t string) string { return theme.Fg("customMessageLabel", t) }
+	c.AddChild(NewDynamicBorder(borderColor))
+	c.AddChild(contentBox)
+	c.AddChild(NewDynamicBorder(borderColor))
 }

@@ -39,7 +39,7 @@ func probeMessageText() string {
 }
 
 func buildTurnComponents(text string) (*components.UserMessageComponent, *components.AssistantMessageComponent) {
-	user := components.NewUserMessageComponent("probe question with padding "+text[:20], &mdThemeProbe, 1, nil)
+	user := components.NewUserMessageComponent("probe question with padding "+text[:20], &mdThemeProbe, 1, nil, nil)
 	assistant := components.NewAssistantMessageComponent(testAssistantMessageForProbe(text), &components.AssistantMessageOptions{
 		MarkdownTheme: &mdThemeProbe,
 	})
@@ -56,7 +56,10 @@ func probeThemeColors() map[string]theme.ColorValue {
 		"selectedBg": "#333333", "customMessageBg": "#1a1a2e",
 		"searchMatchBg": "#333333", "searchMatchText": "#ffffff",
 		"border": "#888888", "borderMuted": "#888888", "borderAccent": "#ff0000",
-		"success": "#00ff00", "error": "#ff0000", "warning": "#ffff00",
+		// userMessageRuleColor resolves the sent-block rules from the
+		// thinking-level color (level "off" in tests).
+		"thinkingOff": "#888888",
+		"success":     "#00ff00", "error": "#ff0000", "warning": "#ffff00",
 		"thinkingText": "#888888", "toolPendingText": "#ffffff", "toolSuccessText": "#00ff00",
 		"toolErrorText": "#ff0000", "customMessageText": "#ffffff",
 		// Markdown inline-code tokens (needed since the clipboard placeholder

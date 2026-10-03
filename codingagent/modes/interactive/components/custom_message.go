@@ -44,10 +44,10 @@ func NewCustomMessageComponent(message *harness.CustomMessage, customRenderer co
 		c.outputPad = 1
 	}
 
-	c.AddChild(tui.NewSpacer(1))
-
-	// Create box with purple background (used for default rendering)
-	c.box = tui.NewBox(1, 1, func(t string) string { return theme.Bg("customMessageBg", t) })
+	// Box without background fill (used for default rendering). Vertical
+	// padding 0: the border rules give the block its frame, keeping the
+	// pre-border block height (pi: 1).
+	c.box = tui.NewBox(1, 0, nil)
 
 	c.rebuild()
 	return c
@@ -76,12 +76,8 @@ func (c *CustomMessageComponent) Invalidate() {
 }
 
 func (c *CustomMessageComponent) rebuild() {
-	// Remove previous content component
-	if c.customComponent != nil {
-		c.RemoveChild(c.customComponent)
-		c.customComponent = nil
-	}
-	c.RemoveChild(c.box)
+	c.Clear()
+	c.customComponent = nil
 
 	// Try custom renderer first - it handles its own styling
 	if c.customRenderer != nil {
@@ -105,11 +101,17 @@ func (c *CustomMessageComponent) rebuild() {
 		}
 	}
 
-	// Default rendering uses our box
+	// pig-only (2026-10-03): border-only framing in the custom-message label
+	// color instead of the pi full-width background fill
+	// (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS).
+	borderColor := func(t string) string { return theme.Fg("customMessageLabel", t) }
+	c.AddChild(tui.NewSpacer(1))
+	c.AddChild(NewDynamicBorder(borderColor))
 	c.AddChild(c.box)
-	c.box.Clear()
+	c.AddChild(NewDynamicBorder(borderColor))
 
 	// Default rendering: label + content
+	c.box.Clear()
 	label := theme.Fg("customMessageLabel", "\x1b[1m["+c.message.CustomType+"]\x1b[22m")
 	c.box.AddChild(tui.NewText(label, 0, 0))
 	c.box.AddChild(tui.NewSpacer(1))

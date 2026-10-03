@@ -66,15 +66,15 @@ func TestCollapsibleMessageComponentsToggleOnClick(t *testing.T) {
 			Timestamp:    time.Now().UnixMilli(),
 		}, nil)
 
-		if strings.Contains(renderCollapsibleText(t, &component.Box), "compaction details") {
+		if strings.Contains(renderCollapsibleText(t, component), "compaction details") {
 			t.Fatalf("expanded before click")
 		}
-		clickCollapsibleRow(t, &component.Box, "[compaction]")
-		if !strings.Contains(renderCollapsibleText(t, &component.Box), "compaction details") {
+		clickCollapsibleRow(t, component, "[compaction]")
+		if !strings.Contains(renderCollapsibleText(t, component), "compaction details") {
 			t.Fatalf("did not expand on click")
 		}
-		clickCollapsibleRow(t, &component.Box, "[compaction]")
-		if strings.Contains(renderCollapsibleText(t, &component.Box), "compaction details") {
+		clickCollapsibleRow(t, component, "[compaction]")
+		if strings.Contains(renderCollapsibleText(t, component), "compaction details") {
 			t.Fatalf("did not collapse on second click")
 		}
 	})
@@ -87,15 +87,15 @@ func TestCollapsibleMessageComponentsToggleOnClick(t *testing.T) {
 			Timestamp: time.Now().UnixMilli(),
 		}, nil)
 
-		if strings.Contains(renderCollapsibleText(t, &component.Box), "branch details") {
+		if strings.Contains(renderCollapsibleText(t, component), "branch details") {
 			t.Fatalf("expanded before click")
 		}
-		clickCollapsibleRow(t, &component.Box, "[branch]")
-		if !strings.Contains(renderCollapsibleText(t, &component.Box), "branch details") {
+		clickCollapsibleRow(t, component, "[branch]")
+		if !strings.Contains(renderCollapsibleText(t, component), "branch details") {
 			t.Fatalf("did not expand on click")
 		}
-		clickCollapsibleRow(t, &component.Box, "[branch]")
-		if strings.Contains(renderCollapsibleText(t, &component.Box), "branch details") {
+		clickCollapsibleRow(t, component, "[branch]")
+		if strings.Contains(renderCollapsibleText(t, component), "branch details") {
 			t.Fatalf("did not collapse on second click")
 		}
 	})
@@ -107,15 +107,15 @@ func TestCollapsibleMessageComponentsToggleOnClick(t *testing.T) {
 			Content:  "skill details",
 		}, nil)
 
-		if strings.Contains(renderCollapsibleText(t, &component.Box), "skill details") {
+		if strings.Contains(renderCollapsibleText(t, component), "skill details") {
 			t.Fatalf("expanded before click")
 		}
-		clickCollapsibleRow(t, &component.Box, "[skill]")
-		if !strings.Contains(renderCollapsibleText(t, &component.Box), "skill details") {
+		clickCollapsibleRow(t, component, "[skill]")
+		if !strings.Contains(renderCollapsibleText(t, component), "skill details") {
 			t.Fatalf("did not expand on click")
 		}
-		clickCollapsibleRow(t, &component.Box, "[skill]")
-		if strings.Contains(renderCollapsibleText(t, &component.Box), "skill details") {
+		clickCollapsibleRow(t, component, "[skill]")
+		if strings.Contains(renderCollapsibleText(t, component), "skill details") {
 			t.Fatalf("did not collapse on second click")
 		}
 	})

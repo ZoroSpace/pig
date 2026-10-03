@@ -297,13 +297,13 @@ func TestAssistantMessageComponent(t *testing.T) {
 func TestUserMessageComponentPadding(t *testing.T) {
 	initTestTheme(t)
 
-	paddedComponent := NewUserMessageComponent("hello", nil, 1, nil)
+	paddedComponent := NewUserMessageComponent("hello", nil, 1, nil, nil)
 	paddedLines := paddedComponent.Render(40)
 	if !someLineStartsWith(paddedLines, " hello") {
 		t.Fatalf("padded lines missing: %v", paddedLines)
 	}
 
-	unpaddedComponent := NewUserMessageComponent("hello", nil, 0, nil)
+	unpaddedComponent := NewUserMessageComponent("hello", nil, 0, nil, nil)
 	unpaddedLines := unpaddedComponent.Render(40)
 	if !someLineStartsWith(unpaddedLines, "hello") {
 		t.Fatalf("unpadded lines missing: %v", unpaddedLines)

@@ -23,15 +23,21 @@ type UserMessageComponent struct {
 	markdownTheme        tui.MarkdownTheme
 	outputPad            int
 	markdownTransformers []core.MarkdownTransformer
+	// ruleColor colors the border-only frame; pig-only param (pi has no
+	// rules). interactive_mode passes the editor's thinking-level border
+	// color so the sent block matches the input box; nil = theme "border".
+	ruleColor func(string) string
 }
 
 // NewUserMessageComponent builds the component (pi: constructor;
-// markdownTheme nil = getMarkdownTheme(), outputPad 0 = default 1).
-func NewUserMessageComponent(text string, markdownTheme *tui.MarkdownTheme, outputPad int, markdownTransformers []core.MarkdownTransformer) *UserMessageComponent {
+// markdownTheme nil = getMarkdownTheme(), outputPad 0 = default 1,
+// ruleColor nil = theme "border" — pig-only extension).
+func NewUserMessageComponent(text string, markdownTheme *tui.MarkdownTheme, outputPad int, markdownTransformers []core.MarkdownTransformer, ruleColor func(string) string) *UserMessageComponent {
 	c := &UserMessageComponent{
 		text:                 text,
 		outputPad:            outputPad,
 		markdownTransformers: markdownTransformers,
+		ruleColor:            ruleColor,
 	}
 	if markdownTheme != nil {
 		c.markdownTheme = *markdownTheme
@@ -50,17 +56,27 @@ func (c *UserMessageComponent) SetOutputPad(padding int) {
 
 func (c *UserMessageComponent) rebuild() {
 	c.Clear()
-	// The Markdown pads and colors its own background: a Box around it would
+	// pig-only (2026-10-03): border-only framing instead of the pi full-width
+	// background fill (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS) —
+	// a colored rule above and below, content unfilled. The rule color
+	// defaults to "border"; interactive_mode passes the input box's
+	// thinking-level color so the sent block stays visually matched.
+	ruleColor := c.ruleColor
+	if ruleColor == nil {
+		ruleColor = func(s string) string { return theme.Fg("border", s) }
+	}
+	c.AddChild(NewDynamicBorder(ruleColor))
+	// The Markdown pads its own lines horizontally: a Box around it would
 	// keep a second full-width copy of every line, with identical output
-	// (pi e792ba131).
+	// (pi e792ba131). pig-only: vertical padding 0 — the border rules give
+	// the block its frame, keeping the pre-border block height (pi: 1).
 	c.AddChild(tui.NewMarkdown(
 		c.text,
 		c.outputPad,
-		1,
+		0,
 		c.markdownTheme,
 		&tui.DefaultTextStyle{
-			Color:   func(content string) string { return theme.Fg("userMessageText", content) },
-			BgColor: func(content string) string { return theme.Bg("userMessageBg", content) },
+			Color: func(content string) string { return theme.Fg("userMessageText", content) },
 		},
 		&tui.MarkdownOptions{
 			PreserveOrderedListMarkers: true,
@@ -68,6 +84,7 @@ func (c *UserMessageComponent) rebuild() {
 			Transform:                  CreateMarkdownTransform("user", false, c.markdownTransformers),
 		},
 	))
+	c.AddChild(NewDynamicBorder(ruleColor))
 }
 
 // Render wraps the output in shell-prompt OSC 133 zones (pi: render).

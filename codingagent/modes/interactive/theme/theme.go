@@ -675,6 +675,31 @@ func (t *Theme) Fg(color ThemeColor, text string) string {
 	return ansi + text + "\x1b[39m"
 }
 
+// HasFgToken reports whether the theme defines the token (pig-only).
+func (t *Theme) HasFgToken(color ThemeColor) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	_, ok := t.fgAnsi[color]
+	return ok
+}
+
+// FgOptional colors text with the token when the theme defines it, else
+// with the fallback token (pig-only: themes may define optional rule tokens
+// such as userMessageRule / toolSuccessRule; older themes fall back to the
+// state tokens).
+func (t *Theme) FgOptional(token, fallback ThemeColor, text string) string {
+	if t.HasFgToken(token) {
+		return t.Fg(token, text)
+	}
+	return t.Fg(fallback, text)
+}
+
+// FgOptional colors text with the token on the global theme when defined,
+// else with the fallback token (pig-only).
+func FgOptional(token, fallback ThemeColor, text string) string {
+	return Current().FgOptional(token, fallback, text)
+}
+
 // Bg wraps text in the token's background color, resetting only the
 // background (pi: bg).
 func (t *Theme) Bg(color ThemeBg, text string) string {
@@ -773,19 +798,33 @@ var (
 	builtinThemesErr  error
 )
 
+// BuiltinThemeNames lists the bundled theme JSONs in selector order (pig-only
+// extension: one-dark-pro / github-light join pi's dark / light; the originals
+// stay available).
+var BuiltinThemeNames = []string{"dark", "light", "one-dark-pro", "github-light"}
+
+// isBuiltinThemeName reports whether name is one of the bundled themes.
+func isBuiltinThemeName(name string) bool {
+	for _, builtin := range BuiltinThemeNames {
+		if name == builtin {
+			return true
+		}
+	}
+	return false
+}
+
 func getBuiltinThemes() (map[string]*ThemeJson, error) {
 	builtinThemesOnce.Do(func() {
-		dark, err := loadBuiltinThemeJson("dark")
-		if err != nil {
-			builtinThemesErr = err
-			return
+		themes := make(map[string]*ThemeJson, len(BuiltinThemeNames))
+		for _, name := range BuiltinThemeNames {
+			themeJson, err := loadBuiltinThemeJson(name)
+			if err != nil {
+				builtinThemesErr = err
+				return
+			}
+			themes[name] = themeJson
 		}
-		light, err := loadBuiltinThemeJson("light")
-		if err != nil {
-			builtinThemesErr = err
-			return
-		}
-		builtinThemes = map[string]*ThemeJson{"dark": dark, "light": light}
+		builtinThemes = themes
 	})
 	return builtinThemes, builtinThemesErr
 }
@@ -843,12 +882,12 @@ func GetAvailableThemesWithPaths() []ThemeInfo {
 		result = append(result, info)
 	}
 
-	// Built-in themes (pi iterates the Record keys; pig pins dark/light).
+	// Built-in themes (pi iterates the Record keys; pig pins BuiltinThemeNames).
 	// The system theme comes first: it is the default and adapts to every
 	// terminal.
 	addTheme(ThemeInfo{Name: SystemThemeName})
 	if _, err := getBuiltinThemes(); err == nil {
-		for _, name := range []string{"dark", "light"} {
+		for _, name := range BuiltinThemeNames {
 			addTheme(ThemeInfo{Name: name, Path: filepath.Join(themesDir, name+".json")})
 		}
 	}
@@ -1526,7 +1565,7 @@ func startThemeWatcher() {
 	globalMu.RLock()
 	currentName := currentThemeName
 	globalMu.RUnlock()
-	if currentName == "" || currentName == "dark" || currentName == "light" || currentName == SystemThemeName {
+	if isBuiltinThemeName(currentName) || currentName == "" || currentName == SystemThemeName {
 		return
 	}
 

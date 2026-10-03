@@ -59,7 +59,7 @@ func TestMemLeakProbeDiscard(t *testing.T) {
 	before := memSnapshotHeap(t)
 	const turns = 200
 	for i := 0; i < turns; i++ {
-		user := components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil)
+		user := components.NewUserMessageComponent("probe question", &mdThemeProbe, 1, nil, nil)
 		assistant := components.NewAssistantMessageComponent(testAssistantMessageForProbe(text), &components.AssistantMessageOptions{
 			MarkdownTheme: &mdThemeProbe,
 		})

@@ -14,7 +14,12 @@ func TestUserMessageComponent(t *testing.T) {
 	t.Run("keeps user message height stable while moving closing OSC markers off line end", func(t *testing.T) {
 		initTestTheme(t)
 
-		component := NewUserMessageComponent("hello", nil, 1, nil)
+		// pig-only deviation from pi (2026-10-03): the user message renders
+		// with border-only framing (top rule, content, bottom rule) instead
+		// of the pi full-width background fill. Vertical padding is 0 so the
+		// block keeps its pre-border height: 3 lines for a one-line message
+		// (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS).
+		component := NewUserMessageComponent("hello", nil, 1, nil, nil)
 		lines := component.Render(20)
 
 		if len(lines) != 3 {
@@ -23,8 +28,8 @@ func TestUserMessageComponent(t *testing.T) {
 		if !strings.Contains(lines[0], osc133ZoneStart) {
 			t.Fatalf("line 0 missing zone start: %q", lines[0])
 		}
-		if !strings.HasSuffix(lines[0], "\x1b[49m") {
-			t.Fatalf("line 0 must end with bg reset: %q", lines[0])
+		if !strings.Contains(lines[0], "─") {
+			t.Fatalf("line 0 missing top border: %q", lines[0])
 		}
 		if strings.Contains(lines[0], osc133ZoneEnd) {
 			t.Fatalf("line 0 must not contain zone end: %q", lines[0])
@@ -35,8 +40,8 @@ func TestUserMessageComponent(t *testing.T) {
 		if !strings.HasPrefix(lines[2], osc133ZoneEnd+osc133ZoneFinal) {
 			t.Fatalf("line 2 missing final markers: %q", lines[2])
 		}
-		if !strings.HasSuffix(lines[2], "\x1b[49m") {
-			t.Fatalf("line 2 must end with bg reset: %q", lines[2])
+		if !strings.Contains(lines[2], "─") {
+			t.Fatalf("line 2 missing bottom border: %q", lines[2])
 		}
 	})
 
@@ -54,7 +59,7 @@ func TestUserMessageComponent(t *testing.T) {
 				calls = append(calls, "suffix")
 				return markdown + " Done."
 			},
-		})
+		}, nil)
 
 		got := utils.StripAnsi(strings.Join(component.Render(80), "\n"))
 		if !strings.Contains(got, "The input is x². Done.") {
@@ -75,7 +80,7 @@ func TestUserMessageComponent(t *testing.T) {
 			func(markdown string, _ core.MarkdownTransformContext) string {
 				return markdown + " " + suffix
 			},
-		})
+		}, nil)
 
 		if got := utils.StripAnsi(strings.Join(component.Render(80), "\n")); !strings.Contains(got, "Message before") {
 			t.Fatalf("rendered = %q", got)

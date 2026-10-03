@@ -1,6 +1,6 @@
 // branch_summary_message.go (pi: components/branch-summary-message.ts) —
 // renders a branch summary message with collapsed/expanded state. Uses the
-// same background color as custom messages for visual consistency.
+// same accent styling as custom messages for visual consistency.
 package components
 
 import (
@@ -11,9 +11,11 @@ import (
 )
 
 // BranchSummaryMessageComponent renders a branch summary (pi: class
-// BranchSummaryMessageComponent extends Box).
+// BranchSummaryMessageComponent extends Box; pig frames it with
+// state-colored borders instead of the pi background fill —
+// docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS).
 type BranchSummaryMessageComponent struct {
-	tui.Box
+	tui.Container
 
 	expanded      bool
 	message       *harness.BranchSummaryMessage
@@ -29,7 +31,6 @@ func NewBranchSummaryMessageComponent(message *harness.BranchSummaryMessage, mar
 	} else {
 		c.markdownTheme = theme.GetMarkdownTheme()
 	}
-	c.Box = *tui.NewBox(1, 1, func(t string) string { return theme.Bg("customMessageBg", t) })
 	c.updateDisplay()
 	return c
 }
@@ -42,7 +43,7 @@ func (c *BranchSummaryMessageComponent) SetExpanded(expanded bool) {
 
 // Invalidate re-renders (pi: invalidate override).
 func (c *BranchSummaryMessageComponent) Invalidate() {
-	c.Box.Invalidate()
+	c.Container.Invalidate()
 	c.updateDisplay()
 }
 
@@ -68,12 +69,19 @@ func (c *BranchSummaryMessageComponent) updateDisplay() {
 			0,
 		))
 	}
-	// pi v0.86.0: a left click anywhere on the message toggles it.
-	c.AddChild(tui.NewMouseRegion(content, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
+
+	contentBox := tui.NewBox(1, 0, nil)
+	contentBox.AddChild(tui.NewMouseRegion(content, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
 		if event.Type != tui.MouseEventTypeClick || event.Button != tui.MouseButtonLeft {
 			return nil
 		}
 		c.SetExpanded(!c.expanded)
 		return &tui.TuiMouseEventResult{Handled: true}
 	}))
+
+	// pi v0.86.0: a left click anywhere on the message toggles it.
+	borderColor := func(t string) string { return theme.Fg("customMessageLabel", t) }
+	c.AddChild(NewDynamicBorder(borderColor))
+	c.AddChild(contentBox)
+	c.AddChild(NewDynamicBorder(borderColor))
 }
