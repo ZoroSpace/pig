@@ -16,6 +16,9 @@ import (
 // DynamicBorder in components exported for extension use.
 type DynamicBorder struct {
 	color func(string) string
+	// corner prefixes the rule with a left box-drawing glyph (pig-only block
+	// frame: '┌' tops / '└' bottoms connect the block's left rail).
+	corner rune
 }
 
 // NewDynamicBorder builds a border with the given colorizer (nil =
@@ -27,14 +30,38 @@ func NewDynamicBorder(color func(string) string) *DynamicBorder {
 	return &DynamicBorder{color: color}
 }
 
+// NewDynamicBorderCorner builds a rule with a left corner glyph (pig-only:
+// the block frame's top/bottom rules, joined by a LeftRail on the left).
+func NewDynamicBorderCorner(color func(string) string, corner rune) *DynamicBorder {
+	b := NewDynamicBorder(color)
+	b.corner = corner
+	return b
+}
+
 // Invalidate has no cached state to clear (pi: invalidate).
 func (d *DynamicBorder) Invalidate() {}
 
-// Render draws the border line (pi: render).
+// Render draws the border line (pi: render). The pig-only block-frame
+// variants (corner set) render solid rules with both corners:
+// ┌───┐ / └───┘, joined by the rail's dashed vertical bars. The frame
+// leaves the last column free: the chat viewport's transient scrollbar
+// paints over the right edge (pi overlays it on full-width content), and
+// the frame's right corner must not compete with it.
 func (d *DynamicBorder) Render(width int) []string {
 	n := width
 	if n < 1 {
 		n = 1
+	}
+	if d.corner != 0 {
+		runes := n - 3
+		if runes < 1 {
+			runes = 1
+		}
+		closing := '┐'
+		if d.corner == '└' {
+			closing = '┘'
+		}
+		return []string{d.color(string(d.corner) + strings.Repeat("─", runes) + string(closing))}
 	}
 	return []string{d.color(strings.Repeat("─", n))}
 }

@@ -106,9 +106,9 @@ func (c *CustomMessageComponent) rebuild() {
 	// (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS).
 	borderColor := func(t string) string { return theme.Fg("customMessageLabel", t) }
 	c.AddChild(tui.NewSpacer(1))
-	c.AddChild(NewDynamicBorder(borderColor))
-	c.AddChild(c.box)
-	c.AddChild(NewDynamicBorder(borderColor))
+	c.AddChild(NewDynamicBorderCorner(borderColor, '┌'))
+	c.AddChild(NewLeftRail(c.box, borderColor))
+	c.AddChild(NewDynamicBorderCorner(borderColor, '└'))
 
 	// Default rendering: label + content
 	c.box.Clear()

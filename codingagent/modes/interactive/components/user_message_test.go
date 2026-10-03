@@ -18,7 +18,8 @@ func TestUserMessageComponent(t *testing.T) {
 		// with border-only framing (top rule, content, bottom rule) instead
 		// of the pi full-width background fill. Vertical padding is 0 so the
 		// block keeps its pre-border height: 3 lines for a one-line message
-		// (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS).
+		// (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS). The left
+		// frame: solid rules with corners, dashed rail bars — ┌─┐ / ┆ ┆ / └─┘.
 		component := NewUserMessageComponent("hello", nil, 1, nil, nil)
 		lines := component.Render(20)
 
@@ -28,20 +29,20 @@ func TestUserMessageComponent(t *testing.T) {
 		if !strings.Contains(lines[0], osc133ZoneStart) {
 			t.Fatalf("line 0 missing zone start: %q", lines[0])
 		}
-		if !strings.Contains(lines[0], "─") {
-			t.Fatalf("line 0 missing top border: %q", lines[0])
+		if !strings.Contains(lines[0], "┌") || !strings.Contains(lines[0], "┐") {
+			t.Fatalf("line 0 missing top border corner: %q", lines[0])
 		}
 		if strings.Contains(lines[0], osc133ZoneEnd) {
 			t.Fatalf("line 0 must not contain zone end: %q", lines[0])
 		}
-		if !strings.Contains(lines[1], "hello") {
-			t.Fatalf("line 1 missing text: %q", lines[1])
+		if got := utils.StripAnsi(lines[1]); !strings.HasPrefix(got, "┆") || !strings.HasSuffix(got, "┆") || !strings.Contains(got, "hello") {
+			t.Fatalf("line 1 missing left rail or text: %q", got)
 		}
 		if !strings.HasPrefix(lines[2], osc133ZoneEnd+osc133ZoneFinal) {
 			t.Fatalf("line 2 missing final markers: %q", lines[2])
 		}
-		if !strings.Contains(lines[2], "─") {
-			t.Fatalf("line 2 missing bottom border: %q", lines[2])
+		if !strings.Contains(lines[2], "└") || !strings.Contains(lines[2], "┘") {
+			t.Fatalf("line 2 missing bottom border corner: %q", lines[2])
 		}
 	})
 
@@ -68,7 +69,7 @@ func TestUserMessageComponent(t *testing.T) {
 		if len(calls) != 2 || calls[0] != "formula" || calls[1] != "suffix" {
 			t.Fatalf("calls = %v", calls)
 		}
-		if contextSeen.MessageType != "user" || contextSeen.IsStreaming || contextSeen.AvailableWidth != 78 {
+		if contextSeen.MessageType != "user" || contextSeen.IsStreaming || contextSeen.AvailableWidth != 75 {
 			t.Fatalf("context = %+v", contextSeen)
 		}
 	})

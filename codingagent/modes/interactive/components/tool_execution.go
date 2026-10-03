@@ -159,20 +159,21 @@ func NewToolExecutionComponent(
 	borderColor := func(s string) string {
 		return theme.FgOptional(ruleTokens[c.borderStateKey], c.borderStateKey, s)
 	}
-	c.topBorder = NewDynamicBorder(borderColor)
-	c.bottomBorder = NewDynamicBorder(borderColor)
+	c.topBorder = NewDynamicBorderCorner(borderColor, '┌')
+	c.bottomBorder = NewDynamicBorderCorner(borderColor, '└')
+	contentRail := func(child tui.Component) tui.Component { return NewLeftRail(child, borderColor) }
 
 	if c.hasRendererDefinition() {
 		if c.getRenderShell() == "self" {
 			c.AddChild(c.selfRenderContainer)
 		} else {
 			c.AddChild(c.topBorder)
-			c.AddChild(c.contentBox)
+			c.AddChild(contentRail(c.contentBox))
 			c.AddChild(c.bottomBorder)
 		}
 	} else {
 		c.AddChild(c.topBorder)
-		c.AddChild(c.contentTextRegion)
+		c.AddChild(contentRail(c.contentTextRegion))
 		c.AddChild(c.bottomBorder)
 	}
 

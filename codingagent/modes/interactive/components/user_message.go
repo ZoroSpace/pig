@@ -65,12 +65,12 @@ func (c *UserMessageComponent) rebuild() {
 	if ruleColor == nil {
 		ruleColor = func(s string) string { return theme.Fg("border", s) }
 	}
-	c.AddChild(NewDynamicBorder(ruleColor))
+	c.AddChild(NewDynamicBorderCorner(ruleColor, '┌'))
 	// The Markdown pads its own lines horizontally: a Box around it would
 	// keep a second full-width copy of every line, with identical output
 	// (pi e792ba131). pig-only: vertical padding 0 — the border rules give
 	// the block its frame, keeping the pre-border block height (pi: 1).
-	c.AddChild(tui.NewMarkdown(
+	c.AddChild(NewLeftRail(tui.NewMarkdown(
 		c.text,
 		c.outputPad,
 		0,
@@ -83,8 +83,8 @@ func (c *UserMessageComponent) rebuild() {
 			PreserveBackslashEscapes:   true,
 			Transform:                  CreateMarkdownTransform("user", false, c.markdownTransformers),
 		},
-	))
-	c.AddChild(NewDynamicBorder(ruleColor))
+	), ruleColor))
+	c.AddChild(NewDynamicBorderCorner(ruleColor, '└'))
 }
 
 // Render wraps the output in shell-prompt OSC 133 zones (pi: render).

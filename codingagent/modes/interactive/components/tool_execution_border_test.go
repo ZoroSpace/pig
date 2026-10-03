@@ -6,6 +6,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
+	"github.com/ZoroSpace/pig/codingagent/utils"
 )
 
 // pig-only regression (2026-10-03,
@@ -49,6 +50,18 @@ func TestToolExecutionBorderOnlyFraming(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], ruleLine("muted")) {
 		t.Fatalf("top rule missing or not muted: %q", lines[1])
+	}
+	if !strings.Contains(lines[1], "┌") || !strings.Contains(lines[len(lines)-1], "└") {
+		t.Fatalf("frame corners missing: %q / %q", lines[1], lines[len(lines)-1])
+	}
+	railSeen := false
+	for _, line := range lines[2 : len(lines)-1] {
+		if strings.HasPrefix(utils.StripAnsi(line), "┆") && strings.HasSuffix(utils.StripAnsi(line), "┆") {
+			railSeen = true
+		}
+	}
+	if !railSeen {
+		t.Fatalf("left rail missing between the rules: %q", joined)
 	}
 	if !strings.Contains(lines[len(lines)-1], ruleLine("muted")) {
 		t.Fatalf("bottom rule missing or not muted: %q", lines[len(lines)-1])

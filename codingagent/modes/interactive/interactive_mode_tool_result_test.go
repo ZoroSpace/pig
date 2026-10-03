@@ -238,7 +238,10 @@ func TestRestoreRendersToolResultsOnRestoredCards(t *testing.T) {
 	rules := 0
 	for _, line := range frame {
 		plain := codingagentutils.StripAnsi(line)
-		if plain == "" || strings.Trim(plain, "─") != "" {
+		// Rule lines carry the solid frame corners (┌─┐/└─┘); the dashed rail
+		// bars (┆) prefix/suffix content lines — trim the frame glyphs to
+		// detect pure rules.
+		if plain == "" || strings.Trim(plain, "─┌┐└┘") != "" {
 			continue
 		}
 		rules++
