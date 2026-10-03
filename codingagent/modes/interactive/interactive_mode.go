@@ -833,9 +833,10 @@ func (m *InteractiveMode) Init() error {
 		)
 		m.builtInHeader = builtInHeader
 
-		// pig-only: no leading spacer so the logo sits directly below the
-		// shell prompt line (pi: headerContainer gets spacer/header/spacer;
-		// user request).
+		// spacer/header/spacer like pi; the leading spacer keeps the logo
+		// off the very top row in fullscreen mode (restored 2026-10-03,
+		// overriding the earlier pig-only "no leading spacer" decision).
+		m.headerContainer.AddChild(tui.NewSpacer(1))
 		m.headerContainer.AddChild(builtInHeader)
 		m.headerContainer.AddChild(tui.NewSpacer(1))
 	} else {
