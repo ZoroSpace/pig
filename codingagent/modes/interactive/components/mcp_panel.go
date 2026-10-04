@@ -32,6 +32,9 @@ type MCPPanelProvider interface {
 	ListServerTools(ctx context.Context, server string) ([]pigmcp.ToolInfo, error)
 	Reconnect(ctx context.Context, server string) error
 	SetServerDisabled(server string, disabled bool) error
+	// SetServerDisabledInProject writes the toggle as a project override of a
+	// global server (#10277; pi's "Enable/Disable in this project" item).
+	SetServerDisabledInProject(server string, disabled bool) error
 }
 
 // MCPPanelOptions wires the panel into interactive mode. Mutate serializes
@@ -125,6 +128,7 @@ func NewMCPPanelComponent(opts MCPPanelOptions) *MCPPanelComponent {
 		"  "+coretools.KeyDisplayText("tui.select.confirm")+" expand/collapse · "+
 			coretools.KeyDisplayText(core.AppKeybindingMCPReconnect)+" reconnect · "+
 			coretools.KeyDisplayText(core.AppKeybindingMCPToggleDisabled)+" enable/disable · "+
+			coretools.KeyDisplayText(core.AppKeybindingMCPToggleDisabledProject)+" in project · "+
 			coretools.KeyDisplayText(core.AppKeybindingMCPCopyError)+" copy error · "+
 			coretools.KeyDisplayText("tui.select.cancel")+" close"), 0, 0))
 	p.AddChild(NewDynamicBorder(nil))
@@ -335,24 +339,29 @@ func (p *MCPPanelComponent) serverLabel(st pigmcp.ServerStatus) string {
 }
 
 // serverSuffix renders the colored status suffix (pi-mcp-adapter order:
-// disabled beats connecting beats failed beats connected).
+// disabled beats connecting beats failed beats connected). An overridden
+// server carries the "project override" marker (#10277).
 func (p *MCPPanelComponent) serverSuffix(st pigmcp.ServerStatus) string {
+	suffix := ""
 	switch {
 	case st.Disabled:
-		return theme.Fg("dim", "disabled")
+		suffix = theme.Fg("dim", "disabled")
 	case st.Status == "connecting":
-		return theme.Fg("muted", "connecting")
+		suffix = theme.Fg("muted", "connecting")
 	case st.Status == "error":
-		return theme.Fg("error", "failed")
+		suffix = theme.Fg("error", "failed")
 	case st.Status == "connected":
-		suffix := theme.Fg("success", "connected")
+		suffix = theme.Fg("success", "connected")
 		if st.IdleMs > 0 {
 			suffix += theme.Fg("dim", " · idle "+mcpPanelFormatIdle(st.IdleMs))
 		}
-		return suffix
 	default:
-		return theme.Fg("dim", "disconnected")
+		suffix = theme.Fg("dim", "disconnected")
 	}
+	if st.OverridePath != "" {
+		suffix += theme.Fg("dim", " · project override")
+	}
+	return suffix
 }
 
 func mcpPanelFormatIdle(ms int64) string {
@@ -467,12 +476,25 @@ func (p *MCPPanelComponent) reconnectSelected() {
 }
 
 // toggleDisabledSelected flips the selected server's disabled flag (ctrl+d).
-// The manager persists it to the winning mcp.json; failures surface in the
-// notice line. Runs inside p.mutate; the flag flip itself is fast (memory +
-// one small file write), so it happens inline and the row flips this frame.
-// Enabling does not connect: the server goes to disconnected and reconnects
-// lazily; the tools cache is dropped so a later expand re-lists.
+// The manager persists it to the file that owns the server — the project
+// override file for overridden servers, else the winning source mcp.json;
+// failures surface in the notice line. Runs inside p.mutate; the flag flip
+// itself is fast (memory + one small file write), so it happens inline and
+// the row flips this frame. Enabling does not connect: the server goes to
+// disconnected and reconnects lazily; the tools cache is dropped so a later
+// expand re-lists.
 func (p *MCPPanelComponent) toggleDisabledSelected() {
+	p.toggleDisabledWithTarget(false)
+}
+
+// toggleDisabledInProject flips the selected global server's disabled flag as
+// a project override (ctrl+p, #10277): the global mcp.json is untouched,
+// the trusted project's mcp.json records the override.
+func (p *MCPPanelComponent) toggleDisabledInProject() {
+	p.toggleDisabledWithTarget(true)
+}
+
+func (p *MCPPanelComponent) toggleDisabledWithTarget(inProject bool) {
 	server := p.selectedServer()
 	if server == "" || p.busy[server] {
 		return
@@ -481,8 +503,20 @@ func (p *MCPPanelComponent) toggleDisabledSelected() {
 	if !ok {
 		return
 	}
+	if inProject {
+		if !st.ProjectOverridable {
+			p.setNoticeLocked(theme.Fg("dim", "no project override available for "+server+" (already overridden, defined in the project, or project not trusted)"))
+			p.requestRender()
+			return
+		}
+	}
 	target := !st.Disabled
-	err := p.opts.Provider.SetServerDisabled(server, target)
+	var err error
+	if inProject {
+		err = p.opts.Provider.SetServerDisabledInProject(server, target)
+	} else {
+		err = p.opts.Provider.SetServerDisabled(server, target)
+	}
 	if err != nil {
 		p.setNoticeLocked(theme.Fg("error", "failed to update "+server+": "+err.Error()))
 	} else {
@@ -490,7 +524,11 @@ func (p *MCPPanelComponent) toggleDisabledSelected() {
 		if target {
 			verb = "disabled"
 		}
-		p.setNoticeLocked(theme.Fg("success", verb+" "+server+" (saved to mcp.json)"))
+		where := "mcp.json"
+		if inProject || st.OverridePath != "" {
+			where = "the project mcp.json"
+		}
+		p.setNoticeLocked(theme.Fg("success", verb+" "+server+" (saved to "+where+")"))
 	}
 	p.statuses = p.opts.Provider.Status()
 	delete(p.tools, server)
@@ -553,6 +591,10 @@ func (p *MCPPanelComponent) handleInputLocked(keyData string) {
 	}
 	if kb.Matches(keyData, core.AppKeybindingMCPToggleDisabled) {
 		p.toggleDisabledSelected()
+		return
+	}
+	if kb.Matches(keyData, core.AppKeybindingMCPToggleDisabledProject) {
+		p.toggleDisabledInProject()
 		return
 	}
 	if kb.Matches(keyData, core.AppKeybindingMCPCopyError) {

@@ -13,6 +13,7 @@ package tui
 
 import (
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/samber/lo"
@@ -153,4 +154,39 @@ func TestGetCapabilitiesTrueColorOverrides(t *testing.T) {
 			}
 		})
 	})
+}
+
+// #10319 ports (pi 672000c80): placement rows are readable without a payload
+// scan, from the explicit r= control or the registered metadata.
+
+func TestGetKittyImagePlacementRowsReadsExplicitRowsWithoutRegisteredMetadata(t *testing.T) {
+	sequence := EncodeKitty("AAAA", EncodeKittyParams{Columns: 2, Rows: 3})
+	if got := GetKittyImagePlacementRows(sequence); got != 3 {
+		t.Fatalf("GetKittyImagePlacementRows = %d, want 3", got)
+	}
+}
+
+func TestKittyImagePlacementRowsPreferExplicitControlsOverMetadata(t *testing.T) {
+	RegisterKittyImageMetadata(KittyImageMetadata{ImageId: 42, Columns: 3, Rows: 3, WidthPx: 100, HeightPx: 100})
+	transmission := EncodeKitty(strings.Repeat("A", 8192), EncodeKittyParams{Columns: 3, Rows: 3, ImageId: 42, MoveCursorOff: true})
+	line := "left " + CropKittyImageLine(transmission, 2, 1) + " right"
+	placement := GetKittyImagePlacement(line)
+	if placement == nil {
+		t.Fatal("expected a placement")
+	}
+	if got := GetKittyImagePlacementRows(line); got != 1 {
+		t.Fatalf("GetKittyImagePlacementRows = %d, want 1", got)
+	}
+	if placement.TransmissionBytes != len(line)-len("left ")-len(" right") {
+		t.Fatalf("TransmissionBytes = %d, want %d", placement.TransmissionBytes, len(line)-len("left ")-len(" right"))
+	}
+	if placement.EstimatedDecodedBytes != 100*100*4 {
+		t.Fatalf("EstimatedDecodedBytes = %d, want %d", placement.EstimatedDecodedBytes, 100*100*4)
+	}
+	if placement.Rows != 1 {
+		t.Fatalf("Rows = %d, want 1", placement.Rows)
+	}
+	if placement.Sequence != "\x1b_Ga=p,q=2,C=1,c=3,i=42,y=66,h=34,r=1\x1b\\" {
+		t.Fatalf("Sequence = %q", placement.Sequence)
+	}
 }

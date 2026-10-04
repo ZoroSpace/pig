@@ -26,6 +26,10 @@ import (
 	"github.com/ZoroSpace/pig/tui"
 )
 
+// openBrowserFn is the browser-open seam (pi tests mock open-browser; ShowAuth
+// fires it and tests must not spawn a real launcher).
+var openBrowserFn = utils.OpenBrowser
+
 // loginAbortController is pi's AbortController (the abort race collapses
 // into ctx cancellation).
 type loginAbortController struct {
@@ -55,6 +59,10 @@ type LoginDialogComponent struct {
 	input            *tui.Input
 	tui              tui.TUI
 	abortController  *loginAbortController
+
+	// The shown sign-in URL, which app.message.copy copies (pi: authUrl,
+	// ced72c2f0). Cleared by the non-URL screens.
+	authURL *AuthURLComponent
 
 	// Mutator serializes container mutations with the render pipeline (pig
 	// addition — see file header). Nil = mutate inline.
@@ -207,12 +215,8 @@ func (d *LoginDialogComponent) ShowAuth(url string, instructions string) {
 		currentTheme := theme.Current()
 		d.contentContainer.Clear()
 		d.contentContainer.AddChild(tui.NewSpacer(1))
-		linkedURL := "\x1b]8;;" + url + "\x07" + url + "\x1b]8;;\x07"
-		d.contentContainer.AddChild(tui.NewText(currentTheme.Fg("accent", linkedURL), 1, 0))
-
-		clickHint := clickToOpenHint()
-		hyperlink := "\x1b]8;;" + url + "\x07" + clickHint + "\x1b]8;;\x07"
-		d.contentContainer.AddChild(tui.NewText(currentTheme.Fg("dim", hyperlink), 1, 0))
+		d.authURL = NewAuthURLComponent(d.tui, url)
+		d.contentContainer.AddChild(d.authURL)
 
 		if instructions != "" {
 			d.contentContainer.AddChild(tui.NewSpacer(1))
@@ -220,7 +224,7 @@ func (d *LoginDialogComponent) ShowAuth(url string, instructions string) {
 		}
 	})
 
-	utils.OpenBrowser(url)
+	openBrowserFn(url)
 	d.requestRender()
 }
 
@@ -236,6 +240,7 @@ func clickToOpenHint() string {
 // by the onDeviceCode callback).
 func (d *LoginDialogComponent) ShowDeviceCode(info ai.OAuthDeviceCodeInfo) {
 	d.mutate(func() {
+		d.authURL = nil
 		currentTheme := theme.Current()
 		d.contentContainer.Clear()
 		d.contentContainer.AddChild(tui.NewSpacer(1))
@@ -295,6 +300,7 @@ func (d *LoginDialogComponent) ShowPrompt(message string, placeholder string) (s
 // showDetails).
 func (d *LoginDialogComponent) ShowDetails(lines []string) {
 	d.mutate(func() {
+		d.authURL = nil
 		d.contentContainer.Clear()
 		d.contentContainer.AddChild(tui.NewSpacer(1))
 		for _, line := range lines {
@@ -355,6 +361,10 @@ func (d *LoginDialogComponent) HandleInput(data string) {
 
 	if kb.Matches(data, "tui.select.cancel") {
 		d.cancel()
+		return
+	}
+	if d.authURL != nil && kb.Matches(data, "app.message.copy") {
+		d.authURL.Copy(d.tui)
 		return
 	}
 

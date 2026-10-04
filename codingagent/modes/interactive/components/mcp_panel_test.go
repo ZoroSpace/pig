@@ -29,6 +29,7 @@ const (
 	mcpKeyEscape = "\x1b"
 	mcpKeyCtrlR  = "\x12"
 	mcpKeyCtrlD  = "\x04"
+	mcpKeyCtrlP  = "\x10"
 	mcpKeyCtrlY  = "\x19"
 
 	// mcpRefreshDisabled is the RefreshInterval sentinel: no ticker.
@@ -103,6 +104,14 @@ func (f *fakeMCPPanelProvider) Reconnect(_ context.Context, server string) error
 func (f *fakeMCPPanelProvider) SetServerDisabled(server string, disabled bool) error {
 	f.mu.Lock()
 	f.calls = append(f.calls, fmt.Sprintf("disable:%s=%v", server, disabled))
+	f.disabled[server] = disabled
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeMCPPanelProvider) SetServerDisabledInProject(server string, disabled bool) error {
+	f.mu.Lock()
+	f.calls = append(f.calls, fmt.Sprintf("disable-project:%s=%v", server, disabled))
 	f.disabled[server] = disabled
 	f.mu.Unlock()
 	return nil
@@ -313,6 +322,46 @@ func TestMCPPanelToggleDisabledAction(t *testing.T) {
 	})
 	if provider.disabled["fs"] != false {
 		t.Fatal("second ctrl+d must re-enable")
+	}
+}
+
+// #10277: ctrl+p toggles a global server as a project override; unavailable
+// targets surface a dim notice instead of an error.
+func TestMCPPanelToggleDisabledProjectAction(t *testing.T) {
+	provider := newFakeMCPProvider()
+	provider.mu.Lock()
+	for i := range provider.statuses {
+		provider.statuses[i].ProjectOverridable = provider.statuses[i].Name == "fs"
+	}
+	provider.mu.Unlock()
+	h := newMCPPanelHarness(t, provider, nil)
+
+	h.input(mcpKeyDown)
+	h.input(mcpKeyDown)
+	h.input(mcpKeyCtrlP)
+	h.waitFor("project disable notice", func() bool {
+		output := h.output()
+		return strings.Contains(output, "disabled fs") && strings.Contains(output, "saved to the project mcp.json")
+	})
+	provider.mu.Lock()
+	calls := append([]string{}, provider.calls...)
+	provider.mu.Unlock()
+	if len(calls) == 0 || calls[0] != "disable-project:fs=true" {
+		t.Fatalf("ctrl+p must route to the project toggle, got %v", calls)
+	}
+
+	// A server without the offer stays untouched.
+	h.input(mcpKeyDown)
+	h.input(mcpKeyCtrlP)
+	h.waitFor("unavailable notice", func() bool {
+		return strings.Contains(h.output(), "no project override available")
+	})
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	for _, call := range provider.calls {
+		if strings.HasPrefix(call, "disable-project:other") {
+			t.Fatalf("project toggle must be refused without the offer, got %v", provider.calls)
+		}
 	}
 }
 

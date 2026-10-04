@@ -40,13 +40,13 @@ const mcpGlobalConfigSubpath = "mcp/mcp.json"
 // only loaded when the project is trusted; skipping them produces a warning
 // diagnostic.
 func createMCPManager(cwd, agentDir string, projectTrusted bool) (*pigmcp.Manager, []AgentSessionRuntimeDiagnostic) {
-	var paths []string
+	var files []pigmcp.ConfigFile
 	var diagnostics []AgentSessionRuntimeDiagnostic
 
 	rootPath := filepath.Join(cwd, ".mcp.json")
 	if fileExistsForMCP(rootPath) {
 		if projectTrusted {
-			paths = append(paths, rootPath)
+			files = append(files, pigmcp.ConfigFile{Path: rootPath, Project: true})
 		} else {
 			diagnostics = append(diagnostics, AgentSessionRuntimeDiagnostic{
 				Type:    AgentSessionRuntimeDiagnosticWarning,
@@ -57,7 +57,7 @@ func createMCPManager(cwd, agentDir string, projectTrusted bool) (*pigmcp.Manage
 	projectPath := filepath.Join(cwd, codingagent.ConfigDirName, "mcp.json")
 	if fileExistsForMCP(projectPath) {
 		if projectTrusted {
-			paths = append(paths, projectPath)
+			files = append(files, pigmcp.ConfigFile{Path: projectPath, Project: true})
 		} else {
 			diagnostics = append(diagnostics, AgentSessionRuntimeDiagnostic{
 				Type:    AgentSessionRuntimeDiagnosticWarning,
@@ -65,12 +65,12 @@ func createMCPManager(cwd, agentDir string, projectTrusted bool) (*pigmcp.Manage
 			})
 		}
 	}
-	paths = append(paths, userMCPConfigPath(agentDir))
+	files = append(files, pigmcp.ConfigFile{Path: userMCPConfigPath(agentDir)})
 	if globalPath := mcpGlobalConfigPathFn(); globalPath != "" {
-		paths = append(paths, globalPath)
+		files = append(files, pigmcp.ConfigFile{Path: globalPath})
 	}
 
-	config, configDiagnostics, err := pigmcp.LoadConfigFiles(paths)
+	config, configDiagnostics, err := pigmcp.LoadConfigFileChain(files)
 	if err != nil {
 		diagnostics = append(diagnostics, AgentSessionRuntimeDiagnostic{
 			Type:    AgentSessionRuntimeDiagnosticWarning,
@@ -96,7 +96,7 @@ func createMCPManager(cwd, agentDir string, projectTrusted bool) (*pigmcp.Manage
 		return nil, diagnostics
 	}
 
-	manager := pigmcp.NewManager(config, pigmcp.ManagerOptions{
+	options := pigmcp.ManagerOptions{
 		ClientVersion: codingagent.Version,
 		// Connection-time header resolution (not load-time): `!command`
 		// results come from the process-wide config-value cache, so
@@ -104,7 +104,15 @@ func createMCPManager(cwd, agentDir string, projectTrusted bool) (*pigmcp.Manage
 		ResolveHeaders: func(server string, headers map[string]string) (map[string]string, error) {
 			return ResolveHeadersOrThrow(headers, fmt.Sprintf("MCP server %q", server), nil)
 		},
-	})
+	}
+	// The project override target exists whenever the project is trusted,
+	// even before the file does — /mcp creates it on the first project
+	// toggle (#10277).
+	if projectTrusted {
+		options.ProjectConfigPath = projectPath
+	}
+
+	manager := pigmcp.NewManager(config, options)
 	return manager, diagnostics
 }
 

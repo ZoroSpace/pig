@@ -1,6 +1,6 @@
-# S12：pi v1.0.0 → v1.0.1 基线同步计划（🔶 S12-1 ✅，余批未开工）
+# S12：pi v1.0.0 → v1.0.1 基线同步计划（🔶 S12-1 ✅、S12-2 ✅，余批未开工）
 
-**状态**：**S12-1 ✅ 完成（2026-10-03，终稿 docs/handoffs/S12-1.md）**；S12-2/3 待开工，S12-4 待拍板。pig 基线现跟踪 pi v1.0.0（S11 收口态，S12 收尾批 bump），目标推进到 v1.0.1（tag a7229ddc2，2026-10-03）。
+**状态**：**S12-1 ✅ 完成（2026-10-03，终稿 docs/handoffs/S12-1.md）**；**S12-2 ✅ 完成（2026-10-04，终稿 docs/handoffs/S12-2.md）**；S12-3 待开工，S12-4 待拍板。pig 基线现跟踪 pi v1.0.0（S11 收口态，S12 收尾批 bump），目标推进到 v1.0.1（tag a7229ddc2，2026-10-03）。
 **规模**：29 commits / 136 files / **+3186/−3238**（v1.0.0..v1.0.1 全区间）。大头是 npm 发行面（shrinkwrap 移除/audit/Nix flake/README，pig 全部不适用），**真正落 pig 映射面的生产面 diff 约 1.2k 行 + 测试**——比 S11（~1.5k）更小，是 v1.0 系列最轻的同步批。
 **性质**：全部是特性增补与修复族，无结构性重构；本批 pi **动了 catalog**（生成器三处修正 + Clef 分类器 + NVIDIA 默认模型），**无线格式改动**（session jsonl / v4 门预期零 diff），无新框架依赖。
 
@@ -93,7 +93,7 @@
 
 1. daxnuts 删除是否跟随（§0.2-2）——唯一阻塞 S12-3 的拍板项，其余可先行。
 2. MCP OAuth（S11-4）是否借本批立项（§0.2-3）——不阻塞 S12-1/2/3。
-3. TUI 图像半区的管线覆盖层级核实结论落在本文件 §2 追注（开工时回填）。
+3. TUI 图像半区的管线覆盖层级核实结论（S12-2 回填，2026-10-04）：pig 的 kitty **传输路不存在**——`tui/terminal_image.go` 是声明缩编版，Image 组件本体在 Phase 8 清单（tool_execution 内为 `pendingImageComponent` 占位且 `caps.Images` 恒 falsy），`EncodeKitty` 零非测试消费者 → **a276dabe5 整体延后 Phase 8**（不为本批拉起管线）；**672000c80 正常移植**（alt-screen kitty 机制 S4/S6-2 已交付，`GetKittyImagePlacementRows` + `imageCellsNeedRedraw` + `drawKittyImagesLast` 三段式），详见 S12-2 终稿 §1。
 4. `golang.org/x/image/webp` 若不在 go.mod（开工核实），WebP 半区可裁剪为 JPEG/GIF 并声明。
 
 ## 6. 开工后回填（2026-10-03，S12-1）

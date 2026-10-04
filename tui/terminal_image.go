@@ -382,8 +382,11 @@ type KittyImagePlacement struct {
 	TransmissionGeneration int
 	TransmissionBytes      int
 	EstimatedDecodedBytes  int
-	Sequence               string
-	ReplacementLine        string
+	// Rows is the number of terminal rows the placement covers (explicit
+	// `r=` control when present, else the registered metadata rows).
+	Rows            int
+	Sequence        string
+	ReplacementLine string
 }
 
 var (
@@ -417,16 +420,13 @@ func RegisterKittyImageMetadata(metadata KittyImageMetadata) {
 var (
 	kittyControlsRegex = regexp.MustCompile(`\x1b_G([^;]*);`)
 	kittyImageIdRegex  = regexp.MustCompile(`(?:^|,)i=(\d+)(?:,|$)`)
+	kittyRowsRegex     = regexp.MustCompile(`(?:^|,)r=(\d+)(?:,|$)`)
 	kittyChunkedRegex  = regexp.MustCompile(`(?:^|,)m=1(?:,|$)`)
 	kittyCropControlRe = regexp.MustCompile(`^[yhr]=`)
 )
 
-func getRegisteredKittyImageMetadata(line string) *registeredKittyImageMetadata {
-	m := kittyControlsRegex.FindStringSubmatch(line)
-	if m == nil {
-		return nil
-	}
-	idMatch := kittyImageIdRegex.FindStringSubmatch(m[1])
+func getRegisteredKittyImageMetadataFromControls(controls string) *registeredKittyImageMetadata {
+	idMatch := kittyImageIdRegex.FindStringSubmatch(controls)
 	if idMatch == nil {
 		return nil
 	}
@@ -437,6 +437,37 @@ func getRegisteredKittyImageMetadata(line string) *registeredKittyImageMetadata 
 	kittyImageMetadataMu.Lock()
 	defer kittyImageMetadataMu.Unlock()
 	return kittyImageMetadataRegistry[imageId]
+}
+
+func getRegisteredKittyImageMetadata(line string) *registeredKittyImageMetadata {
+	m := kittyControlsRegex.FindStringSubmatch(line)
+	if m == nil {
+		return nil
+	}
+	return getRegisteredKittyImageMetadataFromControls(m[1])
+}
+
+// getExplicitKittyImageRows reads the placement's `r=` control (pi:
+// getExplicitKittyImageRows); 0 = not set or not positive.
+func getExplicitKittyImageRows(controls string) int {
+	m := kittyRowsRegex.FindStringSubmatch(controls)
+	if m == nil {
+		return 0
+	}
+	rows, err := strconv.Atoi(m[1])
+	if err != nil || rows <= 0 {
+		return 0
+	}
+	return rows
+}
+
+// getKittyImageRowsFromControls prefers the explicit `r=` control over the
+// registered metadata rows (pi: getKittyImageRowsFromControls).
+func getKittyImageRowsFromControls(controls string, fallbackRows int) int {
+	if rows := getExplicitKittyImageRows(controls); rows != 0 {
+		return rows
+	}
+	return fallbackRows
 }
 
 // GetKittyImageMetadata returns the registered metadata referenced by a
@@ -454,6 +485,25 @@ var kittyPlacementControlKeys = map[string]bool{
 	"i": true, "p": true, "x": true, "y": true, "w": true, "h": true,
 	"X": true, "Y": true, "c": true, "r": true, "C": true, "U": true,
 	"z": true, "P": true, "Q": true, "H": true, "V": true,
+}
+
+// GetKittyImagePlacementRows reads the number of rows covered by an image
+// placement without scanning its payload (pi: getKittyImagePlacementRows,
+// #10319): the explicit `r=` control when present, else the registered
+// metadata rows; 0 = the line places no known image.
+func GetKittyImagePlacementRows(line string) int {
+	m := kittyControlsRegex.FindStringSubmatch(line)
+	if m == nil {
+		return 0
+	}
+	if rows := getExplicitKittyImageRows(m[1]); rows != 0 {
+		return rows
+	}
+	metadata := getRegisteredKittyImageMetadataFromControls(m[1])
+	if metadata == nil {
+		return 0
+	}
+	return metadata.Rows
 }
 
 // GetKittyImagePlacement builds a placement-only command for an image line
@@ -507,6 +557,7 @@ func GetKittyImagePlacement(line string) *KittyImagePlacement {
 		TransmissionGeneration: metadata.transmissionGeneration,
 		TransmissionBytes:      transmissionEnd - match[0],
 		EstimatedDecodedBytes:  metadata.WidthPx * metadata.HeightPx * 4,
+		Rows:                   getKittyImageRowsFromControls(controls, metadata.Rows),
 		Sequence:               sequence,
 		ReplacementLine:        line[:match[0]] + sequence + line[transmissionEnd:],
 	}

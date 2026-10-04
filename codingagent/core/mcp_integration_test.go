@@ -148,6 +148,57 @@ func TestMCPConfigFileChainLaterWins(t *testing.T) {
 	_ = manager // lazy by construction; asserted above
 }
 
+// #10277: a trusted project's mcp.json override entry disables a server
+// defined at the user level, and the manager gains the project write target.
+func TestMCPProjectOverrideDisablesUserServer(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PIG_CODING_AGENT_DIR", "")
+	writeMCPConfigFile(t, filepath.Join(tempDir, "agent", "mcp.json"), `{"mcpServers": {"tools": {"command": "user-cmd"}, "plain": {"command": "plain-cmd"}}}`)
+	writeMCPConfigFile(t, filepath.Join(tempDir, ".pig", "mcp.json"), `{"mcpServers": {"tools": {"disabled": true}}}`)
+
+	m, diags := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), true)
+	if m == nil {
+		t.Fatal("expected a manager")
+	}
+	defer m.Close()
+	if diags != nil {
+		t.Fatalf("expected no diagnostics, got %+v", diags)
+	}
+	var status pigmcp.ServerStatus
+	statuses := map[string]pigmcp.ServerStatus{}
+	for _, s := range m.Status() {
+		statuses[s.Name] = s
+	}
+	status = statuses["tools"]
+	if !status.Disabled {
+		t.Fatalf("project override must disable the user-level server, got %+v", status)
+	}
+	if status.OverridePath != filepath.Join(tempDir, ".pig", "mcp.json") {
+		t.Fatalf("override path must point at the project file, got %q", status.OverridePath)
+	}
+	if status.SourcePath != filepath.Join(tempDir, "agent", "mcp.json") {
+		t.Fatalf("source stays the user file, got %q", status.SourcePath)
+	}
+	// Already overridden: the plain toggle writes the project file, so the
+	// separate project action is not offered (pi: no item when override set).
+	if status.ProjectOverridable {
+		t.Fatal("overridden server must not offer the project toggle again")
+	}
+	for _, s := range statuses {
+		if s.Name == "plain" && !s.ProjectOverridable {
+			t.Fatal("unoverridden global server must offer the project toggle")
+		}
+	}
+	// Untrusted: the project file is skipped, the server stays enabled and no
+	// project target exists.
+	m2, _ := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), false)
+	defer m2.Close()
+	status2 := m2.Status()[0]
+	if status2.Disabled || status2.OverridePath != "" || status2.ProjectOverridable {
+		t.Fatalf("untrusted project must ignore the override, got %+v", status2)
+	}
+}
+
 func TestMCPTrustRequiringResources(t *testing.T) {
 	tempDir := t.TempDir()
 

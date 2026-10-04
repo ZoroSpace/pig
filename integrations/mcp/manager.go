@@ -64,6 +64,12 @@ type ManagerOptions struct {
 	// tests hand back in-memory transports; a future unix-socket transport
 	// would plug in here too). When nil, stdio/HTTP are built from config.
 	TransportFactory func(server string, cfg ServerConfig) (mcp.Transport, error)
+
+	// ProjectConfigPath is the trusted project's mcp.json — where
+	// SetServerDisabledInProject writes project overrides (#10277, pi's
+	// LoadedMcpConfig.projectConfig). Empty = unavailable (untrusted project
+	// or no project scope); the /mcp panel then hides the project toggle.
+	ProjectConfigPath string
 }
 
 // ServerStatus is a snapshot of one server's runtime state (for the `status`
@@ -79,6 +85,14 @@ type ServerStatus struct {
 	IdleMs     int64  `json:"idleMs,omitempty"` // ms since last use, when connected
 	Disabled   bool   `json:"disabled,omitempty"`
 	SourcePath string `json:"sourcePath,omitempty"` // winning config file (for the /mcp panel's write-back)
+	// OverridePath is the project file overriding this server (empty = none;
+	// #10277 — plain enable/disable then writes there, not the source).
+	OverridePath string `json:"overridePath,omitempty"`
+	// ProjectOverridable reports whether "toggle in this project" is offered
+	// for this server: a project mcp.json target exists, the server is not
+	// already overridden, and its definition does not live in the project
+	// file itself.
+	ProjectOverridable bool `json:"projectOverridable,omitempty"`
 }
 
 // ToolInfo describes one discovered tool, prefixed for display.
@@ -104,6 +118,9 @@ type serverState struct {
 	// empty when the manager was built without LoadConfigFiles (tests, direct
 	// construction) — SetServerDisabled then only flips the in-memory flag.
 	sourcePath string
+	// overridePath is the project file overriding this server
+	// (Config.Overrides; empty = none). Plain enable/disable writes there.
+	overridePath string
 
 	mu       sync.Mutex
 	session  *mcp.ClientSession
@@ -140,10 +157,11 @@ func NewManager(config *Config, opts ManagerOptions) *Manager {
 	}
 	for _, name := range config.SortedServerNames() {
 		m.servers[name] = &serverState{
-			name:       name,
-			cfg:        config.MCPServers[name],
-			sourcePath: config.Sources[name],
-			status:     statusDisconnected,
+			name:         name,
+			cfg:          config.MCPServers[name],
+			sourcePath:   config.Sources[name],
+			overridePath: config.Overrides[name],
+			status:       statusDisconnected,
 		}
 	}
 	// Always run the reaper: Close() waits on reapDone unconditionally, so a
@@ -249,6 +267,9 @@ func (m *Manager) Status() []ServerStatus {
 			Disabled:   st.cfg.Disabled,
 			SourcePath: st.sourcePath,
 		}
+		s.OverridePath = st.overridePath
+		s.ProjectOverridable = m.opts.ProjectConfigPath != "" &&
+			st.overridePath == "" && st.sourcePath != m.opts.ProjectConfigPath
 		if st.cfg.Disabled {
 			s.Status = statusDisabled
 		}
@@ -486,11 +507,14 @@ func (m *Manager) Reconnect(ctx context.Context, name string) error {
 }
 
 // SetServerDisabled flips a server's disabled flag in memory and writes it
-// back to the server's winning config file (JSON surgery on mcpServers[name]
-// only — sibling servers and unknown fields are preserved; enabling deletes
-// the key instead of writing false). A disabled server is torn down; a
-// re-enabled one goes back to disconnected and reconnects lazily. When the
-// manager was built without a source path, only the in-memory flag changes.
+// back to the config file that owns it (JSON surgery on mcpServers[name]
+// only — sibling servers and unknown fields are preserved). The write target
+// is the project override file when the server is overridden (#10277), else
+// its winning source file; enabling deletes the key instead of writing false,
+// except on override entries whose explicit value replaces the overridden
+// server's. A disabled server is torn down; a re-enabled one goes back to
+// disconnected and reconnects lazily. When the manager was built without a
+// source path, only the in-memory flag changes.
 // (pig-only: pi-mcp-adapter keeps an overlay state file; pig persists to the
 // source mcp.json per user decision.)
 func (m *Manager) SetServerDisabled(name string, disabled bool) error {
@@ -506,12 +530,43 @@ func (m *Manager) SetServerDisabled(name string, disabled bool) error {
 	} else {
 		st.status = statusDisconnected
 	}
-	sourcePath := st.sourcePath
+	target := st.sourcePath
+	if st.overridePath != "" {
+		target = st.overridePath
+	}
 	st.mu.Unlock()
-	if sourcePath == "" {
+	if target == "" {
 		return nil
 	}
-	return setServerDisabledInFile(sourcePath, name, disabled)
+	return setServerDisabledInFile(target, name, disabled, st.overridePath != "")
+}
+
+// SetServerDisabledInProject flips a server's disabled flag in memory and
+// writes it as a project override into the trusted project's mcp.json
+// (#10277: "enable/disable in this project" — the global server keeps its
+// global setting). Later plain enable/disable calls also target the project
+// file (pi: entry.override is set by saveConfig). Errors when no project
+// config target exists (untrusted project or no project scope).
+func (m *Manager) SetServerDisabledInProject(name string, disabled bool) error {
+	if m.opts.ProjectConfigPath == "" {
+		return errors.New("no project mcp.json to save the override to")
+	}
+	st, err := m.server(name)
+	if err != nil {
+		return err
+	}
+	st.mu.Lock()
+	st.cfg.Disabled = disabled
+	if disabled {
+		m.closeSessionLocked(st)
+		st.status = statusDisabled
+	} else {
+		st.status = statusDisconnected
+	}
+	st.overridePath = m.opts.ProjectConfigPath
+	projectPath := m.opts.ProjectConfigPath
+	st.mu.Unlock()
+	return setServerDisabledInFile(projectPath, name, disabled, true)
 }
 
 // connectLocked connects st. st.mu must be held.

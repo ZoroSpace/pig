@@ -2473,14 +2473,48 @@ func (t *TuiAltScreen) doRender() error {
 	}
 
 	fullRedraw := len(t.previousScreen) == 0 || t.previousScreenWidth != width || t.previousScreenHeight != height
-	imagesNeedRedraw := false
+	isWezTerm := os.Getenv("WEZTERM_PANE") != "" || strings.EqualFold(os.Getenv("TERM_PROGRAM"), "wezterm")
+	changedRows := make([]bool, len(screen))
+	changedAny := false
 	for row := range screen {
-		if screen[row] != sliceOrEmpty(t.previousScreen, row) &&
-			(IsImageLine(screen[row]) || IsImageLine(sliceOrEmpty(t.previousScreen, row))) {
-			imagesNeedRedraw = true
+		changedRows[row] = screen[row] != sliceOrEmpty(t.previousScreen, row)
+		if changedRows[row] {
+			changedAny = true
+		}
+	}
+	// The image anchor row itself changed (pi: imageAnchorsNeedRedraw).
+	imageAnchorsNeedRedraw := false
+	for row := range screen {
+		if changedRows[row] && (IsImageLine(screen[row]) || IsImageLine(sliceOrEmpty(t.previousScreen, row))) {
+			imageAnchorsNeedRedraw = true
 			break
 		}
 	}
+	// pi #10319: WezTerm erases Kitty image cells when any write touches a
+	// covered row, so a change BELOW an unchanged image anchor (scrollbar,
+	// status line) must force a full image redraw even though the anchor row
+	// is unchanged.
+	imageCellsNeedRedraw := false
+	if !imageAnchorsNeedRedraw && isWezTerm && changedAny {
+		if s, ok := t.imageProtocol.(string); ok && s == "kitty" {
+			for row := range screen {
+				placementRows := GetKittyImagePlacementRows(screen[row])
+				if placementRows == 0 {
+					continue
+				}
+				for covered := row; covered < row+placementRows; covered++ {
+					if covered < len(changedRows) && changedRows[covered] {
+						imageCellsNeedRedraw = true
+						break
+					}
+				}
+				if imageCellsNeedRedraw {
+					break
+				}
+			}
+		}
+	}
+	imagesNeedRedraw := imageAnchorsNeedRedraw || imageCellsNeedRedraw
 	redrawImages := fullRedraw || imagesNeedRedraw
 	hadUploadedKittyImages := len(t.uploadedKittyImages) > 0
 	preparedScreen := screen
@@ -2518,30 +2552,44 @@ func (t *TuiAltScreen) doRender() error {
 	}
 	buffer.WriteString(evictedImageDeletion)
 
-	// pi v0.86.0: WezTerm erases intersecting Kitty image cells when a later
-	// EL clears a covered row. Only separate clearing from drawing for
-	// WezTerm frames that place images; preserve the existing interleaved
-	// output for text-only frames and every other terminal.
-	clearRowsBeforeKittyImages := redrawImages && imageProtocolKitty && screenHasImageLine(screen) &&
-		(os.Getenv("WEZTERM_PANE") != "" || strings.EqualFold(os.Getenv("TERM_PROGRAM"), "wezterm"))
-	if clearRowsBeforeKittyImages {
+	// pi (672000c80): WezTerm erases intersecting Kitty image cells when a
+	// later row write touches a covered row. Draw image placements after
+	// every clear and text write so nothing later intersects them; preserve
+	// the existing interleaved output for text-only frames and every other
+	// terminal.
+	drawKittyImagesLast := redrawImages && imageProtocolKitty && screenHasImageLine(screen) && isWezTerm
+	if drawKittyImagesLast {
 		for row := 0; row < height; row++ {
 			if !fullRedraw && !imagesNeedRedraw && screen[row] == sliceOrEmpty(t.previousScreen, row) {
 				continue
 			}
 			buffer.WriteString("\x1b[" + strconv.Itoa(row+1) + ";1H\x1b[2K")
 		}
-	}
-
-	for row := 0; row < height; row++ {
-		if !fullRedraw && !imagesNeedRedraw && screen[row] == sliceOrEmpty(t.previousScreen, row) {
-			continue
+		for row := 0; row < height; row++ {
+			if !fullRedraw && !imagesNeedRedraw && screen[row] == sliceOrEmpty(t.previousScreen, row) {
+				continue
+			}
+			if IsImageLine(sliceOrEmpty(preparedScreen, row)) {
+				continue
+			}
+			buffer.WriteString("\x1b[" + strconv.Itoa(row+1) + ";1H" + sliceOrEmpty(preparedScreen, row))
 		}
-		buffer.WriteString("\x1b[" + strconv.Itoa(row+1) + ";1H")
-		if !clearRowsBeforeKittyImages {
-			buffer.WriteString("\x1b[2K")
+		for row := 0; row < height; row++ {
+			if !fullRedraw && !imagesNeedRedraw && screen[row] == sliceOrEmpty(t.previousScreen, row) {
+				continue
+			}
+			if !IsImageLine(sliceOrEmpty(preparedScreen, row)) {
+				continue
+			}
+			buffer.WriteString("\x1b[" + strconv.Itoa(row+1) + ";1H" + sliceOrEmpty(preparedScreen, row))
 		}
-		buffer.WriteString(sliceOrEmpty(preparedScreen, row))
+	} else {
+		for row := 0; row < height; row++ {
+			if !fullRedraw && !imagesNeedRedraw && screen[row] == sliceOrEmpty(t.previousScreen, row) {
+				continue
+			}
+			buffer.WriteString("\x1b[" + strconv.Itoa(row+1) + ";1H\x1b[2K" + sliceOrEmpty(preparedScreen, row))
+		}
 	}
 
 	if cursorPos != nil {

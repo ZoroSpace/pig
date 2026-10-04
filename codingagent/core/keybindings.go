@@ -76,6 +76,10 @@ const (
 	AppKeybindingMCPReconnect      = "app.mcp.reconnect"
 	AppKeybindingMCPToggleDisabled = "app.mcp.toggleDisabled"
 	AppKeybindingMCPCopyError      = "app.mcp.copyError"
+
+	// pig-only, #10277: toggle a global server's override in the project
+	// mcp.json (pi offers it as a separate panel item).
+	AppKeybindingMCPToggleDisabledProject = "app.mcp.toggleDisabledProject"
 )
 
 // UseWindowsKeybindings reports whether Windows-flavoured defaults apply
@@ -258,6 +262,7 @@ var Keybindings = func() tui.KeybindingDefinitions {
 	defs["app.tree.filter.cycleBackward"] = tui.KeybindingDefinition{DefaultKeys: keys("shift+ctrl+o"), Description: "Tree filter: cycle backward"}
 	defs[AppKeybindingMCPReconnect] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+r"), Description: "MCP panel: reconnect server"}
 	defs[AppKeybindingMCPToggleDisabled] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+d"), Description: "MCP panel: enable/disable server"}
+	defs[AppKeybindingMCPToggleDisabledProject] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+p"), Description: "MCP panel: enable/disable server in this project"}
 	defs[AppKeybindingMCPCopyError] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+y"), Description: "MCP panel: copy server error"}
 	return defs
 }()

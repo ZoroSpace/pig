@@ -1710,3 +1710,64 @@ func TestTuiAltScreenKeepsViewportScrollingWhileTranscriptSearchIsFocused(t *tes
 	}
 	tui.Stop(nil)
 }
+
+// Regression test for #10319 (pi 672000c80): a scrollbar update below an
+// unchanged image anchor erased its cells in WezTerm — a change on any row
+// covered by a placement must force the image redraw, and the placements
+// must be drawn after every clear and text write.
+func TestTuiAltScreenRedrawsWezTermKittyImagesAfterWritesToCoveredRows(t *testing.T) {
+	t.Setenv("WEZTERM_PANE", "1")
+	SetCapabilities(TerminalCapabilities{Images: "kitty", TrueColor: true, Hyperlinks: true})
+	defer ResetCapabilitiesCache()
+	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(20, 4)}
+	tui := NewTuiAltScreen(terminal, nil, "", nil)
+	imageId := 10319
+	imageLine := EncodeKitty("AAAA", EncodeKittyParams{Columns: 2, Rows: 3, ImageId: imageId, MoveCursorOff: true})
+	RegisterKittyImageMetadata(KittyImageMetadata{ImageId: imageId, Columns: 2, Rows: 3, WidthPx: 100, HeightPx: 100})
+	comp := &mutableLinesComponent{lines: []string{imageLine, "", "", "after"}}
+	tui.SetLayoutRoot(comp)
+	tui.Start()
+	terminal.WaitForRender()
+	eventCount := len(terminal.Events())
+
+	comp.setLine(1, "changed")
+	tui.RequestRender(false)
+	terminal.WaitForRender()
+	redraw := altEventWritesJoined(terminal.Events()[eventCount:])
+	placementIndex := strings.Index(redraw, "\x1b_Ga=p,q=2")
+	if !strings.Contains(redraw, "\x1b_Ga=d,d=a,q=2\x1b\\") {
+		t.Fatalf("expected the placement clear before the redraw, got %q", redraw)
+	}
+	if placementIndex == -1 {
+		t.Fatalf("expected the placement-only reuse, got %q", redraw)
+	}
+	changedIndex := strings.Index(redraw, "changed")
+	if changedIndex == -1 || placementIndex < changedIndex {
+		t.Fatalf("image placement must be drawn after covered-row writes: placement=%d changed=%d", placementIndex, changedIndex)
+	}
+	if strings.Contains(redraw, "\x1b_Ga=T") {
+		t.Fatal("expected no retransmission")
+	}
+	tui.Stop(nil)
+}
+
+// mutableLinesComponent is a countingComponent whose lines can change between
+// renders (the pi test mutates a captured `coveredLine` variable).
+type mutableLinesComponent struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (c *mutableLinesComponent) setLine(index int, value string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lines[index] = value
+}
+
+func (c *mutableLinesComponent) Render(int) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.lines...)
+}
+
+func (c *mutableLinesComponent) Invalidate() {}

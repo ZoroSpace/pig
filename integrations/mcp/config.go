@@ -29,6 +29,20 @@ type Config struct {
 	// LoadConfigFiles — the /mcp panel needs it to write `disabled` back to
 	// the file that actually owns the server.
 	Sources map[string]string `json:"-"`
+
+	// Overrides maps server names to the project file that overrides them
+	// (pi 1387af7b4's McpServerEntry.override; pig-only, not serialized). A
+	// project entry without `command`/`url` overrides only `disabled` of the
+	// server with the same name defined in a later (global/user-level) file.
+	Overrides map[string]string `json:"-"`
+}
+
+// ConfigFile is one file in the config chain with its scope. Project-scoped
+// files accept override entries (no `command`/`url`) that only set
+// `disabled` on a server defined elsewhere in the chain (#10277).
+type ConfigFile struct {
+	Path    string
+	Project bool
 }
 
 // Lifecycle values for ServerConfig.
@@ -102,19 +116,103 @@ type Diagnostic struct {
 // missing `mcpServers` key is not an error (empty config); malformed JSON and
 // invalid server entries produce diagnostics.
 func ParseConfigBytes(path string, content []byte) (*Config, []Diagnostic) {
+	config, diags, _ := parseConfigBytesScoped(path, content, false)
+	return config, diags
+}
+
+// pendingOverride is a project override entry collected during the chain
+// walk. pig's chain reads project files FIRST (later-wins: user/global files
+// follow), so the overridden server is not loaded yet when the override is
+// seen — resolution happens after the whole chain (pi resolves inline because
+// it reads global first; the deferred pass is the order-flipped equivalent).
+type pendingOverride struct {
+	name     string
+	path     string
+	disabled bool
+}
+
+func parseConfigBytesScoped(path string, content []byte, project bool) (*Config, []Diagnostic, []pendingOverride) {
 	var config Config
 	if err := json.Unmarshal(content, &config); err != nil {
-		return nil, []Diagnostic{{Severity: "error", Message: fmt.Sprintf("invalid JSON: %v", err), Path: path}}
+		return nil, []Diagnostic{{Severity: "error", Message: fmt.Sprintf("invalid JSON: %v", err), Path: path}}, nil
 	}
 	var diags []Diagnostic
-	for name, server := range config.MCPServers {
+	var pending []pendingOverride
+	if project {
+		// Raw pass for override detection (pi: isOverride — the `command` and
+		// `url` KEYS must be absent; `"command": ""` still counts as defined).
+		var raw struct {
+			MCPServers map[string]json.RawMessage `json:"mcpServers"`
+		}
+		if err := json.Unmarshal(content, &raw); err != nil {
+			// Already reported by the struct decode above.
+			return nil, diags, nil
+		}
+		for _, name := range sortedRawServerNames(raw.MCPServers) {
+			var keys map[string]json.RawMessage
+			if err := json.Unmarshal(raw.MCPServers[name], &keys); err != nil {
+				continue // struct decode already reported the malformed entry
+			}
+			_, hasCommand := keys["command"]
+			_, hasURL := keys["url"]
+			if hasCommand || hasURL {
+				continue
+			}
+			// Override entry: only `disabled` may be set (pig's whole
+			// OVERRIDE_KEYS surface — pi's enabled/exposure/toolExposure map
+			// to it, exposure/toolExposure have no pig face).
+			extra := false
+			for key := range keys {
+				if key != "disabled" {
+					extra = true
+				}
+			}
+			delete(config.MCPServers, name)
+			if extra {
+				diags = append(diags, Diagnostic{Severity: "error", Path: path, Server: name,
+					Message: fmt.Sprintf("server %q: an override can only set disabled", name)})
+				continue
+			}
+			override := pendingOverride{name: name, path: path}
+			if rawDisabled, ok := keys["disabled"]; ok {
+				if err := json.Unmarshal(rawDisabled, &override.disabled); err != nil {
+					diags = append(diags, Diagnostic{Severity: "error", Path: path, Server: name,
+						Message: fmt.Sprintf("server %q: disabled must be a boolean", name)})
+					continue
+				}
+			}
+			pending = append(pending, override)
+		}
+	}
+	for _, name := range sortedServerNames(config.MCPServers) {
+		server := config.MCPServers[name]
 		if diag := validateServerConfig(name, server); diag != nil {
 			diag.Path = path
 			diags = append(diags, *diag)
 			delete(config.MCPServers, name)
 		}
 	}
-	return &config, diags
+	return &config, diags, pending
+}
+
+// sortedRawServerNames returns raw entry names in deterministic order
+// (pig: map iteration is random; pi's Object.entries is insertion order).
+func sortedRawServerNames(raw map[string]json.RawMessage) []string {
+	names := make([]string, 0, len(raw))
+	for name := range raw {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func sortedServerNames(servers map[string]ServerConfig) []string {
+	names := make([]string, 0, len(servers))
+	for name := range servers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // ParseConfigFile reads and parses one MCP config file. A missing file is not
@@ -134,27 +232,59 @@ func ParseConfigFile(path string) (*Config, []Diagnostic, error) {
 // LoadConfigFiles parses the given files in order and merges them, with later
 // files winning on per-server conflicts (whole-entry replacement, not field
 // merge). Invalid servers are dropped from the merged result but reported in
-// the returned diagnostics.
+// the returned diagnostics. All files are treated as non-project (no
+// override entries); use LoadConfigFileChain for scoped chains.
 func LoadConfigFiles(paths []string) (*Config, []Diagnostic, error) {
-	merged := &Config{MCPServers: map[string]ServerConfig{}, Sources: map[string]string{}}
+	files := make([]ConfigFile, len(paths))
+	for i, path := range paths {
+		files[i] = ConfigFile{Path: path}
+	}
+	return LoadConfigFileChain(files)
+}
+
+// LoadConfigFileChain parses the given files in order and merges them with
+// later files winning on per-server conflicts. Project-scoped files accept
+// override entries (no `command`/`url`, only `disabled`): they are resolved
+// after the whole chain against the server with the same name defined in a
+// later file, and recorded in Config.Overrides (#10277).
+func LoadConfigFileChain(files []ConfigFile) (*Config, []Diagnostic, error) {
+	merged := &Config{MCPServers: map[string]ServerConfig{}, Sources: map[string]string{}, Overrides: map[string]string{}}
 	var diags []Diagnostic
-	for _, path := range paths {
-		if path == "" {
+	var pending []pendingOverride
+	for _, file := range files {
+		if file.Path == "" {
 			continue
 		}
-		config, fileDiags, err := ParseConfigFile(path)
+		content, err := os.ReadFile(file.Path)
 		if err != nil {
-			diags = append(diags, Diagnostic{Severity: "warning", Message: err.Error(), Path: path})
+			if os.IsNotExist(err) {
+				continue
+			}
+			diags = append(diags, Diagnostic{Severity: "warning", Message: err.Error(), Path: file.Path})
 			continue
 		}
+		config, fileDiags, filePending := parseConfigBytesScoped(file.Path, content, file.Project)
 		diags = append(diags, fileDiags...)
+		pending = append(pending, filePending...)
 		if config == nil {
 			continue
 		}
 		for name, server := range config.MCPServers {
 			merged.MCPServers[name] = server
-			merged.Sources[name] = path
+			merged.Sources[name] = file.Path
 		}
+	}
+	// Resolve collected overrides in file order (later files win).
+	for _, override := range pending {
+		base, ok := merged.MCPServers[override.name]
+		if !ok {
+			diags = append(diags, Diagnostic{Severity: "error", Path: override.path, Server: override.name,
+				Message: fmt.Sprintf("server %q needs \"command\" or \"url\", or a global server to override", override.name)})
+			continue
+		}
+		base.Disabled = override.disabled
+		merged.MCPServers[override.name] = base
+		merged.Overrides[override.name] = override.path
 	}
 	return merged, diags, nil
 }
