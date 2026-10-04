@@ -22,7 +22,7 @@
 ### 0.2 已拍板与待拍板
 
 1. **3D 彩蛋不迁移（用户已拍板，2026-10-03）**：`c450f2c0f`（恢复 3D pi logo 彩蛋）+ `7fbbd5f4a`（fullscreen /arminsayshi 播 3D Armin）整体跳过，记入延后清单。注：`easter-egg-3d.ts`（1292 行）是纯软件光线投射 + braille 像素渲染、无 WebGL 依赖，技术上可移植，但纯娱乐面，若日后想要单独插批。pig 侧现存的 2D armin.go 不受影响（上游 2D armin.ts 仍保留）。
-2. **daxnuts 删除是否跟随（待拍板）**：`1c1e9c0ef` 上游删除了 daxnuts 彩蛋（−183 行，pig 对应 `components/daxnuts.go`）。同步批惯例是跟随上游，但 daxnuts 是 pig 先于上游的存量面且用户此前未表达不满，默认建议跟随删除，用户可保留。
+2. **daxnuts 删除是否跟随（✅ 已拍板，2026-10-04：保留）**：`1c1e9c0ef` 上游删除了 daxnuts 彩蛋（−183 行，pig 对应 `components/daxnuts.go`）。用户拍板保留（pig 先于上游的存量面且用户明确喜欢），S12-3 对该 commit 整体零操作声明，后续同步批按 pig-only 偏差跳过 daxnuts 相关面。
 3. **MCP OAuth（S11-4 悬案）是否借 `1499466d8` 立项（待拍板）**：pi 这轮给 mcp 包 OAuth 加了 opt-in 的 client ID metadata documents（+344）。pig integrations/mcp 至今无 OAuth，本批该 commit 连同整个 MCP OAuth 族继续挂账，追加进 S11-CLOSING §4 候选清单；若拍板立项则 S12-4 单列。
 
 ### 0.3 本批必迁面（生产面 ~1.2k 行 + 测试）
