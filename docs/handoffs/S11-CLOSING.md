@@ -27,7 +27,9 @@ S11 总计划：`docs/handoffs/SYNC-S11-v1.0.0.md`。S11-1/2/3 源码面已全�
 6. **copy code 登录**（S11-1 挂账）：`/login` anthropic → 选 copy_code → 粘 `code#state` 全链路（需有效凭证或人工完成浏览器步）。
 7. 正常退出 / resume 回归。
 
-## 4. S11-4 候选清单（仅当拍板回填 MCP OAuth 时开工；全清单见 SYNC-S11 §2 MCP 表）
+## 4. S11-4 候选清单（✅ 2026-10-04 销账：用户拍板开工，交付为 S12-4，终稿 docs/handoffs/S12-4.md）
+
+> 本清单即 S12-4 的施工范围，已全部落地（pig 原生实现，见 S12-4 终稿的偏差声明）。
 
 - `integrations/mcp/` 新建 oauth*.go：d850edee9（authServerMetadataUrl + RFC 9207 iss）→ 5806068c2（凭证按 server name+URL 存）→ e529a82c9（step-up 保留 scopes）→ 8ce69e9d2（空/null 可选字段容忍）→ 91f9f3b5d（`"auth":{"provider":...}` 复用 /login token）→ 7c9fe6645（oauth.clientName）。
 - `components/mcp_panel.go`：3e9451238+41169ba2a 登录 URL 可点击（terminal hyperlink）。

@@ -13,8 +13,11 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -101,6 +104,51 @@ type ServerConfig struct {
 	// field; the /mcp panel toggles it and writes it back to the source
 	// file). Disabled servers never connect and contribute no tools.
 	Disabled bool `json:"disabled,omitempty"`
+
+	// OAuth configures the authorization-code flow for servers that do not
+	// support dynamic client registration or need specific scopes (pi:
+	// McpOAuthConfig). Only meaningful for HTTP servers.
+	OAuth *OAuthConfig `json:"oauth,omitempty"`
+
+	// Auth sends a /login provider's token instead of running the OAuth flow
+	// (pi 91f9f3b5d). Only allowed in global files, never project files.
+	Auth *MCPAuthConfig `json:"auth,omitempty"`
+}
+
+// OAuthConfig is the per-server OAuth client configuration.
+type OAuthConfig struct {
+	// ClientID is a pre-registered client id. Without it, pig registers a
+	// client with the authorization server (dynamic client registration).
+	ClientID string `json:"clientId,omitempty"`
+	// ClientSecret may reference environment variables (`${NAME}`) or
+	// commands (`!cmd`); resolved at use time.
+	ClientSecret string `json:"clientSecret,omitempty"`
+	// CallbackPort pins the loopback callback server port, for clients
+	// registered with a fixed redirect URI.
+	CallbackPort int `json:"callbackPort,omitempty"`
+	// CallbackURL is the registered loopback redirect URI, sent exactly as
+	// written (http on localhost/127.0.0.1/[::1], no query or fragment).
+	CallbackURL string `json:"callbackUrl,omitempty"`
+	// Scope lists the scopes to request, separated by spaces. Default: the
+	// scopes the server advertises.
+	Scope string `json:"scope,omitempty"`
+	// ClientName is the `client_name` sent with dynamic client registration.
+	// Default: "pig".
+	ClientName string `json:"clientName,omitempty"`
+	// ClientRegistration selects how pig identifies itself without a
+	// clientId. Only "dcr" (the default) is supported: pi's "cimd" relies on
+	// pi.dev-hosted Client ID Metadata Documents, which do not exist for pig.
+	ClientRegistration string `json:"clientRegistration,omitempty"`
+	// AuthServerMetadataURL overrides discovery with a configured
+	// authorization server metadata document (RFC 8414 / OIDC), for servers
+	// that advertise a wrong authorization server or none. Trusted as
+	// configured; must use https, except on loopback hosts.
+	AuthServerMetadataURL string `json:"authServerMetadataUrl,omitempty"`
+}
+
+// MCPAuthConfig sends a provider's login token instead of OAuth.
+type MCPAuthConfig struct {
+	Provider string `json:"provider"`
 }
 
 // Diagnostic is a config-level problem. Severity is "warning" or "error";
@@ -156,6 +204,14 @@ func parseConfigBytesScoped(path string, content []byte, project bool) (*Config,
 			_, hasCommand := keys["command"]
 			_, hasURL := keys["url"]
 			if hasCommand || hasURL {
+				// A real definition in a project file: auth may not pick
+				// where a credential goes (pi: "auth is only allowed in the
+				// global mcp.json").
+				if _, hasAuth := keys["auth"]; hasAuth {
+					diags = append(diags, Diagnostic{Severity: "error", Path: path, Server: name,
+						Message: fmt.Sprintf("server %q: auth is only allowed in the global mcp.json", name)})
+					delete(config.MCPServers, name)
+				}
 				continue
 			}
 			// Override entry: only `disabled` may be set (pig's whole
@@ -289,6 +345,55 @@ func LoadConfigFileChain(files []ConfigFile) (*Config, []Diagnostic, error) {
 	return merged, diags, nil
 }
 
+// loopbackRedirectHosts are the hosts a loopback redirect URI may use (pi:
+// LOOPBACK_HOSTS).
+var loopbackRedirectHosts = []string{"localhost", "127.0.0.1", "[::1]"}
+
+// isLoopbackRedirectUri reports whether value is an http URI on localhost,
+// 127.0.0.1, or [::1] without query or fragment (pi: isLoopbackRedirectUri) —
+// the shape pi's loopback callback server can serve.
+func isLoopbackRedirectUri(value string) bool {
+	u, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	return u.Scheme == "http" && slices.Contains(loopbackRedirectHosts, u.Hostname()) &&
+		u.RawQuery == "" && u.Fragment == ""
+}
+
+// validateOAuthConfig mirrors pi's validateOAuth (core/mcp-servers.ts).
+func validateOAuthConfig(o *OAuthConfig) string {
+	const prefix = "oauth."
+	if o.CallbackPort != 0 && (o.CallbackPort < 1 || o.CallbackPort > 65535) {
+		return prefix + "callbackPort must be a port number"
+	}
+	if o.CallbackURL != "" {
+		if !isLoopbackRedirectUri(o.CallbackURL) {
+			return prefix + "callbackUrl must be an http URI on localhost, 127.0.0.1, or [::1] without query or fragment"
+		}
+		if u, err := url.Parse(o.CallbackURL); err == nil && u.Port() != "" {
+			if port, err := strconv.Atoi(u.Port()); err == nil && o.CallbackPort != 0 && port != o.CallbackPort {
+				return prefix + "callbackUrl and oauth.callbackPort name different ports"
+			}
+		}
+	}
+	switch o.ClientRegistration {
+	case "":
+	case "dcr":
+	case "cimd":
+		return `oauth.clientRegistration "cimd" is not supported by pig: pi.dev-hosted Client ID Metadata Documents do not exist for pig (use dynamic client registration or oauth.clientId)`
+	default:
+		return `oauth.clientRegistration must be "dcr" or "cimd"`
+	}
+	if o.AuthServerMetadataURL != "" {
+		u, err := url.Parse(o.AuthServerMetadataURL)
+		if err != nil || !(u.Scheme == "https" || (u.Scheme == "http" && slices.Contains(loopbackRedirectHosts, u.Hostname()))) {
+			return prefix + "authServerMetadataUrl must be an https URL, or http on localhost, 127.0.0.1, or [::1]"
+		}
+	}
+	return ""
+}
+
 func validateServerConfig(name string, server ServerConfig) *Diagnostic {
 	if strings.TrimSpace(name) == "" {
 		return &Diagnostic{Severity: "error", Message: "server entry with empty name"}
@@ -301,6 +406,27 @@ func validateServerConfig(name string, server ServerConfig) *Diagnostic {
 			kind = "both command and url"
 		}
 		return &Diagnostic{Severity: "error", Message: fmt.Sprintf("invalid server config: %s", kind)}
+	}
+	if server.OAuth != nil {
+		if !hasURL {
+			return &Diagnostic{Severity: "error", Message: fmt.Sprintf("server %q: oauth only applies to HTTP servers (with \"url\")", name)}
+		}
+		if message := validateOAuthConfig(server.OAuth); message != "" {
+			return &Diagnostic{Severity: "error", Message: fmt.Sprintf("server %q: %s", name, message)}
+		}
+	}
+	if server.Auth != nil {
+		if !hasURL {
+			return &Diagnostic{Severity: "error", Message: fmt.Sprintf("server %q: auth only applies to HTTP servers (with \"url\")", name)}
+		}
+		if strings.TrimSpace(server.Auth.Provider) == "" {
+			return &Diagnostic{Severity: "error", Message: fmt.Sprintf("server %q: auth.provider must be a non-empty string", name)}
+		}
+		// Sending the provider's credential to `url` demands https (pi:
+		// "requires https except on loopback hosts").
+		if u, err := url.Parse(server.URL); err != nil || !(u.Scheme == "https" || (u.Scheme == "http" && slices.Contains(loopbackRedirectHosts, u.Hostname()))) {
+			return &Diagnostic{Severity: "error", Message: fmt.Sprintf("server %q: auth requires an https url, or http on localhost, 127.0.0.1, or [::1]", name)}
+		}
 	}
 	switch server.Lifecycle {
 	case "", LifecycleLazy, LifecycleEager, LifecycleKeepAlive, LifecycleLazyKeepAlive:

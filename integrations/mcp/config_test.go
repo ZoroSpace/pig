@@ -47,6 +47,45 @@ func TestParseConfigInvalidJSON(t *testing.T) {
 	}
 }
 
+func TestParseConfigOAuthValidation(t *testing.T) {
+	config, diags := ParseConfigBytes("test.json", []byte(`{
+		"mcpServers": {
+			"cimd": {"url": "https://x.example/mcp", "oauth": {"clientRegistration": "cimd"}},
+			"badReg": {"url": "https://x.example/mcp", "oauth": {"clientRegistration": "magic"}},
+			"badCallback": {"url": "https://x.example/mcp", "oauth": {"callbackUrl": "https://evil.example/cb"}},
+			"portMismatch": {"url": "https://x.example/mcp", "oauth": {"callbackPort": 1111, "callbackUrl": "http://127.0.0.1:2222/cb"}},
+			"stdioOAuth": {"command": "x", "oauth": {"clientId": "c"}},
+			"badProvider": {"url": "http://example.com/mcp", "auth": {"provider": "anthropic"}},
+			"good": {"url": "https://x.example/mcp", "oauth": {"callbackPort": 33418, "clientId": "c"}}
+		}
+	}`))
+	if len(diags) != 6 {
+		t.Fatalf("want 6 error diagnostics, got %+v", diags)
+	}
+	for _, diag := range diags {
+		if diag.Severity != "error" {
+			t.Fatalf("bad diagnostic: %+v", diag)
+		}
+	}
+	// The cimd rejection is a declared pig-only deviation from pi (which
+	// supports pi.dev-hosted Client ID Metadata Documents).
+	foundCimd := false
+	for _, diag := range diags {
+		if strings.Contains(diag.Message, `clientRegistration "cimd" is not supported`) {
+			foundCimd = true
+		}
+	}
+	if !foundCimd {
+		t.Fatalf("cimd must be rejected with the declared message, got %+v", diags)
+	}
+	if len(config.MCPServers) != 1 {
+		t.Fatalf("invalid servers must be dropped, got %+v", config.MCPServers)
+	}
+	if _, ok := config.MCPServers["good"]; !ok {
+		t.Fatalf("valid OAuth server must survive, got %+v", config.MCPServers)
+	}
+}
+
 func TestParseConfigValidationErrors(t *testing.T) {
 	config, diags := ParseConfigBytes("test.json", []byte(`{
 		"mcpServers": {

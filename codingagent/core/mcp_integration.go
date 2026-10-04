@@ -38,8 +38,9 @@ const mcpGlobalConfigSubpath = "mcp/mcp.json"
 // createMCPManager loads the MCP config file chain for one session cwd and
 // builds the manager (nil = no servers configured). Project-local files are
 // only loaded when the project is trusted; skipping them produces a warning
-// diagnostic.
-func createMCPManager(cwd, agentDir string, projectTrusted bool) (*pigmcp.Manager, []AgentSessionRuntimeDiagnostic) {
+// diagnostic. providerToken feeds `auth.provider` MCP servers (S12-4; nil =
+// such servers fail with needs-sign-in).
+func createMCPManager(cwd, agentDir string, projectTrusted bool, providerToken func(ctx context.Context, provider string) (string, error)) (*pigmcp.Manager, []AgentSessionRuntimeDiagnostic) {
 	var files []pigmcp.ConfigFile
 	var diagnostics []AgentSessionRuntimeDiagnostic
 
@@ -104,6 +105,14 @@ func createMCPManager(cwd, agentDir string, projectTrusted bool) (*pigmcp.Manage
 		ResolveHeaders: func(server string, headers map[string]string) (map[string]string, error) {
 			return ResolveHeadersOrThrow(headers, fmt.Sprintf("MCP server %q", server), nil)
 		},
+		// S12-4: OAuth credentials live next to mcp.json in the agent dir;
+		// clientSecret resolves at flow time through the same config-value
+		// pipeline as headers.
+		CredentialStore: pigmcp.NewCredentialStore(mcpAuthStoragePath(agentDir), mcpAuthLockDir(agentDir)),
+		ProviderToken:   providerToken,
+		ResolveConfigValue: func(server, raw string) (string, error) {
+			return ResolveConfigValueOrThrow(raw, fmt.Sprintf("MCP server %q oauth.clientSecret", server), nil)
+		},
 	}
 	// The project override target exists whenever the project is trusted,
 	// even before the file does — /mcp creates it on the first project
@@ -128,6 +137,24 @@ func userMCPConfigPath(agentDir string) string {
 		return filepath.Join(agentDir, "mcp.json")
 	}
 	return codingagent.GetMCPPath()
+}
+
+// mcpAuthStoragePath resolves the OAuth credential file (pi:
+// <agentDir>/mcp-auth.json). Explicit agentDir wins so tests are isolated.
+func mcpAuthStoragePath(agentDir string) string {
+	if agentDir != "" {
+		return filepath.Join(agentDir, "mcp-auth.json")
+	}
+	return filepath.Join(codingagent.GetAgentDir(), "mcp-auth.json")
+}
+
+// mcpAuthLockDir is where the per-server OAuth refresh lock files live (the
+// agent dir; the credential store creates it on demand).
+func mcpAuthLockDir(agentDir string) string {
+	if agentDir != "" {
+		return agentDir
+	}
+	return codingagent.GetAgentDir()
 }
 
 // defaultMCPGlobalConfigPath resolves ~/.config/mcp/mcp.json ("" = none).

@@ -6572,6 +6572,8 @@ func (m *InteractiveMode) showMcpPanel() {
 			Mutate:          m.mutateUI,
 			RequestRender:   func() { m.ui.RequestRender(false) },
 			CopyToClipboard: func(text string) error { return interactiveCopyToClipboard(text) },
+			// S12-4: OAuth sign-in opens the authorization URL in the browser.
+			OpenURL: utils.OpenBrowser,
 			OnCancel: func() {
 				done()
 				m.ui.RequestRender(false)

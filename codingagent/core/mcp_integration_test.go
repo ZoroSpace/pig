@@ -77,7 +77,7 @@ func TestMCPConfigFileChainLaterWins(t *testing.T) {
 
 	t.Run("project files load when trusted", func(t *testing.T) {
 		writeMCPConfigFile(t, filepath.Join(tempDir, "agent", "mcp.json"), `{"mcpServers": {"user": {"command": "user-cmd"}}}`)
-		m, diags := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), true)
+		m, diags := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), true, nil)
 		if m == nil {
 			t.Fatal("expected a manager")
 		}
@@ -92,7 +92,7 @@ func TestMCPConfigFileChainLaterWins(t *testing.T) {
 
 	t.Run("project files are skipped when untrusted", func(t *testing.T) {
 		// The user-level file still loads: trust gates project-local files only.
-		m, diags := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), false)
+		m, diags := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), false, nil)
 		if m == nil {
 			t.Fatal("user-level config must load regardless of project trust")
 		}
@@ -112,7 +112,7 @@ func TestMCPConfigFileChainLaterWins(t *testing.T) {
 
 	t.Run("later files win per server", func(t *testing.T) {
 		writeMCPConfigFile(t, filepath.Join(tempDir, "agent", "mcp.json"), `{"mcpServers": {"root": {"command": "user-cmd"}}}`)
-		m, _ := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), true)
+		m, _ := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), true, nil)
 		if m == nil {
 			t.Fatal("expected a manager")
 		}
@@ -134,7 +134,7 @@ func TestMCPConfigFileChainLaterWins(t *testing.T) {
 		mcpGlobalConfigPathFn = func() string { return filepath.Join(tempDir, "global-mcp.json") }
 		t.Cleanup(func() { mcpGlobalConfigPathFn = original })
 		writeMCPConfigFile(t, filepath.Join(tempDir, "global-mcp.json"), `{"mcpServers": {"global": {"command": "global-cmd"}}}`)
-		m, _ := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), false)
+		m, _ := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), false, nil)
 		if m == nil {
 			t.Fatal("global config must load even for untrusted projects")
 		}
@@ -156,7 +156,7 @@ func TestMCPProjectOverrideDisablesUserServer(t *testing.T) {
 	writeMCPConfigFile(t, filepath.Join(tempDir, "agent", "mcp.json"), `{"mcpServers": {"tools": {"command": "user-cmd"}, "plain": {"command": "plain-cmd"}}}`)
 	writeMCPConfigFile(t, filepath.Join(tempDir, ".pig", "mcp.json"), `{"mcpServers": {"tools": {"disabled": true}}}`)
 
-	m, diags := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), true)
+	m, diags := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), true, nil)
 	if m == nil {
 		t.Fatal("expected a manager")
 	}
@@ -191,7 +191,7 @@ func TestMCPProjectOverrideDisablesUserServer(t *testing.T) {
 	}
 	// Untrusted: the project file is skipped, the server stays enabled and no
 	// project target exists.
-	m2, _ := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), false)
+	m2, _ := createMCPManager(tempDir, filepath.Join(tempDir, "agent"), false, nil)
 	defer m2.Close()
 	status2 := m2.Status()[0]
 	if status2.Disabled || status2.OverridePath != "" || status2.ProjectOverridable {

@@ -99,3 +99,13 @@
 组件复用遵循 ls 渲染器先例（LastComponent 为 *tui.Text 时原位 SetText）。
 
 **回归测试**（`codingagent/core/mcp_integration_test.go`，新增 3 函数）：`TestMCPProxyRenderCallShowsToolAndServer`（六 action 形态）、`TestMCPProxyRenderCallDegradesGracefully`（空 map/nil/字符串/数字 → 裸标签）、`TestMCPProxyRenderCallReusesLastComponent`（渲染槽复用）。全量 `go test ./... -race -count=1` 单次 rc=0，30 包（/tmp/pig-test-out-mcp-render.log）。
+
+# S12-4：MCP OAuth（插批 feat，2026-10-04 收口）
+
+**来源**：2026-10-04 用户拍板把 S11-4 悬案（MCP OAuth 整族）回填，pig 原生实现（逐项对齐 pi 的 MCP OAuth 语义，非 baseline commit 对应）。终稿与偏差清单见 `docs/handoffs/S12-4.md`。
+
+**交付**：`integrations/mcp/oauth.go`（发现/PKCE/DCR/换码/刷新/iss 校验/scope 族）、`oauth_store.go`（`<agentDir>/mcp-auth.json`，`name|<url>` 键 + 原子写 0600 + 跨进程 flock）、`oauth_lock_unix.go`/`_windows.go`、`oauth_callback.go`（state 路由回调服务器）、`oauth_signin.go`（refresh-first + 回调/粘贴竞速）、`oauth_handler.go`（go-sdk `auth.OAuthHandler` 接入；非交互路永不开浏览器）。config 加 `oauth.*`/`auth.provider` 并 fail-closed 拒绝 `clientRegistration:"cimd"`；面板加 needs-auth 行 + ctrl+s sign-in 视图（URL 可复制 + 粘贴输入）+ ctrl+o 登出；core 桥接喂 `ModelRegistry.GetApiKeyForProvider` 供 `auth.provider` 服务器取 token。
+
+**并发要点（pig-only）**：go-sdk 在 `client.Connect` 内同步回调 `Authorize`/onChallenge，而连接路持 `serverState.mu`；challenge 用独立 `challengeMu` 记录，避免自死锁（pi 单线程无此隐患，pig 端口时曾因此挂起 `TestManagerNeedsAuthThenSignIn`）。
+
+**验收**：全量 `-race` 单次 rc=0 31 包；tmux 真 TTY 冒烟 needs-auth → ctrl+s → 回调落 token → 重连出工具 → 重启免重签 → ctrl+o 清凭证全通（独立 mock OAuth server，零真实 API）。

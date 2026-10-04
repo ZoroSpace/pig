@@ -10,6 +10,7 @@ package components
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -35,13 +36,20 @@ type MCPPanelProvider interface {
 	// SetServerDisabledInProject writes the toggle as a project override of a
 	// global server (#10277; pi's "Enable/Disable in this project" item).
 	SetServerDisabledInProject(server string, disabled bool) error
+	// SignIn runs the interactive OAuth sign-in (S12-4; pi: signInWithUi).
+	// The prompt shows the authorization URL and collects a pasted redirect
+	// URL; openURL (optional) opens the browser.
+	SignIn(ctx context.Context, server string, prompt pigmcp.SignInPrompt, openURL func(string)) error
+	// SignOut removes stored OAuth credentials and disconnects (pi: signOut).
+	SignOut(server string) (bool, error)
 }
 
 // MCPPanelOptions wires the panel into interactive mode. Mutate serializes
 // UI mutation (interactive passes m.mutateUI: HandleInput reenters the TUI
 // lock, ticker/async callbacks take it fresh); RequestRender wakes the
 // render loop after background updates; CopyToClipboard is the interactive
-// clipboard seam. RefreshInterval overrides the 2s status refresh tick
+// clipboard seam; OpenURL (optional, S12-4) opens the OAuth authorization
+// URL in the browser. RefreshInterval overrides the 2s status refresh tick
 // (tests pass -1 to run without the ticker goroutine; 0 = default).
 type MCPPanelOptions struct {
 	Provider        MCPPanelProvider
@@ -49,6 +57,7 @@ type MCPPanelOptions struct {
 	RequestRender   func()
 	CopyToClipboard func(text string) error
 	OnCancel        func()
+	OpenURL         func(url string)
 	RefreshInterval time.Duration
 }
 
@@ -60,7 +69,7 @@ const (
 	mcpRowServer mcpPanelRowKind = iota
 	mcpRowTool
 	mcpRowError  // failed server's LastError line
-	mcpRowNotice // loading / tool-listing error placeholder
+	mcpRowNotice // loading / tool-listing error / needs-sign-in placeholder
 )
 
 type mcpPanelRow struct {
@@ -89,8 +98,25 @@ type MCPPanelComponent struct {
 	selectListChildIndex int
 	noticeText           *tui.Text
 
+	// signIn is the active OAuth sign-in view (S12-4); non-nil swaps the
+	// server list for the sign-in screen until the flow settles.
+	signIn *mcpSignInView
+
 	focused  bool
 	stopTick chan struct{}
+}
+
+// mcpSignInView is the panel's sign-in screen (pi: signInWithUi + the
+// manager view's redirect-URL screen): status line, the authorization URL
+// (with copy hint, S12-2's AuthURLComponent), and a paste input racing the
+// browser callback for machines the browser cannot reach (SSH).
+type mcpSignInView struct {
+	server string
+	status *tui.Text
+	url    *AuthURLComponent // set once the flow produces the URL
+	input  *tui.Input
+	paste  chan string // submitted redirect URLs (buffered 1)
+	cancel context.CancelFunc
 }
 
 // NewMCPPanelComponent builds the panel. Provider status is snapshotted
@@ -130,6 +156,8 @@ func NewMCPPanelComponent(opts MCPPanelOptions) *MCPPanelComponent {
 			coretools.KeyDisplayText(core.AppKeybindingMCPToggleDisabled)+" enable/disable · "+
 			coretools.KeyDisplayText(core.AppKeybindingMCPToggleDisabledProject)+" in project · "+
 			coretools.KeyDisplayText(core.AppKeybindingMCPCopyError)+" copy error · "+
+			coretools.KeyDisplayText(core.AppKeybindingMCPSignIn)+" sign in · "+
+			coretools.KeyDisplayText(core.AppKeybindingMCPSignOut)+" sign out · "+
 			coretools.KeyDisplayText("tui.select.cancel")+" close"), 0, 0))
 	p.AddChild(NewDynamicBorder(nil))
 
@@ -202,10 +230,42 @@ func (p *MCPPanelComponent) rebuildLocked() {
 	}
 
 	var rows []mcpPanelRow
+	if p.signIn != nil {
+		// Sign-in screen: swap the select list for the sign-in view (status,
+		// authorization URL with copy hint, paste input).
+		screen := &tui.Container{}
+		screen.AddChild(tui.NewSpacer(1))
+		screen.AddChild(tui.NewText(theme.Fg("accent", "Sign in to "+p.signIn.server), 1, 0))
+		screen.AddChild(tui.NewSpacer(1))
+		screen.AddChild(p.signIn.status)
+		if p.signIn.url != nil {
+			screen.AddChild(tui.NewSpacer(1))
+			screen.AddChild(p.signIn.url)
+		}
+		screen.AddChild(tui.NewSpacer(1))
+		screen.AddChild(p.signIn.input)
+		screen.AddChild(tui.NewSpacer(1))
+		screen.AddChild(tui.NewText(theme.Fg("dim",
+			"  paste the redirect URL and press "+coretools.KeyDisplayText("tui.select.confirm")+" · "+
+				coretools.KeyDisplayText("app.message.copy")+" copy URL · "+
+				coretools.KeyDisplayText("tui.select.cancel")+" cancel"), 0, 0))
+		if len(p.Children) > p.selectListChildIndex {
+			p.Children[p.selectListChildIndex] = screen
+		} else {
+			p.selectListChildIndex = len(p.Children)
+			p.AddChild(screen)
+		}
+		p.selectList = nil
+		p.rows = rows
+		return
+	}
 	for _, st := range p.filterStatuses() {
 		rows = append(rows, mcpPanelRow{kind: mcpRowServer, server: st.Name, value: "server:" + st.Name})
 		if st.Status == "error" && st.LastError != "" {
 			rows = append(rows, mcpPanelRow{kind: mcpRowError, server: st.Name, value: "error:" + st.Name})
+		}
+		if st.Status == "needs-auth" {
+			rows = append(rows, mcpPanelRow{kind: mcpRowNotice, server: st.Name, value: "needsauth:" + st.Name})
 		}
 		if !p.expanded[st.Name] {
 			continue
@@ -294,6 +354,9 @@ func (p *MCPPanelComponent) renderRow(row mcpPanelRow) tui.SelectItem {
 		}
 		return tui.SelectItem{Value: row.value, Label: "    " + theme.Fg("error", st.LastError)}
 	case mcpRowNotice:
+		if strings.HasPrefix(row.value, "needsauth:") {
+			return tui.SelectItem{Value: row.value, Label: "    " + theme.Fg("warning", "needs sign-in — press "+coretools.KeyDisplayText(core.AppKeybindingMCPSignIn)+" to sign in")}
+		}
 		return tui.SelectItem{Value: row.value, Label: "    " + theme.Fg("dim", "connecting… listing tools")}
 	}
 	return tui.SelectItem{Value: row.value}
@@ -322,6 +385,8 @@ func (p *MCPPanelComponent) serverLabel(st pigmcp.ServerStatus) string {
 		symbol = "●"
 	case st.Status == "connecting":
 		symbol = "◌"
+	case st.Status == "needs-auth":
+		symbol = "∅"
 	case st.Status == "error":
 		symbol = "✗"
 	}
@@ -348,6 +413,8 @@ func (p *MCPPanelComponent) serverSuffix(st pigmcp.ServerStatus) string {
 		suffix = theme.Fg("dim", "disabled")
 	case st.Status == "connecting":
 		suffix = theme.Fg("muted", "connecting")
+	case st.Status == "needs-auth":
+		suffix = theme.Fg("warning", "needs sign-in")
 	case st.Status == "error":
 		suffix = theme.Fg("error", "failed")
 	case st.Status == "connected":
@@ -565,6 +632,140 @@ func (p *MCPPanelComponent) setNoticeLocked(text string) {
 	p.noticeText.SetText(text)
 }
 
+// ---- OAuth sign-in (S12-4; pi: signInWithUi) ----
+
+// signInSelected starts the interactive OAuth sign-in for the selected
+// server: the panel swaps to the sign-in screen and the flow runs in the
+// background (the callback server + prompt race run inside the manager).
+func (p *MCPPanelComponent) signInSelected() {
+	server := p.selectedServer()
+	if server == "" || p.signIn != nil {
+		return
+	}
+	st, ok := p.statusByName(server)
+	if !ok {
+		return
+	}
+	if st.OAuthURL == "" {
+		p.setNoticeLocked(theme.Fg("dim", "MCP server "+server+" does not use OAuth (only HTTP servers without an Authorization header do)"))
+		p.requestRender()
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	view := &mcpSignInView{
+		server: server,
+		status: tui.NewText(theme.Fg("dim", "Contacting the authorization server…"), 1, 0),
+		input:  tui.NewInput(),
+		paste:  make(chan string, 1),
+		cancel: cancel,
+	}
+	view.input.OnSubmit = func(value string) {
+		select {
+		case view.paste <- value:
+		default:
+		}
+	}
+	p.signIn = view
+	p.rebuildLocked()
+	p.requestRender()
+	go pigutils.Guard("mcp.panel.signin", func() {
+		err := p.opts.Provider.SignIn(ctx, server, mcpSignInPrompt{p: p, view: view}, p.opts.OpenURL)
+		p.mutate(func() {
+			if p.signIn == view {
+				p.signIn = nil
+				p.rebuildLocked()
+			}
+			switch {
+			case err == nil:
+				p.setNoticeLocked(theme.Fg("success", "signed in to "+server))
+			case errors.Is(err, pigmcp.ErrSignInCancelled):
+				p.setNoticeLocked(theme.Fg("dim", "sign-in cancelled"))
+			default:
+				p.setNoticeLocked(theme.Fg("error", err.Error()))
+			}
+			p.statuses = p.opts.Provider.Status()
+		})
+		p.requestRender()
+	})
+}
+
+// signOutSelected removes the selected server's stored OAuth credentials and
+// disconnects (ctrl+o).
+func (p *MCPPanelComponent) signOutSelected() {
+	server := p.selectedServer()
+	if server == "" || p.signIn != nil {
+		return
+	}
+	st, ok := p.statusByName(server)
+	if !ok || st.OAuthURL == "" {
+		p.setNoticeLocked(theme.Fg("dim", "MCP server "+server+" does not use OAuth"))
+		p.requestRender()
+		return
+	}
+	go pigutils.Guard("mcp.panel.signout", func() {
+		removed, err := p.opts.Provider.SignOut(server)
+		p.mutate(func() {
+			switch {
+			case err != nil:
+				p.setNoticeLocked(theme.Fg("error", "sign out failed: "+err.Error()))
+			case removed:
+				p.setNoticeLocked(theme.Fg("success", "signed out of "+server))
+			default:
+				p.setNoticeLocked(theme.Fg("dim", "no stored credentials for "+server))
+			}
+			p.statuses = p.opts.Provider.Status()
+			delete(p.tools, server)
+			delete(p.toolErrs, server)
+			p.rebuildLocked()
+		})
+		p.requestRender()
+	})
+}
+
+// cancelSignInLocked aborts the active sign-in (esc): the context
+// cancellation unblocks the flow, which reports sign-in cancelled.
+func (p *MCPPanelComponent) cancelSignInLocked() {
+	if p.signIn == nil {
+		return
+	}
+	p.signIn.cancel()
+}
+
+// mcpSignInPrompt adapts the sign-in screen to pigmcp.SignInPrompt. Methods
+// run on the sign-in goroutine; UI touches marshal through p.mutate.
+type mcpSignInPrompt struct {
+	p    *MCPPanelComponent
+	view *mcpSignInView
+}
+
+// ShowAuthorizationURL displays the URL with its copy hint (pi:
+// showAuthorizationUrl + the manager view's URL screen).
+func (m mcpSignInPrompt) ShowAuthorizationURL(url string) {
+	m.p.mutate(func() {
+		if m.p.signIn != m.view {
+			return
+		}
+		m.view.url = NewAuthURLComponent(nil, url)
+		m.view.status.SetText(theme.Fg("dim", "Complete the sign-in in your browser. If it cannot reach this machine, paste the URL it redirected to."))
+		m.p.rebuildLocked()
+	})
+	m.p.requestRender()
+}
+
+// PromptForRedirectURL resolves with the pasted redirect URL, or an error
+// once the context is cancelled (callback arrival or esc).
+func (m mcpSignInPrompt) PromptForRedirectURL(ctx context.Context) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", pigmcp.ErrSignInCancelled
+	case value := <-m.view.paste:
+		if strings.TrimSpace(value) == "" {
+			return "", pigmcp.ErrSignInCancelled
+		}
+		return value, nil
+	}
+}
+
 // SetFocused implements Focusable — propagate to the search input for IME
 // cursor positioning (thinking_selector precedent).
 func (p *MCPPanelComponent) GetFocused() bool { return p.focused }
@@ -585,8 +786,31 @@ func (p *MCPPanelComponent) HandleInput(keyData string) {
 
 func (p *MCPPanelComponent) handleInputLocked(keyData string) {
 	kb := tui.GetKeybindings()
+	if p.signIn != nil {
+		// Sign-in screen: esc cancels, copy copies the URL, everything else
+		// goes to the paste input.
+		if kb.Matches(keyData, "tui.select.cancel") {
+			p.cancelSignInLocked()
+			return
+		}
+		if kb.Matches(keyData, "app.message.copy") && p.signIn.url != nil {
+			p.signIn.url.Copy(nil)
+			p.requestRender()
+			return
+		}
+		p.signIn.input.HandleInput(keyData)
+		return
+	}
 	if kb.Matches(keyData, core.AppKeybindingMCPReconnect) {
 		p.reconnectSelected()
+		return
+	}
+	if kb.Matches(keyData, core.AppKeybindingMCPSignIn) {
+		p.signInSelected()
+		return
+	}
+	if kb.Matches(keyData, core.AppKeybindingMCPSignOut) {
+		p.signOutSelected()
 		return
 	}
 	if kb.Matches(keyData, core.AppKeybindingMCPToggleDisabled) {

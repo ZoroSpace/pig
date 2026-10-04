@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/codingagent/core"
+	coretools "github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/utils"
 	pigmcp "github.com/ZoroSpace/pig/integrations/mcp"
 	"github.com/ZoroSpace/pig/tui"
@@ -31,6 +32,8 @@ const (
 	mcpKeyCtrlD  = "\x04"
 	mcpKeyCtrlP  = "\x10"
 	mcpKeyCtrlY  = "\x19"
+	mcpKeyCtrlS  = "\x13"
+	mcpKeyCtrlO  = "\x0f"
 
 	// mcpRefreshDisabled is the RefreshInterval sentinel: no ticker.
 	mcpRefreshDisabled = -1 * time.Second
@@ -47,6 +50,9 @@ type fakeMCPPanelProvider struct {
 	reconnErr map[string]error
 	disabled  map[string]bool
 	calls     []string
+	// signInHold, when non-nil, makes SignIn block until it is closed or the
+	// context is cancelled (set via holdSignIn before the panel starts).
+	signInHold chan struct{}
 }
 
 func newFakeMCPProvider() *fakeMCPPanelProvider {
@@ -75,6 +81,13 @@ func (f *fakeMCPPanelProvider) setStatuses(statuses []pigmcp.ServerStatus) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.statuses = statuses
+}
+
+// holdSignIn makes the next SignIn block until it is closed or cancelled.
+func (f *fakeMCPPanelProvider) holdSignIn() {
+	f.mu.Lock()
+	f.signInHold = make(chan struct{})
+	f.mu.Unlock()
 }
 
 func (f *fakeMCPPanelProvider) ListServerTools(_ context.Context, server string) ([]pigmcp.ToolInfo, error) {
@@ -115,6 +128,30 @@ func (f *fakeMCPPanelProvider) SetServerDisabledInProject(server string, disable
 	f.disabled[server] = disabled
 	f.mu.Unlock()
 	return nil
+}
+
+func (f *fakeMCPPanelProvider) SignIn(ctx context.Context, server string, _ pigmcp.SignInPrompt, _ func(string)) error {
+	f.mu.Lock()
+	f.calls = append(f.calls, "signin:"+server)
+	hold := f.signInHold
+	f.mu.Unlock()
+	if hold != nil {
+		// Block so tests can observe the sign-in screen; esc cancels the
+		// context and the flow reports cancellation (manager semantics).
+		select {
+		case <-hold:
+		case <-ctx.Done():
+			return pigmcp.ErrSignInCancelled
+		}
+	}
+	return nil
+}
+
+func (f *fakeMCPPanelProvider) SignOut(server string) (bool, error) {
+	f.mu.Lock()
+	f.calls = append(f.calls, "signout:"+server)
+	f.mu.Unlock()
+	return true, nil
 }
 
 // mcpPanelHarness serializes panel access the way the TUI lock does.
@@ -421,5 +458,73 @@ func TestMCPPanelSelectionSurvivesRefresh(t *testing.T) {
 	h.input(mcpKeyCtrlY)
 	if output := h.output(); strings.Contains(output, "no error to copy") {
 		t.Fatalf("selection must survive refresh (broken still selected), got %q", output)
+	}
+}
+
+// S12-4: a needs-auth server renders the sign-in prompt naming the ctrl+s
+// key (the manager reports needs-auth when the transport 401s with no stored
+// credentials).
+func TestMCPPanelRendersNeedsAuthRow(t *testing.T) {
+	provider := newFakeMCPProvider()
+	provider.setStatuses([]pigmcp.ServerStatus{
+		{Name: "docs", Transport: "http", Lifecycle: "lazy", Status: "needs-auth", OAuthURL: "https://example.com/mcp"},
+	})
+	h := newMCPPanelHarness(t, provider, nil)
+
+	output := h.output()
+	if !strings.Contains(output, "needs sign-in") {
+		t.Fatalf("needs-auth must render a sign-in prompt, got %q", output)
+	}
+	wantKey := coretools.KeyDisplayText(core.AppKeybindingMCPSignIn)
+	if !strings.Contains(output, wantKey) {
+		t.Fatalf("prompt must name the sign-in key %q, got %q", wantKey, output)
+	}
+}
+
+// S12-4: ctrl+s swaps the list for the sign-in screen; esc cancels the flow
+// (context cancellation) and the list comes back with a cancelled notice.
+func TestMCPPanelSignInAndCancel(t *testing.T) {
+	provider := newFakeMCPProvider()
+	provider.setStatuses([]pigmcp.ServerStatus{
+		{Name: "docs", Transport: "http", Lifecycle: "lazy", Status: "needs-auth", OAuthURL: "https://example.com/mcp"},
+	})
+	provider.holdSignIn()
+	h := newMCPPanelHarness(t, provider, nil)
+
+	h.input(mcpKeyCtrlS)
+	h.waitFor("sign-in screen", func() bool {
+		return strings.Contains(h.output(), "Sign in to docs")
+	})
+	provider.mu.Lock()
+	calls := strings.Join(provider.calls, ",")
+	provider.mu.Unlock()
+	if !strings.Contains(calls, "signin:docs") {
+		t.Fatalf("ctrl+s must call SignIn, calls = %s", calls)
+	}
+
+	h.input(mcpKeyEscape)
+	h.waitFor("sign-in cancelled", func() bool {
+		out := h.output()
+		return !strings.Contains(out, "Sign in to docs") && strings.Contains(out, "sign-in cancelled")
+	})
+}
+
+// S12-4: ctrl+o signs out and drops the cached tools for the server.
+func TestMCPPanelSignOut(t *testing.T) {
+	provider := newFakeMCPProvider()
+	provider.setStatuses([]pigmcp.ServerStatus{
+		{Name: "docs", Transport: "http", Lifecycle: "lazy", Status: "connected", OAuthURL: "https://example.com/mcp", ToolCount: 1},
+	})
+	h := newMCPPanelHarness(t, provider, nil)
+
+	h.input(mcpKeyCtrlO)
+	h.waitFor("sign-out notice", func() bool {
+		return strings.Contains(h.output(), "signed out of docs")
+	})
+	provider.mu.Lock()
+	calls := strings.Join(provider.calls, ",")
+	provider.mu.Unlock()
+	if !strings.Contains(calls, "signout:docs") {
+		t.Fatalf("ctrl+o must call SignOut, calls = %s", calls)
 	}
 }

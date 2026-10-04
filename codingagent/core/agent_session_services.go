@@ -208,7 +208,16 @@ func CreateAgentSessionServices(ctx context.Context, options CreateAgentSessionS
 
 	// pig: native MCP — build the session's MCP manager after Reload, when
 	// project trust is final (ResolveProjectTrust may have set it).
-	mcpManager, mcpDiagnostics := createMCPManager(cwd, agentDir, settingsManager.IsProjectTrusted())
+	mcpManager, mcpDiagnostics := createMCPManager(cwd, agentDir, settingsManager.IsProjectTrusted(),
+		// S12-4: per-request token for `auth.provider` servers (pi:
+		// modelRegistry?.getApiKeyForProvider).
+		func(ctx context.Context, provider string) (string, error) {
+			key := NewModelRegistry(modelRuntime).GetApiKeyForProvider(ctx, provider)
+			if key == "" {
+				return "", fmt.Errorf("no auth found for provider %q", provider)
+			}
+			return key, nil
+		})
 	diagnostics = append(diagnostics, mcpDiagnostics...)
 
 	return &AgentSessionServices{

@@ -4,6 +4,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -221,7 +222,16 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 	// its own (diagnostics have no channel here and are dropped).
 	mcpManager := options.MCPManager
 	if mcpManager == nil {
-		mcpManager, _ = createMCPManager(cwd, agentDir, settingsManager.IsProjectTrusted())
+		mcpManager, _ = createMCPManager(cwd, agentDir, settingsManager.IsProjectTrusted(),
+			// S12-4: per-request token for `auth.provider` servers (pi:
+			// modelRegistry?.getApiKeyForProvider).
+			func(ctx context.Context, provider string) (string, error) {
+				key := NewModelRegistry(modelRuntime).GetApiKeyForProvider(ctx, provider)
+				if key == "" {
+					return "", fmt.Errorf("no auth found for provider %q", provider)
+				}
+				return key, nil
+			})
 	}
 
 	// Check if session has existing data to restore

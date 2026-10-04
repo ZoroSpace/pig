@@ -77,6 +77,10 @@ const (
 	AppKeybindingMCPToggleDisabled = "app.mcp.toggleDisabled"
 	AppKeybindingMCPCopyError      = "app.mcp.copyError"
 
+	// pig-only, S12-4: OAuth sign-in/out for remote MCP servers.
+	AppKeybindingMCPSignIn  = "app.mcp.signIn"
+	AppKeybindingMCPSignOut = "app.mcp.signOut"
+
 	// pig-only, #10277: toggle a global server's override in the project
 	// mcp.json (pi offers it as a separate panel item).
 	AppKeybindingMCPToggleDisabledProject = "app.mcp.toggleDisabledProject"
@@ -264,6 +268,8 @@ var Keybindings = func() tui.KeybindingDefinitions {
 	defs[AppKeybindingMCPToggleDisabled] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+d"), Description: "MCP panel: enable/disable server"}
 	defs[AppKeybindingMCPToggleDisabledProject] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+p"), Description: "MCP panel: enable/disable server in this project"}
 	defs[AppKeybindingMCPCopyError] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+y"), Description: "MCP panel: copy server error"}
+	defs[AppKeybindingMCPSignIn] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+s"), Description: "MCP panel: sign in to OAuth server"}
+	defs[AppKeybindingMCPSignOut] = tui.KeybindingDefinition{DefaultKeys: keys("ctrl+o"), Description: "MCP panel: sign out of OAuth server"}
 	return defs
 }()
 
@@ -448,6 +454,7 @@ var keybindingsOrder = []string{
 	"app.tree.filter.cycleForward", "app.tree.filter.cycleBackward",
 	// pig-only panel keys.
 	"app.mcp.reconnect", "app.mcp.toggleDisabled", "app.mcp.copyError",
+	"app.mcp.signIn", "app.mcp.signOut",
 }
 
 // loadRawConfig reads and parses a keybindings.json file (pi:

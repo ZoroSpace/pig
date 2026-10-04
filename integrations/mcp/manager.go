@@ -70,6 +70,17 @@ type ManagerOptions struct {
 	// LoadedMcpConfig.projectConfig). Empty = unavailable (untrusted project
 	// or no project scope); the /mcp panel then hides the project toggle.
 	ProjectConfigPath string
+
+	// CredentialStore persists OAuth tokens (S12-4: <agentDir>/mcp-auth.json).
+	// Nil = OAuth flows unavailable; OAuth servers then fail to connect with
+	// a needs-sign-in error.
+	CredentialStore *CredentialStore
+	// ProviderToken reads a /login provider's token for `auth.provider`
+	// servers, per request (core wires ModelRegistry.GetApiKeyForProvider).
+	ProviderToken func(ctx context.Context, provider string) (string, error)
+	// ResolveConfigValue resolves `${env}` / `!command` values (core wires
+	// ResolveConfigValueOrThrow); used for oauth.clientSecret at flow time.
+	ResolveConfigValue func(server, raw string) (string, error)
 }
 
 // ServerStatus is a snapshot of one server's runtime state (for the `status`
@@ -93,6 +104,9 @@ type ServerStatus struct {
 	// already overridden, and its definition does not live in the project
 	// file itself.
 	ProjectOverridable bool `json:"projectOverridable,omitempty"`
+	// OAuthURL is the server URL when the server authenticates with OAuth
+	// (S12-4; the /mcp panel offers sign-in for these).
+	OAuthURL string `json:"oauthUrl,omitempty"`
 }
 
 // ToolInfo describes one discovered tool, prefixed for display.
@@ -127,8 +141,16 @@ type serverState struct {
 	cmd      *exec.Cmd
 	stderr   *ringBuffer
 	lastUsed time.Time
-	status   string // "connected" | "disconnected" | "connecting" | "error"
+	status   string // "connected" | "disconnected" | "connecting" | "error" | "needs-auth"
 	toolErr  string // last discovery/invocation error (for status)
+	// challenge is the server's last WWW-Authenticate challenge; /mcp
+	// sign-in reuses its resource metadata URL and scope (pi: connection.
+	// challenge). It has its own lock because the OAuth transport records
+	// the challenge from inside client.Connect, i.e. while mu is held by the
+	// connect path — taking mu there would self-deadlock (pig-only lock;
+	// pi's single-threaded runtime has no equivalent hazard).
+	challengeMu sync.Mutex
+	challenge   OAuthChallenge
 
 	cachedTools []ToolInfo // valid while session != nil
 }
@@ -139,7 +161,23 @@ const (
 	statusConnecting   = "connecting"
 	statusError        = "error"
 	statusDisabled     = "disabled"
+	statusNeedsAuth    = "needs-auth"
 )
+
+// usesOAuth reports whether the HTTP server authenticates with OAuth: a URL,
+// no `auth` provider, and no Authorization header in the config (pi:
+// usesOAuth).
+func usesOAuth(cfg ServerConfig) bool {
+	if cfg.URL == "" || cfg.Auth != nil {
+		return false
+	}
+	for header := range cfg.Headers {
+		if strings.EqualFold(header, "authorization") {
+			return false
+		}
+	}
+	return true
+}
 
 // NewManager creates a Manager for the given (already merged) config. It does
 // not connect anything: lazy servers connect on first use, eager/keep-alive
@@ -280,6 +318,9 @@ func (m *Manager) Status() []ServerStatus {
 			}
 		} else {
 			s.Transport = "http"
+			if usesOAuth(st.cfg) {
+				s.OAuthURL = st.cfg.URL
+			}
 		}
 		if st.status == statusConnected && !st.lastUsed.IsZero() {
 			s.IdleMs = time.Since(st.lastUsed).Milliseconds()
@@ -365,6 +406,10 @@ func (m *Manager) CallTool(ctx context.Context, server, tool string, args map[st
 	res, err := st.session.CallTool(reqCtx, &mcp.CallToolParams{Name: rawName, Arguments: args})
 	st.lastUsed = time.Now()
 	if err != nil {
+		if errors.Is(err, ErrSignInRequired) {
+			m.markNeedsAuth(st)
+			return nil, err
+		}
 		m.markToolError(st, fmt.Sprintf("call %s: %v", rawName, err))
 		return nil, fmt.Errorf("mcp server %q tool %q: %w", server, rawName, err)
 	}
@@ -619,6 +664,14 @@ func (m *Manager) connectLocked(ctx context.Context, st *serverState) (*mcp.Clie
 	defer cancel()
 	session, err := client.Connect(connectCtx, transport, nil)
 	if err != nil {
+		if errors.Is(err, ErrSignInRequired) {
+			// OAuth server waiting for the user to sign in (pi:
+			// markNeedsAuth + signInRequiredMessage).
+			st.status = statusNeedsAuth
+			st.toolErr = ""
+			m.logf("connect %s: needs sign-in", st.name)
+			return nil, err
+		}
 		st.status = statusError
 		st.toolErr = stderrSuffix(err, st.stderr)
 		m.closeProcessLocked(st)
@@ -664,7 +717,147 @@ func (m *Manager) newHTTPTransport(ctx context.Context, st *serverState) (mcp.Tr
 	if m.opts.HTTPClient != nil {
 		client.Timeout = m.opts.HTTPClient.Timeout
 	}
-	return &mcp.StreamableClientTransport{Endpoint: st.cfg.URL, HTTPClient: client}, nil
+	transport := &mcp.StreamableClientTransport{Endpoint: st.cfg.URL, HTTPClient: client}
+	if handler := m.oauthHandler(st); handler != nil {
+		transport.OAuthHandler = handler
+	}
+	return transport, nil
+}
+
+// oauthHandler builds the transport auth provider for the server (S12-4):
+// the OAuth flow for servers without credentials in config, or the
+// auth.provider token face. Nil when the server does not authenticate via
+// OAuth/provider (headers carry the credential) or no store is wired.
+func (m *Manager) oauthHandler(st *serverState) *OAuthTransportHandler {
+	if st.cfg.URL == "" {
+		return nil
+	}
+	if st.cfg.Auth != nil {
+		provider := st.cfg.Auth.Provider
+		if m.opts.ProviderToken == nil {
+			return nil
+		}
+		return newProviderTokenHandler(st.name, provider, func(ctx context.Context) (string, error) {
+			return m.opts.ProviderToken(ctx, provider)
+		})
+	}
+	if !usesOAuth(st.cfg) {
+		return nil
+	}
+	deps := flowDeps{store: m.opts.CredentialStore, serverName: st.name}
+	if deps.store == nil {
+		// No store wired: the handler can only fail with needs-sign-in, which
+		// is still better UX than an opaque 401.
+		deps.store = NewCredentialStore("", "")
+	}
+	settings := func() OAuthSettings { return m.oauthSettings(st) }
+	return newOAuthTransportHandler(deps, st.name, st.cfg.URL, settings, func(challenge OAuthChallenge) {
+		st.challengeMu.Lock()
+		st.challenge = challenge
+		st.challengeMu.Unlock()
+	})
+}
+
+// oauthSettings resolves the server's oauth.* config (pi: connection.
+// oauthSettings; clientSecret resolves at use time so a broken secret fails
+// the refresh, not the connection setup).
+func (m *Manager) oauthSettings(st *serverState) OAuthSettings {
+	cfg := st.cfg.OAuth
+	if cfg == nil {
+		return OAuthSettings{}
+	}
+	secret := cfg.ClientSecret
+	if secret != "" && m.opts.ResolveConfigValue != nil {
+		resolved, err := m.opts.ResolveConfigValue(st.name, secret)
+		if err == nil {
+			secret = resolved
+		} else {
+			m.logf("server %s: oauth.clientSecret: %v", st.name, err)
+		}
+	}
+	return OAuthSettings{
+		ClientID:              cfg.ClientID,
+		ClientSecret:          secret,
+		CallbackPort:          cfg.CallbackPort,
+		CallbackURL:           cfg.CallbackURL,
+		Scope:                 cfg.Scope,
+		ClientName:            cfg.ClientName,
+		AuthServerMetadataURL: cfg.AuthServerMetadataURL,
+	}
+}
+
+// oauthServerURL returns the URL the server's OAuth credentials are stored
+// under, or "" when the server does not use OAuth.
+func (m *Manager) oauthServerURL(st *serverState) string {
+	if usesOAuth(st.cfg) {
+		return st.cfg.URL
+	}
+	return ""
+}
+
+// SignIn runs the interactive sign-in for the server (S12-4; pi: signIn +
+// signInMcpServer). The prompt shows the authorization URL and collects the
+// pasted redirect URL; openURL (optional) opens the browser. On success the
+// pending challenge is answered and the server reconnects.
+func (m *Manager) SignIn(ctx context.Context, name string, prompt SignInPrompt, openURL func(string)) error {
+	st, err := m.server(name)
+	if err != nil {
+		return err
+	}
+	st.mu.Lock()
+	serverURL := m.oauthServerURL(st)
+	settings := m.oauthSettings(st)
+	st.mu.Unlock()
+	st.challengeMu.Lock()
+	challenge := st.challenge
+	st.challengeMu.Unlock()
+	if serverURL == "" {
+		return fmt.Errorf("MCP server %q does not use OAuth", name)
+	}
+	if m.opts.CredentialStore == nil {
+		return errors.New("no credential store configured")
+	}
+	deps := flowDeps{store: m.opts.CredentialStore, serverName: name}
+	if err := signInMcpServer(ctx, deps, serverURL, settings, challenge, prompt, openURL); err != nil {
+		if errors.Is(err, ErrSignInCancelled) {
+			return err
+		}
+		return fmt.Errorf("sign-in failed: %w", err)
+	}
+	st.challengeMu.Lock()
+	st.challenge = OAuthChallenge{}
+	st.challengeMu.Unlock()
+	if err := m.Reconnect(ctx, name); err != nil {
+		return fmt.Errorf("signed in, but %w", err)
+	}
+	return nil
+}
+
+// SignOut removes the server's stored OAuth credentials and disconnects
+// (pi: signOut). Returns whether credentials were stored.
+func (m *Manager) SignOut(name string) (bool, error) {
+	st, err := m.server(name)
+	if err != nil {
+		return false, err
+	}
+	st.mu.Lock()
+	serverURL := m.oauthServerURL(st)
+	st.mu.Unlock()
+	if serverURL == "" {
+		return false, nil
+	}
+	var removed bool
+	if m.opts.CredentialStore != nil {
+		removed, err = m.opts.CredentialStore.Remove(name, serverURL)
+		if err != nil {
+			return false, err
+		}
+	}
+	st.mu.Lock()
+	m.closeSessionLocked(st)
+	st.status = statusNeedsAuth
+	st.mu.Unlock()
+	return removed, nil
 }
 
 // listToolsLocked lists and caches the server's tools with filters applied.
@@ -675,6 +868,10 @@ func (m *Manager) listToolsLocked(ctx context.Context, st *serverState) error {
 	tools, err := collectTools(reqCtx, st.session)
 	st.lastUsed = time.Now()
 	if err != nil {
+		if errors.Is(err, ErrSignInRequired) {
+			m.markNeedsAuth(st)
+			return fmt.Errorf("list tools of mcp server %q: %w", st.name, err)
+		}
 		m.markToolError(st, fmt.Sprintf("list tools: %v", err))
 		return fmt.Errorf("list tools of mcp server %q: %w", st.name, err)
 	}
@@ -776,6 +973,14 @@ func (m *Manager) markToolError(st *serverState, message string) {
 	st.status = statusError
 	st.toolErr = message
 	m.logf("%s: %s", st.name, message)
+}
+
+// markNeedsAuth flags the server as waiting for an interactive sign-in
+// (pi: markNeedsAuth — no error text; the status suffix carries it).
+func (m *Manager) markNeedsAuth(st *serverState) {
+	st.status = statusNeedsAuth
+	st.toolErr = ""
+	m.logf("%s: needs sign-in", st.name)
 }
 
 func (m *Manager) markToolOK(st *serverState) {
