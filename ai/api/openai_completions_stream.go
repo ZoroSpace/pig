@@ -284,14 +284,13 @@ func buildParams(model *types.Model, llmContext *types.TranscriptContext, option
 		}
 	}
 
-	// Last so custom keys override the named request fields. Model defaults
-	// apply first, per-request keys override them (pi: Object.assign(params,
-	// model.samplingParams, options?.samplingParams), #9506).
-	for key, value := range model.SamplingParams {
-		params[key] = value
-	}
-	for key, value := range options.SamplingParams {
-		params[key] = value
+	// Last so model and request sampling parameters override the named
+	// request fields, per key later wins (pi:
+	// Object.assign(params, resolveSamplingParams(...)), v1.0.2 #9776).
+	if samplingParams := ResolveSamplingParams(model, options.ReasoningEffort, options.SamplingParams); samplingParams != nil {
+		for key, value := range samplingParams {
+			params[key] = value
+		}
 	}
 
 	return params

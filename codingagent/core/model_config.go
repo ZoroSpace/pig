@@ -57,6 +57,11 @@ type ModelsJsonVercelGatewayRouting struct {
 	Order []string `json:"order,omitempty"`
 }
 
+// ModelsJsonSamplingParamsByThinkingLevel maps pi thinking levels to
+// per-level sampling parameter overrides (pi:
+// SamplingParamsByThinkingLevelSchema, v1.0.2 #9776).
+type ModelsJsonSamplingParamsByThinkingLevel map[string]map[string]any
+
 // ModelsJsonThinkingLevelMap maps pi thinking levels to provider-specific
 // values (pi: ThinkingLevelMapSchema, string | null members). A nil entry
 // that is Present means an explicit null (the level is unsupported); a
@@ -199,8 +204,11 @@ type ModelsJsonModel struct {
 	ContextWindow    *float64                    `json:"contextWindow,omitempty"`
 	MaxTokens        *float64                    `json:"maxTokens,omitempty"`
 	SamplingParams   map[string]any              `json:"samplingParams,omitempty"`
-	Headers          map[string]string           `json:"headers,omitempty"`
-	Compat           json.RawMessage             `json:"compat,omitempty"`
+	// SamplingParamsByThinkingLevel holds per-pi-thinking-level sampling
+	// overrides (pi: SamplingParamsByThinkingLevelSchema, v1.0.2 #9776).
+	SamplingParamsByThinkingLevel ModelsJsonSamplingParamsByThinkingLevel `json:"samplingParamsByThinkingLevel,omitempty"`
+	Headers                       map[string]string                       `json:"headers,omitempty"`
+	Compat                        json.RawMessage                         `json:"compat,omitempty"`
 }
 
 // ModelsJsonModelOverride is one model override (pi:
@@ -216,8 +224,11 @@ type ModelsJsonModelOverride struct {
 	ContextWindow    *float64                    `json:"contextWindow,omitempty"`
 	MaxTokens        *float64                    `json:"maxTokens,omitempty"`
 	SamplingParams   map[string]any              `json:"samplingParams,omitempty"`
-	Headers          map[string]string           `json:"headers,omitempty"`
-	Compat           json.RawMessage             `json:"compat,omitempty"`
+	// SamplingParamsByThinkingLevel holds per-pi-thinking-level sampling
+	// overrides (pi: SamplingParamsByThinkingLevelSchema, v1.0.2 #9776).
+	SamplingParamsByThinkingLevel ModelsJsonSamplingParamsByThinkingLevel `json:"samplingParamsByThinkingLevel,omitempty"`
+	Headers                       map[string]string                       `json:"headers,omitempty"`
+	Compat                        json.RawMessage                         `json:"compat,omitempty"`
 }
 
 // ModelsJsonProvider is one provider config (pi: ProviderConfigSchema).

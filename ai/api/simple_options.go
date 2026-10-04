@@ -6,6 +6,7 @@ import (
 
 	"github.com/samber/lo"
 
+	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/ai/utils"
 )
@@ -24,15 +25,41 @@ func ClampMaxTokensToContext(model *types.Model, context *types.TranscriptContex
 	return minInt64(maxTokens, maxInt64(minMaxTokens, available))
 }
 
+// ResolveSamplingParams merges model defaults, the effective thinking level's
+// overrides, and request-level params (later wins per key). thinkingLevel is
+// clamped to the model's supported levels first; "" means off (pi:
+// resolveSamplingParams, v1.0.2 #9776).
+func ResolveSamplingParams(model *types.Model, thinkingLevel types.ModelThinkingLevel, requestParams map[string]any) map[string]any {
+	if thinkingLevel == "" {
+		thinkingLevel = types.ModelThinkingOff
+	}
+	effectiveThinkingLevel := ai.ClampThinkingLevel(model, thinkingLevel)
+	thinkingLevelParams := model.SamplingParamsByThinkingLevel[effectiveThinkingLevel]
+	if model.SamplingParams == nil && thinkingLevelParams == nil && requestParams == nil {
+		return nil
+	}
+	merged := make(map[string]any)
+	for key, value := range model.SamplingParams {
+		merged[key] = value
+	}
+	for key, value := range thinkingLevelParams {
+		merged[key] = value
+	}
+	for key, value := range requestParams {
+		merged[key] = value
+	}
+	return merged
+}
+
 // BuildBaseOptions maps a SimpleStreamOptions into the StreamOptions shared by
 // full streams (pi: buildBaseOptions). signal is intentionally absent (Go
 // cancellation travels as context).
 func BuildBaseOptions(model *types.Model, context *types.TranscriptContext, options *types.SimpleStreamOptions, apiKey string) types.StreamOptions {
-	// v0.99.1 #9506: model-level samplingParams are applied in each adapter's
-	// buildParams (Object.assign(params, model.samplingParams,
-	// options.samplingParams)); merging them here as well would double-apply
-	// them past adapter-level request keys.
-	samplingParams := options.SamplingParams
+	// v1.0.2 #9776: sampling params are resolved here over the request's
+	// thinking level; each adapter's buildParams re-merges the same layers
+	// (idempotent, same shape as pi).
+	reasoning := types.ModelThinkingLevel(options.Reasoning)
+	samplingParams := ResolveSamplingParams(model, reasoning, options.SamplingParams)
 	maxTokens := options.MaxTokens
 	if maxTokens == nil {
 		maxTokens = &model.MaxTokens

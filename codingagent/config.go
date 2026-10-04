@@ -183,7 +183,7 @@ const ConfigDirName = ".pig"
 // ldflags injection arrives with the packaging batch).
 // Bump discipline: MUST be updated in the same batch as every pi baseline
 // sync (S7 missed the v0.86.1 bump; pinned by TestVersionTracksPiBaseline).
-const Version = "1.0.1"
+const Version = "1.0.2"
 
 // IssuesURL is the pig issue tracker (pig-only: pi has no counterpart —
 // pig removed /bug and the Pi Radius bug-report chain per user decision

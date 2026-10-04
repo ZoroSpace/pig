@@ -828,11 +828,24 @@ func TestModelRegistryCustomModelAndModelOverrideCarrySamplingParams(t *testing.
 				map[string]any{
 					"id":             "custom/sampling-model",
 					"samplingParams": map[string]any{"temperature": 1, "top_p": 0.95, "top_k": 0},
+					"samplingParamsByThinkingLevel": map[string]any{
+						"low":  map[string]any{"temperature": 0.6, "top_p": 0.95},
+						"high": map[string]any{"temperature": 0.8},
+					},
 				},
 			},
 			"modelOverrides": map[string]any{
+				"custom/sampling-model": map[string]any{
+					"samplingParamsByThinkingLevel": map[string]any{
+						"low": map[string]any{"temperature": 0.5, "top_k": 20},
+						"max": map[string]any{"temperature": 1},
+					},
+				},
 				"anthropic/claude-sonnet-4": map[string]any{
 					"samplingParams": map[string]any{"top_p": 0.9},
+					"samplingParamsByThinkingLevel": map[string]any{
+						"high": map[string]any{"temperature": 0.8},
+					},
 				},
 			},
 		},
@@ -844,13 +857,34 @@ func TestModelRegistryCustomModelAndModelOverrideCarrySamplingParams(t *testing.
 	if custom.SamplingParams["temperature"] != float64(1) || custom.SamplingParams["top_p"] != 0.95 || custom.SamplingParams["top_k"] != float64(0) {
 		t.Fatalf("custom samplingParams = %+v", custom.SamplingParams)
 	}
+	// v1.0.2 #9776: override per-level entries merge per key with the base
+	// model; levels the override doesn't carry inherit the base.
+	customByLevel := custom.SamplingParamsByThinkingLevel
+	if customByLevel == nil {
+		t.Fatal("custom samplingParamsByThinkingLevel unset")
+	}
+	if low := customByLevel[types.ModelThinkingLow]; len(low) != 3 || low["temperature"] != 0.5 || low["top_p"] != 0.95 || low["top_k"] != float64(20) {
+		t.Fatalf("custom low = %+v", low)
+	}
+	if high := customByLevel[types.ModelThinkingHigh]; len(high) != 1 || high["temperature"] != 0.8 {
+		t.Fatalf("custom high = %+v", high)
+	}
+	if max := customByLevel[types.ModelThinkingMax]; len(max) != 1 || max["temperature"] != float64(1) {
+		t.Fatalf("custom max = %+v", max)
+	}
 	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
 	if len(sonnet.SamplingParams) != 1 || sonnet.SamplingParams["top_p"] != 0.9 {
 		t.Fatalf("sonnet samplingParams = %+v", sonnet.SamplingParams)
 	}
+	if high := sonnet.SamplingParamsByThinkingLevel[types.ModelThinkingHigh]; len(high) != 1 || high["temperature"] != 0.8 {
+		t.Fatalf("sonnet high = %+v", sonnet.SamplingParamsByThinkingLevel)
+	}
 	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-opus-4.1" })
 	if opus.SamplingParams != nil {
 		t.Fatalf("opus samplingParams = %+v, want unset", opus.SamplingParams)
+	}
+	if opus.SamplingParamsByThinkingLevel != nil {
+		t.Fatalf("opus samplingParamsByThinkingLevel = %+v, want unset", opus.SamplingParamsByThinkingLevel)
 	}
 }
 

@@ -65,8 +65,11 @@ type ProviderConfigInputModel struct {
 	ContextWindow  int64
 	MaxTokens      int64
 	SamplingParams map[string]any
-	Headers        map[string]string
-	Compat         ai.ModelCompat
+	// SamplingParamsByThinkingLevel holds per-pi-thinking-level sampling
+	// overrides (pi: Model.samplingParamsByThinkingLevel, v1.0.2 #9776).
+	SamplingParamsByThinkingLevel types.SamplingParamsByThinkingLevel
+	Headers                       map[string]string
+	Compat                        ai.ModelCompat
 }
 
 // ProviderConfigInput is the input type of the extension registerProvider API
@@ -338,6 +341,10 @@ func applyModelOverride(model ai.Model, override *ModelsJsonModelOverride) ai.Mo
 		}
 		model.SamplingParams = merged
 	}
+	model.SamplingParamsByThinkingLevel = mergeSamplingParamsByThinkingLevel(
+		model.SamplingParamsByThinkingLevel,
+		samplingParamsByThinkingLevelFromJSON(override.SamplingParamsByThinkingLevel),
+	)
 	if len(override.Compat) > 0 {
 		if compat, err := mergeCompat(model.Compat, override.Compat, model.API); err == nil {
 			model.Compat = compat
@@ -368,6 +375,59 @@ func thinkingLevelMapFromJSON(m *ModelsJsonThinkingLevelMap) types.ThinkingLevel
 		} else {
 			out[types.ModelThinkingLevel(key)] = nil
 		}
+	}
+	return out
+}
+
+// mergeSamplingParamsByThinkingLevel merges model-override per-level entries
+// over the base model per key (pi: mergeSamplingParamsByThinkingLevel,
+// v1.0.2 #9776). Levels the override doesn't carry inherit the base.
+func mergeSamplingParamsByThinkingLevel(
+	base types.SamplingParamsByThinkingLevel,
+	override types.SamplingParamsByThinkingLevel,
+) types.SamplingParamsByThinkingLevel {
+	if override == nil {
+		return base
+	}
+	merged := make(types.SamplingParamsByThinkingLevel)
+	for level, params := range base {
+		merged[level] = params
+	}
+	for _, level := range []types.ModelThinkingLevel{
+		types.ModelThinkingOff,
+		types.ModelThinkingMinimal,
+		types.ModelThinkingLow,
+		types.ModelThinkingMedium,
+		types.ModelThinkingHigh,
+		types.ModelThinkingXHigh,
+		types.ModelThinkingMax,
+	} {
+		params, ok := override[level]
+		if !ok || params == nil {
+			continue
+		}
+		mergedLevel := make(map[string]any)
+		for key, value := range base[level] {
+			mergedLevel[key] = value
+		}
+		for key, value := range params {
+			mergedLevel[key] = value
+		}
+		merged[level] = mergedLevel
+	}
+	return merged
+}
+
+// samplingParamsByThinkingLevelFromJSON converts the models.json record to
+// the typed Model field (pi needs no conversion; pig's models.json layer is
+// string-keyed).
+func samplingParamsByThinkingLevelFromJSON(m ModelsJsonSamplingParamsByThinkingLevel) types.SamplingParamsByThinkingLevel {
+	if m == nil {
+		return nil
+	}
+	out := make(types.SamplingParamsByThinkingLevel)
+	for key, params := range m {
+		out[types.ModelThinkingLevel(key)] = params
 	}
 	return out
 }
@@ -489,21 +549,22 @@ func modelFromJSON(providerID string, definition *ModelsJsonModel, providerConfi
 		return ai.Model{}, err
 	}
 	return ai.Model{
-		ID:               definition.ID,
-		Name:             name,
-		API:              ai.Api(api),
-		Provider:         ai.ProviderID(providerID),
-		BaseURL:          baseURL,
-		Reasoning:        reasoning,
-		ThinkingLevelMap: thinkingLevelMapFromJSON(definition.ThinkingLevelMap),
-		Input:            input,
-		InputLimits:      inputLimitsFromJSON(definition.InputLimits),
-		Cost:             cost,
-		PromptCache:      promptCacheFromJSON(definition.PromptCache),
-		ContextWindow:    contextWindow,
-		MaxTokens:        maxTokens,
-		SamplingParams:   definition.SamplingParams,
-		Compat:           compat,
+		ID:                            definition.ID,
+		Name:                          name,
+		API:                           ai.Api(api),
+		Provider:                      ai.ProviderID(providerID),
+		BaseURL:                       baseURL,
+		Reasoning:                     reasoning,
+		ThinkingLevelMap:              thinkingLevelMapFromJSON(definition.ThinkingLevelMap),
+		Input:                         input,
+		InputLimits:                   inputLimitsFromJSON(definition.InputLimits),
+		Cost:                          cost,
+		PromptCache:                   promptCacheFromJSON(definition.PromptCache),
+		ContextWindow:                 contextWindow,
+		MaxTokens:                     maxTokens,
+		SamplingParams:                definition.SamplingParams,
+		SamplingParamsByThinkingLevel: samplingParamsByThinkingLevelFromJSON(definition.SamplingParamsByThinkingLevel),
+		Compat:                        compat,
 	}, nil
 }
 
@@ -642,21 +703,22 @@ func applyExtension(providerID string, models []ai.Model, config *ProviderConfig
 			return nil, fmt.Errorf("Provider %s: %q is required when defining custom models.", providerID, "baseUrl")
 		}
 		out = append(out, ai.Model{
-			ID:               definition.ID,
-			Name:             definition.Name,
-			API:              ai.Api(api),
-			Provider:         ai.ProviderID(providerID),
-			BaseURL:          baseURL,
-			Reasoning:        definition.Reasoning,
-			ThinkingLevelMap: definition.ThinkingLevelMap,
-			Input:            definition.Input,
-			InputLimits:      definition.InputLimits,
-			Cost:             definition.Cost,
-			PromptCache:      definition.PromptCache,
-			ContextWindow:    definition.ContextWindow,
-			MaxTokens:        definition.MaxTokens,
-			SamplingParams:   definition.SamplingParams,
-			Compat:           definition.Compat,
+			ID:                            definition.ID,
+			Name:                          definition.Name,
+			API:                           ai.Api(api),
+			Provider:                      ai.ProviderID(providerID),
+			BaseURL:                       baseURL,
+			Reasoning:                     definition.Reasoning,
+			ThinkingLevelMap:              definition.ThinkingLevelMap,
+			Input:                         definition.Input,
+			InputLimits:                   definition.InputLimits,
+			Cost:                          definition.Cost,
+			PromptCache:                   definition.PromptCache,
+			ContextWindow:                 definition.ContextWindow,
+			MaxTokens:                     definition.MaxTokens,
+			SamplingParams:                definition.SamplingParams,
+			SamplingParamsByThinkingLevel: definition.SamplingParamsByThinkingLevel,
+			Compat:                        definition.Compat,
 		})
 	}
 	return out, nil

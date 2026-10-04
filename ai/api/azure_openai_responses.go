@@ -537,11 +537,17 @@ func buildAzureResponsesParams(model *types.Model, llmContext *types.TranscriptC
 		params["tool_choice"] = options.ToolChoice
 	}
 
+	// v1.0.2 #9776: resolve the effective reasoning effort up front —
+	// summary-only requests default to "medium" — and select sampling
+	// params by it below.
+	reasoningEffort := options.ReasoningEffort
+	if reasoningEffort == "" && options.ReasoningSummary != "" {
+		reasoningEffort = types.ModelThinkingMedium
+	}
 	if model.Reasoning {
-		if options.ReasoningEffort != "" || options.ReasoningSummary != "" {
-			effort := "medium"
+		if reasoningEffort != "" {
+			effort := string(reasoningEffort)
 			if options.ReasoningEffort != "" {
-				effort = string(options.ReasoningEffort)
 				if mapped, ok := model.ThinkingLevelMap[options.ReasoningEffort]; ok && mapped != nil {
 					effort = *mapped
 				}
@@ -557,14 +563,13 @@ func buildAzureResponsesParams(model *types.Model, llmContext *types.TranscriptC
 		}
 	}
 
-	// Last so custom keys override the named request fields. Model defaults
-	// apply first, per-request keys override them (pi: Object.assign(params,
-	// model.samplingParams, options?.samplingParams), #9506).
-	for key, value := range model.SamplingParams {
-		params[key] = value
-	}
-	for key, value := range options.SamplingParams {
-		params[key] = value
+	// Last so model and request sampling parameters override the named
+	// request fields, per key later wins (pi:
+	// Object.assign(params, resolveSamplingParams(...)), v1.0.2 #9776).
+	if samplingParams := ResolveSamplingParams(model, reasoningEffort, options.SamplingParams); samplingParams != nil {
+		for key, value := range samplingParams {
+			params[key] = value
+		}
 	}
 
 	return params

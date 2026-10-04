@@ -174,6 +174,10 @@ const (
 // unsupported.
 type ThinkingLevelMap map[ModelThinkingLevel]*string
 
+// SamplingParamsByThinkingLevel maps pi thinking levels to per-level sampling
+// parameter overrides (pi: SamplingParamsByThinkingLevel, v1.0.2 #9776).
+type SamplingParamsByThinkingLevel map[ModelThinkingLevel]map[string]any
+
 // ChatTemplateVar names the thinking value a chat-template kwarg placeholder
 // resolves to.
 type ChatTemplateVar string
@@ -1700,8 +1704,15 @@ type Model struct {
 	MaxTokens     int64            `json:"maxTokens"`
 	// SamplingParams are the model's default sampling parameters; per-request
 	// keys in StreamOptions.SamplingParams override them.
-	SamplingParams map[string]any    `json:"samplingParams,omitempty"`
-	Headers        map[string]string `json:"headers,omitempty"`
+	SamplingParams map[string]any `json:"samplingParams,omitempty"`
+	// SamplingParamsByThinkingLevel holds sampling parameter overrides
+	// selected by the effective pi thinking level (pi:
+	// Model.samplingParamsByThinkingLevel, v1.0.2 #9776). Keys are pi
+	// thinking levels (off/minimal/low/medium/high/xhigh/max), not provider
+	// values from ThinkingLevelMap; only the OpenAI-compatible adapters
+	// consume it.
+	SamplingParamsByThinkingLevel SamplingParamsByThinkingLevel `json:"samplingParamsByThinkingLevel,omitempty"`
+	Headers                       map[string]string             `json:"headers,omitempty"`
 	// Compat holds per-API compatibility overrides; when unset, URL-based
 	// auto-detection applies.
 	Compat ModelCompat `json:"compat,omitempty"`
