@@ -86,3 +86,12 @@
 - codemode 相关：`extensions/codemode/**`、`bash-executor.ts` 的 codemode 面、QuickJS/install-change 逻辑
 - `scripts/build-coding-agent-bundle.mjs`（1b094148b 的 bundle 面，pig 无）
 - pi 的 nix/ 目录
+
+## 6. 下一批候选 + 已知落点（下一同步目标未定，按仓库机制预写）
+
+- 下一同步目标：等 pi 新正式 tag，届时照例 `git diff v1.0.3..<tag>` 逐 commit 分拣。pig 基线钉 v1.0.3，永不追 main。
+- 已知悬置面（无需动作，仅备忘）：
+  - pi v1.0.3 的 models.generated.ts 与 models.dev 快照未含 bedrock sonnet-5-5 EU/US、nvidia nemotron-3-super-120b-a12b、openrouter 新 classifier 等漂移（pig 重生成时已观察到）；pi 下次重生成目录时这些会一并进基线，届时 pig 的 catalog golden（`ai/testdata/*.json`）需同步重拷 + 重生成。
+  - azure provider 首次进入 `BuiltinProviders()`，dogfooding 中如遇 Azure Foundry 真机验证，按 `docs/handoffs/verify-matrix.md` 销账流程补一行。
+  - pig-only 偏差清单无新增（本批记录的 RefreshStoredOAuthCredential ctx 语义与 models_generated 变换均为一次性执行细节，不构成活偏差）。
+- pig 侧候选插批（等用户拍板，不自行开工）：v1.0.3 tag 补打（`v1.0.3` 附注 tag 指向本批收口 commit）；README/verify-matrix 如有 Azure 面需要补文档。
