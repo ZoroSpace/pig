@@ -1,4 +1,4 @@
-// pi: test/azure-openai-responses-reasoning-replay.test.ts.
+// pi: test/azure-reasoning-replay.test.ts.
 package api
 
 import (
@@ -12,7 +12,7 @@ import (
 func newAzureReplayModel() *types.Model {
 	return &types.Model{
 		ID: "gpt-5-mini", Name: "GPT-5 Mini", API: types.ApiAzureOpenAIResponses,
-		Provider: types.ProviderID("azure-openai-responses"), BaseURL: "https://example.invalid",
+		Provider: types.ProviderID("azure"), BaseURL: "https://example.invalid",
 		Reasoning: true, Input: []types.ModelInput{types.ModelInputText},
 		Cost:          responsesModelCost(0, 0, 0, 0),
 		ContextWindow: 400000, MaxTokens: 128000,
@@ -45,7 +45,7 @@ func getAzureReplayedReasoning(t *testing.T, model *types.Model, assistant *type
 			responsesUserMessage("follow-up"),
 		},
 	})
-	input := ConvertResponsesMessages(model, llmContext, map[string]struct{}{"azure-openai-responses": {}}, nil)
+	input := ConvertResponsesMessages(model, llmContext, map[string]struct{}{"azure": {}}, nil)
 	for _, item := range input {
 		if m, ok := item.(map[string]any); ok && m["type"] == "reasoning" {
 			return m

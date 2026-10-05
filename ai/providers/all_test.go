@@ -47,7 +47,7 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 	// and xiaomi(-token-plan-cn/ams/sgp); the P2-T2 bedrock batch adds
 	// amazon-bedrock.
 	want := []string{
-		"amazon-bedrock", "ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
+		"amazon-bedrock", "ant-ling", "anthropic", "azure", "baseten", "cerebras", "cloudflare-ai-gateway",
 		"cloudflare-workers-ai", "deepseek", "fireworks", "github-copilot", "google",
 		"google-vertex", "groq", "huggingface", "kimi-coding", "meta", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
@@ -64,7 +64,7 @@ func TestBuiltinProvidersOrder(t *testing.T) {
 func TestBuiltinModelsRegistersAll(t *testing.T) {
 	models := BuiltinModels(nil)
 	for _, id := range []string{
-		"amazon-bedrock", "ant-ling", "anthropic", "baseten", "cerebras", "cloudflare-ai-gateway",
+		"amazon-bedrock", "ant-ling", "anthropic", "azure", "baseten", "cerebras", "cloudflare-ai-gateway",
 		"cloudflare-workers-ai", "deepseek", "fireworks", "github-copilot", "google",
 		"google-vertex", "groq", "huggingface", "kimi-coding", "meta", "minimax",
 		"minimax-cn", "moonshotai", "moonshotai-cn", "nvidia", "openai",
@@ -88,8 +88,8 @@ func TestBuiltinModelsRegistersAll(t *testing.T) {
 			t.Fatalf("provider %q has no APIKey auth", id)
 		}
 	}
-	if got := len(models.GetProviders()); got != 40 {
-		t.Fatalf("GetProviders() length = %d, want 40", got)
+	if got := len(models.GetProviders()); got != 41 {
+		t.Fatalf("GetProviders() length = %d, want 41", got)
 	}
 }
 
@@ -119,14 +119,14 @@ func TestCatalogAccessors(t *testing.T) {
 	providers := GetBuiltinProviders()
 	// The generated catalog covers the ported providers; providers whose wire
 	// APIs are unported (mistral-conversations, ...) are absent. The B2
-	// openai-responses batch adds openai, xai, and azure-openai-responses; the
+	// openai-responses batch adds openai, xai, and azure; the
 	// C2 codex batch adds openai-codex; the C3 google batch adds google.
 	for _, id := range []BuiltinProvider{"anthropic", "deepseek", "openrouter"} {
 		if !slices.Contains(providers, id) {
 			t.Fatalf("GetBuiltinProviders() = %v, missing %q", providers, id)
 		}
 	}
-	for _, id := range []BuiltinProvider{"openai", "xai", "azure-openai-responses", "openai-codex", "google", "google-vertex"} {
+	for _, id := range []BuiltinProvider{"openai", "xai", "azure", "openai-codex", "google", "google-vertex"} {
 		if !slices.Contains(providers, id) {
 			t.Fatalf("GetBuiltinProviders() = %v, missing B2 %q", providers, id)
 		}

@@ -85,10 +85,15 @@ const (
 type ProviderID string
 
 const (
-	ProviderAmazonBedrock       ProviderID = "amazon-bedrock"
-	ProviderOpenAI              ProviderID = "openai"
-	ProviderGoogle              ProviderID = "google"
-	ProviderGoogleVertex        ProviderID = "google-vertex"
+	ProviderAmazonBedrock ProviderID = "amazon-bedrock"
+	ProviderOpenAI        ProviderID = "openai"
+	ProviderGoogle        ProviderID = "google"
+	ProviderGoogleVertex  ProviderID = "google-vertex"
+	// ProviderAzure is Azure Foundry (pi: KnownProvider "azure", v1.0.3
+	// #9645 renamed it from "azure-openai-responses" — the provider serves
+	// Chat Completions deployments alongside the Responses API, while the
+	// api id "azure-openai-responses" stays unchanged).
+	ProviderAzure               ProviderID = "azure"
 	ProviderOpenAICodex         ProviderID = "openai-codex"
 	ProviderAnthropic           ProviderID = "anthropic"
 	ProviderOpenRouter          ProviderID = "openrouter"

@@ -145,7 +145,11 @@ type renderSessionItem struct {
 	costNotice  *CompactionCostNotice
 }
 
-var deadTerminalErrorCodes = map[string]bool{"EIO": true, "EPIPE": true, "ENOTCONN": true}
+// deadTerminalErrorCodes lists the errnos that mean the terminal is gone
+// (pi: DEAD_TERMINAL_ERROR_CODES). EIO: tty reads/ioctls from an orphaned
+// background process group, or writes after hangup. ENOTTY: the tty was
+// revoked (macOS) and stdin is no longer a terminal (v1.0.3 4c6b724ea).
+var deadTerminalErrorCodes = map[string]bool{"EIO": true, "EPIPE": true, "ENOTCONN": true, "ENOTTY": true}
 
 // isDeadTerminalError reports whether the error means the terminal is gone
 // (pi: isDeadTerminalError).
@@ -3005,6 +3009,21 @@ func ansiDim(text string) string { return "\x1b[2m" + text + "\x1b[22m" }
 // uncaughtCrash restores the terminal before the process dies on any
 // uncaught panic (pi: uncaughtCrash; wired via RecoverCrash below).
 func (m *InteractiveMode) uncaughtCrash(err error) {
+	// A dead terminal is not a crash. Do not try to restore it or record it
+	// (pi v1.0.3 4c6b724ea: emergencyTerminalExit — restore the terminal and
+	// exit without a crash record; pig has no separate helper, so the
+	// restore-and-exit is inlined).
+	if isDeadTerminalError(err) {
+		func() {
+			defer func() { _ = recover() }()
+			m.unregisterSignalHandlers()
+		}()
+		func() {
+			defer func() { _ = recover() }()
+			m.ui.Stop(nil)
+		}()
+		os.Exit(1)
+	}
 	if m.isShuttingDown {
 		os.Exit(1)
 	}

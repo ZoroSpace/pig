@@ -125,14 +125,14 @@ func GetAllBuiltinModels(provider BuiltinProvider) []ai.Model {
 
 // BuiltinProviders returns all built-in providers, freshly constructed (pi:
 // builtinProviders), in pi's alphabetical position order. The remaining
-// factories arrive with their adapters (README Phase 2):
-// amazonBedrockProvider, azureOpenAIResponsesProvider, mistralProvider,
+// factories arrive with their adapters (README Phase 2): mistralProvider,
 // radiusProvider.
 func BuiltinProviders() []ai.Provider {
 	return []ai.Provider{
 		AmazonBedrockProvider(),
 		AntLingProvider(),
 		AnthropicProvider(),
+		AzureProvider(),
 		BasetenProvider(),
 		CerebrasProvider(),
 		CloudflareAIGatewayProvider(),

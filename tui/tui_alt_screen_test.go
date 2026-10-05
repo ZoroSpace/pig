@@ -521,11 +521,11 @@ func TestTuiAltScreenSupportsConfigurableKeyboardViewportNavigationWithFourRowsO
 	terminal.WaitForRender()
 	altAssertViewport(t, terminal, []string{"line 5", "line 6", "line 7", "line 8", "line 9", "line 10", "line 11", "line 12"})
 
-	terminal.SendInput("\x1bOH")
+	terminal.SendInput("\x1b[7^")
 	terminal.WaitForRender()
 	altAssertViewport(t, terminal, []string{"line 1", "line 2", "line 3", "line 4", "line 5", "line 6", "line 7", "line 8"})
 
-	terminal.SendInput("\x1bOF")
+	terminal.SendInput("\x1b[8^")
 	terminal.WaitForRender()
 	altAssertViewport(t, terminal, []string{"line 5", "line 6", "line 7", "line 8", "line 9", "line 10", "line 11", "line 12"})
 
@@ -739,7 +739,7 @@ func TestTuiAltScreenScrollsTheTranscriptByOneLineWithCustomBindings(t *testing.
 	tui.Stop(nil)
 }
 
-func TestTuiAltScreenRoutesCtrlModifiedViewportNavigationToTheFocusedComponent(t *testing.T) {
+func TestTuiAltScreenRoutesHomeAndEndToTheFocusedComponentAndCtrlHomeEndToTheTranscript(t *testing.T) {
 	terminal := NewVirtualTerminal(20, 6)
 	tui := NewTuiAltScreen(terminal, nil, "", nil)
 	transcript := NewScrollView(
@@ -757,26 +757,44 @@ func TestTuiAltScreenRoutesCtrlModifiedViewportNavigationToTheFocusedComponent(t
 	tui.Start()
 	terminal.WaitForRender()
 
-	terminal.SendInput("\x1bOH")
+	bottom := transcript.ScrollTop()
+	if bottom <= 0 {
+		t.Fatalf("transcript scrollTop = %d, want scrolled to the end", bottom)
+	}
+
+	// #10314: unmodified Home/End belong to the editor in every UI mode.
+	editorKeys := []string{"\x1bOH", "\x1b[F", "\x1b[57423u", "\x1b[5;5~", "\x1b[6;5~"}
+	for _, input := range editorKeys {
+		terminal.SendInput(input)
+	}
+	terminal.WaitForRender()
+	if transcript.ScrollTop() != bottom {
+		t.Fatalf("transcript scrollTop = %d, want %d", transcript.ScrollTop(), bottom)
+	}
+	if got := editor.Inputs(); !stringSlicesEqual(got, editorKeys) {
+		t.Fatalf("editor inputs = %q, want %q", got, editorKeys)
+	}
+
+	terminal.SendInput("\x1b[1;5H")
 	terminal.WaitForRender()
 	if transcript.ScrollTop() != 0 {
 		t.Fatalf("transcript scrollTop = %d, want 0", transcript.ScrollTop())
 	}
-	if got := editor.Inputs(); len(got) != 0 {
-		t.Fatalf("editor inputs = %q, want none", got)
+
+	terminal.SendInput("\x1b[1;5F")
+	terminal.WaitForRender()
+	if transcript.ScrollTop() != bottom {
+		t.Fatalf("transcript scrollTop = %d, want %d", transcript.ScrollTop(), bottom)
+	}
+	if !transcript.IsFollowingEnd() {
+		t.Fatal("transcript not following end after ctrl+end")
 	}
 
-	modifiedInputs := []string{"\x1b[1;5H", "\x1b[1;5F", "\x1b[5;5~", "\x1b[6;5~", "\x1b[57423;5u"}
-	for _, input := range modifiedInputs {
-		terminal.SendInput(input)
-	}
+	terminal.SendInput("\x1b[57423;5u")
 	terminal.SendInput("\x1b[57423;5:3u")
 	terminal.WaitForRender()
 	if transcript.ScrollTop() != 0 {
 		t.Fatalf("transcript scrollTop = %d, want 0", transcript.ScrollTop())
-	}
-	if got := editor.Inputs(); !stringSlicesEqual(got, modifiedInputs) {
-		t.Fatalf("editor inputs = %q, want %q", got, modifiedInputs)
 	}
 
 	terminal.SendInput("\x1b[6~")
@@ -784,8 +802,8 @@ func TestTuiAltScreenRoutesCtrlModifiedViewportNavigationToTheFocusedComponent(t
 	if transcript.ScrollTop() != 1 {
 		t.Fatalf("transcript scrollTop = %d, want 1", transcript.ScrollTop())
 	}
-	if got := editor.Inputs(); !stringSlicesEqual(got, modifiedInputs) {
-		t.Fatalf("editor inputs = %q, want %q", got, modifiedInputs)
+	if got := editor.Inputs(); !stringSlicesEqual(got, editorKeys) {
+		t.Fatalf("editor inputs = %q, want %q", got, editorKeys)
 	}
 
 	tui.Stop(nil)

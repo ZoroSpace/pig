@@ -49,6 +49,18 @@ var deepseekV4FlashThinkingLevelMap = ai.ThinkingLevelMap{
 	ai.ModelThinkingMax:     lo.ToPtr("max"),
 }
 
+// azureDeepSeekV4ThinkingLevelMap clamps to the efforts the Azure Foundry
+// deployment accepts — Azure rejects DeepSeek's own max effort (pi:
+// AZURE_DEEPSEEK_V4_THINKING_LEVEL_MAP, v1.0.3 #9645).
+var azureDeepSeekV4ThinkingLevelMap = ai.ThinkingLevelMap{
+	ai.ModelThinkingMinimal: nil,
+	ai.ModelThinkingLow:     lo.ToPtr("low"),
+	ai.ModelThinkingMedium:  lo.ToPtr("medium"),
+	ai.ModelThinkingHigh:    lo.ToPtr("high"),
+	ai.ModelThinkingXHigh:   nil,
+	ai.ModelThinkingMax:     nil,
+}
+
 // KIMI_K3 constants (pi: KIMI_K3_MAX_TOKENS, KIMI_K3_COST,
 // KIMI_CODING_IMPLIED_COSTS).
 const kimiK3MaxTokens = 131072
@@ -843,7 +855,7 @@ func mergeOpenAIResponsesCompat(model *ai.Model, compat *ai.OpenAIResponsesCompa
 // OPENAI_GRAMMAR_TOOL_PROVIDERS). OpenAI rejects `type: "custom"` tools for
 // pre-GPT-5 models (gpt-4.x, gpt-4o, o-series).
 var openAIGrammarToolProviders = stringSet(
-	"openai", "openai-codex", "azure-openai-responses", "github-copilot", "opencode", "cloudflare-ai-gateway",
+	"openai", "openai-codex", "azure", "github-copilot", "opencode", "cloudflare-ai-gateway",
 )
 
 // openAIGrammarToolApis (pi: OPENAI_GRAMMAR_TOOL_APIS).
@@ -1254,6 +1266,8 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 				ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ai.ModelThinkingMax:     nil,
 			})
+		case model.Provider == ai.ProviderAzure:
+			mergeThinkingLevelMap(model, azureDeepSeekV4ThinkingLevelMap)
 		case (model.Provider == ai.ProviderDeepSeek || model.Provider == ai.ProviderOpenCode || model.Provider == ai.ProviderOpenCodeGo) &&
 			strings.Contains(model.ID, "deepseek-v4-flash"):
 			mergeThinkingLevelMap(model, deepseekV4FlashThinkingLevelMap)

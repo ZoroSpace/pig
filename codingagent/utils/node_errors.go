@@ -114,4 +114,5 @@ var errnoNames = map[syscall.Errno]string{
 	syscall.EIO:      "EIO",
 	syscall.EPIPE:    "EPIPE",
 	syscall.ENOTCONN: "ENOTCONN",
+	syscall.ENOTTY:   "ENOTTY",
 }

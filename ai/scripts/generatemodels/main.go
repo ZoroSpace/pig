@@ -306,6 +306,10 @@ func generateModels(ctx context.Context) error {
 	// own short-tier defaults (pi: the azureOpenAiModels clone; see
 	// models-sold-directly-by-azure docs).
 	allModels = append(allModels, cloneAzureOpenAIModels(allModels)...)
+	// Azure resells DeepSeek at its own rates; the clone ships as an
+	// openai-completions model (pi: the azureDeepSeekModels clone, v1.0.3
+	// #9645).
+	allModels = append(allModels, cloneAzureDeepSeekModels(allModels)...)
 
 	for _, model := range allModels {
 		applyOpenAICompletionsCompatMetadata(model)

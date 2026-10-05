@@ -1,7 +1,17 @@
 # S14 开工稿：pi v1.0.2 → v1.0.3 同步（预写于 S13 收口后、2026-10-05）
 
-**状态**：开工稿（未拍板不开工）。pi diff 范围 `v1.0.2..v1.0.3`，共 22 commit，已逐个分拣完毕。
-**结论**：实移 5 项 + 零操作 13 commit（durable 11 + codemode 3 + Nix/docs，见 §3），预计单批收口。
+**状态**：**终稿（2026-10-05 收口）**。pi diff 范围 `v1.0.2..v1.0.3`，共 22 commit，实移 5 项 + 零操作 13 commit（durable 11 + codemode 3 + Nix/docs，见 §3），单批收口。
+
+## 0. 终稿追加（开工稿 → 实际执行）
+
+- **验收门**：build/vet/gofmt 干净；全量 `-race` 单次 rc=0 31 包（`/tmp/pig-test-out-s14.log`）；tmux 冒烟四项全通（复用 S13 环境 `/tmp/pig-s13-smoke`：header `v1.0.3`、`hello smoke`→`pong` ↑1↓1、ctrl+d 干净退出、jsonl usage input 1/output 1/cost.total 0，mock-requests.log 仅 1 条 → 零真实 API）。
+- **Version** 1.0.2→1.0.3（config.go + config_test.go）。
+- **models_generated.go 改走机械变换而非整体重生成**：生成器改完重跑后发现实时 models.dev 漂移（bedrock sonnet-5-5 EU/US、nvidia nemotron-3-super、openrouter classifier 等）**超出 pi v1.0.3 自身目录**（pi v1.0.3 的 models.generated.ts 仅 14 行改名、未重生成），整体重生成会让 pig 领先同步目标且 catalog golden 测试红。改为：恢复 HEAD 版 generated 文件 → `ProviderID("azure-openai-responses")`→`ProviderID("azure")` 机械替换（45 处，仅 provider 键、Api 字符串 `Api("azure-openai-responses")` 不动）→ 拼入生成器产出的 azure deepseek-v4-pro 条目（取自重生成结果，非手写）。此为「生成物禁手改」的一次记录在案的例外，理由：生成器输入（models.dev）已漂移过基线，唯一能精确对齐 pi v1.0.3 目录的方式就是该变换；下次自然重生成即收敛。
+- **1.2 记录偏差**：pi 在 fn 内 disarm 锁等待 signal；pig `CredentialStore.Modify` 无法拆分两段取消，`RefreshStoredOAuthCredential` 改为 Modify 跑在 caller 取消不到的 `context.Background()` 上 + fn 入口重查 caller ctx（等锁不被唤醒、等锁期间 abort 则入口报错不刷新——可观测结果与 pi 一致：已开始的刷新必完成并落盘）。
+- **1.3 实际落点**：pig `uncaughtCrash` 目前未接线（PANIC-RESILIENCE 偏差收容 panic）、stdin readLoop 读错误静默返回无 crash 路径——pi 的 stdin stream error handler 子项 pig 零操作；ENOTTY 补全（code map + errno 表）+ `uncaughtCrash` 死终端短路（restore+exit 内联，pig 无 emergencyTerminalExit 函数）落地。
+- **1.4 文档面零操作**：pig 无 keybindings.md 用户文档；alt-screen 路由测试改名重写为 pi v1.0.3 语义（Home/End 归编辑器、Ctrl+Home/End 归 transcript）。
+- **all_test.go** provider 计数 40→41、期望顺序插 `azure`。
+- 新测试：`ai/providers/azure_test.go`（10 子测，pi azure-openai-completions.test.ts 移植）、`ai/api/azure_openai_config_test.go`（base URL 归一化 + deployment name 9 子测）、`ai/models_test.go` OAuth 持久化 2 个回归测试、`codingagent/modes/interactive/dead_terminal_test.go`（ENOTTY 识别）。
 
 ## 1. 实移项（按施工顺序）
 

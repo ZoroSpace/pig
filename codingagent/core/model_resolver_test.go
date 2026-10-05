@@ -410,7 +410,7 @@ func TestResolveCliModel(t *testing.T) {
 	})
 
 	t.Run("prefers the sole authenticated provider for an ambiguous bare exact model id", func(t *testing.T) {
-		azureModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "azure-openai-responses", "https://api.openai.com", false)
+		azureModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "azure", "https://api.openai.com", false)
 		codexModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "openai-codex", "https://api.openai.com", false)
 		registry := &stubResolverRuntime{
 			models:  []ai.Model{azureModel, codexModel},
@@ -426,7 +426,7 @@ func TestResolveCliModel(t *testing.T) {
 	})
 
 	t.Run("requires an explicit provider for an ambiguous bare exact model id without a unique authenticated provider", func(t *testing.T) {
-		azureModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "azure-openai-responses", "https://api.openai.com", false)
+		azureModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "azure", "https://api.openai.com", false)
 		codexModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "openai-codex", "https://api.openai.com", false)
 		registry := &stubResolverRuntime{models: []ai.Model{azureModel, codexModel}, authByP: map[string]bool{}}
 		result := ResolveCliModel(ResolveCliModelOptions{CliModel: "gpt-5.6-sol", ModelRuntime: registry})
@@ -435,7 +435,7 @@ func TestResolveCliModel(t *testing.T) {
 		}
 		for _, want := range []string{
 			`Model "gpt-5.6-sol" is ambiguous across providers`,
-			"azure-openai-responses/gpt-5.6-sol",
+			"azure/gpt-5.6-sol",
 			"openai-codex/gpt-5.6-sol",
 			"Use --provider or provider/model",
 		} {

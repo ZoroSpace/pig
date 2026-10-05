@@ -44,6 +44,7 @@ const (
 	ProviderOpenAI              = types.ProviderOpenAI
 	ProviderGoogle              = types.ProviderGoogle
 	ProviderGoogleVertex        = types.ProviderGoogleVertex
+	ProviderAzure               = types.ProviderAzure
 	ProviderOpenAICodex         = types.ProviderOpenAICodex
 	ProviderAnthropic           = types.ProviderAnthropic
 	ProviderOpenRouter          = types.ProviderOpenRouter

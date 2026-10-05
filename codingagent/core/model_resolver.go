@@ -74,7 +74,7 @@ var DefaultModelPerProvider = map[string]string{
 	"ant-ling":                   "Ring-2.6-1T",
 	"anthropic":                  "claude-opus-4-8",
 	"openai":                     "gpt-5.5",
-	"azure-openai-responses":     "gpt-5.4",
+	"azure":                      "gpt-5.4",
 	"openai-codex":               "gpt-6.1-sol",
 	"radius":                     "balanced",
 	"nvidia":                     "nvidia/nemotron-3-ultra-550b-a55b",
@@ -116,7 +116,7 @@ var DefaultModelPerProvider = map[string]string{
 // DefaultModelProviderKeys preserves pi's Object.keys(defaultModelPerProvider)
 // insertion order.
 var DefaultModelProviderKeys = []string{
-	"amazon-bedrock", "ant-ling", "anthropic", "openai", "azure-openai-responses",
+	"amazon-bedrock", "ant-ling", "anthropic", "openai", "azure",
 	"openai-codex", "radius", "nvidia", "deepseek", "google", "google-vertex",
 	"github-copilot", "openrouter", "vercel-ai-gateway", "xai", "groq",
 	"cerebras", "zai", "zai-coding-cn", "mistral", "minimax", "minimax-cn",

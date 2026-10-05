@@ -24,10 +24,10 @@ func TestKeybindingsCtrlJNewlineAlias(t *testing.T) {
 func TestKeybindingsModifiedAndUnmodifiedViewportNavigation(t *testing.T) {
 	keybindings := NewKeybindingsManager(TUIKeyBindings, nil)
 
-	if got := keybindings.GetKeys("tui.editor.cursorLineStart"); !reflect.DeepEqual(got, []KeyId{"home", "ctrl+home", "ctrl+a"}) {
+	if got := keybindings.GetKeys("tui.editor.cursorLineStart"); !reflect.DeepEqual(got, []KeyId{"home", "ctrl+a"}) {
 		t.Errorf("GetKeys(cursorLineStart) = %v", got)
 	}
-	if got := keybindings.GetKeys("tui.editor.cursorLineEnd"); !reflect.DeepEqual(got, []KeyId{"end", "ctrl+end", "ctrl+e"}) {
+	if got := keybindings.GetKeys("tui.editor.cursorLineEnd"); !reflect.DeepEqual(got, []KeyId{"end", "ctrl+e"}) {
 		t.Errorf("GetKeys(cursorLineEnd) = %v", got)
 	}
 	if got := keybindings.GetKeys("tui.editor.pageUp"); !reflect.DeepEqual(got, []KeyId{"pageUp", "ctrl+pageUp"}) {
@@ -65,8 +65,8 @@ func TestKeybindingsUnmodifiedViewportShortcutsBindAltScreen(t *testing.T) {
 		"tui.altScreen.searchNext":     {"enter", "ctrl+g"},
 		"tui.altScreen.searchPrevious": {"shift+enter", "ctrl+shift+g"},
 		"tui.altScreen.searchClose":    {"escape"},
-		"tui.altScreen.top":            {"home"},
-		"tui.altScreen.bottom":         {"end"},
+		"tui.altScreen.top":            {"ctrl+home"},
+		"tui.altScreen.bottom":         {"ctrl+end"},
 	}
 	for id, want := range expect {
 		if got := keybindings.GetKeys(id); !reflect.DeepEqual(got, want) {

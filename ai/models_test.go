@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -412,5 +413,117 @@ func TestModelsRefreshCancelsPerProviderRefreshContext(t *testing.T) {
 	case <-refreshCtx.Done():
 	case <-time.After(2 * time.Second):
 		t.Fatal("refresh context not canceled after Refresh returned (Refresh leaks the ctx registration)")
+	}
+}
+
+// stubOAuthAuth mirrors pi's testOAuth (models-runtime.test.ts): refresh is
+// injectable; ToAuth exposes the access token as the API key.
+type stubOAuthAuth struct {
+	refresh func(ctx context.Context, credential *auth.OAuthCredential) (*auth.OAuthCredential, error)
+}
+
+func (o *stubOAuthAuth) Name() string         { return "OAuth" }
+func (o *stubOAuthAuth) IsSubscription() bool { return false }
+func (o *stubOAuthAuth) LoginLabel() string   { return "" }
+func (o *stubOAuthAuth) Login(ctx context.Context, interaction auth.AuthInteraction, options *auth.LoginOptions) (*auth.OAuthCredential, error) {
+	return nil, errors.New("not used")
+}
+func (o *stubOAuthAuth) Refresh(ctx context.Context, credential *auth.OAuthCredential) (*auth.OAuthCredential, error) {
+	return o.refresh(ctx, credential)
+}
+func (o *stubOAuthAuth) ToAuth(credential *auth.OAuthCredential) (*auth.ModelAuth, error) {
+	return &auth.ModelAuth{APIKey: credential.Access}, nil
+}
+
+func storeExpiredOAuthCredential(t *testing.T, store auth.CredentialStore, providerID string) {
+	t.Helper()
+	_, err := store.Modify(context.Background(), providerID, func(auth.Credential) (auth.Credential, error) {
+		return &auth.OAuthCredential{OAuthCredentials: auth.OAuthCredentials{
+			Access: "old", Refresh: "old-refresh", Expires: 0,
+		}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func storedRefreshToken(t *testing.T, store auth.CredentialStore, providerID string) string {
+	t.Helper()
+	credential, err := store.Read(context.Background(), providerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oauth, ok := credential.(*auth.OAuthCredential)
+	if !ok {
+		t.Fatalf("credential type = %T, want oauth", credential)
+	}
+	return oauth.Refresh
+}
+
+// Regression (pi v1.0.3 bde882c74, Radius bug report 01a10855): cancelling the
+// caller while a refresh is in flight must not discard the rotated credential
+// — the provider has already invalidated the old refresh token, so dropping
+// the persist leaves auth dead with refresh_token_invalidated.
+func TestRefreshStoredOAuthCredentialPersistsAfterCancel(t *testing.T) {
+	store := &auth.InMemoryCredentialStore{}
+	storeExpiredOAuthCredential(t, store, "p1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	oauth := &stubOAuthAuth{refresh: func(ctx context.Context, credential *auth.OAuthCredential) (*auth.OAuthCredential, error) {
+		// The provider has rotated old-refresh by the time the caller cancels.
+		cancel()
+		out := *credential
+		out.Access = "new"
+		out.Refresh = "new-refresh"
+		out.Expires = time.Now().Add(60_000).UnixMilli()
+		return &out, nil
+	}}
+
+	post, err := auth.RefreshStoredOAuthCredential(ctx, store, "p1", oauth,
+		func(current *auth.OAuthCredential) bool { return time.Now().UnixMilli() >= current.Expires })
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if post == nil || post.Refresh != "new-refresh" {
+		t.Fatalf("post = %+v", post)
+	}
+	if got := storedRefreshToken(t, store, "p1"); got != "new-refresh" {
+		t.Fatalf("stored refresh = %q, want new-refresh", got)
+	}
+}
+
+// Same regression through the model-refresh path (pi: "persists an OAuth
+// refresh that started before the model refresh was cancelled").
+func TestModelsRefreshPersistsOAuthAfterCancel(t *testing.T) {
+	store := &auth.InMemoryCredentialStore{}
+	storeExpiredOAuthCredential(t, store, "p1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	oauth := &stubOAuthAuth{refresh: func(ctx context.Context, credential *auth.OAuthCredential) (*auth.OAuthCredential, error) {
+		cancel()
+		out := *credential
+		out.Access = "new"
+		out.Refresh = "new-refresh"
+		out.Expires = time.Now().Add(60_000).UnixMilli()
+		return &out, nil
+	}}
+	provider := &stubRefreshingProvider{
+		stubProvider: stubProvider{
+			id:      "p1",
+			streams: stubStreams{},
+			models:  []Model{{ID: "m", API: ApiOpenAICompletions, Provider: "p1"}},
+			auth:    auth.ProviderAuth{OAuth: oauth},
+		},
+		refresh: func(ctx context.Context, refreshCtx *RefreshModelsContext) error { return nil },
+	}
+	m := NewModels(&CreateModelsOptions{Credentials: store})
+	m.SetProvider(provider)
+
+	result := m.Refresh(ctx, &ModelsRefreshOptions{})
+	if !result.Aborted {
+		t.Fatal("refresh did not report aborted")
+	}
+	if got := storedRefreshToken(t, store, "p1"); got != "new-refresh" {
+		t.Fatalf("stored refresh = %q, want new-refresh", got)
 	}
 }

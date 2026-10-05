@@ -16,7 +16,7 @@
 
 ## 当前状态（2026-10-04）
 
-- **pig 基线现跟踪 pi v1.0.2**（Version 1.0.2，`TestVersionTracksPiBaseline` 守卫）；全量 `go test ./... -race` 31 包全绿；最近一批 = S13（handoff：`docs/handoffs/SYNC-S13-v1.0.2.md`）。下一同步目标未知（等 pi 新正式 tag）；下一批范围未定时开工稿写「下一批候选 + 已知落点」段（仓库机制 handoff 规则）。
+- **pig 基线现跟踪 pi v1.0.3**（Version 1.0.3，`TestVersionTracksPiBaseline` 守卫）；全量 `go test ./... -race` 31 包全绿；最近一批 = S14（handoff：`docs/handoffs/SYNC-S14-v1.0.3.md`）。下一同步目标未知（等 pi 新正式 tag）；下一批范围未定时开工稿写「下一批候选 + 已知落点」段（仓库机制 handoff 规则）。
 - **Dogfooding（2026-09-11 起）**：用户日常自用 pig，pi 保留作 fallback 与规格书。约定：① 日常撞到的 pig bug 一律走 `docs/fix/` 登记 + 回归测试锁定流程；② 缺 provider/adapter 卡住日常时按需提前拉起移植批；③ **真机验证矩阵** `docs/handoffs/verify-matrix.md`——provider 真机/OAuth 验证逐家解锁，每拿到一个 key 按表销账。
 - **真机冒烟测试**一律 `//go:build smoke` 门控移出默认门禁（跑法见 `docs/feat/TEST-SUITE-RUNTIME.md`）；冒烟启动必须 mock provider / 清凭证（见仓库机制 tmux 条）。
 - 路线余量：Phase 8 余量（photon/wazero、telemetry、goreleaser、/share、terminal-image）顺序由用户拍板；dogfooding 插批随时插入。
@@ -67,6 +67,7 @@
 - S12-1 → S12-3（→v1.0.1）anthropic inline tools / MCP 项目 override+auth URL / daxnuts 拍板+收尾 — `docs/handoffs/SYNC-S12-v1.0.1.md` + `S12-*.md`
 - S12-4（插批 feat，不涉基线）MCP OAuth 整族 — `docs/handoffs/S12-4.md`
 - S13（→v1.0.2）per-thinking-level sampling params（唯一实移）— `docs/handoffs/SYNC-S13-v1.0.2.md`
+- S14（→v1.0.3）azure provider 首移（v1.0.3 改名形态）+ OAuth 刷新取消语义 + 死终端 ENOTTY + TUI Home/End — `docs/handoffs/SYNC-S14-v1.0.3.md`
 
 **Phase 2 provider/adapter 批（2026-09-11~15，Phase 2 收口）**：
 - A1+A2 anthropic-messages adapter + provider 铺开 + Claude/Kimi OAuth — `docs/handoffs/A1.md`、`A2.md`

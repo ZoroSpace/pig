@@ -157,7 +157,7 @@ func TestOpenAIResponsesToolCallNamespaces(t *testing.T) {
 		targetModels := []*types.Model{
 			{ID: "gpt-5.2", Name: "GPT-5.2", API: base.API, Provider: base.Provider, BaseURL: base.BaseURL,
 				Reasoning: base.Reasoning, Input: base.Input, Cost: base.Cost, ContextWindow: base.ContextWindow, MaxTokens: base.MaxTokens},
-			{ID: base.ID, Name: base.Name, API: base.API, Provider: "azure-openai-responses", BaseURL: base.BaseURL,
+			{ID: base.ID, Name: base.Name, API: base.API, Provider: "azure", BaseURL: base.BaseURL,
 				Reasoning: base.Reasoning, Input: base.Input, Cost: base.Cost, ContextWindow: base.ContextWindow, MaxTokens: base.MaxTokens},
 			{ID: "gpt-5.3-codex-spark", Name: "GPT-5.3 Codex Spark", API: types.Api("openai-codex-responses"), Provider: "openai-codex",
 				BaseURL: base.BaseURL, Reasoning: base.Reasoning, Input: base.Input, Cost: base.Cost,

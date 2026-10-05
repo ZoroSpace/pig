@@ -3,7 +3,11 @@
 // and the Azure Foundry clone.
 package main
 
-import "github.com/ZoroSpace/pig/ai"
+import (
+	"github.com/samber/lo"
+
+	"github.com/ZoroSpace/pig/ai"
+)
 
 // openAILongContextInputThreshold is pi's OPENAI_LONG_CONTEXT_INPUT_THRESHOLD.
 const openAILongContextInputThreshold = 272000
@@ -138,7 +142,8 @@ var azureContextWindowOverrides = map[string]int64{
 }
 
 // cloneAzureOpenAIModels clones the openai openai-responses models into the
-// azure-openai-responses provider (pi: the azureOpenAiModels clone). The
+// azure provider (pi: the azureOpenAiModels clone; v1.0.3 #9645 renamed the
+// provider from "azure-openai-responses" to "azure"). The
 // spread keeps thinkingLevelMap/compat/samplingParams/headers; only api,
 // provider, baseUrl, the flat cost rates, and the context window change.
 func cloneAzureOpenAIModels(allModels []*ai.Model) []*ai.Model {
@@ -153,7 +158,7 @@ func cloneAzureOpenAIModels(allModels []*ai.Model) []*ai.Model {
 		}
 		clone := *model
 		clone.API = ai.ApiAzureOpenAIResponses
-		clone.Provider = ai.ProviderID("azure-openai-responses")
+		clone.Provider = ai.ProviderAzure
 		clone.BaseURL = ""
 		clone.Cost = ai.ModelCost{ModelCostRates: model.Cost.ModelCostRates}
 		clone.ContextWindow = contextWindow
@@ -166,6 +171,42 @@ func cloneAzureOpenAIModels(allModels []*ai.Model) []*ai.Model {
 		}
 		if compat, ok := model.Compat.(*ai.OpenAIResponsesCompat); ok && compat != nil {
 			clone.Compat = copyOpenAIResponsesCompat(compat)
+		}
+		out = append(out, &clone)
+	}
+	return out
+}
+
+// azureDeepSeekV4ProCost is Azure's DeepSeek resale pricing — US data zone,
+// checked 2026-09-16 (pi: AZURE_DEEPSEEK_V4_PRO_COST).
+// https://azure.microsoft.com/en-us/pricing/details/ai-foundry-models/deepseek/
+var azureDeepSeekV4ProCost = ai.ModelCostRates{Input: 1.925, Output: 3.828, CacheRead: 0.165, CacheWrite: 0}
+
+// cloneAzureDeepSeekModels clones DeepSeek's deepseek-v4-pro into the azure
+// provider as an openai-completions model (pi: the azureDeepSeekModels
+// clone, v1.0.3 #9645). Azure 400s on DeepSeek's `thinking` field and on
+// every prompt cache parameter, discards a `developer` system message
+// unbilled once reasoning_effort is set, and honours mid-convo ones.
+func cloneAzureDeepSeekModels(allModels []*ai.Model) []*ai.Model {
+	var out []*ai.Model
+	for _, model := range allModels {
+		if model.Provider != ai.ProviderDeepSeek || model.ID != "deepseek-v4-pro" {
+			continue
+		}
+		clone := *model
+		clone.Provider = ai.ProviderAzure
+		clone.BaseURL = ""
+		clone.Cost = ai.ModelCost{ModelCostRates: azureDeepSeekV4ProCost}
+		if model.ThinkingLevelMap != nil {
+			clone.ThinkingLevelMap = cloneThinkingLevelMap(model.ThinkingLevelMap)
+		}
+		if compat, ok := model.Compat.(*ai.OpenAICompletionsCompat); ok && compat != nil {
+			clone.Compat = withCompat(compat, func(c *ai.OpenAICompletionsCompat) {
+				c.SupportsDeveloperRole = lo.ToPtr(false)
+				c.SupportsMidConvoSystemMessages = lo.ToPtr(true)
+				c.ThinkingFormat = lo.ToPtr(ai.ThinkingFormatOpenAI)
+				c.SupportsLongCacheRetention = lo.ToPtr(false)
+			})
 		}
 		out = append(out, &clone)
 	}
