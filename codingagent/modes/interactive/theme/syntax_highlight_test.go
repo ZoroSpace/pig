@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -67,6 +68,23 @@ func TestSyntaxHighlightRenderer(t *testing.T) {
 		}
 	})
 
+	t.Run("formats each line of a multiline span separately (#10356)", func(t *testing.T) {
+		rendered := utils.RenderHighlightedHtml(
+			`<span class="hljs-string">a<br>b</span>`, utils.HighlightTheme{
+				"string": func(text string) string { return "[string:" + text + "]" },
+			},
+		)
+		_ = rendered
+		rendered = utils.RenderHighlightedHtml(
+			"<span class=\"hljs-string\">a\nb\n\nc</span>", utils.HighlightTheme{
+				"string": func(text string) string { return "[string:" + text + "]" },
+			},
+		)
+		if rendered != "[string:a]\n[string:b]\n\n[string:c]" {
+			t.Fatalf("rendered = %q", rendered)
+		}
+	})
+
 	t.Run("highlights code through the chroma backend", func(t *testing.T) {
 		if !utils.SupportsLanguage("typescript") {
 			t.Fatal("typescript lexer missing")
@@ -102,6 +120,41 @@ func TestThemeSyntaxHighlighting(t *testing.T) {
 	t.Cleanup(func() { tui.ResetCapabilitiesCache() })
 	tui.SetCapabilities(tui.TerminalCapabilities{Images: nil, TrueColor: true, Hyperlinks: false})
 	InitTheme("dark", false)
+
+	t.Run("colors each line of Python docstrings independently (#10143)", func(t *testing.T) {
+		code := "\"\"\"\nline one\n\nline two\n\"\"\"\nafter"
+		ansi := ansiFgOf(t, ColorSyntaxString)
+		expected := []string{
+			ansi + "\"\"\"\x1b[39m",
+			ansi + "line one\x1b[39m",
+			"",
+			ansi + "line two\x1b[39m",
+			ansi + "\"\"\"\x1b[39m",
+			"after",
+		}
+		if got := HighlightCode(code, "python"); !reflect.DeepEqual(got, expected) {
+			t.Fatalf("HighlightCode = %q", got)
+		}
+		if got := GetMarkdownTheme().HighlightCode(code, "python"); !reflect.DeepEqual(got, expected) {
+			t.Fatalf("markdown HighlightCode = %q", got)
+		}
+	})
+
+	t.Run("maps subst scope (string interpolation) to text color", func(t *testing.T) {
+		// pi #10356 second half: `subst` renders in the text color, not the
+		// string color. chroma's LiteralStringInterpol resolves to the
+		// "subst" scope (declared adaptation).
+		rendered := utils.RenderHighlightedHtml(
+			`<span class="hljs-string">a<span class="hljs-subst">x</span>b</span>`,
+			utils.HighlightTheme{
+				"string": func(text string) string { return "[string:" + text + "]" },
+				"subst":  func(text string) string { return "[subst:" + text + "]" },
+			},
+		)
+		if rendered != "[string:a][subst:x][string:b]" {
+			t.Fatalf("rendered = %q", rendered)
+		}
+	})
 
 	t.Run("colors diff additions and deletions in fenced diff blocks", func(t *testing.T) {
 		lines := HighlightCode("-old\n+new\n", "diff")

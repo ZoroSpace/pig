@@ -1,12 +1,19 @@
 package mcp
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 )
 
 func TestParseTokenResponse(t *testing.T) {
@@ -292,5 +299,62 @@ func TestDiscoveryStatusAndMiss(t *testing.T) {
 	}
 	if isDiscoveryMiss(errors.New("bad status 500")) || isDiscoveryMiss(errors.New("metadata issuer mismatch")) {
 		t.Fatal("500 and validation errors are not misses")
+	}
+}
+
+// TestRegisterClientDerivesApplicationType ports pi's #10493 regression
+// (oauth.test.ts): dynamic client registration derives application_type from
+// the redirect URIs unless one is already set — loopback hosts and custom
+// schemes are "native" (RFC 8252), everything else "web".
+func TestRegisterClientDerivesApplicationType(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+		}
+		var parsed map[string]any
+		if err := json.Unmarshal(body, &parsed); err != nil {
+			t.Errorf("decode body: %v", err)
+		}
+		mu.Lock()
+		bodies = append(bodies, parsed)
+		mu.Unlock()
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"client_id":"client"}`))
+	}))
+	defer server.Close()
+
+	register := func(redirectURIs []string, applicationType string) {
+		t.Helper()
+		metadata := &oauthex.ClientRegistrationMetadata{
+			RedirectURIs: redirectURIs,
+		}
+		if applicationType != "" {
+			metadata.ApplicationType = applicationType
+		}
+		if _, err := registerClient(context.Background(), server.URL, metadata, server.Client()); err != nil {
+			t.Fatalf("registerClient: %v", err)
+		}
+	}
+
+	register([]string{"http://127.0.0.1:1234/callback"}, "")
+	register([]string{"http://[::1]/callback"}, "")
+	register([]string{"com.example.app:/callback"}, "")
+	register([]string{"https://app.example/callback"}, "")
+	register([]string{"http://localhost/callback"}, "web")
+
+	want := []string{"native", "native", "native", "web", "web"}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != len(want) {
+		t.Fatalf("got %d registration bodies", len(bodies))
+	}
+	for i, body := range bodies {
+		if got := body["application_type"]; got != want[i] {
+			t.Fatalf("body %d application_type = %v, want %q", i, got, want[i])
+		}
 	}
 }

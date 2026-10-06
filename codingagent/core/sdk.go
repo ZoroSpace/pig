@@ -68,16 +68,22 @@ type CreateAgentSessionOptions struct {
 	//   - "builtin": disable the default built-in tools (read, bash, edit,
 	//     write) but keep extension/custom tools enabled
 	NoTools string
-	// Tools is the optional allowlist of tool names. When omitted, pig uses
-	// the defaultTools setting for the initial built-in selection when
+	// Tools is the optional allowlist of tool names or patterns (`*`
+	// matches any characters; pi v1.0.4). When omitted, pig uses the
+	// defaultTools setting for the initial built-in selection when
 	// configured; otherwise it enables the default built-in tools (read,
 	// bash, edit, write). Extension/custom tools remain enabled unless
-	// NoTools changes that default. When provided, only the listed tool
-	// names are enabled.
+	// NoTools changes that default. When provided, only matching tools are
+	// enabled.
 	Tools []string
-	// ExcludeTools is the optional denylist of tool names to disable.
-	// Applies after Tools when both are provided.
+	// ExcludeTools is the optional denylist of tool names or patterns to
+	// disable. Applies after Tools when both are provided.
 	ExcludeTools []string
+	// NoMcp disables the built-in MCP support for one run (pi `--no-mcp`,
+	// v1.0.4): no servers connect and the mcp proxy tool is not registered.
+	// pig-only surface shape: pi disables its built-in mcp extension
+	// (disabledBuiltinExtensions).
+	NoMcp bool
 	// CustomTools are custom tools to register (in addition to built-in
 	// tools).
 	CustomTools []*tools.ToolDefinition
@@ -221,7 +227,7 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 	// its manager (with diagnostics merged there); the direct path builds
 	// its own (diagnostics have no channel here and are dropped).
 	mcpManager := options.MCPManager
-	if mcpManager == nil {
+	if mcpManager == nil && !options.NoMcp {
 		mcpManager, _ = createMCPManager(cwd, agentDir, settingsManager.IsProjectTrusted(),
 			// S12-4: per-request token for `auth.provider` servers (pi:
 			// modelRegistry?.getApiKeyForProvider).
@@ -321,12 +327,9 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 	if allowedToolNames == nil && options.NoTools == "all" {
 		allowedToolNames = []string{}
 	}
-	var excludedToolNameSet map[string]bool
+	var excludedToolMatcher func(string) bool
 	if options.ExcludeTools != nil {
-		excludedToolNameSet = make(map[string]bool, len(options.ExcludeTools))
-		for _, name := range options.ExcludeTools {
-			excludedToolNameSet[name] = true
-		}
+		excludedToolMatcher = toolNameMatcher(options.ExcludeTools)
 	}
 	initialActiveToolNamesSource := options.Tools
 	if initialActiveToolNamesSource == nil {
@@ -340,7 +343,7 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 	}
 	var initialActiveToolNames []string
 	for _, name := range initialActiveToolNamesSource {
-		if excludedToolNameSet[name] {
+		if excludedToolMatcher != nil && excludedToolMatcher(name) {
 			continue
 		}
 		initialActiveToolNames = append(initialActiveToolNames, name)

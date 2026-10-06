@@ -651,10 +651,44 @@ func refreshTokens(ctx context.Context, endpoints *oauthEndpoints, info *OAuthCl
 	return tokens, nil
 }
 
+// oauthApplicationType derives the OpenID Connect `application_type` for
+// `redirect_uris` (MCP SEP-837, pi: applicationType in flow.ts). Without one,
+// OpenID Connect servers assume `web`, which rejects http loopback redirect
+// URIs. Loopback hosts and custom schemes are native (RFC 8252). Note: pi's
+// URL.hostname keeps IPv6 brackets ("[::1]"); Go's Hostname() strips them,
+// so only the bracketless form is compared here.
+func oauthApplicationType(redirectURIs []string) string {
+	native := false
+	for _, uri := range redirectURIs {
+		parsed, err := url.Parse(uri)
+		if err != nil {
+			continue
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			native = true
+			break
+		}
+		switch parsed.Hostname() {
+		case "localhost", "127.0.0.1", "::1":
+			native = true
+		}
+		if native {
+			break
+		}
+	}
+	if native {
+		return "native"
+	}
+	return "web"
+}
+
 // registerClient runs dynamic client registration (pi: registerClient).
 func registerClient(ctx context.Context, endpoint string, metadata *oauthex.ClientRegistrationMetadata, client *http.Client) (*OAuthClientInformation, error) {
 	if _, err := secureEndpoint(endpoint); err != nil {
 		return nil, err
+	}
+	if metadata.ApplicationType == "" {
+		metadata.ApplicationType = oauthApplicationType(metadata.RedirectURIs)
 	}
 	resp, err := oauthex.RegisterClient(ctx, endpoint, metadata, client)
 	if err != nil {

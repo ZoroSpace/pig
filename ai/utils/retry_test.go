@@ -50,6 +50,19 @@ func TestIsRetryableAssistantErrorMatches520(t *testing.T) {
 	}
 }
 
+func TestIsRetryableAssistantErrorMatchesPendingStreamCanceled(t *testing.T) {
+	// Regression for pi #10379: Bedrock HTTP/2 pending stream cancellation.
+	for _, errorMessage := range []string{
+		"The pending stream has been canceled",
+		"The pending stream has been canceled (caused by: socket closed)",
+	} {
+		message := retryTestMessage("", types.StopReasonError, errorMessage)
+		if !IsRetryableAssistantError(message) {
+			t.Fatalf("%q should be retryable", errorMessage)
+		}
+	}
+}
+
 func TestRetryDelayMsCapsAgentRetryDelay(t *testing.T) {
 	// Regression for pi #8826.
 	if got := RetryDelayMs(&RetryPolicy{BaseDelayMs: 2000}, 6); got != 60000 {

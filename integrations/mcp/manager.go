@@ -152,6 +152,14 @@ type serverState struct {
 	challengeMu sync.Mutex
 	challenge   OAuthChallenge
 
+	// connectCancel cancels the in-flight connect's context; nil when not
+	// connecting. connectMu guards it for the same reason challengeMu
+	// exists: Close must reach the cancel handle while connect holds mu
+	// (pig-only lock; pi aborts via a per-connection AbortController,
+	// v1.0.4).
+	connectMu     sync.Mutex
+	connectCancel context.CancelFunc
+
 	cachedTools []ToolInfo // valid while session != nil
 }
 
@@ -272,6 +280,15 @@ func (m *Manager) Close() error {
 	<-m.reapDone
 
 	for _, st := range servers {
+		// Abort a connect in progress so shutdown does not wait for it to
+		// settle (pi v1.0.4 #10249); the connect error path cleans up under
+		// mu, then closeSessionLocked below marks the server closed.
+		st.connectMu.Lock()
+		if st.connectCancel != nil {
+			st.connectCancel()
+			st.connectCancel = nil
+		}
+		st.connectMu.Unlock()
 		st.mu.Lock()
 		m.closeSessionLocked(st)
 		st.mu.Unlock()
@@ -661,7 +678,35 @@ func (m *Manager) connectLocked(ctx context.Context, st *serverState) (*mcp.Clie
 		connectTimeout = 10 * time.Second
 	}
 	connectCtx, cancel := context.WithTimeout(ctx, connectTimeout)
-	defer cancel()
+	// Register the cancel handle before connecting so Close can abort an
+	// in-flight connect (pi v1.0.4 #10249) instead of waiting for it to
+	// settle on its own. The closed re-check closes the registration race:
+	// either Close's cancel loop sees the handle or this registration sees
+	// m.closed first.
+	st.connectMu.Lock()
+	m.mu.Lock()
+	registered := !m.closed
+	if registered {
+		st.connectCancel = cancel
+	}
+	m.mu.Unlock()
+	st.connectMu.Unlock()
+	if !registered {
+		// The transport (and a stdio process) may already exist; mirror the
+		// connect-failure cleanup, then Close's closeSessionLocked marks the
+		// server closed.
+		cancel()
+		st.status = statusError
+		st.toolErr = "mcp manager is closed"
+		m.closeProcessLocked(st)
+		return nil, errors.New("mcp manager is closed")
+	}
+	defer func() {
+		st.connectMu.Lock()
+		st.connectCancel = nil
+		st.connectMu.Unlock()
+		cancel()
+	}()
 	session, err := client.Connect(connectCtx, transport, nil)
 	if err != nil {
 		if errors.Is(err, ErrSignInRequired) {

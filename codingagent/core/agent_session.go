@@ -345,11 +345,14 @@ type AgentSessionConfig struct {
 	// defaultTools setting (#10245). When true, reload activates tools newly
 	// added to the setting. Tools removed from it stay active.
 	UsesDefaultTools bool
-	// AllowedToolNames is an optional allowlist of tool names. When
-	// provided, only these tool names are exposed.
+	// AllowedToolNames is an optional allowlist of tool names or patterns
+	// (`*` matches any characters). When provided, only matching tools are
+	// exposed (pi v1.0.4; pig deviation: pi keeps MCP tools registered for
+	// codemode/tool_search when the list has no `mcp__` entry — pig's MCP is
+	// a single declared proxy tool, so it filters like any other tool).
 	AllowedToolNames []string
-	// ExcludedToolNames is an optional denylist of tool names. When
-	// provided, these tool names are not exposed.
+	// ExcludedToolNames is an optional denylist of tool names or patterns.
+	// When provided, matching tools are not exposed.
 	ExcludedToolNames []string
 	// BaseToolsOverride overrides base tools (useful for custom runtimes).
 	// These are synthesized into minimal ToolDefinitions internally so
@@ -609,8 +612,8 @@ type AgentSession struct {
 	extensionRunnerRef             *ExtensionRunnerRef
 	initialActiveToolNames         []string
 	usesDefaultTools               bool
-	allowedToolNames               map[string]struct{}
-	excludedToolNames              map[string]struct{}
+	allowedToolNames               func(string) bool
+	excludedToolNames              func(string) bool
 	baseToolsOverride              map[string]agent.AgentTool
 	sessionStartEvent              *SessionStartEvent
 	extensionUIContext             ExtensionUIContext
@@ -684,16 +687,10 @@ func NewAgentSession(config AgentSessionConfig) *AgentSession {
 	s.initialActiveToolNames = config.InitialActiveToolNames
 	s.usesDefaultTools = config.UsesDefaultTools
 	if config.AllowedToolNames != nil {
-		s.allowedToolNames = map[string]struct{}{}
-		for _, name := range config.AllowedToolNames {
-			s.allowedToolNames[name] = struct{}{}
-		}
+		s.allowedToolNames = toolNameMatcher(config.AllowedToolNames)
 	}
 	if config.ExcludedToolNames != nil {
-		s.excludedToolNames = map[string]struct{}{}
-		for _, name := range config.ExcludedToolNames {
-			s.excludedToolNames[name] = struct{}{}
-		}
+		s.excludedToolNames = toolNameMatcher(config.ExcludedToolNames)
 	}
 	s.baseToolsOverride = config.BaseToolsOverride
 	if config.SessionStartEvent != nil {
@@ -4721,17 +4718,16 @@ func (s *AgentSession) refreshToolRegistry(options *refreshToolRegistryOptions) 
 	allowedToolNames := s.allowedToolNames
 	excludedToolNames := s.excludedToolNames
 	isAllowedTool := func(name string) bool {
-		if allowedToolNames != nil {
-			if _, ok := allowedToolNames[name]; !ok {
-				return false
-			}
+		// pi: `if (this._excludedTools?.(name)) return false;
+		// if (!this._allowedTools || this._allowedTools(name)) return true;
+		// return !this._allowlistFiltersMcp && isMcpToolName(name);` — the
+		// last clause keeps MCP tools registered for codemode/tool_search;
+		// pig's MCP is a single declared proxy tool, so unmatched names stay
+		// excluded (declared deviation, v1.0.4).
+		if excludedToolNames != nil && excludedToolNames(name) {
+			return false
 		}
-		if excludedToolNames != nil {
-			if _, ok := excludedToolNames[name]; ok {
-				return false
-			}
-		}
-		return true
+		return allowedToolNames == nil || allowedToolNames(name)
 	}
 
 	registeredTools := s.extensionRunner.GetAllRegisteredTools()
@@ -4833,7 +4829,9 @@ func (s *AgentSession) refreshToolRegistry(options *refreshToolRegistryOptions) 
 	if allowedToolNames != nil {
 		s.mu.Lock()
 		for toolName := range s.toolRegistry {
-			if _, ok := allowedToolNames[toolName]; ok {
+			// Naming or matching a tool activates it even when it is not
+			// active by default (pi: allowedTools(toolName) && …, v1.0.4).
+			if allowedToolNames(toolName) {
 				nextActiveToolNames = append(nextActiveToolNames, toolName)
 			}
 		}

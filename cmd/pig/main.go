@@ -615,6 +615,9 @@ func buildSessionOptions(parsed *cli.Args, scopedModels []core.ScopedModel, hasE
 	if parsed.ExcludeTools != nil {
 		result.options.ExcludeTools = append([]string(nil), parsed.ExcludeTools...)
 	}
+	if parsed.NoMcp != nil && *parsed.NoMcp {
+		result.options.NoMcp = true
+	}
 
 	return result
 }

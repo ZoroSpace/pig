@@ -93,3 +93,15 @@ func TestParseArgsModelsIgnoresEmptyEntries(t *testing.T) {
 		t.Fatalf("models = %v, want empty", result.Models)
 	}
 }
+
+func TestParseArgsNoMcp(t *testing.T) {
+	// pi v1.0.4: --no-mcp disables the built-in MCP support for one run.
+	result := ParseArgs([]string{"--no-mcp"})
+	if result.NoMcp == nil || !*result.NoMcp {
+		t.Fatal("--no-mcp must set NoMcp")
+	}
+	result = ParseArgs([]string{})
+	if result.NoMcp != nil {
+		t.Fatal("NoMcp must stay unset without the flag")
+	}
+}

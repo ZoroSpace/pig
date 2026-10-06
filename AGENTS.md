@@ -16,7 +16,7 @@
 
 ## 当前状态（2026-10-04）
 
-- **pig 基线现跟踪 pi v1.0.3**（Version 1.0.3，`TestVersionTracksPiBaseline` 守卫）；全量 `go test ./... -race` 31 包全绿；最近一批 = S14（handoff：`docs/handoffs/SYNC-S14-v1.0.3.md`）。下一同步目标未知（等 pi 新正式 tag）；下一批范围未定时开工稿写「下一批候选 + 已知落点」段（仓库机制 handoff 规则）。
+- **pig 基线现跟踪 pi v1.0.4**（Version 1.0.4，`TestVersionTracksPiBaseline` 守卫）；全量 `go test ./... -race` 31 包全绿；最近一批 = S15（handoff：`docs/handoffs/SYNC-S15-v1.0.4.md`）。下一同步目标未知（等 pi 新正式 tag）；下一批范围未定时开工稿写「下一批候选 + 已知落点」段（仓库机制 handoff 规则）。
 - **Dogfooding（2026-09-11 起）**：用户日常自用 pig，pi 保留作 fallback 与规格书。约定：① 日常撞到的 pig bug 一律走 `docs/fix/` 登记 + 回归测试锁定流程；② 缺 provider/adapter 卡住日常时按需提前拉起移植批；③ **真机验证矩阵** `docs/handoffs/verify-matrix.md`——provider 真机/OAuth 验证逐家解锁，每拿到一个 key 按表销账。
 - **真机冒烟测试**一律 `//go:build smoke` 门控移出默认门禁（跑法见 `docs/feat/TEST-SUITE-RUNTIME.md`）；冒烟启动必须 mock provider / 清凭证（见仓库机制 tmux 条）。
 - 路线余量：Phase 8 余量（photon/wazero、telemetry、goreleaser、/share、terminal-image）顺序由用户拍板；dogfooding 插批随时插入。
@@ -25,7 +25,7 @@
 
 - **Phase 5**（RPC/sqlite 后端）、**harness 上半身**（S2 已取消）、**pi experimental**、**Phase 7 扩展系统**全部不做（2026-09-21 定稿），历史 handoff 的「下一批建议 T7」作废。
 - **/bug 命令与 bug-report 上报链**（Radius 上传 / zip 打包 / crash-log 的 /bug 指针）不移植——pig 用户走 GitHub issue（2026-09-30 追加，`docs/fix/2026-09-30-remove-bug-command.md`）；**后续 pi 上游对 /bug / bug-report 面的任何改动永不迁移，也不得把 /bug 相关能力重新加回 pig**。
-- durable/chord 两个 pi 新包整体延后不迁；virtual models 按「pi experimental 不做」跳过；codemode+tool_search 不做（候选设计见 `docs/handoffs/SYNC-S10-v0.99.1.md` §5）；npm 发行与 3D 彩蛋不迁。
+- durable/chord 两个 pi 新包整体延后不迁；**pi-env**（`@earendil-works/pi-env`，SSH 远程执行环境 + Rust 远端 daemon，Durable ExecutionEnv 实现）同族随 durable 延后（2026-10-06 S15 拍板，`docs/handoffs/SYNC-S15-v1.0.4.md` §0）；virtual models 按「pi experimental 不做」跳过；codemode+tool_search 不做（候选设计见 `docs/handoffs/SYNC-S10-v0.99.1.md` §5）；npm 发行与 3D 彩蛋不迁。
 - mistral-conversations / pi-messages adapter 按需延后（无内置 provider 消费）。
 
 ## pig-only 偏差清单（同步批遇到这些面一律跳过/维持，勿被上游「纠正」）
@@ -68,6 +68,7 @@
 - S12-4（插批 feat，不涉基线）MCP OAuth 整族 — `docs/handoffs/S12-4.md`
 - S13（→v1.0.2）per-thinking-level sampling params（唯一实移）— `docs/handoffs/SYNC-S13-v1.0.2.md`
 - S14（→v1.0.3）azure provider 首移（v1.0.3 改名形态）+ OAuth 刷新取消语义 + 死终端 ENOTTY + TUI Home/End — `docs/handoffs/SYNC-S14-v1.0.3.md`
+- S15（→v1.0.4）ai retry HTTP/2 补模式 + 语法高亮多行保色/subst + MCP OAuth application_type + --tools 通配/--no-mcp + MCP Close 中断连接中 connect（pig 形状适配）— `docs/handoffs/SYNC-S15-v1.0.4.md`
 
 **Phase 2 provider/adapter 批（2026-09-11~15，Phase 2 收口）**：
 - A1+A2 anthropic-messages adapter + provider 铺开 + Claude/Kimi OAuth — `docs/handoffs/A1.md`、`A2.md`

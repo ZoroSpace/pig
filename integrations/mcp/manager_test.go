@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -512,5 +513,68 @@ func TestHeaderTransportRejectFailure(t *testing.T) {
 	}
 	if status := manager.Status()[0]; status.Status != statusError {
 		t.Fatalf("server must be in error status, got %q", status.Status)
+	}
+}
+
+// blockingTransport hangs in Connect until its context is canceled, simulating
+// a server whose initialize never answers.
+type blockingTransport struct {
+	started chan struct{}
+	once    sync.Once
+}
+
+func (b *blockingTransport) Connect(ctx context.Context) (mcp.Connection, error) {
+	b.once.Do(func() { close(b.started) })
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// TestCloseAbortsInFlightConnect ports pi v1.0.4's #10249 fix semantics:
+// close() aborts a connect in progress instead of waiting for it to settle,
+// so shutdown does not block until the connect timeout.
+func TestCloseAbortsInFlightConnect(t *testing.T) {
+	blocker := &blockingTransport{started: make(chan struct{})}
+	config := &Config{MCPServers: map[string]ServerConfig{
+		"stuck": {Command: "irrelevant", Args: []string{}},
+	}}
+	manager := newTestManager(t, config, ManagerOptions{
+		TransportFactory: func(server string, _ ServerConfig) (mcp.Transport, error) {
+			return blocker, nil
+		},
+		// Generous timeout: only the close-abort path can unblock the
+		// connect in time.
+		ConnectTimeout: 60 * time.Second,
+	})
+
+	connectErr := make(chan error, 1)
+	go func() {
+		connectErr <- manager.Reconnect(t.Context(), "stuck")
+	}()
+	select {
+	case <-blocker.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("connect never reached the transport")
+	}
+
+	closed := make(chan error, 1)
+	go func() { closed <- manager.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close blocked on the in-flight connect (v1.0.4 #10249 regression)")
+	}
+	if err := <-connectErr; err == nil {
+		t.Fatal("aborted connect must report an error")
+	}
+	// pig semantics: per-server status goes disconnected; the manager-level
+	// closed flag rejects further work.
+	if st := manager.Status()[0]; st.Status != "disconnected" {
+		t.Fatalf("status = %q, want disconnected", st.Status)
+	}
+	if _, err := manager.CallTool(t.Context(), "stuck", "echo", map[string]any{}); err == nil || !strings.Contains(err.Error(), "closed") {
+		t.Fatalf("CallTool after Close = %v, want manager-closed error", err)
 	}
 }

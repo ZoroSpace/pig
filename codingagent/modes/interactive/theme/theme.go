@@ -1805,12 +1805,15 @@ var (
 
 func buildCliHighlightTheme(t *Theme) cliHighlightTheme {
 	return cliHighlightTheme{
-		"keyword":     func(s string) string { return t.Fg(ColorSyntaxKeyword, s) },
-		"built_in":    func(s string) string { return t.Fg(ColorSyntaxType, s) },
-		"literal":     func(s string) string { return t.Fg(ColorSyntaxNumber, s) },
-		"number":      func(s string) string { return t.Fg(ColorSyntaxNumber, s) },
-		"regexp":      func(s string) string { return t.Fg(ColorSyntaxString, s) },
-		"string":      func(s string) string { return t.Fg(ColorSyntaxString, s) },
+		"keyword":  func(s string) string { return t.Fg(ColorSyntaxKeyword, s) },
+		"built_in": func(s string) string { return t.Fg(ColorSyntaxType, s) },
+		"literal":  func(s string) string { return t.Fg(ColorSyntaxNumber, s) },
+		"number":   func(s string) string { return t.Fg(ColorSyntaxNumber, s) },
+		"regexp":   func(s string) string { return t.Fg(ColorSyntaxString, s) },
+		"string":   func(s string) string { return t.Fg(ColorSyntaxString, s) },
+		// String interpolation content renders in text color (pi `subst`,
+		// #10356).
+		"subst":       func(s string) string { return t.Fg(ColorText, s) },
 		"comment":     func(s string) string { return t.Fg(ColorSyntaxComment, s) },
 		"doctag":      func(s string) string { return t.Fg(ColorSyntaxComment, s) },
 		"meta":        func(s string) string { return t.Fg(ColorMuted, s) },

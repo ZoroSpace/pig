@@ -56,6 +56,7 @@ type Args struct {
 	Models             []string
 	Tools              []string
 	ExcludeTools       []string
+	NoMcp              *bool
 	NoTools            *bool
 	NoBuiltinTools     *bool
 	Extensions         []string
@@ -203,6 +204,8 @@ func ParseArgs(args []string) Args {
 		case (arg == "--exclude-tools" || arg == "-xt") && i+1 < len(args):
 			i++
 			result.ExcludeTools = splitTrimFilter(args[i], ",")
+		case arg == "--no-mcp":
+			result.NoMcp = boolPtr(true)
 		case arg == "--thinking" && i+1 < len(args):
 			i++
 			level := args[i]
@@ -407,10 +410,11 @@ Options:
                                  Supports globs (anthropic/*, *sonnet*) and fuzzy matching
   --no-tools, -nt                Disable all tools by default (built-in and extension)
   --no-builtin-tools, -nbt       Disable built-in tools by default but keep extension/custom tools enabled
-  --tools, -t <tools>            Comma-separated allowlist of tool names to enable
-                                 Applies to built-in, extension, and custom tools
-  --exclude-tools, -xt <tools>   Comma-separated denylist of tool names to disable
-                                 Applies to built-in, extension, and custom tools
+  --tools, -t <tools>            Comma-separated allowlist of tool names or patterns (*) to enable
+                                 Applies to built-in, extension, custom, and MCP tools
+  --exclude-tools, -xt <tools>   Comma-separated denylist of tool names or patterns (*) to disable
+                                 Applies to all tools, MCP tools included
+  --no-mcp                       Disable built-in MCP support: no servers connect and no MCP tools
   --thinking <level>             Set thinking level: off, minimal, low, medium, high, xhigh, max
   --extension, -e <path>         Load an extension file (can be used multiple times)
   --no-extensions, -ne           Disable extension discovery (explicit -e paths still work)
@@ -490,6 +494,9 @@ Examples:
   # Read-only mode (no file modifications possible)
   %s --tools read,grep,find,ls -p "Review the code in src/"
 
+  # Pattern allowlist (only the mcp proxy tool plus read/bash)
+  %s --tools 'read,bash,mcp*'
+
   # Disable one tool while keeping the rest available
   %s --exclude-tools ask_question
 
@@ -567,6 +574,7 @@ Built-in Tool Names:
 		codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName,
 		codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName,
 		codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName,
+		codingagent.AppName,
 		codingagent.ConfigDirName, codingagent.AppName,
 		codingagent.EnvAgentDir, codingagent.ConfigDirName,
 		codingagent.EnvSessionDir,

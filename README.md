@@ -133,12 +133,14 @@ pig 是纯 Go 实现，编译产物为**单个静态二进制**，拷到任何 L
 
 编辑工具带 diff 预览与文件互斥锁，bash 工具支持长输出落盘与流式折叠渲染；项目级 `AGENTS.md` / `CLAUDE.md` 上下文文件、SKILL.md 技能、prompt 模板、项目信任机制全部就位。
 
-可以限制本次运行的工具权限：
+可以限制本次运行的工具权限（`--tools` / `--exclude-tools` 条目支持 `*` 通配模式）：
 
 ```bash
 ./pig --no-tools                          # 完全禁用工具
 ./pig --tools read,grep,find,ls -p "只审查源码，不修改任何文件"
 ./pig --exclude-tools bash,write          # 禁用指定工具
+./pig --exclude-tools 'mcp*'              # 通配禁用（如 mcp 代理工具）
+./pig --no-mcp                            # 本次运行禁用内建 MCP：不连 server、无 MCP 工具
 ```
 
 ### 🔌 MCP：内建 Model Context Protocol 客户端

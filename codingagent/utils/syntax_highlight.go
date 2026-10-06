@@ -53,34 +53,38 @@ var chromaScopeNames = map[chroma.TokenType]string{
 	chroma.LiteralOther:       "literal",
 	chroma.LiteralString:      "string",
 	chroma.LiteralStringRegex: "regexp",
-	chroma.LiteralNumber:      "number",
-	chroma.Comment:            "comment",
-	chroma.CommentPreprocFile: "doctag",
-	chroma.GenericHeading:     "meta",
-	chroma.GenericSubheading:  "meta",
-	chroma.GenericDeleted:     "deletion",
-	chroma.GenericInserted:    "addition",
-	chroma.GenericEmph:        "emphasis",
-	chroma.GenericStrong:      "strong",
-	chroma.GenericUnderline:   "link",
-	chroma.NameFunction:       "function",
-	chroma.NameFunctionMagic:  "function",
-	chroma.NameDecorator:      "title",
-	chroma.NameClass:          "class",
-	chroma.NameException:      "class",
-	chroma.NameNamespace:      "class",
-	chroma.NameTag:            "tag",
-	chroma.NameLabel:          "name",
-	chroma.NameAttribute:      "attr",
-	chroma.NameEntity:         "attr",
-	chroma.NameProperty:       "attr",
-	chroma.NameConstant:       "variable",
-	chroma.NameVariable:       "variable",
-	chroma.NameOther:          "variable",
-	chroma.Operator:           "operator",
-	chroma.OperatorWord:       "operator",
-	chroma.Punctuation:        "punctuation",
-	chroma.GenericPrompt:      "punctuation",
+	// pi maps highlight.js's `subst` scope (string interpolation delimiters
+	// and content) to the theme's text color (#10356); chroma's closest
+	// token is LiteralStringInterpol (declared adaptation).
+	chroma.LiteralStringInterpol: "subst",
+	chroma.LiteralNumber:         "number",
+	chroma.Comment:               "comment",
+	chroma.CommentPreprocFile:    "doctag",
+	chroma.GenericHeading:        "meta",
+	chroma.GenericSubheading:     "meta",
+	chroma.GenericDeleted:        "deletion",
+	chroma.GenericInserted:       "addition",
+	chroma.GenericEmph:           "emphasis",
+	chroma.GenericStrong:         "strong",
+	chroma.GenericUnderline:      "link",
+	chroma.NameFunction:          "function",
+	chroma.NameFunctionMagic:     "function",
+	chroma.NameDecorator:         "title",
+	chroma.NameClass:             "class",
+	chroma.NameException:         "class",
+	chroma.NameNamespace:         "class",
+	chroma.NameTag:               "tag",
+	chroma.NameLabel:             "name",
+	chroma.NameAttribute:         "attr",
+	chroma.NameEntity:            "attr",
+	chroma.NameProperty:          "attr",
+	chroma.NameConstant:          "variable",
+	chroma.NameVariable:          "variable",
+	chroma.NameOther:             "variable",
+	chroma.Operator:              "operator",
+	chroma.OperatorWord:          "operator",
+	chroma.Punctuation:           "punctuation",
+	chroma.GenericPrompt:         "punctuation",
 }
 
 // chromaScopeForToken resolves the highlight.js scope name for a chroma
@@ -345,7 +349,17 @@ func RenderHighlightedHtml(htmlStr string, theme HighlightTheme) string {
 		text := textBuffer.String()
 		formatter := getActiveFormatter(scopes, theme)
 		if formatter != nil {
-			output.WriteString(formatter(text))
+			// Format each line separately so a span whose text crosses a
+			// line boundary keeps per-line color resets (pi #10356); empty
+			// lines pass through unformatted (pi: line ? formatter(line) : line).
+			for i, line := range strings.Split(text, "\n") {
+				if i > 0 {
+					output.WriteString("\n")
+				}
+				if line != "" {
+					output.WriteString(formatter(line))
+				}
+			}
 		} else {
 			output.WriteString(text)
 		}
