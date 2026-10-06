@@ -4,7 +4,7 @@
 
 ## 0. 终稿追加（开工稿 → 实际执行）
 
-- **验收门**：build/vet/gofmt 干净；全量 `-race` 单次 rc=0 31 包（`/tmp/pig-test-out-s15.log`）；tmux 冒烟四项全通（复用 S13 mock 环境 `/tmp/pig-s13-smoke`：header `v1.0.4`、`hello smoke`→`pong` ↑1↓1、ctrl+d 干净退出、jsonl usage input 1/output 1/cost.total 0，mock-requests.log 仅 1 条 127.0.0.1:8941 → 零真实 API）。tmux 备忘：本次用户默认 socket 为残留死 socket，冒烟改用 `-S /tmp/pig-s15-tmux.sock` 独立 socket + `-f /dev/null`（用户 tmux 配置插件会让无 TTY 的 server 立即退出）；mock 进程/独立 socket 已清理。
+- **验收门**：build/vet/gofmt 干净；全量 `-race` 单次 rc=0 31 包（`/tmp/pig-test-out-s15.log`）；tmux 冒烟四项全通（复用 S13 mock 环境 `/tmp/pig-s13-smoke`：header `v1.0.4`、`hello smoke`→`pong` ↑1↓1、ctrl+d 干净退出、jsonl usage input 1/output 1/cost.total 0，mock-requests.log 仅 1 条 127.0.0.1:8941 → 零真实 API）。tmux 备忘（2026-10-06 收口后勘误）：故障根因是冒烟启动命令未先 cd 到信任目录 → pig 被项目信任门秒退 → 最后一个会话关闭连带 server 退出、留下死 socket，与 tmux 配置无关（`~/.tmux.conf` 的 Kaku integration 引用的 `~/.config/kaku/` 不存在，仅加载告警无副作用，A/B 对照实证）；死 socket 已删并验证默认 socket 恢复。教训：tmux 内冒烟启动命令一律带 `cd <信任工作目录> &&`。
 - **Version** 1.0.3→1.0.4（config.go + config_test.go）。
 - **1.6 skills indirect 定论为零操作**：pig 无 hiddenDeclarations（全仓零命中），`declaredTools == selectedTools` 恒成立，pi 的 `?? "indirect"` 分支不可达——skills.go 未改动。
 - **1.5 实现细节**：`serverState` 新增 `connectMu/connectCancel`（独立小锁，原因同 challengeMu——connect 持 mu 全程）；`connectLocked` 在 `client.Connect` 前注册 cancel 柄 + `m.closed` 重查关闭注册竞态窗口，重查命中时走 connect-failure 同款清理（closeProcessLocked，防 stdio 进程泄漏）；`Close()` 先 cancel 再等 `st.mu`。测试实证：ConnectTimeout 60s 下 Close 5s 内返回（`TestCloseAbortsInFlightConnect`，pig 语义断言 per-server 状态为 disconnected 而非 pi 的 closed）。
