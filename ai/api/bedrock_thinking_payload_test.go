@@ -3,6 +3,7 @@ package api
 
 import (
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai"
@@ -298,6 +299,90 @@ func TestBedrockThinkingPayload(t *testing.T) {
 			t.Fatalf("anthropic_beta = %v", beta)
 		}
 	})
+}
+
+func TestBedrockOpenAIReasoningPayload(t *testing.T) {
+	resetBedrockEnv(t)
+
+	// Regression for pi #9331: the configured thinking level never reached
+	// OpenAI models on Bedrock.
+	t.Run("sends reasoning.effort for GPT-6 and GPT-5.6", func(t *testing.T) {
+		cases := []struct{ reasoning, effort string }{
+			{"minimal", "low"},
+			{"low", "low"},
+			{"medium", "medium"},
+			{"high", "high"},
+			{"xhigh", "xhigh"},
+			{"max", "max"},
+		}
+		for _, tc := range cases {
+			for _, id := range []string{"global.openai.gpt-6-sol", "us.openai.gpt-6-luna", "global.openai.gpt-5.6-sol"} {
+				model, ok := ai.MODELS["amazon-bedrock"][id]
+				if !ok {
+					t.Fatalf("expected %s in the builtin catalog", id)
+				}
+				payload := captureBedrockThinkingPayload(t, &model, &BedrockOptions{Reasoning: types.ThinkingLevel(tc.reasoning)})
+				if len(payload.AdditionalModelRequestFields) != 1 ||
+					!reflect.DeepEqual(payload.AdditionalModelRequestFields["reasoning"], map[string]any{"effort": tc.effort}) {
+					t.Fatalf("%s reasoning=%s: additionalModelRequestFields = %v, want {reasoning: {effort: %s}}",
+						id, tc.reasoning, payload.AdditionalModelRequestFields, tc.effort)
+				}
+			}
+		}
+	})
+
+	t.Run("sends reasoning.effort when only model.name identifies a GPT model", func(t *testing.T) {
+		model := bedrockOpenAIModel(t, "global.openai.gpt-6-sol", "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile", "GPT-6 Sol")
+		payload := captureBedrockThinkingPayload(t, model, &BedrockOptions{Reasoning: types.ThinkingLevelMedium})
+
+		if len(payload.AdditionalModelRequestFields) != 1 ||
+			!reflect.DeepEqual(payload.AdditionalModelRequestFields["reasoning"], map[string]any{"effort": "medium"}) {
+			t.Fatalf("additionalModelRequestFields = %v, want {reasoning: {effort: medium}}", payload.AdditionalModelRequestFields)
+		}
+	})
+
+	t.Run("sends flat reasoning_effort for gpt-oss, clamped to high", func(t *testing.T) {
+		model, ok := ai.MODELS["amazon-bedrock"]["openai.gpt-oss-120b-1:0"]
+		if !ok {
+			t.Fatal("expected openai.gpt-oss-120b-1:0 in the builtin catalog")
+		}
+		for _, tc := range []struct{ reasoning, effort string }{
+			{"minimal", "low"},
+			{"medium", "medium"},
+			{"xhigh", "high"},
+		} {
+			payload := captureBedrockThinkingPayload(t, &model, &BedrockOptions{Reasoning: types.ThinkingLevel(tc.reasoning)})
+			if len(payload.AdditionalModelRequestFields) != 1 ||
+				payload.AdditionalModelRequestFields["reasoning_effort"] != tc.effort {
+				t.Fatalf("reasoning=%s: additionalModelRequestFields = %v, want {reasoning_effort: %s}",
+					tc.reasoning, payload.AdditionalModelRequestFields, tc.effort)
+			}
+		}
+	})
+
+	t.Run("sends no reasoning fields when reasoning is off", func(t *testing.T) {
+		model, ok := ai.MODELS["amazon-bedrock"]["global.openai.gpt-6-sol"]
+		if !ok {
+			t.Fatal("expected global.openai.gpt-6-sol in the builtin catalog")
+		}
+		payload := captureBedrockThinkingPayloadNoReasoning(t, &model)
+		if payload.AdditionalModelRequestFields != nil {
+			t.Fatalf("additionalModelRequestFields = %v, want unset", payload.AdditionalModelRequestFields)
+		}
+	})
+}
+
+// bedrockOpenAIModel re-reads a catalog OpenAI model and retargets its id and
+// name (pi: getModel + spread).
+func bedrockOpenAIModel(t *testing.T, catalogID string, id string, name string) *types.Model {
+	t.Helper()
+	base, ok := ai.MODELS["amazon-bedrock"][catalogID]
+	if !ok {
+		t.Fatalf("expected %s in the builtin catalog", catalogID)
+	}
+	base.ID = id
+	base.Name = name
+	return &base
 }
 
 // captureBedrockThinkingPayloadNoReasoning captures the payload without a

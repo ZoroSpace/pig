@@ -369,7 +369,12 @@ func loginOpenAIChatGPT(ctx context.Context, interaction AuthInteraction, option
 
 	params := url.Values{}
 	params.Set("client_id", chatGPTDynamicClientID)
-	params.Set("agent_name_hint", chatGPTAgentNameHint)
+	// pi #10433: the app can name itself; the default stays pi's name.
+	agentNameHint := chatGPTAgentNameHint
+	if options != nil && options.AgentName != "" {
+		agentNameHint = options.AgentName
+	}
+	params.Set("agent_name_hint", agentNameHint)
 	params.Set("ext_agent_host_id", hostID)
 	params.Set("response_type", "code")
 	params.Set("redirect_uri", chatGPTRedirectURI)

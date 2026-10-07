@@ -1251,6 +1251,12 @@ type CreateProviderOptions struct {
 	FetchModels func(ctx context.Context, refreshCtx *RefreshModelsContext) ([]Model, error)
 	// FilterModels optionally filters credential-specific availability.
 	FilterModels func(models []Model, credential auth.Credential) []Model
+	// FilterAllModels optionally filters credential-specific availability
+	// over the mixed-type catalog (pi: optional filterAllModels provider
+	// member). Providers created with it satisfy ProviderAllModelsFilter;
+	// those without keep the default chat-FilterModels + non-chat
+	// pass-through availability.
+	FilterAllModels func(models []Model, credential auth.Credential) []Model
 	// API is the single stream implementation for all models.
 	API ProviderStreams
 	// APIByAPI dispatches on model.API for mixed-API providers; a model
@@ -1331,7 +1337,25 @@ func CreateProvider(input *CreateProviderOptions) Provider {
 			return err
 		}
 	}
+	if input.FilterAllModels != nil {
+		return &allModelsFilterProvider{composedProvider: p, filter: input.FilterAllModels}
+	}
 	return p
+}
+
+// allModelsFilterProvider wraps composedProvider with the optional
+// filterAllModels policy (pi: a provider literal that sets filterAllModels).
+// It exists so providers without the policy keep the default availability
+// path instead of matching ProviderAllModelsFilter with a nil filter.
+type allModelsFilterProvider struct {
+	*composedProvider
+	filter func(models []Model, credential auth.Credential) []Model
+}
+
+// FilterAllModels applies the provider's credential-specific availability
+// policy over the mixed-type catalog.
+func (p *allModelsFilterProvider) FilterAllModels(models []Model, credential auth.Credential) []Model {
+	return p.filter(models, credential)
 }
 
 // composedProvider is the CreateProvider implementation. pi builds a closure

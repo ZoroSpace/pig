@@ -14,9 +14,9 @@
 - **每批收口必须预写下一批 handoff（2026-10-02 立，起因：S11-2 开工前靠 S11-1 会话上下文预消化 8 个 commit 落点，省掉开工批重翻 pi diff 与重新定位 pig 代码的 token 开销）**：每完成一批（含收口 commit 之前），在当前会话上下文还热着时把**下一批**的开工稿写进 `docs/handoffs/`：逐 commit 消化 pi diff、核实 pig 落点（文件/函数/行号/测试基建）、预判偏差与跳过项（引用不做清单裁决），做到开工批「照单施工、无需再翻 pi 仓库」。下一批范围未定时至少写「下一批候选 + 已知落点」段。首例：docs/handoffs/S11-2.md（4 实移 4 零操作声明）。
 - **git worktree 并行开发规范（2026-09-12 立）**：用户要求用 git worktree 并行开发时按此执行——① **适用判据**：小 feature/fix 且**改动文件集合不相交**才并行（`interactive_mode.go`、`agent_session.go`、`BuiltinProviders`、`ai/models_generated.go`、`ai/index.go`、`go.mod` 是大磁铁/共享注册面，双方都碰就串行）；S 系基线同步批等动多区域的大迭代**独占串行**，期间并行小 fix 会无谓扩大冲突面。② **流程四步**：`git worktree add ../pig-<fix|feat>-<主题> -b <fix|feat>/<主题>` → 在 worktree 内正常开工（读 AGENTS.md + 对应 `docs/fix/`、`docs/feat/` 先例，回归测试 stash 验证照常走）→ 各分支独立过 §3.5 验收门 → master `git merge --no-ff` 合流（后合的一方先 rebase/merge master，**终审再跑一遍全量 `-race`**）→ `git worktree remove`。③ **共享写入点**：`AGENTS.md` 是唯一必然双写的文件（fix 在 `docs/fix/` 现有文件列表补一行、feat 在「批次索引」补一行），均为单行追加，后合者手工并、成本≈0；`docs/fix/`、`docs/feat/`、`docs/handoffs/` 每起独立文件，天然零冲突；`go.mod`/`go.sum` 双方都加了依赖则合流后 `go mod tidy`；`models_generated.go` 必冲突，rebase 后重跑生成脚本勿手工并。④ **全量 `-race` 错峰**：两个 worktree 同时跑会撞 `ai/auth` 的固定端口（codex 1455 / anthropic 53692，见 `docs/fix/2026-09-12-oauth-callback-listener-leak-flaky.md`）假红 `bind: address already in use`，错开几分钟或并行期间单跑时跳过该包。⑤ Go build cache 内容寻址共享（~/.cache/go-build），两 worktree 编译缓存大部分复用，并行成本远低于 node_modules 世界。并行 agent 的 tmux 窗格由用户自己开，agent 不感知、不管理 tmux（仅在需要真 TTY 冒烟时按既有 tmux 规则建临时 session）。
 
-## 当前状态（2026-10-04）
+## 当前状态（2026-10-07）
 
-- **pig 基线现跟踪 pi v1.0.4**（Version 1.0.4，`TestVersionTracksPiBaseline` 守卫）；全量 `go test ./... -race` 31 包全绿；最近一批 = S15（handoff：`docs/handoffs/SYNC-S15-v1.0.4.md`）。下一同步目标未知（等 pi 新正式 tag）；下一批范围未定时开工稿写「下一批候选 + 已知落点」段（仓库机制 handoff 规则）。
+- **pig 基线跟踪 pi v1.0.4 + main@27c7b6ff4**（S16 起对齐 pi main 最新 commit——用户拍板提前消化，pi 无 v1.0.5 tag 故 Version 1.0.4 与 `TestVersionTracksPiBaseline` 守卫语义不动，v1.0.5 发布后 S17 只补增量）；全量 `go test ./... -race` 31 包全绿；最近一批 = S16-1（handoff：`docs/handoffs/S16-1.md`，全系计划稿：`docs/handoffs/SYNC-S16-pre-digest.md`）。S16-2（agent/codingagent：durationMs 落点 + `--tools +name/-name` + MCP 核对）已按仓库规则预写开工稿。
 - **Dogfooding（2026-09-11 起）**：用户日常自用 pig，pi 保留作 fallback 与规格书。约定：① 日常撞到的 pig bug 一律走 `docs/fix/` 登记 + 回归测试锁定流程；② 缺 provider/adapter 卡住日常时按需提前拉起移植批；③ **真机验证矩阵** `docs/handoffs/verify-matrix.md`——provider 真机/OAuth 验证逐家解锁，每拿到一个 key 按表销账。
 - **真机冒烟测试**一律 `//go:build smoke` 门控移出默认门禁（跑法见 `docs/feat/TEST-SUITE-RUNTIME.md`）；冒烟启动必须 mock provider / 清凭证（见仓库机制 tmux 条）。
 - 路线余量：Phase 8 余量（photon/wazero、telemetry、goreleaser、/share、terminal-image）顺序由用户拍板；dogfooding 插批随时插入。
@@ -69,6 +69,7 @@
 - S13（→v1.0.2）per-thinking-level sampling params（唯一实移）— `docs/handoffs/SYNC-S13-v1.0.2.md`
 - S14（→v1.0.3）azure provider 首移（v1.0.3 改名形态）+ OAuth 刷新取消语义 + 死终端 ENOTTY + TUI Home/End — `docs/handoffs/SYNC-S14-v1.0.3.md`
 - S15（→v1.0.4）ai retry HTTP/2 补模式 + 语法高亮多行保色/subst + MCP OAuth application_type + --tools 通配/--no-mcp + MCP Close 中断连接中 connect（pig 形状适配）— `docs/handoffs/SYNC-S15-v1.0.4.md`
+- S16-1 ✅（2026-10-07，→main@27c7b6ff4 提前消化，无 v1.0.5 tag 故 Version 不动）ai 层 7 commit：retry server_busy / estimate 3.5 / bedrock OpenAI reasoning effort / LoginOptions.AgentName / anthropic 回调 free-port 回退 / durationMs ai 侧基建（拷贝语义并发偏差）/ classifier 目录平价（openai-decisions 常量+生成器条目+FilterAllModels，运行时零操作）— `docs/handoffs/S16-1.md` + 计划稿 `SYNC-S16-pre-digest.md`
 
 **Phase 2 provider/adapter 批（2026-09-11~15，Phase 2 收口）**：
 - A1+A2 anthropic-messages adapter + provider 铺开 + Claude/Kimi OAuth — `docs/handoffs/A1.md`、`A2.md`

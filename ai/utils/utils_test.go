@@ -4,8 +4,11 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/ZoroSpace/pig/ai/types"
 )
 
 func TestShortHash(t *testing.T) {
@@ -165,11 +168,26 @@ func TestGetRetryDelayMSUnparseableRetryAfterFallsBackToExponential(t *testing.T
 }
 
 func TestEstimateTokens(t *testing.T) {
-	if got := EstimateTextTokens("abcd"); got != 1 {
+	// 4 chars ÷ 3.5 chars/token rounds up to 2 (pi: CHARS_PER_TOKEN = 3.5
+	// since #10497).
+	if got := EstimateTextTokens("abcd"); got != 2 {
 		t.Fatalf("EstimateTextTokens = %d", got)
 	}
 	if got := EstimateTextTokens("abcde"); got != 2 {
 		t.Fatalf("EstimateTextTokens = %d", got)
+	}
+}
+
+func TestEstimateContextReservesThreePointFiveCharsPerToken(t *testing.T) {
+	// Regression for pi #10497: large new inputs need more room than
+	// chars/4 allows — 3500 trailing chars now estimate to 1000 tokens.
+	messages := []types.Message{
+		types.AssistantMessage{Role: types.RoleAssistant, Usage: types.Usage{TotalTokens: 2000}, Timestamp: 100},
+		types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: strings.Repeat("x", 3500)}, Timestamp: 200},
+	}
+	estimate := EstimateContextTokensOfMessages(messages)
+	if estimate.Tokens != 3000 || estimate.UsageTokens != 2000 || estimate.TrailingTokens != 1000 {
+		t.Fatalf("estimate = %+v, want {tokens: 3000, usageTokens: 2000, trailingTokens: 1000}", estimate)
 	}
 }
 

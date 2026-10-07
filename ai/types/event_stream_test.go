@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/samber/lo"
 )
 
 func TestEventStreamPushIterateResult(t *testing.T) {
@@ -289,4 +291,102 @@ func TestEventStreamWakesAllWaitingConsumersOnEndWithoutResult(t *testing.T) {
 	if _, done := second.next(t); !done {
 		t.Fatal("second consumer should see done")
 	}
+}
+
+// message builds a minimal assistant message for timing tests (pi: the
+// message() helper in event-stream.test.ts).
+func timingTestMessage(timestamp int64, durationMs *int64) AssistantMessage {
+	return AssistantMessage{
+		Role:       RoleAssistant,
+		Content:    []Content{},
+		API:        ApiOpenAIResponses,
+		Provider:   "openai",
+		Model:      "m",
+		Usage:      Usage{},
+		StopReason: StopReasonStop,
+		Timestamp:  timestamp,
+		DurationMs: durationMs,
+	}
+}
+
+// Timing tests from pi 36a686ee8 (#10549).
+func TestAssistantMessageEventStreamTimesResponse(t *testing.T) {
+	t.Run("sets durationMs on the final done or error message of a response it saw start", func(t *testing.T) {
+		done := NewAssistantMessageEventStream()
+		answer := timingTestMessage(time.Now().UnixMilli(), nil)
+		time.Sleep(20 * time.Millisecond)
+		done.Push(AssistantMessageEvent{Type: EventDone, Reason: StopReasonStop, Message: &answer})
+		// pig stamps a copy before publishing (see the stream's doc comment);
+		// consumers read the stamp through Result() and the events.
+		measured := done.Result().DurationMs
+		if measured == nil || *measured < 15 {
+			t.Fatalf("result().DurationMs = %v, want >= 15", measured)
+		}
+		if answer.DurationMs != nil {
+			t.Fatalf("answer.DurationMs = %v, want unset (the caller's object is not stamped)", *answer.DurationMs)
+		}
+
+		failed := NewAssistantMessageEventStream()
+		errorMessage := timingTestMessage(time.Now().UnixMilli(), nil)
+		errorMessage.StopReason = StopReasonError
+		failed.Push(AssistantMessageEvent{Type: EventError, Reason: StopReasonError, Message: &errorMessage})
+		if got := failed.Result().DurationMs; got == nil || *got < 0 {
+			t.Fatalf("error result().DurationMs = %v, want set", got)
+		}
+
+		ended := NewAssistantMessageEventStream()
+		result := timingTestMessage(time.Now().UnixMilli(), nil)
+		ended.EndWith(result)
+		// EndWith takes the message by value; consumers see the stamped copy
+		// through Result() (pi mutates the same object reference).
+		if got := ended.Result().DurationMs; got == nil || *got < 0 {
+			t.Fatalf("result.DurationMs = %v, want set", got)
+		}
+	})
+
+	t.Run("keeps an existing duration, so a forwarding stream keeps the inner measurement", func(t *testing.T) {
+		outer := NewAssistantMessageEventStream()
+		time.Sleep(20 * time.Millisecond)
+		inner := NewAssistantMessageEventStream()
+		answer := timingTestMessage(time.Now().UnixMilli(), nil)
+		inner.Push(AssistantMessageEvent{Type: EventDone, Reason: StopReasonStop, Message: &answer})
+		innerResult := inner.Result()
+		innerMeasured := *innerResult.DurationMs
+		// The already-stamped message is forwarded as-is, so the outer stream
+		// keeps the inner measurement instead of re-timing.
+		outer.Push(AssistantMessageEvent{Type: EventDone, Reason: StopReasonStop, Message: &innerResult})
+		if got := outer.Result().DurationMs; got == nil || *got != innerMeasured {
+			t.Fatalf("outer result().DurationMs = %v, want %d", got, innerMeasured)
+		}
+		if innerMeasured >= 20 {
+			t.Fatalf("inner duration %d should stay under the outer stream's 20ms head start", innerMeasured)
+		}
+
+		preset := timingTestMessage(time.Now().UnixMilli(), lo.ToPtr(int64(1234)))
+		stream := NewAssistantMessageEventStream()
+		stream.Push(AssistantMessageEvent{Type: EventDone, Reason: StopReasonStop, Message: &preset})
+		if got := stream.Result().DurationMs; got == nil || *got != 1234 {
+			t.Fatalf("preset result().DurationMs = %v, want 1234", got)
+		}
+	})
+
+	t.Run("leaves a message untimed when it started before the stream, such as a fetched deferred result", func(t *testing.T) {
+		fetched := timingTestMessage(time.Now().Add(-time.Minute).UnixMilli(), nil)
+		stream := NewAssistantMessageEventStream()
+		stream.Push(AssistantMessageEvent{Type: EventDone, Reason: StopReasonStop, Message: &fetched})
+		if fetched.DurationMs != nil {
+			t.Fatalf("fetched.DurationMs = %v, want unset", *fetched.DurationMs)
+		}
+	})
+
+	t.Run("does not time a message pushed after the stream completed", func(t *testing.T) {
+		stream := NewAssistantMessageEventStream()
+		answer := timingTestMessage(time.Now().UnixMilli(), nil)
+		stream.Push(AssistantMessageEvent{Type: EventDone, Reason: StopReasonStop, Message: &answer})
+		late := timingTestMessage(time.Now().UnixMilli(), nil)
+		stream.Push(AssistantMessageEvent{Type: EventDone, Reason: StopReasonStop, Message: &late})
+		if late.DurationMs != nil {
+			t.Fatalf("late.DurationMs = %v, want unset", *late.DurationMs)
+		}
+	})
 }

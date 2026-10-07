@@ -520,7 +520,13 @@ func codexLoginDeviceCode(ctx context.Context, interaction AuthInteraction) (*OA
 // with the Codex CLI; when it is taken, fall back to the pasted redirect URL
 // (pi: .catch(() => undefined)).
 func codexLoginBrowser(ctx context.Context, interaction AuthInteraction, options *LoginOptions) (*OAuthCredential, error) {
-	verifier, state, authURL, err := codexCreateAuthorizationFlow("pi")
+	// pi #10433: the app can name itself in the browser login originator; the
+	// default stays pi's name (codexCreateAuthorizationFlow maps "" to "pi").
+	originator := ""
+	if options != nil {
+		originator = options.AgentName
+	}
+	verifier, state, authURL, err := codexCreateAuthorizationFlow(originator)
 	if err != nil {
 		return nil, err
 	}

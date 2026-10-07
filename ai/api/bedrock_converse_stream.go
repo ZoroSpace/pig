@@ -1569,7 +1569,47 @@ func buildAdditionalModelRequestFields(model *types.Model, options *BedrockOptio
 		return result
 	}
 
+	// OpenAI models on Bedrock never received the configured thinking level
+	// before this branch (#10142 / pi #9331): they always ran at Bedrock's
+	// default effort.
+	candidates := getModelMatchCandidates(model.ID, model.Name)
+	for _, candidate := range candidates {
+		if strings.Contains(candidate, "gpt-oss") {
+			return map[string]any{"reasoning_effort": openAIGptOssEffort[options.Reasoning]}
+		}
+	}
+	for _, candidate := range candidates {
+		if strings.Contains(candidate, "gpt-") {
+			if mapped, ok := model.ThinkingLevelMap[types.ModelThinkingLevel(options.Reasoning)]; ok && mapped != nil {
+				return map[string]any{"reasoning": map[string]any{"effort": *mapped}}
+			}
+			return map[string]any{"reasoning": map[string]any{"effort": openAIGptEffort[options.Reasoning]}}
+		}
+	}
+
 	return nil
+}
+
+// openAIGptEffort maps thinking levels for OpenAI GPT models (GPT-5.x, GPT-6);
+// they take a nested `reasoning.effort` and reject `minimal`.
+var openAIGptEffort = map[types.ThinkingLevel]string{
+	types.ThinkingLevelMinimal: "low",
+	types.ThinkingLevelLow:     "low",
+	types.ThinkingLevelMedium:  "medium",
+	types.ThinkingLevelHigh:    "high",
+	types.ThinkingLevelXHigh:   "xhigh",
+	types.ThinkingLevelMax:     "max",
+}
+
+// openAIGptOssEffort maps thinking levels for gpt-oss; it takes a flat
+// `reasoning_effort` and only accepts low, medium and high.
+var openAIGptOssEffort = map[types.ThinkingLevel]string{
+	types.ThinkingLevelMinimal: "low",
+	types.ThinkingLevelLow:     "low",
+	types.ThinkingLevelMedium:  "medium",
+	types.ThinkingLevelHigh:    "high",
+	types.ThinkingLevelXHigh:   "high",
+	types.ThinkingLevelMax:     "high",
 }
 
 func createBedrockImageBlock(mimeType string, data string) *bedrockImageBlock {

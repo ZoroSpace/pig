@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -93,6 +94,80 @@ func TestAnthropicOAuthManualCallbackLogin(t *testing.T) {
 	}
 	if authURL == "" {
 		t.Error("expected an auth_url event")
+	}
+}
+
+// TestAnthropicOAuthFallsBackToFreeCallbackPort covers pi #10571: when the
+// preferred port cannot be bound, login falls back to an OS-assigned free
+// loopback port and the authorize URL and token exchange use the bound
+// redirect URI.
+func TestAnthropicOAuthFallsBackToFreeCallbackPort(t *testing.T) {
+	blocker, err := net.Listen("tcp", "127.0.0.1:53692")
+	if err != nil {
+		t.Skipf("cannot occupy port 53692: %v", err)
+	}
+	defer blocker.Close()
+
+	var authURL string
+	var exchangedRedirectURI string
+	stubAnthropicPostJSON(t, func(requestURL string, body map[string]any) (string, error) {
+		if requestURL != "https://platform.claude.com/v1/oauth/token" {
+			t.Errorf("url = %q", requestURL)
+		}
+		exchangedRedirectURI, _ = body["redirect_uri"].(string)
+		return `{"access_token":"access-token","refresh_token":"refresh-token","expires_in":3600}`, nil
+	})
+
+	interaction := &oauthTestInteraction{
+		notify: func(event AuthEvent) {
+			if event.Type == "auth_url" {
+				authURL = event.URL
+			}
+		},
+		prompt: func(prompt AuthPrompt) (string, error) {
+			if prompt.Type == "select" {
+				return "browser", nil
+			}
+			if prompt.Type != "manual_code" {
+				return "", &oauthTestUnexpectedPrompt{prompt.Type}
+			}
+			parsed, err := url.Parse(authURL)
+			if err != nil {
+				return "", err
+			}
+			state := parsed.Query().Get("state")
+			redirectURI := parsed.Query().Get("redirect_uri")
+			if state == "" || redirectURI == "" {
+				return "", &oauthTestFailure{"Missing OAuth state or redirect_uri in auth URL"}
+			}
+			return redirectURI + "?code=manual-code&state=" + state, nil
+		},
+	}
+
+	credentials, err := (AnthropicOAuth{}).Login(context.Background(), interaction, nil)
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	if credentials.Access != "access-token" || credentials.Refresh != "refresh-token" {
+		t.Errorf("credentials = %+v", credentials.OAuthCredentials)
+	}
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redirectURI := parsed.Query().Get("redirect_uri")
+	bound, err := url.Parse(redirectURI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bound.Hostname() != "localhost" || bound.Path != "/callback" {
+		t.Errorf("redirect URI = %q, want localhost/callback", redirectURI)
+	}
+	if bound.Port() == "53692" {
+		t.Errorf("redirect URI = %q, want a fallback port", redirectURI)
+	}
+	if exchangedRedirectURI != redirectURI {
+		t.Errorf("exchange redirect_uri = %q, want %q", exchangedRedirectURI, redirectURI)
 	}
 }
 

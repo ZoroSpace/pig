@@ -23,7 +23,9 @@ type ContextUsageEstimate struct {
 	LastUsageIndex int64
 }
 
-const charsPerToken = 4
+// charsPerToken is pi's CHARS_PER_TOKEN: 3.5 since #10497 (up from 4) so the
+// output-limit estimate reserves more room for new input.
+const charsPerToken = 3.5
 const estimatedImageChars = 4800
 
 // CalculateContextTokens returns the reported context size of one usage block
@@ -74,13 +76,13 @@ func estimateTextAndImageContentBlocksChars(content []types.Content) int64 {
 // EstimateTextTokens estimates the token count of a text (pi:
 // estimateTextTokens).
 func EstimateTextTokens(text string) int64 {
-	return ceilDiv(int64(len(text)), charsPerToken)
+	return ceilDiv(int64(len(text)))
 }
 
 // EstimateTextAndImageContentTokens estimates the tokens of a user/tool-result
 // content body (pi: estimateTextAndImageContentTokens).
 func EstimateTextAndImageContentTokens(content *types.UserContent) int64 {
-	return ceilDiv(estimateTextAndImageContentChars(content), charsPerToken)
+	return ceilDiv(estimateTextAndImageContentChars(content))
 }
 
 // EstimateMessageTokens estimates the tokens of one message (pi:
@@ -95,7 +97,7 @@ func EstimateMessageTokens(message types.Message) int64 {
 	case types.UserMessage:
 		return EstimateTextAndImageContentTokens(&m.Content)
 	case types.ToolResultMessage:
-		return ceilDiv(estimateTextAndImageContentBlocksChars(m.Content), charsPerToken)
+		return ceilDiv(estimateTextAndImageContentBlocksChars(m.Content))
 	case types.AssistantMessage:
 		for _, block := range m.Content {
 			switch b := block.(type) {
@@ -108,7 +110,7 @@ func EstimateMessageTokens(message types.Message) int64 {
 			}
 		}
 	}
-	return ceilDiv(chars, charsPerToken)
+	return ceilDiv(chars)
 }
 
 func messageTimestamp(message types.Message) int64 {
@@ -190,9 +192,12 @@ func EstimateContextTokensOfMessages(messages []types.Message) ContextUsageEstim
 	return estimateMessages(messages)
 }
 
-func ceilDiv(a, b int64) int64 {
-	if a <= 0 {
+// ceilDiv estimates tokens from a character count (pi: Math.ceil(chars /
+// CHARS_PER_TOKEN)). Applied as exact integer math — ceil(2*chars/7), since
+// CHARS_PER_TOKEN is 3.5 — so no float rounding can flip a boundary.
+func ceilDiv(chars int64) int64 {
+	if chars <= 0 {
 		return 0
 	}
-	return (a + b - 1) / b
+	return (chars*2 + 6) / 7
 }

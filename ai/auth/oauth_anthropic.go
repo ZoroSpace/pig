@@ -34,6 +34,9 @@ const (
 	anthropicAuthorizeURL = "https://claude.ai/oauth/authorize"
 	anthropicTokenURL     = "https://platform.claude.com/v1/oauth/token"
 	anthropicCallbackPath = "/callback"
+	// anthropicCallbackPort is preferred so the port can be forwarded into
+	// containers or over SSH. Anthropic accepts any loopback port, so login
+	// falls back to a free port when this one cannot be bound (#10571).
 	anthropicRedirectURI  = "http://localhost:53692" + anthropicCallbackPath
 	anthropicOAuthScopes  = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
 	anthropicCallbackPort = 53692
@@ -170,27 +173,43 @@ func loginAnthropic(ctx context.Context, interaction AuthInteraction, options *L
 	if err != nil {
 		return nil, err
 	}
-	// pi: .catch(() => undefined) — a bind failure (port taken) degrades to
-	// manual entry.
+	// The preferred port is tried first so forwarded setups keep working; a
+	// bind failure (port taken, e.g. Hyper-V/WSL port exclusions) falls back
+	// to an OS-assigned free loopback port. Without a callback server, login
+	// continues with the pasted redirect URL (pi #10571: .catch(() =>
+	// startCallbackServer(0)).catch(() => undefined)).
+	startCallbackServer := func(port int) (*OAuthCallbackServer[string], error) {
+		return StartOAuthCallbackServer[string](OAuthCallbackServerOptions[string]{
+			ProviderName: "Anthropic",
+			Host:         getAnthropicCallbackHost(nil),
+			// The authorize URL keeps the localhost spelling regardless of the
+			// bind host (pi: redirectHost).
+			RedirectHost: "localhost",
+			Port:         port,
+			Path:         anthropicCallbackPath,
+			State:        verifier,
+			Complete:     func(_ context.Context, callbackCode string) (string, error) { return callbackCode, nil },
+			Ctx:          ctx,
+		})
+	}
 	var callback *OAuthCallbackServer[string]
-	if server, serverErr := StartOAuthCallbackServer[string](OAuthCallbackServerOptions[string]{
-		ProviderName: "Anthropic",
-		Host:         getAnthropicCallbackHost(nil),
-		Port:         anthropicCallbackPort,
-		Path:         anthropicCallbackPath,
-		State:        verifier,
-		Complete:     func(_ context.Context, callbackCode string) (string, error) { return callbackCode, nil },
-		Ctx:          ctx,
-	}); serverErr == nil {
+	if server, serverErr := startCallbackServer(anthropicCallbackPort); serverErr == nil {
 		callback = server
 		defer callback.Close()
+	} else if freeServer, freeErr := startCallbackServer(0); freeErr == nil {
+		callback = freeServer
+		defer callback.Close()
+	}
+	redirectURI := anthropicRedirectURI
+	if callback != nil {
+		redirectURI = callback.RedirectURI()
 	}
 
 	authParams := url.Values{}
 	authParams.Set("code", "true")
 	authParams.Set("client_id", anthropicOAuthClientID)
 	authParams.Set("response_type", "code")
-	authParams.Set("redirect_uri", anthropicRedirectURI)
+	authParams.Set("redirect_uri", redirectURI)
 	authParams.Set("scope", anthropicOAuthScopes)
 	authParams.Set("code_challenge", challenge)
 	authParams.Set("code_challenge_method", "S256")
@@ -202,7 +221,7 @@ func loginAnthropic(ctx context.Context, interaction AuthInteraction, options *L
 	})
 
 	result, err := WaitForCallbackOrManualInput[string](interaction, callback,
-		"Complete login in your browser, or paste the authorization code / redirect URL here:", anthropicRedirectURI)
+		"Complete login in your browser, or paste the authorization code / redirect URL here:", redirectURI)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +244,7 @@ func loginAnthropic(ctx context.Context, interaction AuthInteraction, options *L
 		return nil, fmt.Errorf("Missing OAuth state")
 	}
 	interaction.Notify(AuthEvent{Type: "progress", Message: "Exchanging authorization code for tokens..."})
-	return exchangeAnthropicAuthorizationCode(ctx, code, state, verifier, anthropicRedirectURI)
+	return exchangeAnthropicAuthorizationCode(ctx, code, state, verifier, redirectURI)
 }
 
 func orDefaultString(value string, fallback string) string {

@@ -319,6 +319,10 @@ type LoginOptions struct {
 	// it, so apps can create the ID on first use and must return the same
 	// ID on every later call.
 	GetDeviceId func() string
+	// AgentName is the name this app introduces itself with during login,
+	// e.g. OpenAI's agent name hint and Codex originator. Defaults to pi's
+	// own name (pig keeps the pi spelling as the default protocol value).
+	AgentName string
 }
 
 // OAuthAuth is OAuth auth. The Refresh/ToAuth split lets Models own the

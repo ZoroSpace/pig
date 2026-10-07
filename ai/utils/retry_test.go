@@ -50,6 +50,19 @@ func TestIsRetryableAssistantErrorMatches520(t *testing.T) {
 	}
 }
 
+func TestIsRetryableAssistantErrorMatchesServerBusy(t *testing.T) {
+	// Regression for pi #10543: transient server-busy provider errors.
+	for _, errorMessage := range []string{
+		"server_busy",
+		"All servers are currently busy, please try again.",
+	} {
+		message := retryTestMessage("", types.StopReasonError, errorMessage)
+		if !IsRetryableAssistantError(message) {
+			t.Fatalf("%q should be retryable", errorMessage)
+		}
+	}
+}
+
 func TestIsRetryableAssistantErrorMatchesPendingStreamCanceled(t *testing.T) {
 	// Regression for pi #10379: Bedrock HTTP/2 pending stream cancellation.
 	for _, errorMessage := range []string{

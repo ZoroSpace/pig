@@ -51,6 +51,8 @@ var nonRetryableProviderLimitErrorPattern = buildProviderErrorPattern([]string{
 var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	// Generic provider load, HTTP status, and server-side transient failures.
 	"overloaded",
+	"server_busy",
+	"servers are currently busy",
 	"currently experiencing high demand",
 	"model is at capacity",
 	"rate.?limit",

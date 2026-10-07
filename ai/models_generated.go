@@ -43862,6 +43862,26 @@ var CLASSIFIER_MODELS = map[ProviderID]map[string]Model{
 			MaxTokens:     0,
 		},
 	},
+	ProviderOpenAI: {
+		"gpt-6-luna": {
+			ID:        "gpt-6-luna",
+			Name:      "GPT-6 Luna",
+			API:       Api("openai-decisions"),
+			Provider:  ProviderOpenAI,
+			BaseURL:   "https://api.openai.com/v1",
+			Type:      ModelTypeClassifier,
+			Reasoning: false,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.1, Output: 0, CacheRead: 0, CacheWrite: 0},
+				Tiers: []ModelCostTier{
+					{ModelCostRates: ModelCostRates{Input: 0.2, Output: 0, CacheRead: 0, CacheWrite: 0}, InputTokensAbove: 272000},
+				},
+			},
+			ContextWindow: 922000,
+			MaxTokens:     0,
+		},
+	},
 	ProviderOpenCode: {
 		"jev-1.13": {
 			ID:            "jev-1.13",

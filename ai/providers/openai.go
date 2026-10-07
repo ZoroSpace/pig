@@ -23,5 +23,20 @@ func OpenAIProvider() ai.Provider {
 		},
 		Models: GetBuiltinModels(types.ProviderOpenAI),
 		API:    api.OpenAIResponses{},
+		// Sign in with ChatGPT tokens only reach the Responses API; the
+		// Decisions API rejects them (pi: filterAllModels).
+		FilterAllModels: func(models []ai.Model, credential auth.Credential) []ai.Model {
+			if credential == nil || credential.CredentialType() != auth.CredentialTypeOAuth {
+				return models
+			}
+			available := make([]ai.Model, 0, len(models))
+			for _, model := range models {
+				if model.Type == ai.ModelTypeClassifier {
+					continue
+				}
+				available = append(available, model)
+			}
+			return available
+		},
 	})
 }

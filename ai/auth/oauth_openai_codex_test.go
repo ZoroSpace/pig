@@ -747,6 +747,56 @@ func TestCodexOAuthBrowserLoginManualRedirect(t *testing.T) {
 	}
 }
 
+// TestCodexOAuthBrowserLoginUsesAgentNameAsOriginator covers pi #10433: the
+// app's LoginOptions.AgentName replaces pi's name in the Codex originator.
+func TestCodexOAuthBrowserLoginUsesAgentNameAsOriginator(t *testing.T) {
+	accessToken := codexTestAccessToken("account-agent-name")
+	var authURL string
+	stubCodexOAuthDo(t, func(method, requestURL, contentType, body string) (*http.Response, error) {
+		if requestURL != "https://auth.openai.com/oauth/token" {
+			return nil, fmt.Errorf("Unexpected fetch URL: %s", requestURL)
+		}
+		return codexTestJSONResponse(200, fmt.Sprintf(`{"access_token":%q,"refresh_token":"refresh-token","expires_in":3600}`, accessToken)), nil
+	})
+
+	interaction := &oauthTestInteraction{
+		prompt: func(prompt AuthPrompt) (string, error) {
+			switch prompt.Type {
+			case "select":
+				return "browser", nil
+			case "manual_code":
+				parsed, err := url.Parse(authURL)
+				if err != nil {
+					return "", err
+				}
+				state := parsed.Query().Get("state")
+				if state == "" {
+					return "", errors.New("auth URL carries no state")
+				}
+				return "http://localhost:1455/auth/callback?code=browser-code&state=" + state, nil
+			default:
+				return "", fmt.Errorf("Unexpected prompt: %s", prompt.Type)
+			}
+		},
+		notify: func(event AuthEvent) {
+			if event.Type == "auth_url" {
+				authURL = event.URL
+			}
+		},
+	}
+
+	if _, err := (OpenAICodexOAuth{}).Login(context.Background(), interaction, &LoginOptions{AgentName: "my-app"}); err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parsed.Query().Get("originator"); got != "my-app" {
+		t.Errorf("auth URL originator = %q, want my-app", got)
+	}
+}
+
 // TestCodexOAuthBrowserLoginStateMismatch covers the manual-input state
 // check (pi: parsed.state !== state → "State mismatch").
 func TestCodexOAuthBrowserLoginStateMismatch(t *testing.T) {

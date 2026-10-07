@@ -341,6 +341,7 @@ func generateModels(ctx context.Context) error {
 	}
 	classifierModels = append(classifierModels, opencodeClassifierModels()...)
 	classifierModels = append(classifierModels, cloudflareWorkersAIClassifierModels()...)
+	classifierModels = append(classifierModels, openAIClassifierModels()...)
 
 	providers := map[ai.ProviderID]*providerCatalog{}
 	for _, model := range allModels {
@@ -705,6 +706,34 @@ func cloudflareWorkersAIClassifierModels() []*ai.Model {
 			Input:         []ai.ModelInput{ai.ModelInputText},
 			Cost:          ai.ModelCost{},
 			ContextWindow: 32000,
+		},
+	}
+}
+
+// openAIClassifierModels are the hardcoded OpenAI Decisions classifiers (pi:
+// OPENAI_CLASSIFIER_MODELS). The model needs an API key and is hidden from
+// availability while openai uses Sign in with ChatGPT.
+// https://developers.openai.com/api/docs/guides/decisions
+func openAIClassifierModels() []*ai.Model {
+	return []*ai.Model{
+		// OpenAI Decisions API (public beta): gpt-6-luna is its only model.
+		// It bills input tokens only, with the same long-context multiplier
+		// as chat requests. Only API keys work: Sign in with ChatGPT tokens
+		// are rejected on /v1/decisions, and the Codex backend has no
+		// Decisions route. The endpoint rejects inputs above 922K tokens (the
+		// model's documented maximum input), but requests running longer than
+		// about five seconds, currently above roughly 600K input tokens, fail
+		// with a gateway timeout.
+		{
+			Type:          ai.ModelTypeClassifier,
+			ID:            "gpt-6-luna",
+			Name:          "GPT-6 Luna",
+			API:           ai.ClassifierApiOpenAIDecisions,
+			Provider:      ai.ProviderOpenAI,
+			BaseURL:       "https://api.openai.com/v1",
+			Input:         []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          withOpenAiLongContextPricing(ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 0.1, Output: 0, CacheRead: 0, CacheWrite: 0}}),
+			ContextWindow: 922000,
 		},
 	}
 }

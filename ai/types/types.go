@@ -75,6 +75,11 @@ const (
 	// ClassifierApiLlamaCpp is llama.cpp next-token classification (pi:
 	// "llama-cpp-classify"; pig has no llama.cpp provider).
 	ClassifierApiLlamaCpp Api = "llama-cpp-classify"
+	// ClassifierApiOpenAIDecisions is OpenAI's Decisions classification
+	// protocol, gpt-6-luna's only API (pi: KnownClassifierApi
+	// "openai-decisions"; used by catalog entries only — pig does not port
+	// the classify() runtime).
+	ClassifierApiOpenAIDecisions Api = "openai-decisions"
 )
 
 // ProviderID identifies a provider (openai, openrouter, a local vLLM, ...).
@@ -922,8 +927,14 @@ type AssistantMessage struct {
 	// ended its turn; preserved for debugging and does not currently affect
 	// agent control flow.
 	EndTurn *bool `json:"endTurn,omitempty"`
-	// Timestamp is a Unix timestamp in milliseconds.
+	// Timestamp is a Unix timestamp in milliseconds — when the request
+	// started.
 	Timestamp int64 `json:"timestamp"`
+	// DurationMs is milliseconds from Timestamp until the response ended,
+	// measured with a monotonic clock. Set by AssistantMessageEventStream on
+	// the final message of a response it saw start; absent for legacy
+	// messages and for deferred results fetched later.
+	DurationMs *int64 `json:"durationMs,omitempty"`
 }
 
 // ToolResultMessage reports the outcome of one tool call back to the model.
@@ -938,8 +949,12 @@ type ToolResultMessage struct {
 	// part of main LLM context accounting.
 	Usage   *Usage `json:"usage,omitempty"`
 	IsError bool   `json:"isError"`
-	// Timestamp is a Unix timestamp in milliseconds.
+	// Timestamp is a Unix timestamp in milliseconds — when the result was
+	// created.
 	Timestamp int64 `json:"timestamp"`
+	// DurationMs is milliseconds the tool's execution took, measured with a
+	// monotonic clock. Absent for legacy results.
+	DurationMs *int64 `json:"durationMs,omitempty"`
 }
 
 // Message is a session-history entry. Concrete types: UserMessage,

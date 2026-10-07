@@ -182,6 +182,27 @@ func TestChatGPTOAuthAuthorizeURLCarriesTheRegistrationParameters(t *testing.T) 
 	}
 }
 
+// TestChatGPTOAuthUsesAgentNameAsNameHint covers pi #10433: the app's
+// LoginOptions.AgentName replaces pi's name in the agent_name_hint.
+func TestChatGPTOAuthUsesAgentNameAsNameHint(t *testing.T) {
+	stubChatGPTOAuthDo(t, func(_ context.Context, method, requestURL, contentType, body string) (*http.Response, error) {
+		if requestURL != chatGPTTokenURL {
+			return nil, fmt.Errorf("Unexpected fetch URL: %s", requestURL)
+		}
+		return chatGPTTestJSONResponse(t, 200, chatGPTTestTokenJSON(t, "")), nil
+	})
+	interaction := &chatGPTTestInteraction{callbackClientID: "oaiapp_issued", t: t}
+	if _, err := loginOpenAIChatGPT(context.Background(), interaction, &LoginOptions{
+		GetDeviceId: func() string { return chatGPTTestDeviceID },
+		AgentName:   "my-app",
+	}); err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	if got := interaction.authorizeURL.Query().Get("agent_name_hint"); got != "my-app" {
+		t.Errorf("agent_name_hint = %q, want my-app", got)
+	}
+}
+
 func TestChatGPTOAuthRejectsRegistrationWithoutIssuedClientID(t *testing.T) {
 	tokenCalled := false
 	stubChatGPTOAuthDo(t, func(_ context.Context, method, requestURL, contentType, body string) (*http.Response, error) {

@@ -37,6 +37,7 @@ const (
 	ClassifierApiTypesafeSystemOne   = types.ClassifierApiTypesafeSystemOne
 	ClassifierApiCloudflareWorkersAI = types.ClassifierApiCloudflareWorkersAI
 	ClassifierApiLlamaCpp            = types.ClassifierApiLlamaCpp
+	ClassifierApiOpenAIDecisions     = types.ClassifierApiOpenAIDecisions
 )
 
 const (

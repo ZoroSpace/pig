@@ -7,7 +7,7 @@ import (
 // pi: api/lazy.ts, ported into package ai because models.go consumes it (a
 // separate subpackage would cycle).
 
-func createSetupErrorMessage(model *Model, err error) *AssistantMessage {
+func createSetupErrorMessage(model *Model, err error, startedAt int64) *AssistantMessage {
 	return &AssistantMessage{
 		Role:         RoleAssistant,
 		Content:      []Content{},
@@ -17,19 +17,22 @@ func createSetupErrorMessage(model *Model, err error) *AssistantMessage {
 		Usage:        Usage{},
 		StopReason:   StopReasonError,
 		ErrorMessage: err.Error(),
-		Timestamp:    time.Now().UnixMilli(),
+		Timestamp:    startedAt,
 	}
 }
 
 // LazyStream returns a stream synchronously while running async setup (auth
 // resolution, lazy module loading) behind it. Setup failures terminate the
-// stream with an error event.
+// stream with an error event. The setup-error message timestamps from the
+// stream's wall-clock start (pi 3ba22ce17), not from when setup failed, so
+// the event stream's response timing window covers it.
 func LazyStream(model *Model, setup func() (*AssistantMessageEventStream, error)) *AssistantMessageEventStream {
+	startedAt := time.Now().UnixMilli()
 	outer := NewAssistantMessageEventStream()
 	go func() {
 		inner, err := setup()
 		if err != nil {
-			message := createSetupErrorMessage(model, err)
+			message := createSetupErrorMessage(model, err, startedAt)
 			outer.Push(AssistantMessageEvent{Type: EventError, Reason: StopReasonError, Message: message})
 			outer.EndWith(*message)
 			return
