@@ -9,7 +9,10 @@
 //   - The temp file write stream becomes a plain file handle.
 //   - pi's TextDecoder(stream:true) → a local UTF-8 chunk decoder with the
 //     same streaming semantics (incomplete sequences buffered, invalid bytes
-//     become U+FFFD).
+//     become U+FFFD; the no-argument decode() flush is flush()).
+//   - The unfinished-ANSI buffering + split (pi 27c7b6ff4) lives in
+//     utils.SplitIncompleteAnsiSuffix; the abort path is folded into the
+//     single post-exec result assembly like pi's try/catch.
 package core
 
 import (
@@ -53,8 +56,12 @@ type BashResult struct {
 }
 
 // bashExecutorDecoder decodes streamed bytes the way node's
-// setEncoding('utf8') does: incomplete sequences buffer until complete,
-// invalid bytes become U+FFFD.
+// TextDecoder(stream:true) does: incomplete sequences buffer until complete
+// (completed by a later chunk or flushed at end of stream), invalid bytes
+// become U+FFFD. Truncation is detected with utf8.FullRune: DecodeRune
+// reports an incomplete prefix and an invalid encoding identically as
+// (RuneError, 1), so the size alone cannot distinguish "buffer for later"
+// from "replace now".
 type bashExecutorDecoder struct {
 	pending []byte
 }
@@ -63,25 +70,37 @@ func (d *bashExecutorDecoder) chunk(data []byte) string {
 	if len(d.pending) > 0 {
 		d.pending = append(d.pending, data...)
 		data = d.pending
+		d.pending = nil
 	}
-	d.pending = d.pending[:0]
 	var out []byte
 	for len(data) > 0 {
 		r, size := utf8.DecodeRune(data)
 		if r == utf8.RuneError && size <= 1 {
+			if len(data) < utf8.UTFMax && !utf8.FullRune(data) {
+				// Incomplete sequence: buffer the remainder.
+				d.pending = append(d.pending, data...)
+				break
+			}
 			out = append(out, []byte("\uFFFD")...)
 			data = data[1:]
 			continue
-		}
-		if size > len(data) {
-			// Incomplete sequence: buffer the remainder.
-			d.pending = append(d.pending, data...)
-			break
 		}
 		out = append(out, data[:size]...)
 		data = data[size:]
 	}
 	return string(out)
+}
+
+// flush drains a buffered incomplete sequence at end of stream the way
+// node's no-argument decoder.decode() does: a truncated sequence decodes to
+// a single U+FFFD. chunk() only ever buffers one incomplete rune prefix, so
+// the pending bytes are always exactly one truncated sequence.
+func (d *bashExecutorDecoder) flush() string {
+	if len(d.pending) == 0 {
+		return ""
+	}
+	d.pending = nil
+	return "\uFFFD"
 }
 
 // ExecuteBashWithOperations executes a bash command using custom
@@ -122,12 +141,17 @@ func ExecuteBashWithOperations(ctx context.Context, command string, cwd string, 
 	}
 
 	var decoder bashExecutorDecoder
-	onData := func(data []byte) {
-		totalBytes += len(data)
+	// Unfinished escape sequence at the end of the previous chunk, completed
+	// by the next chunk (pi: pendingAnsi).
+	pendingAnsi := ""
 
+	appendText := func(rawText string) {
 		// Sanitize: strip ANSI, replace binary garbage, normalize newlines.
-		text := codingagentutils.SanitizeBinaryOutput(codingagentutils.StripAnsi(decoder.chunk(data)))
+		text := codingagentutils.SanitizeBinaryOutput(codingagentutils.StripAnsi(rawText))
 		text = strings.ReplaceAll(text, "\r", "")
+		if text == "" {
+			return
+		}
 
 		// Start writing to the temp file once the threshold is exceeded.
 		if totalBytes > harnessutils.DefaultMaxBytes {
@@ -152,32 +176,31 @@ func ExecuteBashWithOperations(ctx context.Context, command string, cwd string, 
 		}
 	}
 
+	onData := func(data []byte) {
+		totalBytes += len(data)
+		complete, pending := codingagentutils.SplitIncompleteAnsiSuffix(pendingAnsi + decoder.chunk(data))
+		pendingAnsi = pending
+		appendText(complete)
+	}
+
+	flushOutput := func() {
+		rest := pendingAnsi + decoder.flush()
+		pendingAnsi = ""
+		appendText(rest)
+	}
+
 	exitCode, err := operations.Exec(ctx, command, cwd, &tools.BashExecOptions{OnData: onData})
-	if err != nil {
-		// Check whether this was an abort (pi: signal.aborted).
-		if ctx.Err() != nil {
-			fullOutput := strings.Join(outputChunks, "")
-			truncationResult := harnessutils.TruncateTail(fullOutput, nil)
-			if truncationResult.Truncated {
-				_ = ensureTempFile()
-			}
-			if tempFile != nil {
-				_ = tempFile.Close()
-			}
-			return BashResult{
-				Output:         truncationResult.Content,
-				ExitCode:       nil,
-				Cancelled:      true,
-				Truncated:      truncationResult.Truncated,
-				FullOutputPath: tempFilePath,
-			}, nil
-		}
+	// An aborted command still returns the output it produced so far: flush
+	// and assemble the result on both the success and the abort path; only a
+	// non-abort error rethrows (pi: single-exit try/catch).
+	if err != nil && ctx.Err() == nil {
 		if tempFile != nil {
 			_ = tempFile.Close()
 		}
 		return BashResult{}, err
 	}
 
+	flushOutput()
 	fullOutput := strings.Join(outputChunks, "")
 	truncationResult := harnessutils.TruncateTail(fullOutput, nil)
 	if truncationResult.Truncated {

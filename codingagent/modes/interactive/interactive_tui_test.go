@@ -99,6 +99,7 @@ func newCopySelectionFixture(t *testing.T, fullscreenCopyOnSelect bool) *copySel
 	}
 	f.mode = newSeamTestMode(session, nil)
 	f.mode.ui = f.ui
+	f.mode.renderer = f.ui
 
 	f.ui.AddChild(tui.NewText("alpha\nbeta\ngamma\ndelta", 0, 0))
 	return f
@@ -151,6 +152,35 @@ func TestInteractiveTuiCopiesAssistantMessageWhenCopyOnSelectEnabled(t *testing.
 
 	if len(f.copied) != 1 || f.copied[0] != "assistant response" {
 		t.Fatalf("copied = %v, want the assistant response", f.copied)
+	}
+}
+
+// pi: "drops the fullscreen selection when session entries are re-rendered"
+// (#9311 regression): selection coordinates survived session switches and
+// other transcript rebuilds, highlighting unrelated text in the new
+// transcript.
+func TestInteractiveTuiRenderSessionEntriesDropsSelection(t *testing.T) {
+	f := newCopySelectionFixture(t, false)
+	f.ui.Start()
+	t.Cleanup(func() { f.ui.Stop(nil) })
+
+	f.terminal.WaitForRender()
+	f.terminal.SendInput("\x1b[<0;1;1M")  // press (1,1)
+	f.terminal.SendInput("\x1b[<32;4;2M") // drag (4,2)
+	f.terminal.SendInput("\x1b[<0;4;2m")  // release (4,2)
+	f.terminal.WaitForRender()
+	altScreen, ok := f.ui.(*tui.TuiAltScreen)
+	if !ok {
+		t.Fatal("renderer is not the alt screen")
+	}
+	if !altScreen.HasActiveSelection() {
+		t.Fatal("expected an active selection after drag")
+	}
+
+	f.mode.renderSessionEntries(nil, nil)
+
+	if altScreen.HasActiveSelection() {
+		t.Fatal("renderSessionEntries must drop the fullscreen selection")
 	}
 }
 

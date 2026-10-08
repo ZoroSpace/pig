@@ -2726,6 +2726,10 @@ type renderSessionOptions struct {
 // Used for initial load and rebuild after compaction (pi:
 // renderSessionEntries).
 func (m *InteractiveMode) renderSessionEntries(entries []core.SessionEntry, options *renderSessionOptions) {
+	// Selection coordinates point into the transcript being replaced (#9311).
+	if altScreen, ok := m.renderer.(*tui.TuiAltScreen); ok {
+		altScreen.ResetTextSelection()
+	}
 	var items []renderSessionItem
 	for _, entry := range entries {
 		if custom, ok := entry.(*core.CustomEntry); ok {

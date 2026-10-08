@@ -2145,6 +2145,15 @@ func (t *TuiAltScreen) CopyActiveSelectionToClipboard() bool {
 	return ok
 }
 
+// ResetTextSelection drops the text selection and multi-click history, e.g.
+// before the host replaces the transcript (pi: resetTextSelection).
+func (t *TuiAltScreen) ResetTextSelection() {
+	t.lock(func() {
+		t.clearTextSelection()
+		t.lastClick = nil
+	})
+}
+
 func (t *TuiAltScreen) applySearchTextHighlight(text string, current bool) string {
 	style := t.searchMatchStyle
 	if current {

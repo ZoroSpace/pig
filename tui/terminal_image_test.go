@@ -35,6 +35,7 @@ var capabilityEnvKeys = []string{
 	"WARP_SESSION_ID",
 	"WARP_TERMINAL_SESSION_UUID",
 	"PI_TRUE_COLOR",
+	"PI_HYPERLINKS",
 }
 
 // withCapabilityEnv clears the detection environment, applies overrides,
@@ -116,6 +117,56 @@ func TestGetCapabilitiesDetectsTrueColor(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestGetCapabilitiesDetectsHerdrHyperlinks(t *testing.T) {
+	// #10573 ports (pi b2363841a): Herdr forwards OSC 8 hyperlinks with image
+	// protocols off, and it is checked before outer-terminal detection so
+	// leaked variables like KITTY_WINDOW_ID do not enable images inside
+	// Herdr panes.
+	t.Run("enables hyperlinks without images for Herdr", func(t *testing.T) {
+		withCapabilityEnv(t, map[string]string{
+			"TERM_PROGRAM": "herdr", "TERM": "xterm-256color",
+			"COLORTERM": "truecolor", "KITTY_WINDOW_ID": "1",
+		}, func() {
+			caps := GetCapabilities()
+			if !caps.Hyperlinks {
+				t.Fatal("Hyperlinks = false, want true for Herdr")
+			}
+			if caps.Images != nil && caps.Images != false {
+				t.Fatalf("Images = %v, want off (pi images:null) under Herdr", caps.Images)
+			}
+			if !caps.TrueColor {
+				t.Fatal("TrueColor = false, want the COLORTERM hint")
+			}
+		})
+	})
+
+	t.Run("PI_HYPERLINKS forces both directions", func(t *testing.T) {
+		withCapabilityEnv(t, map[string]string{"TERM_PROGRAM": "herdr", "PI_HYPERLINKS": "0"}, func() {
+			if GetCapabilities().Hyperlinks {
+				t.Fatal("PI_HYPERLINKS=0 must force hyperlinks off")
+			}
+		})
+		withCapabilityEnv(t, map[string]string{"TERM": "xterm-256color", "PI_HYPERLINKS": "1"}, func() {
+			if !GetCapabilities().Hyperlinks {
+				t.Fatal("PI_HYPERLINKS=1 must force hyperlinks on")
+			}
+		})
+	})
+
+	t.Run("leaked kitty variables do not enable truecolor inside Herdr", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("windows console detection forces truecolor")
+		}
+		withCapabilityEnv(t, map[string]string{
+			"TERM_PROGRAM": "herdr", "TERM": "xterm-256color", "KITTY_WINDOW_ID": "1",
+		}, func() {
+			if GetCapabilities().TrueColor {
+				t.Fatal("Herdr must not inherit kitty truecolor from leaked variables")
+			}
+		})
+	})
 }
 
 func TestGetCapabilitiesTrueColorOverrides(t *testing.T) {

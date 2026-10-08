@@ -15,9 +15,10 @@
 //   - The `trueColor` branch of pi's detectCapabilitiesFromEnvironment *is*
 //     ported (2026-10-01 fix): the theme picked its color mode from it, so
 //     leaving it at false silently quantized every theme color to the
-//     256-color palette. The images/hyperlinks branches stay deferred (pi's
-//     hyperlink branch needs the tmux forwarding probe, the image branch
-//     needs the Phase 8 image pipeline).
+//     256-color palette. The `hyperlinks` branch is ported for the terminals
+//     S16-3 brought (Herdr, pi b2363841a); its remaining branches (the tmux
+//     client_termfeatures probe and the kitty/ghostty/... families) stay
+//     deferred together with the images half and the Phase 8 image pipeline.
 package tui
 
 import (
@@ -90,18 +91,25 @@ func SetCellDimensions(dims CellDimensions) {
 
 // GetCapabilities returns the cached terminal capabilities. TrueColor is
 // auto-detected from the environment (detectTrueColorCapability) with the
-// PI_TRUE_COLOR override on top; what a caller forces via
+// PI_TRUE_COLOR override on top, and Hyperlinks from
+// detectHyperlinksCapability with PI_HYPERLINKS; what a caller forces via
 // SetCapabilityOverrides (user settings' `terminal.*`) wins over both
 // (pi: getCapabilities spreads capabilityOverrides over
-// detectCapabilities). Images/hyperlinks detection is still deferred to
-// Phase 8, so they keep their zero values unless overridden.
+// detectCapabilities). Images detection is still deferred to Phase 8, so
+// it keeps its zero value unless overridden.
 func GetCapabilities() TerminalCapabilities {
 	capabilitiesMu.Lock()
 	defer capabilitiesMu.Unlock()
 	if cachedCapabilities == nil {
-		caps := TerminalCapabilities{TrueColor: detectTrueColorCapability()}
+		caps := TerminalCapabilities{
+			TrueColor:  detectTrueColorCapability(),
+			Hyperlinks: detectHyperlinksCapability(),
+		}
 		if override := parseBooleanCapabilityOverride(os.Getenv("PI_TRUE_COLOR")); override != nil {
 			caps.TrueColor = *override
+		}
+		if override := parseBooleanCapabilityOverride(os.Getenv("PI_HYPERLINKS")); override != nil {
+			caps.Hyperlinks = *override
 		}
 		applyCapabilityOverrides(&caps, capabilityOverrides)
 		cachedCapabilities = &caps
@@ -144,6 +152,14 @@ func detectTrueColorCapability() bool {
 
 	// screen does not forward OSC 8 hyperlinks, so keep them off there.
 	if strings.HasPrefix(term, "screen") {
+		return hasTrueColorHint
+	}
+
+	// Herdr forwards OSC 8 hyperlinks, but its trueColor follows the explicit
+	// hint only: it runs inside another terminal whose variables, such as
+	// KITTY_WINDOW_ID, may leak into its panes, so check it before the
+	// outer-terminal detection (pi b2363841a #10573).
+	if termProgram == "herdr" {
 		return hasTrueColorHint
 	}
 
@@ -191,6 +207,36 @@ func detectTrueColorCapability() bool {
 	// Unknown terminal: be conservative and trust only an explicit hint (pi:
 	// hasTrueColorHint).
 	return hasTrueColorHint
+}
+
+// detectHyperlinksCapability reports whether the terminal renders OSC 8
+// hyperlinks. This is the hyperlinks branch of pi's
+// detectCapabilitiesFromEnvironment, landed incrementally: S16-3 brought the
+// Herdr branch (pi b2363841a #10573); the remaining branches stay deferred
+// with the Phase 8 image pipeline (the tmux branch needs the
+// client_termfeatures probe, and flipping hyperlinks on for the
+// kitty/ghostty/... families is a user-visible switch pig has so far kept
+// off).
+func detectHyperlinksCapability() bool {
+	termProgram := strings.ToLower(os.Getenv("TERM_PROGRAM"))
+
+	// pi: tmux branch (term prefix + TMUX env) — hyperlinks only when `tmux
+	// display-message -p '#{client_termfeatures}'` lists `hyperlinks`.
+	// Deferred with Phase 8. pi: screen branch — screen does not forward
+	// OSC 8 hyperlinks; false. Deferred with Phase 8.
+
+	// Herdr forwards OSC 8 hyperlinks. It runs inside another terminal whose
+	// variables, such as KITTY_WINDOW_ID, may leak into its panes, so check
+	// it first and leave image protocols off (pi b2363841a #10573).
+	if termProgram == "herdr" {
+		return true
+	}
+
+	// pi: kitty / ghostty / wezterm / warp / iterm.app / WT_SESSION /
+	// alacritty / vscode / zed branches → hyperlinks true;
+	// jetbrains-jediterm / windows console / unknown → false. Deferred with
+	// Phase 8.
+	return false
 }
 
 // applyCapabilityOverrides spreads non-empty overrides over caps (pig helper
