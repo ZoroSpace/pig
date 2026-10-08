@@ -576,6 +576,53 @@ func isToolModifier(entry string) bool {
 	return strings.HasPrefix(entry, "+") || strings.HasPrefix(entry, "-")
 }
 
+// GetToolListError validates a tool list from `--tools` or the SDK `tools`
+// option. It is either an allowlist of plain names and patterns or a list of
+// only `+name`/`-name` entries with exact names. Returns the problem, or ""
+// when the list is valid (pi: getToolListError, #10549).
+func GetToolListError(entries []string) string {
+	var modifiers []string
+	for _, entry := range entries {
+		if isToolModifier(entry) {
+			modifiers = append(modifiers, entry)
+		}
+	}
+	if len(modifiers) == 0 {
+		return ""
+	}
+	if len(modifiers) < len(entries) {
+		return "tool names cannot be mixed with +name or -name entries"
+	}
+	for _, entry := range modifiers {
+		if strings.Contains(entry, "*") {
+			return fmt.Sprintf("+name and -name entries take exact tool names, not patterns: %s", entry)
+		}
+	}
+	return ""
+}
+
+// applyToolModifiers applies the `+name` and `-name` entries of entries to
+// base in order: `+name` adds a tool and `-name` removes one. Other entries
+// are ignored (pi: applyToolModifiers, #10549).
+func applyToolModifiers(base []string, entries []string) []string {
+	toolsList := append([]string(nil), base...)
+	for _, entry := range entries {
+		if !isToolModifier(entry) {
+			continue
+		}
+		name := entry[1:]
+		index := slices.Index(toolsList, name)
+		if strings.HasPrefix(entry, "+") {
+			if index == -1 && name != "" {
+				toolsList = append(toolsList, name)
+			}
+		} else if index != -1 {
+			toolsList = slices.Delete(toolsList, index, index+1)
+		}
+	}
+	return toolsList
+}
+
 // allToolModifiers reports whether every entry is a modifier (pi: the
 // overrides.every(isToolModifier) check in mergeDefaultTools).
 func allToolModifiers(entries []string) bool {
@@ -614,27 +661,11 @@ func resolveDefaultTools(entries []string) []string {
 			plain = append(plain, entry)
 		}
 	}
-	var toolsList []string
-	if len(plain) > 0 || len(entries) == 0 {
-		toolsList = plain
-	} else {
-		toolsList = append([]string(nil), DefaultToolNames...)
+	base := plain
+	if len(plain) == 0 && len(entries) > 0 {
+		base = DefaultToolNames
 	}
-	for _, entry := range entries {
-		if !isToolModifier(entry) {
-			continue
-		}
-		name := entry[1:]
-		index := slices.Index(toolsList, name)
-		if strings.HasPrefix(entry, "+") {
-			if index == -1 && name != "" {
-				toolsList = append(toolsList, name)
-			}
-		} else if index != -1 {
-			toolsList = slices.Delete(toolsList, index, index+1)
-		}
-	}
-	return toolsList
+	return applyToolModifiers(base, entries)
 }
 
 // parseTimeoutSetting parses an optional timeout setting, erroring on

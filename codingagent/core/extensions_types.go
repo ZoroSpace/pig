@@ -1113,6 +1113,9 @@ type ToolExecutionEndEvent struct {
 	ToolName   string                `json:"toolName"`
 	Result     agent.AgentToolResult `json:"result"`
 	IsError    bool                  `json:"isError"`
+	// DurationMs is how long Execute took, measured with a monotonic clock;
+	// absent when the tool did not run (pi: durationMs, #10549).
+	DurationMs *int64 `json:"durationMs,omitempty"`
 }
 
 func (e *ToolExecutionEndEvent) EventType() string { return e.Type }

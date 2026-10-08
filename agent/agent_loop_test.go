@@ -348,6 +348,74 @@ func TestAgentLoopHandlesToolCallsAndResults(t *testing.T) {
 	}
 }
 
+// pi: agent-loop.test.ts #10549 — the tool result carries how long execute()
+// took, excluding the before/after hooks, and a tool that never ran has no
+// duration.
+func TestAgentLoopRecordsToolExecutionDuration(t *testing.T) {
+	tool := &AgentTool{
+		Tool:  types.Tool{Name: "echo", Description: "Echo tool", Parameters: echoToolSchema(t)},
+		Label: "Echo",
+		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate AgentToolUpdateCallback) (AgentToolResult, error) {
+			time.Sleep(30 * time.Millisecond)
+			return AgentToolResult{Content: []types.Content{types.NewTextContent(params.(map[string]any)["value"].(string))}}, nil
+		},
+	}
+
+	config := AgentLoopConfig{
+		Model:        createModel(),
+		ConvertToLlm: identityConverter,
+		BeforeToolCall: func(ctx context.Context, hookContext BeforeToolCallContext) (*BeforeToolCallResult, error) {
+			// The hook must not be counted toward the tool's duration.
+			time.Sleep(100 * time.Millisecond)
+			if hookContext.ToolCall.ID == "blocked" {
+				return &BeforeToolCallResult{Block: true, Reason: "no"}, nil
+			}
+			return nil, nil
+		},
+	}
+
+	callIndex := 0
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *types.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		var message types.AssistantMessage
+		if callIndex == 0 {
+			message = createAssistantMessage([]types.Content{
+				types.NewToolCall("ran", "echo", map[string]any{"value": "a"}),
+				types.NewToolCall("blocked", "echo", map[string]any{"value": "b"}),
+			}, types.StopReasonToolUse)
+		} else {
+			message = createAssistantMessage([]types.Content{types.NewTextContent("done")}, "")
+		}
+		callIndex++
+		return mockStreamFn(doneEvent(message))(ctx, model, llmContext, options)
+	}
+
+	stream := AgentLoop(context.Background(), []AgentMessage{createUserMessage("go")}, AgentContext{Tools: []*AgentTool{tool}}, config, streamFn)
+	_, messages := collectEvents(t, stream)
+
+	var results []types.ToolResultMessage
+	for _, message := range messages {
+		if result, ok := message.(types.ToolResultMessage); ok {
+			results = append(results, result)
+		}
+	}
+	if len(results) != 2 {
+		t.Fatalf("tool results = %d, want 2", len(results))
+	}
+	ran, blocked := results[0], results[1]
+	if ran.DurationMs == nil {
+		t.Fatal("ran tool result has no durationMs")
+	}
+	if *ran.DurationMs < 25 || *ran.DurationMs >= 100 {
+		t.Fatalf("ran durationMs = %d, want [25, 100)", *ran.DurationMs)
+	}
+	if !blocked.IsError {
+		t.Fatalf("blocked tool result IsError = false, want true")
+	}
+	if blocked.DurationMs != nil {
+		t.Fatalf("blocked tool result durationMs = %d, want absent", *blocked.DurationMs)
+	}
+}
+
 func TestAgentLoopDoesNotExecuteToolCallsFromLengthTruncatedMessage(t *testing.T) {
 	executed := []string{}
 	tool := &AgentTool{

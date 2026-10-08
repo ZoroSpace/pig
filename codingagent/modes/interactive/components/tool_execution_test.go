@@ -233,6 +233,31 @@ func TestToolExecutionBashNoDuplicateTruncationDetails(t *testing.T) {
 	}
 }
 
+// pi: tool-execution-component.test.ts #10549 — a final result's recorded
+// duration wins over the renderer's own clock, so it survives a reload (no
+// live MarkExecutionStarted) and a wrong wall clock.
+func TestToolExecutionBashShowsRecordedDuration(t *testing.T) {
+	initTestTheme(t)
+	duration := int64(4200)
+	render := func(live bool) string {
+		component := NewToolExecutionComponent("bash", "tool-bash-recorded", map[string]any{"command": "sleep 4"},
+			ToolExecutionOptions{}, tools.CreateBashToolDefinition(mustCwd(t), &tools.BashToolOptions{ExposeSessionEnvironment: boolPtr(false)}),
+			&toolExecutionFakeTUI{}, mustCwd(t))
+		if live {
+			component.MarkExecutionStarted()
+			component.UpdateResult(ToolExecutionResult{Content: []types.Content{}, IsError: false}, true)
+		}
+		component.UpdateResult(ToolExecutionResult{Content: []types.Content{}, IsError: false, DurationMs: &duration}, false)
+		return renderedPlain(t, component, 120)
+	}
+	if got := render(true); !strings.Contains(got, "Took 4.2s") {
+		t.Fatalf("live render missing recorded duration: %q", got)
+	}
+	if got := render(false); !strings.Contains(got, "Took 4.2s") {
+		t.Fatalf("restored render missing recorded duration: %q", got)
+	}
+}
+
 func TestToolExecutionNoDuplicateHeadersWithBuiltinDefinition(t *testing.T) {
 	initTestTheme(t)
 	component := NewToolExecutionComponent("read", "tool-4", map[string]any{"path": "README.md"},

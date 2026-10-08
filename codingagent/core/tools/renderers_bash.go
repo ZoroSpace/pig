@@ -157,6 +157,7 @@ func rebuildBashResultRenderComponent(
 	showImages bool,
 	startedAt int64,
 	endedAt int64,
+	durationMs *int64,
 ) {
 	state := &component.state
 	component.Clear()
@@ -212,7 +213,12 @@ func rebuildBashResultRenderComponent(
 		component.AddChild(tui.NewText("\n"+theme.Fg("warning", "["+strings.Join(warnings, ". ")+"]"), 0, 0))
 	}
 
-	if startedAt != 0 {
+	// A final result's recorded duration wins: it is monotonic and survives
+	// reloads. The renderer's own clock is the fallback for live progress and
+	// for results stored without one (pi: #10549).
+	if !options.IsPartial && durationMs != nil {
+		component.AddChild(tui.NewText("\n"+theme.Fg("muted", fmt.Sprintf("Took %s", formatDuration(float64(*durationMs)))), 0, 0))
+	} else if startedAt != 0 {
 		label := "Took"
 		if options.IsPartial {
 			label = "Elapsed"
@@ -264,7 +270,7 @@ func CreateShellRenderers(prompt string) ToolRenderers {
 			} else {
 				component = &BashResultRenderComponent{}
 			}
-			rebuildBashResultRenderComponent(theme, component, result, options, context.ShowImages, state.StartedAt, state.EndedAt)
+			rebuildBashResultRenderComponent(theme, component, result, options, context.ShowImages, state.StartedAt, state.EndedAt, context.DurationMs)
 			component.Invalidate()
 			return component
 		},

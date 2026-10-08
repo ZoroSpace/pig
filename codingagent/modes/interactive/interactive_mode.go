@@ -2149,7 +2149,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 		if component != nil {
 			// pi spreads event.partialResult into updateResult (isError:
 			// false) — content AND details must surface (interactive-mode.ts:3351).
-			component.UpdateResult(resultToComponentResult(event.PartialResult, false), true)
+			component.UpdateResult(resultToComponentResult(event.PartialResult, false, nil), true)
 			m.ui.RequestRender(false)
 		}
 
@@ -2161,7 +2161,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 		}
 		m.pendingToolsMu.Unlock()
 		if component != nil {
-			component.UpdateResult(resultToComponentResult(event.Result, event.IsError), false)
+			component.UpdateResult(resultToComponentResult(event.Result, event.IsError, event.DurationMs), false)
 			m.ui.RequestRender(false)
 		}
 
@@ -2698,7 +2698,7 @@ func (m *InteractiveMode) renderSessionItems(items []renderSessionItem, options 
 				continue
 			}
 			if component := renderedPendingTools[toolResult.ToolCallID]; component != nil {
-				component.UpdateResult(resultToComponentResult(toolResult, false), false)
+				component.UpdateResult(resultToComponentResult(toolResult, false, toolResult.DurationMs), false)
 				delete(renderedPendingTools, toolResult.ToolCallID)
 			}
 		} else {
@@ -4023,8 +4023,8 @@ func loPtrInt(v int64) *int { i := int(v); return &i }
 // seams (interactive-mode.ts:3351/3360): tool_execution_update/end carry an
 // agent.AgentToolResult (content + details), while the session-restore path
 // (transcript entries) carries a ToolResultMessage — all forms must surface.
-func resultToComponentResult(result any, isError bool) components.ToolExecutionResult {
-	out := components.ToolExecutionResult{IsError: isError}
+func resultToComponentResult(result any, isError bool, durationMs *int64) components.ToolExecutionResult {
+	out := components.ToolExecutionResult{IsError: isError, DurationMs: durationMs}
 	switch r := result.(type) {
 	case agent.AgentToolResult:
 		out.Content = r.Content

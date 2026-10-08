@@ -94,6 +94,42 @@ func TestParseArgsModelsIgnoresEmptyEntries(t *testing.T) {
 	}
 }
 
+func TestParseArgsToolModifiers(t *testing.T) {
+	// pi: args.test.ts +name/-name tool modifiers (#10549).
+	t.Run("parses +name and -name tool modifiers", func(t *testing.T) {
+		result := ParseArgs([]string{"-t", "+codemode,-write"})
+		want := []string{"+codemode", "-write"}
+		if len(result.Tools) != 2 || result.Tools[0] != want[0] || result.Tools[1] != want[1] {
+			t.Fatalf("tools = %v, want %v", result.Tools, want)
+		}
+		if len(result.Diagnostics) != 0 {
+			t.Fatalf("diagnostics = %v, want none", result.Diagnostics)
+		}
+	})
+
+	t.Run("rejects tool names mixed with modifiers", func(t *testing.T) {
+		result := ParseArgs([]string{"--tools", "read,+codemode"})
+		if result.Tools != nil {
+			t.Fatalf("tools = %v, want unset", result.Tools)
+		}
+		want := ArgDiagnostic{Type: ArgDiagnosticError, Message: "--tools: tool names cannot be mixed with +name or -name entries"}
+		if len(result.Diagnostics) != 1 || result.Diagnostics[0] != want {
+			t.Fatalf("diagnostics = %+v, want [%+v]", result.Diagnostics, want)
+		}
+	})
+
+	t.Run("rejects patterns in tool modifiers", func(t *testing.T) {
+		result := ParseArgs([]string{"-t", "+mcp__radius__*"})
+		if result.Tools != nil {
+			t.Fatalf("tools = %v, want unset", result.Tools)
+		}
+		want := ArgDiagnostic{Type: ArgDiagnosticError, Message: "-t: +name and -name entries take exact tool names, not patterns: +mcp__radius__*"}
+		if len(result.Diagnostics) != 1 || result.Diagnostics[0] != want {
+			t.Fatalf("diagnostics = %+v, want [%+v]", result.Diagnostics, want)
+		}
+	})
+}
+
 func TestParseArgsNoMcp(t *testing.T) {
 	// pi v1.0.4: --no-mcp disables the built-in MCP support for one run.
 	result := ParseArgs([]string{"--no-mcp"})

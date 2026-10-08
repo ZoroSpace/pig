@@ -322,24 +322,52 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		thinkingLevel = ai.ClampThinkingLevel(model, ai.ModelThinkingLevel(thinkingLevel))
 	}
 
+	if options.Tools != nil {
+		if problem := GetToolListError(options.Tools); problem != "" {
+			return nil, fmt.Errorf("Invalid tools option: %s", problem)
+		}
+	}
 	configuredDefaultToolNames, hasConfiguredDefaultTools := settingsManager.GetDefaultTools()
-	allowedToolNames := options.Tools
-	if allowedToolNames == nil && options.NoTools == "all" {
+	var defaultToolNames []string
+	if options.NoTools != "" {
+		defaultToolNames = []string{}
+	} else if hasConfiguredDefaultTools {
+		defaultToolNames = configuredDefaultToolNames
+	} else {
+		defaultToolNames = DefaultToolNames
+	}
+	// A `tools` list of only `+name`/`-name` entries changes the default
+	// selection instead of replacing it, like the `defaultTools` setting
+	// (pi: #10549).
+	var toolModifiers []string
+	for _, entry := range options.Tools {
+		if isToolModifier(entry) {
+			toolModifiers = options.Tools
+			break
+		}
+	}
+	selectedToolNames := options.Tools
+	if toolModifiers != nil {
+		selectedToolNames = applyToolModifiers(defaultToolNames, toolModifiers)
+	}
+	var allowedToolNames []string
+	switch {
+	case toolModifiers != nil && options.NoTools == "all":
+		allowedToolNames = selectedToolNames
+	case toolModifiers != nil:
+		// Modifiers are not an allowlist: keep every tool available.
+	case options.Tools != nil:
+		allowedToolNames = options.Tools
+	case options.NoTools == "all":
 		allowedToolNames = []string{}
 	}
 	var excludedToolMatcher func(string) bool
 	if options.ExcludeTools != nil {
 		excludedToolMatcher = toolNameMatcher(options.ExcludeTools)
 	}
-	initialActiveToolNamesSource := options.Tools
+	initialActiveToolNamesSource := selectedToolNames
 	if initialActiveToolNamesSource == nil {
-		if options.NoTools != "" {
-			initialActiveToolNamesSource = []string{}
-		} else if hasConfiguredDefaultTools {
-			initialActiveToolNamesSource = configuredDefaultToolNames
-		} else {
-			initialActiveToolNamesSource = DefaultToolNames
-		}
+		initialActiveToolNamesSource = defaultToolNames
 	}
 	var initialActiveToolNames []string
 	for _, name := range initialActiveToolNamesSource {
@@ -447,7 +475,8 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		ModelRuntime:           modelRuntime,
 		CacheWarmer:            cacheWarmer,
 		InitialActiveToolNames: initialActiveToolNames,
-		UsesDefaultTools:       options.Tools == nil && options.NoTools == "",
+		UsesDefaultTools:       (options.Tools == nil || toolModifiers != nil) && options.NoTools == "",
+		DefaultToolModifiers:   toolModifiers,
 		AllowedToolNames:       allowedToolNames,
 		ExcludedToolNames:      options.ExcludeTools,
 		ExtensionRunnerRef:     extensionRunnerRef,

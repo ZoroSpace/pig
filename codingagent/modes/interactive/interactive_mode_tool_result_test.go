@@ -43,7 +43,7 @@ func probeAgentToolResult() agent.AgentToolResult {
 // the live tool_execution_end seam: pi passes the AgentToolResult through
 // verbatim, so content and details must survive (value and pointer forms).
 func TestResultToComponentResultCarriesAgentToolResult(t *testing.T) {
-	got := resultToComponentResult(probeAgentToolResult(), false)
+	got := resultToComponentResult(probeAgentToolResult(), false, nil)
 	if len(got.Content) != 1 {
 		t.Fatalf("content blocks = %d, want 1", len(got.Content))
 	}
@@ -70,7 +70,7 @@ func TestResultToComponentResultCarriesAgentToolResult(t *testing.T) {
 	}
 
 	probe := probeAgentToolResult()
-	got = resultToComponentResult(&probe, true)
+	got = resultToComponentResult(&probe, true, nil)
 	if len(got.Content) != 1 || got.Details == nil || !got.IsError {
 		t.Fatalf("pointer form lost payload: content=%d details=%v isError=%v",
 			len(got.Content), got.Details, got.IsError)
@@ -93,7 +93,7 @@ func TestResultToComponentResultKeepsToolResultMessage(t *testing.T) {
 		{"pointer", &value},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := resultToComponentResult(tc.in, true)
+			got := resultToComponentResult(tc.in, true, nil)
 			if len(got.Content) != 1 || got.Details == nil || !got.IsError {
 				t.Fatalf("content=%d details=%v isError=%v", len(got.Content), got.Details, got.IsError)
 			}
@@ -117,10 +117,10 @@ func TestLiveToolExecutionResultReachesBashRenderer(t *testing.T) {
 		&stubRequestRenderTUI{}, cwd,
 	)
 
-	component.UpdateResult(resultToComponentResult(probeAgentToolResult(), false), true)
+	component.UpdateResult(resultToComponentResult(probeAgentToolResult(), false, nil), true)
 	assertRenderContainsProbe(t, component, "partial update")
 
-	component.UpdateResult(resultToComponentResult(probeAgentToolResult(), false), false)
+	component.UpdateResult(resultToComponentResult(probeAgentToolResult(), false, nil), false)
 	assertRenderContainsProbe(t, component, "final result")
 }
 

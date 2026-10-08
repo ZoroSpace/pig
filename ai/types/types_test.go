@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/samber/lo"
@@ -93,6 +94,49 @@ func TestToolResultMessageRoundtrip(t *testing.T) {
 	out := roundtripMessage(t, in).(ToolResultMessage)
 	if !out.IsError || out.ToolCallID != "call-1" {
 		t.Fatalf("%+v", out)
+	}
+}
+
+// #10549 wire-compat gate: durationMs is an additive field on both assistant
+// and toolResult messages. Session lines stored before durations were
+// recorded decode with nil and must re-encode without the key; a recorded
+// duration round-trips as camelCase.
+func TestToolResultMessageDurationMsWireCompat(t *testing.T) {
+	legacy, err := DecodeMessage([]byte(`{"role":"toolResult","toolCallId":"call-1","toolName":"bash","content":[{"type":"text","text":"ok"}],"isError":false,"timestamp":4}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, ok := legacy.(ToolResultMessage)
+	if !ok {
+		t.Fatalf("%T", legacy)
+	}
+	if result.DurationMs != nil {
+		t.Fatalf("absent durationMs decoded as %d, want nil", *result.DurationMs)
+	}
+	data, err := json.Marshal(&result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "durationMs") {
+		t.Fatalf("nil durationMs must not be written: %s", data)
+	}
+
+	duration := int64(1234)
+	stamped := ToolResultMessage{Role: RoleToolResult, ToolCallID: "call-2", ToolName: "bash", DurationMs: &duration, Timestamp: 5}
+	data, err = json.Marshal(&stamped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"durationMs":1234`) {
+		t.Fatalf("recorded durationMs must round-trip: %s", data)
+	}
+	decoded, err := DecodeMessage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, ok = decoded.(ToolResultMessage)
+	if !ok || result.DurationMs == nil || *result.DurationMs != 1234 {
+		t.Fatalf("stamped durationMs lost: %#v", decoded)
 	}
 }
 

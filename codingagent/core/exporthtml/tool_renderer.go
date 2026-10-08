@@ -126,6 +126,7 @@ func (r *toolHTMLRenderer) createRenderContext(
 		Expanded:         expanded,
 		ShowImages:       false,
 		IsError:          isError,
+		DurationMs:       nil,
 	}
 }
 

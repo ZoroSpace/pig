@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -207,6 +208,27 @@ func TestDefaultToolsReloadActivatesNewlyAddedTools(t *testing.T) {
 		}
 	})
 
+	t.Run("keeps tools removed by -name tool options removed on reload", func(t *testing.T) {
+		writeSettings(t, map[string]any{"defaultTools": []string{"read"}})
+		session := createFileSession(t, &CreateAgentSessionOptions{Tools: []string{"-bash", "+grep"}})
+		defer session.Dispose()
+		got := session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"grep", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools = %v, want %v", got, want)
+		}
+
+		writeSettings(t, map[string]any{"defaultTools": []string{"read", "bash"}})
+		if err := session.Reload(context.Background(), nil); err != nil {
+			t.Fatal(err)
+		}
+		got = session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"grep", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools after reload = %v, want %v", got, want)
+		}
+	})
+
 	t.Run("keeps explicit tool options on reload", func(t *testing.T) {
 		allowlisted := createFileSession(t, &CreateAgentSessionOptions{Tools: []string{"read"}})
 		writeSettings(t, map[string]any{"defaultTools": []string{"+grep"}})
@@ -241,5 +263,83 @@ func TestDefaultToolsReloadActivatesNewlyAddedTools(t *testing.T) {
 			t.Fatalf("excluded active tools = %v, want %v", got, want)
 		}
 		excluded.Dispose()
+	})
+}
+
+// pi: test/default-tools-setting.test.ts "applies +name and -name tool
+// options to the default selection" and "rejects invalid tool modifier
+// options" (#10549). pig has no extension tools, so the built-in grep/find
+// (registered but inactive by default) play the role of pi's inactive_tool.
+func TestDefaultToolsToolModifierOptions(t *testing.T) {
+	tempDir := newTempDir(t)
+	agentDir := filepath.Join(tempDir, "agent")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeSettings := func(t *testing.T, settings map[string]any) {
+		t.Helper()
+		data, err := json.Marshal(settings)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(agentDir, "settings.json"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	createSession := func(t *testing.T, tools []string, noTools string) (*AgentSession, error) {
+		t.Helper()
+		settingsManager := CreateSettingsManager(tempDir, agentDir, nil)
+		sessionManager, err := InMemorySession(tempDir, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := CreateAgentSession(context.Background(), &CreateAgentSessionOptions{
+			Cwd:             tempDir,
+			AgentDir:        agentDir,
+			SessionManager:  sessionManager,
+			SettingsManager: settingsManager,
+			Tools:           tools,
+			NoTools:         noTools,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return result.Session, nil
+	}
+
+	t.Run("applies +name and -name tool options to the default selection", func(t *testing.T) {
+		writeSettings(t, map[string]any{"defaultTools": []string{"+grep"}})
+		session, err := createSession(t, []string{"-write", "+find"}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer session.Dispose()
+		got := session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"bash", "edit", "find", "grep", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools = %v, want %v", got, want)
+		}
+
+		writeSettings(t, map[string]any{"defaultTools": []string{"read"}})
+		toolLess, err := createSession(t, []string{"+grep"}, "all")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer toolLess.Dispose()
+		if got := toolLess.GetActiveToolNames(); !slices.Equal(got, []string{"grep"}) {
+			t.Fatalf("tool-less active tools = %v, want [grep]", got)
+		}
+	})
+
+	t.Run("rejects invalid tool modifier options", func(t *testing.T) {
+		writeSettings(t, map[string]any{})
+		if _, err := createSession(t, []string{"read", "+grep"}, ""); err == nil ||
+			!strings.Contains(err.Error(), "Invalid tools option: tool names cannot be mixed with +name or -name entries") {
+			t.Fatalf("mixed tools error = %v", err)
+		}
+		if _, err := createSession(t, []string{"-gr*"}, ""); err == nil ||
+			!strings.Contains(err.Error(), "+name and -name entries take exact tool names, not patterns: -gr*") {
+			t.Fatalf("pattern modifier error = %v", err)
+		}
 	})
 }

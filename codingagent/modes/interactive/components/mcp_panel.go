@@ -578,30 +578,40 @@ func (p *MCPPanelComponent) toggleDisabledWithTarget(inProject bool) {
 		}
 	}
 	target := !st.Disabled
-	var err error
-	if inProject {
-		err = p.opts.Provider.SetServerDisabledInProject(server, target)
-	} else {
-		err = p.opts.Provider.SetServerDisabled(server, target)
+	where := "mcp.json"
+	if inProject || st.OverridePath != "" {
+		where = "the project mcp.json"
 	}
-	if err != nil {
-		p.setNoticeLocked(theme.Fg("error", "failed to update "+server+": "+err.Error()))
-	} else {
-		verb := "enabled"
-		if target {
-			verb = "disabled"
-		}
-		where := "mcp.json"
-		if inProject || st.OverridePath != "" {
-			where = "the project mcp.json"
-		}
-		p.setNoticeLocked(theme.Fg("success", verb+" "+server+" (saved to "+where+")"))
-	}
-	p.statuses = p.opts.Provider.Status()
-	delete(p.tools, server)
-	delete(p.toolErrs, server)
-	p.rebuildLocked()
+	// pi #10562: run connection actions in the background so the subscribed
+	// menu stays usable while the disable/replace settles.
+	p.busy[server] = true
+	p.setNoticeLocked(theme.Fg("muted", "updating "+server+"…"))
 	p.requestRender()
+	go pigutils.Guard("mcp.panel.toggle", func() {
+		var err error
+		if inProject {
+			err = p.opts.Provider.SetServerDisabledInProject(server, target)
+		} else {
+			err = p.opts.Provider.SetServerDisabled(server, target)
+		}
+		p.mutate(func() {
+			p.busy[server] = false
+			if err != nil {
+				p.setNoticeLocked(theme.Fg("error", "failed to update "+server+": "+err.Error()))
+			} else {
+				verb := "enabled"
+				if target {
+					verb = "disabled"
+				}
+				p.setNoticeLocked(theme.Fg("success", verb+" "+server+" (saved to "+where+")"))
+			}
+			p.statuses = p.opts.Provider.Status()
+			delete(p.tools, server)
+			delete(p.toolErrs, server)
+			p.rebuildLocked()
+		})
+		p.requestRender()
+	})
 }
 
 // copyErrorSelected copies the selected server's last error (ctrl+y). Runs

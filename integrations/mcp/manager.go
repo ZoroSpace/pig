@@ -283,17 +283,26 @@ func (m *Manager) Close() error {
 		// Abort a connect in progress so shutdown does not wait for it to
 		// settle (pi v1.0.4 #10249); the connect error path cleans up under
 		// mu, then closeSessionLocked below marks the server closed.
-		st.connectMu.Lock()
-		if st.connectCancel != nil {
-			st.connectCancel()
-			st.connectCancel = nil
-		}
-		st.connectMu.Unlock()
+		m.abortConnect(st)
 		st.mu.Lock()
 		m.closeSessionLocked(st)
 		st.mu.Unlock()
 	}
 	return nil
+}
+
+// abortConnect cancels an in-flight connect so Close/disable do not wait for
+// it to settle (pi v1.0.4 #10249; S16 #10562 uses it for disabling too). The
+// connect path cleans up under st.mu and releases it, so a following st.mu
+// lock does not block until the connect timeout. Safe to call at any time:
+// a nil handle is a no-op.
+func (m *Manager) abortConnect(st *serverState) {
+	st.connectMu.Lock()
+	if st.connectCancel != nil {
+		st.connectCancel()
+		st.connectCancel = nil
+	}
+	st.connectMu.Unlock()
 }
 
 // Status returns a snapshot of all servers' runtime state.
@@ -584,6 +593,11 @@ func (m *Manager) SetServerDisabled(name string, disabled bool) error {
 	if err != nil {
 		return err
 	}
+	if disabled {
+		// A disable must not block until a connect in flight settles
+		// (#10562): abort it first, like Close does, then take mu.
+		m.abortConnect(st)
+	}
 	st.mu.Lock()
 	st.cfg.Disabled = disabled
 	if disabled {
@@ -616,6 +630,9 @@ func (m *Manager) SetServerDisabledInProject(name string, disabled bool) error {
 	st, err := m.server(name)
 	if err != nil {
 		return err
+	}
+	if disabled {
+		m.abortConnect(st)
 	}
 	st.mu.Lock()
 	st.cfg.Disabled = disabled

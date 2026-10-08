@@ -546,7 +546,7 @@ const (
 //	message_end            Message
 //	tool_execution_start   ToolCallID, ToolName, Args
 //	tool_execution_update  ToolCallID, ToolName, Args, PartialResult
-//	tool_execution_end     ToolCallID, ToolName, Result, IsError
+//	tool_execution_end     ToolCallID, ToolName, Result, IsError, DurationMs
 type AgentEvent struct {
 	Type AgentEventType
 
@@ -575,4 +575,8 @@ type AgentEvent struct {
 	Result any
 	// IsError (tool_execution_end) reports tool failure.
 	IsError bool
+	// DurationMs (tool_execution_end) is how long the tool's Execute took,
+	// measured with a monotonic clock; nil when the tool did not run (pi:
+	// durationMs, #10549).
+	DurationMs *int64
 }

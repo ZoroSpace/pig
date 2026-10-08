@@ -200,7 +200,14 @@ func ParseArgs(args []string) Args {
 			result.NoBuiltinTools = boolPtr(true)
 		case (arg == "--tools" || arg == "-t") && i+1 < len(args):
 			i++
-			result.Tools = splitTrimFilter(args[i], ",")
+			toolsList := splitTrimFilter(args[i], ",")
+			// A list of only +name/-name entries modifies the default
+			// selection instead of replacing it (pi: #10549).
+			if problem := core.GetToolListError(toolsList); problem != "" {
+				pushDiagnostic(ArgDiagnosticError, fmt.Sprintf("%s: %s", arg, problem))
+			} else {
+				result.Tools = toolsList
+			}
 		case (arg == "--exclude-tools" || arg == "-xt") && i+1 < len(args):
 			i++
 			result.ExcludeTools = splitTrimFilter(args[i], ",")
@@ -412,6 +419,7 @@ Options:
   --no-builtin-tools, -nbt       Disable built-in tools by default but keep extension/custom tools enabled
   --tools, -t <tools>            Comma-separated allowlist of tool names or patterns (*) to enable
                                  Applies to built-in, extension, custom, and MCP tools
+                                 Only +name/-name entries add to or remove from the defaults
   --exclude-tools, -xt <tools>   Comma-separated denylist of tool names or patterns (*) to disable
                                  Applies to all tools, MCP tools included
   --no-mcp                       Disable built-in MCP support: no servers connect and no MCP tools
@@ -494,6 +502,9 @@ Examples:
   # Read-only mode (no file modifications possible)
   %s --tools read,grep,find,ls -p "Review the code in src/"
 
+  # Add codemode to the default tools
+  %s --tools +codemode
+
   # Pattern allowlist (only the mcp proxy tool plus read/bash)
   %s --tools 'read,bash,mcp*'
 
@@ -571,7 +582,9 @@ Built-in Tool Names:
 		codingagent.AppName, codingagent.AppName, codingagent.AppName,
 		extensionFlagsText,
 		codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName,
-		codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName,
+		codingagent.AppName, codingagent.AppName, codingagent.AppName,
+		codingagent.AppName,
+		codingagent.AppName, codingagent.AppName,
 		codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName,
 		codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName, codingagent.AppName,
 		codingagent.AppName,

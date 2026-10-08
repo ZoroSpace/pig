@@ -144,6 +144,10 @@ type ToolRenderContext struct {
 	ShowImages bool
 	// IsError reports whether the current result is an error (pi: isError).
 	IsError bool
+	// DurationMs is how long the tool's Execute took, from the final result;
+	// nil while it runs, when it did not run, or for results stored before
+	// durations were recorded (pi: durationMs, #10549).
+	DurationMs *int64
 }
 
 // ToolRenderResult is the result shape handed to renderResult (pi:

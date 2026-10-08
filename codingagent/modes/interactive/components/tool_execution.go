@@ -32,6 +32,9 @@ type ToolExecutionResult struct {
 	Content []types.Content
 	Details any
 	IsError bool
+	// DurationMs is the execution time of a final result; nil while partial or
+	// when the tool did not run (pi: durationMs, #10549).
+	DurationMs *int64
 }
 
 // ToolExecutionComponent renders one tool execution row (pi: class
@@ -229,7 +232,17 @@ func (c *ToolExecutionComponent) getRenderContext(lastComponent tui.Component, i
 		Expanded:         c.expanded,
 		ShowImages:       c.showImages,
 		IsError:          isError,
+		DurationMs:       c.renderDurationMs(),
 	}
+}
+
+// renderDurationMs resolves the duration shown to renderers: undefined while
+// the result is partial (pi: `this.isPartial ? undefined : this.result?.durationMs`).
+func (c *ToolExecutionComponent) renderDurationMs() *int64 {
+	if c.isPartial || c.result == nil {
+		return nil
+	}
+	return c.result.DurationMs
 }
 
 // invalidateAndRequestRender is pi's inline invalidate closure.

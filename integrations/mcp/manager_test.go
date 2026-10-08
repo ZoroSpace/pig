@@ -578,3 +578,49 @@ func TestCloseAbortsInFlightConnect(t *testing.T) {
 		t.Fatalf("CallTool after Close = %v, want manager-closed error", err)
 	}
 }
+
+// pi #10562: disabling a server whose connect is still in flight must not
+// block until the connect timeout — the disable aborts the attempt first
+// (pig shape of pi's attempt-invalidation + closing wait).
+func TestSetServerDisabledAbortsInFlightConnect(t *testing.T) {
+	blocker := &blockingTransport{started: make(chan struct{})}
+	config := &Config{MCPServers: map[string]ServerConfig{
+		"stuck": {Command: "irrelevant", Args: []string{}},
+	}}
+	manager := newTestManager(t, config, ManagerOptions{
+		TransportFactory: func(server string, _ ServerConfig) (mcp.Transport, error) {
+			return blocker, nil
+		},
+		ConnectTimeout: 60 * time.Second,
+	})
+
+	connectErr := make(chan error, 1)
+	go func() {
+		connectErr <- manager.Reconnect(t.Context(), "stuck")
+	}()
+	select {
+	case <-blocker.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("connect never reached the transport")
+	}
+
+	disabled := make(chan error, 1)
+	go func() { disabled <- manager.SetServerDisabled("stuck", true) }()
+	select {
+	case err := <-disabled:
+		if err != nil {
+			t.Fatalf("SetServerDisabled: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("disable blocked on the in-flight connect (#10562 regression)")
+	}
+	if err := <-connectErr; err == nil {
+		t.Fatal("aborted connect must report an error")
+	}
+	if st := manager.Status()[0]; st.Status != "disabled" {
+		t.Fatalf("status = %q, want disabled", st.Status)
+	}
+	if _, err := manager.CallTool(t.Context(), "stuck", "echo", map[string]any{}); err == nil || !strings.Contains(err.Error(), "disabled") {
+		t.Fatalf("CallTool on a disabled server = %v, want disabled error", err)
+	}
+}

@@ -16,7 +16,7 @@
 
 ## 当前状态（2026-10-07）
 
-- **pig 基线跟踪 pi v1.0.4 + main@27c7b6ff4**（S16 起对齐 pi main 最新 commit——用户拍板提前消化，pi 无 v1.0.5 tag 故 Version 1.0.4 与 `TestVersionTracksPiBaseline` 守卫语义不动，v1.0.5 发布后 S17 只补增量）；全量 `go test ./... -race` 31 包全绿；最近一批 = S16-1（handoff：`docs/handoffs/S16-1.md`，全系计划稿：`docs/handoffs/SYNC-S16-pre-digest.md`）。S16-2（agent/codingagent：durationMs 落点 + `--tools +name/-name` + MCP 核对）已按仓库规则预写开工稿。
+- **pig 基线跟踪 pi v1.0.4 + main@27c7b6ff4**（S16 起对齐 pi main 最新 commit——用户拍板提前消化，pi 无 v1.0.5 tag 故 Version 1.0.4 与 `TestVersionTracksPiBaseline` 守卫语义不动，v1.0.5 发布后 S17 只补增量）；全量 `go test ./... -race` 31 包全绿；最近一批 = S16-2（handoff：`docs/handoffs/S16-2.md`）。S16-3（TUI+interactive：bash ANSI 跨 chunk / 重建清选区 / herdr 检测 + S16 收尾）开工稿已预写，outputPad 铺开为拍板项。
 - **Dogfooding（2026-09-11 起）**：用户日常自用 pig，pi 保留作 fallback 与规格书。约定：① 日常撞到的 pig bug 一律走 `docs/fix/` 登记 + 回归测试锁定流程；② 缺 provider/adapter 卡住日常时按需提前拉起移植批；③ **真机验证矩阵** `docs/handoffs/verify-matrix.md`——provider 真机/OAuth 验证逐家解锁，每拿到一个 key 按表销账。
 - **真机冒烟测试**一律 `//go:build smoke` 门控移出默认门禁（跑法见 `docs/feat/TEST-SUITE-RUNTIME.md`）；冒烟启动必须 mock provider / 清凭证（见仓库机制 tmux 条）。
 - 路线余量：Phase 8 余量（photon/wazero、telemetry、goreleaser、/share、terminal-image）顺序由用户拍板；dogfooding 插批随时插入。
@@ -70,6 +70,7 @@
 - S14（→v1.0.3）azure provider 首移（v1.0.3 改名形态）+ OAuth 刷新取消语义 + 死终端 ENOTTY + TUI Home/End — `docs/handoffs/SYNC-S14-v1.0.3.md`
 - S15（→v1.0.4）ai retry HTTP/2 补模式 + 语法高亮多行保色/subst + MCP OAuth application_type + --tools 通配/--no-mcp + MCP Close 中断连接中 connect（pig 形状适配）— `docs/handoffs/SYNC-S15-v1.0.4.md`
 - S16-1 ✅（2026-10-07，→main@27c7b6ff4 提前消化，无 v1.0.5 tag 故 Version 不动）ai 层 7 commit：retry server_busy / estimate 3.5 / bedrock OpenAI reasoning effort / LoginOptions.AgentName / anthropic 回调 free-port 回退 / durationMs ai 侧基建（拷贝语义并发偏差）/ classifier 目录平价（openai-decisions 常量+生成器条目+FilterAllModels，运行时零操作）— `docs/handoffs/S16-1.md` + 计划稿 `SYNC-S16-pre-digest.md`
+- S16-2 ✅（2026-10-07）agent+codingagent 区：durationMs 全链（agent loop 盖戳/事件/扩展回调/渲染面/bash Took reload 存活/线格式兼容门）+ `--tools +name/-name`（GetToolListError/applyToolModifiers/sdk 判定/reload 修饰符保留/-name 永移）+ MCP #10562 偏差面核对（disable 先 abortConnect + 面板 toggle 后台化两处回填，其余三点已覆盖零回填）— `docs/handoffs/S16-2.md`
 
 **Phase 2 provider/adapter 批（2026-09-11~15，Phase 2 收口）**：
 - A1+A2 anthropic-messages adapter + provider 铺开 + Claude/Kimi OAuth — `docs/handoffs/A1.md`、`A2.md`

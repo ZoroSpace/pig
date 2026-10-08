@@ -196,6 +196,11 @@ func (e AgentSessionEvent) MarshalJSON() ([]byte, error) {
 		obj["toolName"] = e.ToolName
 		obj["result"] = e.Result
 		obj["isError"] = e.IsError
+		// pi json.md (#10549): durationMs is how long execute() took, absent
+		// when the tool did not run.
+		if e.DurationMs != nil {
+			obj["durationMs"] = *e.DurationMs
+		}
 	case AgentSessionEventQueueUpdate:
 		// pi always carries both arrays; nil slice renders as [] not null.
 		if e.Steering == nil {
@@ -345,6 +350,11 @@ type AgentSessionConfig struct {
 	// defaultTools setting (#10245). When true, reload activates tools newly
 	// added to the setting. Tools removed from it stay active.
 	UsesDefaultTools bool
+	// DefaultToolModifiers are the `+name`/`-name` entries applied on top of
+	// the `defaultTools` setting, from `--tools`. Reload applies them to the
+	// reloaded setting too, so a removed tool stays removed (pi:
+	// defaultToolModifiers, #10549).
+	DefaultToolModifiers []string
 	// AllowedToolNames is an optional allowlist of tool names or patterns
 	// (`*` matches any characters). When provided, only matching tools are
 	// exposed (pi v1.0.4; pig deviation: pi keeps MCP tools registered for
@@ -612,6 +622,7 @@ type AgentSession struct {
 	extensionRunnerRef             *ExtensionRunnerRef
 	initialActiveToolNames         []string
 	usesDefaultTools               bool
+	defaultToolModifiers           []string
 	allowedToolNames               func(string) bool
 	excludedToolNames              func(string) bool
 	baseToolsOverride              map[string]agent.AgentTool
@@ -686,6 +697,7 @@ func NewAgentSession(config AgentSessionConfig) *AgentSession {
 	}
 	s.initialActiveToolNames = config.InitialActiveToolNames
 	s.usesDefaultTools = config.UsesDefaultTools
+	s.defaultToolModifiers = config.DefaultToolModifiers
 	if config.AllowedToolNames != nil {
 		s.allowedToolNames = toolNameMatcher(config.AllowedToolNames)
 	}
@@ -1895,7 +1907,7 @@ func (s *AgentSession) emitExtensionEvent(ctx context.Context, event agent.Agent
 		if result, ok := event.Result.(agent.AgentToolResult); ok {
 			toolResult = result
 		}
-		_, _ = s.extensionRunner.Emit(ctx, &ToolExecutionEndEvent{Type: "tool_execution_end", ToolCallID: event.ToolCallID, ToolName: event.ToolName, Result: toolResult, IsError: event.IsError})
+		_, _ = s.extensionRunner.Emit(ctx, &ToolExecutionEndEvent{Type: "tool_execution_end", ToolCallID: event.ToolCallID, ToolName: event.ToolName, Result: toolResult, IsError: event.IsError, DurationMs: event.DurationMs})
 	}
 }
 
@@ -4963,15 +4975,21 @@ func (s *AgentSession) Reload(ctx context.Context, options *ReloadOptions) error
 	oldRunner.Invalidate("This extension ctx is stale after session replacement or reload. Do not use a captured pig or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().")
 	// Snapshot the resolved defaultTools selection before the settings
 	// reload (#10245): only names newly added by the setting get activated.
-	previousDefaultTools := map[string]struct{}{}
-	if s.usesDefaultTools {
+	// `+name`/`-name` modifiers from `--tools` are applied on top of the
+	// reloaded setting too, so a removed tool stays removed (#10549).
+	getDefaultTools := func() []string {
+		if !s.usesDefaultTools {
+			return []string{}
+		}
 		names, ok := s.SettingsManager.GetDefaultTools()
 		if !ok {
 			names = DefaultToolNames
 		}
-		for _, name := range names {
-			previousDefaultTools[name] = struct{}{}
-		}
+		return applyToolModifiers(names, s.defaultToolModifiers)
+	}
+	previousDefaultTools := map[string]struct{}{}
+	for _, name := range getDefaultTools() {
+		previousDefaultTools[name] = struct{}{}
 	}
 	s.SettingsManager.Reload()
 	s.syncQueueModesFromSettings()
@@ -4983,15 +5001,9 @@ func (s *AgentSession) Reload(ctx context.Context, options *ReloadOptions) error
 	// and tools disabled during the session stay disabled unless the setting
 	// newly adds them.
 	var addedDefaultTools []string
-	if s.usesDefaultTools {
-		names, ok := s.SettingsManager.GetDefaultTools()
-		if !ok {
-			names = DefaultToolNames
-		}
-		for _, name := range names {
-			if _, seen := previousDefaultTools[name]; !seen {
-				addedDefaultTools = append(addedDefaultTools, name)
-			}
+	for _, name := range getDefaultTools() {
+		if _, seen := previousDefaultTools[name]; !seen {
+			addedDefaultTools = append(addedDefaultTools, name)
 		}
 	}
 	activeToolNames := s.GetActiveToolNames()

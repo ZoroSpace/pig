@@ -663,6 +663,9 @@ type toolCallPreparation struct {
 type executedToolCallOutcome struct {
 	result  AgentToolResult
 	isError bool
+	// durationMs is how long Execute took, measured with a monotonic clock
+	// (pi: durationMs, #10549).
+	durationMs *int64
 }
 
 // finalizedToolCallOutcome is a tool call with its final result (pi:
@@ -671,6 +674,9 @@ type finalizedToolCallOutcome struct {
 	toolCall AgentToolCall
 	result   AgentToolResult
 	isError  bool
+	// durationMs is copied from the executed outcome; absent when the tool
+	// did not run (pi: durationMs, #10549).
+	durationMs *int64
 }
 
 // finalizedToolCallEntry is pi's FinalizedToolCallEntry union (immediate
@@ -800,6 +806,10 @@ func executePreparedToolCall(ctx context.Context, prepared *toolCallPreparation,
 	// (pi relies on the single-threaded event loop here).
 	var acceptingUpdates atomic.Bool
 	acceptingUpdates.Store(true)
+	// pi times only the execute() call, excluding the before/after hooks
+	// (#10549). Go's time.Now() carries a monotonic reading, so time.Since is
+	// monotonic like pi's performance.now().
+	startedAt := time.Now()
 	onUpdate := func(partialResult AgentToolResult) {
 		if !acceptingUpdates.Load() {
 			return
@@ -814,14 +824,16 @@ func executePreparedToolCall(ctx context.Context, prepared *toolCallPreparation,
 	}
 
 	result, err := prepared.tool.Execute(ctx, prepared.toolCall.ID, prepared.args, onUpdate)
+	durationMs := time.Since(startedAt).Milliseconds()
 	acceptingUpdates.Store(false)
 	if err != nil {
 		return executedToolCallOutcome{
-			result:  createErrorToolResult(err.Error()),
-			isError: true,
+			result:     createErrorToolResult(err.Error()),
+			isError:    true,
+			durationMs: &durationMs,
 		}
 	}
-	return executedToolCallOutcome{result: result, isError: false}
+	return executedToolCallOutcome{result: result, isError: false, durationMs: &durationMs}
 }
 
 func finalizeExecutedToolCall(ctx context.Context, currentContext *AgentContext, assistantMessage *types.AssistantMessage, prepared *toolCallPreparation, executed *executedToolCallOutcome, config AgentLoopConfig) finalizedToolCallOutcome {
@@ -860,9 +872,10 @@ func finalizeExecutedToolCall(ctx context.Context, currentContext *AgentContext,
 	}
 
 	return finalizedToolCallOutcome{
-		toolCall: prepared.toolCall,
-		result:   result,
-		isError:  isError,
+		toolCall:   prepared.toolCall,
+		result:     result,
+		isError:    isError,
+		durationMs: executed.durationMs,
 	}
 }
 
@@ -880,6 +893,7 @@ func emitToolExecutionEnd(finalized *finalizedToolCallOutcome, emit AgentEventSi
 		ToolName:   finalized.toolCall.Name,
 		Result:     finalized.result,
 		IsError:    finalized.isError,
+		DurationMs: finalized.durationMs,
 	})
 }
 
@@ -898,6 +912,7 @@ func createToolResultMessage(finalized *finalizedToolCallOutcome) types.ToolResu
 		Details:    finalized.result.Details,
 		Usage:      finalized.result.Usage,
 		IsError:    finalized.isError,
+		DurationMs: finalized.durationMs,
 		Timestamp:  time.Now().UnixMilli(),
 	}
 	return toolResultMessage
