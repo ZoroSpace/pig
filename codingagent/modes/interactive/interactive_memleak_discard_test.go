@@ -33,6 +33,8 @@ func (d *discardTerminal) ClearScreen()                                {}
 func (d *discardTerminal) SetTitle(title string)                       {}
 func (d *discardTerminal) SetProgress(active bool)                     {}
 
+func (d *discardTerminal) SetProgramStatus(status tui.ProgramStatus) {}
+
 func waitForRenders(t *testing.T, screen *tui.TuiMainScreen, n int) {
 	t.Helper()
 	// crude pacing: RenderNow forces a synchronous frame regardless of the

@@ -82,6 +82,7 @@
 - 线格式抄自 pi（有真实使用历史），主要风险在 **pig 重写的 HTTP 细节**（URL 拼接、header 组装、表单编码、轮询状态机）——mock 锁了结构，真机才能暴露端点的实际容忍度。
 - **最高风险三件**：① anthropic OAuth 回调全链路（纯 pig 新写 HTTP 服务器）；② openai 5.6 家族 `prompt_cache_options` 分代（发错即 400）；③ azure URL 约定（零真机）。
 - 加密 reasoning 重放（`encrypted_content`）是 openai-responses 多轮无状态的关键路径，DeepSeek 端点无法覆盖——拿到 `OPENAI_API_KEY` 后 reasoning-replay e2e 是第一优先。
+- **S17 待销账两项（2026-10-09）**：① OSC 7501 program status 🧪 mock（协议编码/探测/终端集成全单测锁；真机需支持 OSC 7501 的终端，Warp 或 rex spec 终端到手即验：`PI_PROGRAM_STATUS=1` 发 prompt 看 working/blocked/done/error 状态上报与 stop 后 clear）；② MCP OAuth 取消语义 🧪 mock（closing 不刷新 + Close 等待 sign-in 单测锁；真机需一个 OAuth MCP server：sign-in 中 Esc/关会话确认立即取消且无迟后网络刷新）。
 
 ## 6. 平台矩阵（Windows，WINDOWS-SUPPORT 2026-09-16 后开列）
 

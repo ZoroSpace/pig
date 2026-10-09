@@ -937,7 +937,7 @@ func bedrockNormalizeModelRef(value string) string {
 }
 
 func supportsAdaptiveThinking(modelID string, modelName string) bool {
-	// Opus 4.6+, Sonnet 4.6 (checks id and name candidates).
+	// Opus 4.6+, Sonnet 4.6, Haiku 5.5 (checks id and name candidates).
 	return anyBedrockCandidate(modelID, modelName, func(s string) bool {
 		return strings.Contains(s, "opus-4-6") ||
 			strings.Contains(s, "opus-4-7") ||
@@ -945,6 +945,7 @@ func supportsAdaptiveThinking(modelID string, modelName string) bool {
 			strings.Contains(s, "opus-5") ||
 			strings.Contains(s, "sonnet-4-6") ||
 			strings.Contains(s, "sonnet-5") ||
+			strings.Contains(s, "haiku-5") ||
 			strings.Contains(s, "fable-5")
 	})
 }
@@ -955,6 +956,7 @@ func supportsNativeXhighEffort(model *types.Model) bool {
 			strings.Contains(s, "opus-4-8") ||
 			strings.Contains(s, "opus-5") ||
 			strings.Contains(s, "sonnet-5") ||
+			strings.Contains(s, "haiku-5") ||
 			strings.Contains(s, "fable-5")
 	})
 }
@@ -969,6 +971,7 @@ func supportsThinkingBlockBinding(model *types.Model) bool {
 			strings.Contains(s, "opus-4-8") ||
 			strings.Contains(s, "opus-5") ||
 			strings.Contains(s, "sonnet-5") ||
+			strings.Contains(s, "haiku-5") ||
 			strings.Contains(s, "fable-5")
 	})
 }
@@ -1052,9 +1055,9 @@ func supportsPromptCaching(model *types.Model, env types.ProviderEnv) bool {
 		// ARN. Allow users to force cache points via environment variable.
 		return utils.GetProviderEnvValue("AWS_BEDROCK_FORCE_CACHE", env) == "1"
 	}
-	// Claude 5 models (fable-5, opus-5, sonnet-5)
+	// Claude 5 models (fable-5, opus-5, sonnet-5, haiku-5)
 	if anyBedrockCandidate(model.ID, model.Name, func(s string) bool {
-		return strings.Contains(s, "fable-5") || strings.Contains(s, "opus-5") || strings.Contains(s, "sonnet-5")
+		return strings.Contains(s, "fable-5") || strings.Contains(s, "opus-5") || strings.Contains(s, "sonnet-5") || strings.Contains(s, "haiku-5")
 	}) {
 		return true
 	}

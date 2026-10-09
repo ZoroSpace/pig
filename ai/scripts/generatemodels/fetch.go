@@ -200,12 +200,6 @@ func fetchAiGatewayModels(ctx context.Context) (*aiGatewayCatalog, error) {
 			input = append(input, ai.ModelInputImage)
 		}
 
-		pricing := model.Pricing
-		inputCost := roundCost(gatewayNumber(pricing, func(p *AIGatewayPricing) json.Number { return p.Input }) * 1_000_000)
-		outputCost := roundCost(gatewayNumber(pricing, func(p *AIGatewayPricing) json.Number { return p.Output }) * 1_000_000)
-		cacheReadCost := roundCost(gatewayNumber(pricing, func(p *AIGatewayPricing) json.Number { return p.InputCacheRead }) * 1_000_000)
-		cacheWriteCost := roundCost(gatewayNumber(pricing, func(p *AIGatewayPricing) json.Number { return p.InputCacheWrite }) * 1_000_000)
-
 		catalog.chat = append(catalog.chat, &ai.Model{
 			ID:        model.ID,
 			Name:      orString(model.Name, model.ID),
@@ -216,8 +210,10 @@ func fetchAiGatewayModels(ctx context.Context) (*aiGatewayCatalog, error) {
 			Input:     input,
 			// v0.86.0 ("preserve Vercel AI Gateway unsigned thinking"): the
 			// gateway strips thinking signatures, so replay accepts empty ones.
-			Compat:        &ai.AnthropicMessagesCompat{AllowEmptySignature: lo.ToPtr(true)},
-			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: inputCost, Output: outputCost, CacheRead: cacheReadCost, CacheWrite: cacheWriteCost}},
+			Compat: &ai.AnthropicMessagesCompat{AllowEmptySignature: lo.ToPtr(true)},
+			// S17 (pi 943a10e74): per-rate prompt-length brackets become
+			// request-wide tiers (pi: cost: getAiGatewayCost(model.pricing)).
+			Cost:          getAiGatewayCost(model.Pricing),
 			ContextWindow: int64Or(model.ContextWindow, 4096),
 			MaxTokens:     int64Or(model.MaxTokens, 4096),
 		})

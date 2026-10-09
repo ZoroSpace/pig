@@ -44,7 +44,12 @@ const (
 	defaultSshEscapeTimeout                   = 100
 )
 
-var kittyKeyboardProtocolQuery = "\x1b[>" + itoa(desiredKittyKeyboardProtocolFlags) + "u\x1b[?u\x1b[c"
+var kittyKeyboardProtocolQuery = "\x1b[>" + itoa(desiredKittyKeyboardProtocolFlags) + "u\x1b[?u"
+
+// deviceAttributesQuery is the trailing DA sentinel (pi:
+// DEVICE_ATTRIBUTES_QUERY — S17 503c60552 split it out of the Kitty query so
+// the OSC 7501 program status query can share the sentinel).
+const deviceAttributesQuery = "\x1b[c"
 
 // KeyboardProtocolNegotiationSequence is a parsed keyboard-protocol response.
 // pi: tagged union { type: "kitty-flags" | "device-attributes", ... }.
@@ -138,6 +143,11 @@ type Terminal interface {
 
 	// Progress indicator (OSC 9;4)
 	SetProgress(active bool)
+
+	// Report what the program is doing (OSC 7501). Sent only to terminals
+	// that support it; the latest status is re-sent when support is confirmed
+	// or the terminal restarts (pi: setProgramStatus, S17 503c60552).
+	SetProgramStatus(status ProgramStatus)
 }
 
 // ResolveEscapeTimeoutMs resolves how long to wait for the rest of an escape
@@ -181,6 +191,21 @@ type ProcessTerminal struct {
 	progressTimer *time.Timer
 	winchStop     chan struct{}
 	winchWG       sync.WaitGroup
+
+	// Latest program status, kept across stop so start can report it again
+	// (pi: programStatus).
+	programStatus *ProgramStatus
+	// Whether the terminal confirmed OSC 7501 support since the last start,
+	// or PI_PROGRAM_STATUS=1 (pi: programStatusSupported).
+	programStatusSupported bool
+	// The support query was sent and its DA1 sentinel has not arrived yet
+	// (pi: programStatusQueryPending).
+	programStatusQueryPending bool
+	// Device-attribute replies still owed by the terminal (pi:
+	// pendingKeyboardProtocolDeviceAttributes): the last owed DA answers the
+	// latest query, so a DA after that means no program status support.
+	// Earlier DA replies belong to queries from before a restart.
+	pendingKeyboardProtocolDeviceAttributes int
 
 	writeLogPath string
 
@@ -259,6 +284,17 @@ func (t *ProcessTerminal) setupStdinBuffer() {
 	// Forward individual sequences to the input handler
 	t.stdinBuffer.OnData(func(sequence string) {
 		t.mu.Lock()
+		// S17 (pi 503c60552): an OSC 7501 reply before DA confirms program
+		// status support; re-send the latest status.
+		if isProgramStatusReply(sequence) {
+			if t.programStatusQueryPending {
+				t.programStatusQueryPending = false
+				t.programStatusSupported = true
+				t.writeProgramStatusLocked()
+			}
+			t.mu.Unlock()
+			return
+		}
 		negotiationSequence, bufferedToForward, pending := t.readKeyboardProtocolNegotiationSequenceLocked(sequence)
 		if pending {
 			t.scheduleKeyboardProtocolNegotiationBufferFlushLocked()
@@ -312,12 +348,25 @@ func (t *ProcessTerminal) setupStdinBuffer() {
 //   - 1 = disambiguate escape codes
 //   - 2 = report event types (press/repeat/release)
 //   - 4 = report alternate keys (shifted key, base layout key)
+//
+// The OSC 7501 program status query shares the DA sentinel: a terminal that
+// supports it replies before DA. PI_PROGRAM_STATUS=1 or 0 skips the query
+// (pi: queryAndEnableKittyProtocol, S17 503c60552).
 func (t *ProcessTerminal) queryAndEnableKittyProtocol() {
 	t.mu.Lock()
 	t.setupStdinBufferLocked()
 	t.keyboardProtocolPushed = true
+	t.pendingKeyboardProtocolDeviceAttributes++
 	t.clearKeyboardProtocolNegotiationBufferLocked()
-	t.writeLocked(kittyKeyboardProtocolQuery)
+	programStatusOverride := os.Getenv("PI_PROGRAM_STATUS")
+	t.programStatusSupported = programStatusOverride == "1"
+	t.programStatusQueryPending = programStatusOverride != "1" && programStatusOverride != "0"
+	programStatusQuery := ""
+	if t.programStatusQueryPending {
+		programStatusQuery = ProgramStatusQuery
+	}
+	t.writeLocked(kittyKeyboardProtocolQuery + programStatusQuery + deviceAttributesQuery)
+	t.writeProgramStatusLocked()
 	t.mu.Unlock()
 
 	// Start reading stdin (Node: process.stdin.on("data", ...) + resume)
@@ -431,6 +480,16 @@ func (t *ProcessTerminal) handleKeyboardProtocolNegotiationSequenceLocked(negoti
 		return true
 	}
 
+	// device-attributes: track how many replies are still owed (pi S17
+	// 503c60552). The last owed DA answers the latest query, which got no
+	// program status reply first; earlier DA replies belong to queries from
+	// before a restart.
+	if t.pendingKeyboardProtocolDeviceAttributes > 0 {
+		t.pendingKeyboardProtocolDeviceAttributes--
+		if t.pendingKeyboardProtocolDeviceAttributes == 0 {
+			t.programStatusQueryPending = false
+		}
+	}
 	if !t.kittyProtocolActive {
 		t.enableModifyOtherKeysLocked()
 	}
@@ -610,6 +669,14 @@ func (t *ProcessTerminal) Stop() {
 		t.writeLocked(terminalProgressClearSequence)
 	}
 
+	// S17 (pi 503c60552): remove the status while stopped, for example after
+	// exit or while suspended. start reports it again.
+	if t.programStatusSupported && t.programStatus != nil {
+		t.writeLocked(formatProgramStatus(ProgramStatus{State: ProgramStatusClear}))
+	}
+	t.programStatusSupported = false
+	t.programStatusQueryPending = false
+
 	// Disable bracketed paste mode
 	t.writeLocked("\x1b[?2004l")
 
@@ -715,6 +782,29 @@ func (t *ProcessTerminal) ClearScreen() {
 func (t *ProcessTerminal) SetTitle(title string) {
 	// OSC 0;title BEL - set terminal window title
 	t.Write("\x1b]0;" + title + "\x07")
+}
+
+// SetProgramStatus reports what the program is doing (OSC 7501) (pi:
+// setProgramStatus).
+func (t *ProcessTerminal) SetProgramStatus(status ProgramStatus) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if status.State == ProgramStatusClear {
+		t.programStatus = nil
+	} else {
+		t.programStatus = &status
+	}
+	if t.programStatusSupported {
+		t.writeLocked(formatProgramStatus(status))
+	}
+}
+
+// writeProgramStatusLocked re-sends the latest status after support is
+// confirmed or the terminal restarts (pi: writeProgramStatus).
+func (t *ProcessTerminal) writeProgramStatusLocked() {
+	if t.programStatusSupported && t.programStatus != nil {
+		t.writeLocked(formatProgramStatus(*t.programStatus))
+	}
 }
 
 func (t *ProcessTerminal) SetProgress(active bool) {

@@ -510,3 +510,91 @@ func TestManagerSignInNonOAuthServer(t *testing.T) {
 		t.Fatalf("sign-out on stdio server: %v %v", removed, err)
 	}
 }
+
+// S17 (pi f10993bc7): markClosing stops the proactive refresh — close reuses
+// the stored token instead of asking the auth provider (which could refresh
+// over the network first).
+func TestHandlerClosingSkipsProactiveRefresh(t *testing.T) {
+	mock := newMockOAuthServer(t)
+	defer mock.close()
+	store := NewCredentialStore(t.TempDir()+"/mcp-auth.json", "")
+	if err := store.Save("docs", mock.serverURL(), &OAuthServerState{
+		ServerURL:     mock.serverURL(),
+		TokenEndpoint: mock.s.URL + "/token",
+		// Expired one minute ago: without closing, TokenSource would refresh.
+		TokensExpireAt: time.Now().Add(-time.Minute).UnixMilli(),
+		Tokens:         &OAuthTokens{AccessToken: "old", TokenType: "Bearer", RefreshToken: "refresh-0", Scope: "mcp:read"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := newOAuthTransportHandler(flowDeps{store: store, serverName: "docs"}, "docs", mock.serverURL(),
+		func() OAuthSettings { return OAuthSettings{} }, nil)
+	handler.markClosing()
+	src, err := handler.TokenSource(context.Background())
+	if err != nil || src == nil {
+		t.Fatalf("token source: %v %v", src, err)
+	}
+	token, err := src.Token()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token.AccessToken != "old" {
+		t.Fatalf("expected the stored token without a refresh, got %q", token.AccessToken)
+	}
+	if _, refreshes, _ := mock.counts(); refreshes != 0 {
+		t.Fatalf("refreshes: %d, want 0 (close must not refresh)", refreshes)
+	}
+}
+
+// blockingPrompt hangs in PromptForRedirectURL until its context is canceled,
+// simulating a user who never pastes the redirect URL.
+type blockingPrompt struct{}
+
+func (blockingPrompt) ShowAuthorizationURL(string) {}
+
+func (blockingPrompt) PromptForRedirectURL(ctx context.Context) (string, error) {
+	<-ctx.Done()
+	return "", ErrSignInCancelled
+}
+
+// S17 (pi f10993bc7): the manager's lifetime doubles as pi's per-session
+// signal — Close cancels in-flight sign-ins and waits for their cleanup.
+func TestManagerCloseCancelsInFlightSignIn(t *testing.T) {
+	mock := newMockOAuthServer(t)
+	defer mock.close()
+	store := NewCredentialStore(t.TempDir()+"/mcp-auth.json", "")
+	config := &Config{MCPServers: map[string]ServerConfig{
+		"docs": {URL: mock.serverURL()},
+	}}
+	manager := NewManager(config, ManagerOptions{CredentialStore: store})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- manager.SignIn(context.Background(), "docs", blockingPrompt{}, nil)
+	}()
+	// Give the sign-in time to reach its blocking prompt, then close.
+	time.Sleep(200 * time.Millisecond)
+	closed := make(chan error, 1)
+	go func() { closed <- manager.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Close hung waiting for the in-flight sign-in")
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrSignInCancelled) {
+			t.Fatalf("SignIn error = %v, want ErrSignInCancelled", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("SignIn did not return after Close")
+	}
+	// A sign-in after Close reports cancellation immediately.
+	if err := manager.SignIn(context.Background(), "docs", blockingPrompt{}, nil); !errors.Is(err, ErrSignInCancelled) {
+		t.Fatalf("SignIn after Close = %v, want ErrSignInCancelled", err)
+	}
+}

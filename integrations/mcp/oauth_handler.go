@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -24,9 +25,11 @@ import (
 // REFRESH_SKEW_MS).
 const oauthRefreshSkew = 30 * time.Second
 
-// Bounds each request of a refresh, so it cannot delay a tool call for long
-// (pi: REFRESH_REQUEST_TIMEOUT_MS).
-const oauthRefreshRequestTimeout = 15 * time.Second
+// Bounds each request to the authorization server, so an unresponsive one
+// cannot hold the refresh lock, delay a tool call, delay shutdown, or keep a
+// sign-in waiting for long (pi: OAUTH_REQUEST_TIMEOUT_MS — S17 f10993bc7
+// widened REFRESH_REQUEST_TIMEOUT_MS from refreshes to every OAuth request).
+const oauthRequestTimeout = 15 * time.Second
 
 var _ auth.OAuthHandler = (*OAuthTransportHandler)(nil)
 
@@ -59,6 +62,12 @@ type OAuthTransportHandler struct {
 
 	mu         sync.Mutex
 	refreshing bool
+	// closing marks "the session is being torn down": TokenSource then hands
+	// out the stored token without a proactive refresh, so Close never waits
+	// on a network refresh (S17 f10993bc7 — pi's transport reuses the last
+	// request's token; pig sits outside the go-sdk transport, so the closest
+	// equivalent is "stored token, no refresh").
+	closing atomic.Bool
 }
 
 func newOAuthTransportHandler(deps flowDeps, server, serverURL string, settings func() OAuthSettings, onChallenge func(OAuthChallenge)) *OAuthTransportHandler {
@@ -83,8 +92,10 @@ func newProviderTokenHandler(server, providerName string, providerToken func(ctx
 
 // tokenState returns the stored tokens, refreshed when they are about to
 // expire. Failures fall through with the old token: the request goes out and
-// a 401 decides what happens (pi: token()).
-func (h *OAuthTransportHandler) tokenState(ctx context.Context) *OAuthTokens {
+// a 401 decides what happens (pi: token()). With closing set the proactive
+// refresh is skipped: close reuses the stored token instead of asking the
+// auth provider, which could refresh over the network (S17 f10993bc7).
+func (h *OAuthTransportHandler) tokenState(ctx context.Context, closing bool) *OAuthTokens {
 	state, err := h.deps.store.Load(h.server, h.serverURL)
 	if err != nil || state == nil || state.Tokens == nil {
 		return nil
@@ -92,7 +103,7 @@ func (h *OAuthTransportHandler) tokenState(ctx context.Context) *OAuthTokens {
 	if state.TokensExpireAt != 0 && time.Until(time.UnixMilli(state.TokensExpireAt)) > oauthRefreshSkew {
 		return state.Tokens
 	}
-	if state.Tokens.RefreshToken == "" {
+	if state.Tokens.RefreshToken == "" || closing {
 		return state.Tokens
 	}
 	// Failures fall through.
@@ -117,7 +128,7 @@ func (h *OAuthTransportHandler) TokenSource(ctx context.Context) (oauth2.TokenSo
 		}
 		return staticTokenSource{token: token}, nil
 	}
-	if tokens := h.tokenState(ctx); tokens != nil && tokens.AccessToken != "" {
+	if tokens := h.tokenState(ctx, h.closing.Load()); tokens != nil && tokens.AccessToken != "" {
 		return staticTokenSource{token: tokens.AccessToken}, nil
 	}
 	return nil, nil
@@ -191,7 +202,7 @@ func (h *OAuthTransportHandler) silentRefresh(ctx context.Context, challenge *OA
 		ch = *challenge
 	}
 	deps := h.deps
-	deps.client = &http.Client{Timeout: oauthRefreshRequestTimeout}
+	deps.client = &http.Client{Timeout: oauthRequestTimeout}
 	input := flowInput{
 		serverURL:   h.serverURL,
 		settings:    settings,
@@ -207,4 +218,10 @@ func (h *OAuthTransportHandler) silentRefresh(ctx context.Context, challenge *OA
 		return fmt.Errorf("refreshing MCP OAuth tokens: %w", err)
 	}
 	return nil
+}
+
+// markClosing flips the closing flag: subsequent TokenSource calls skip the
+// proactive refresh (S17 f10993bc7 — see the closing field comment).
+func (h *OAuthTransportHandler) markClosing() {
+	h.closing.Store(true)
 }

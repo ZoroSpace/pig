@@ -35,6 +35,15 @@ type Manager struct {
 
 	reapStop chan struct{}
 	reapDone chan struct{}
+
+	// baseCtx is the manager's lifetime: canceled by Close, it stops sign-ins
+	// the way pi's per-session signal does (S17 f10993bc7 — "the MCP extension
+	// owns one signal per session"; a pig Manager lives for one agent
+	// session). signins tracks in-flight sign-ins so Close waits for their
+	// cleanup.
+	baseCtx  context.Context
+	baseStop context.CancelFunc
+	signins  sync.WaitGroup
 }
 
 // ManagerOptions configures the Manager. All fields are optional.
@@ -160,6 +169,11 @@ type serverState struct {
 	connectMu     sync.Mutex
 	connectCancel context.CancelFunc
 
+	// oauthHandler is the transport auth provider of the current session, so
+	// closeSessionLocked can mark it closing before Close (S17 f10993bc7).
+	// Written by newHTTPTransport under st.mu; nil for stdio servers.
+	oauthHandler *OAuthTransportHandler
+
 	cachedTools []ToolInfo // valid while session != nil
 }
 
@@ -194,12 +208,15 @@ func NewManager(config *Config, opts ManagerOptions) *Manager {
 	if config == nil {
 		config = &Config{}
 	}
+	baseCtx, baseStop := context.WithCancel(context.Background())
 	m := &Manager{
 		config:   config,
 		opts:     opts,
 		servers:  map[string]*serverState{},
 		reapStop: make(chan struct{}),
 		reapDone: make(chan struct{}),
+		baseCtx:  baseCtx,
+		baseStop: baseStop,
 	}
 	for _, name := range config.SortedServerNames() {
 		m.servers[name] = &serverState{
@@ -278,6 +295,11 @@ func (m *Manager) Close() error {
 
 	close(m.reapStop)
 	<-m.reapDone
+
+	// S17 (pi f10993bc7): shutdown cancels in-flight sign-ins and waits for
+	// their cleanup before tearing down the sessions.
+	m.baseStop()
+	m.signins.Wait()
 
 	for _, st := range servers {
 		// Abort a connect in progress so shutdown does not wait for it to
@@ -782,6 +804,7 @@ func (m *Manager) newHTTPTransport(ctx context.Context, st *serverState) (mcp.Tr
 	transport := &mcp.StreamableClientTransport{Endpoint: st.cfg.URL, HTTPClient: client}
 	if handler := m.oauthHandler(st); handler != nil {
 		transport.OAuthHandler = handler
+		st.oauthHandler = handler
 	}
 	return transport, nil
 }
@@ -862,6 +885,23 @@ func (m *Manager) oauthServerURL(st *serverState) string {
 // pasted redirect URL; openURL (optional) opens the browser. On success the
 // pending challenge is answered and the server reconnects.
 func (m *Manager) SignIn(ctx context.Context, name string, prompt SignInPrompt, openURL func(string)) error {
+	// S17 (pi f10993bc7): the session's end cancels the sign-in — the manager
+	// lifetime doubles as pi's per-session signal, and Close waits for this
+	// sign-in to clean up before tearing the sessions down. A sign-in after
+	// Close reports cancellation, not a manager error. The Add happens under
+	// the same lock as the closed check so Close's Wait never races a late
+	// Add: either the sign-in is tracked before Close proceeds, or it is
+	// rejected.
+	m.mu.Lock()
+	closed := m.closed
+	if !closed {
+		m.signins.Add(1)
+	}
+	m.mu.Unlock()
+	if closed || m.baseCtx.Err() != nil {
+		return ErrSignInCancelled
+	}
+	defer m.signins.Done()
 	st, err := m.server(name)
 	if err != nil {
 		return err
@@ -879,8 +919,13 @@ func (m *Manager) SignIn(ctx context.Context, name string, prompt SignInPrompt, 
 	if m.opts.CredentialStore == nil {
 		return errors.New("no credential store configured")
 	}
+	signinCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(m.baseCtx, cancel)
+	defer stop()
+
 	deps := flowDeps{store: m.opts.CredentialStore, serverName: name}
-	if err := signInMcpServer(ctx, deps, serverURL, settings, challenge, prompt, openURL); err != nil {
+	if err := signInMcpServer(signinCtx, deps, serverURL, settings, challenge, prompt, openURL); err != nil {
 		if errors.Is(err, ErrSignInCancelled) {
 			return err
 		}
@@ -1096,6 +1141,11 @@ func (m *Manager) reapOnce() {
 
 // closeSessionLocked tears down st's session and process. st.mu must be held.
 func (m *Manager) closeSessionLocked(st *serverState) {
+	if st.oauthHandler != nil {
+		// S17 (pi f10993bc7): closing a session must not ask the auth provider
+		// for a token, which could refresh over the network first.
+		st.oauthHandler.markClosing()
+	}
 	if st.session != nil {
 		_ = st.session.Close()
 		st.session = nil

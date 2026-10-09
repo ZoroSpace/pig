@@ -43,6 +43,8 @@ func (t *dispatchDeadlockTerminal) ClearScreen()              {}
 func (t *dispatchDeadlockTerminal) SetTitle(title string)     {}
 func (t *dispatchDeadlockTerminal) SetProgress(active bool)   {}
 
+func (t *dispatchDeadlockTerminal) SetProgramStatus(status ProgramStatus) {}
+
 // dispatchDeadlockSubclass is an inert tuiSubclass so the immediate-render
 // goroutine spawned by input dispatch has a doRender to call.
 type dispatchDeadlockSubclass struct{}

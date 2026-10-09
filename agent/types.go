@@ -579,4 +579,8 @@ type AgentEvent struct {
 	// measured with a monotonic clock; nil when the tool did not run (pi:
 	// durationMs, #10549).
 	DurationMs *int64
+	// Aborted (agent_settled) reports whether the run ended because it was
+	// aborted, for example with Escape (pi: AgentSettledEvent.aborted,
+	// S17 503c60552).
+	Aborted bool
 }

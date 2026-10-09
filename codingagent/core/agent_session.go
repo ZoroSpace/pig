@@ -256,7 +256,10 @@ func (e AgentSessionEvent) MarshalJSON() ([]byte, error) {
 			obj["id"] = *e.ID
 		}
 		obj["delta"] = e.Delta
-	case AgentSessionEventAgentSettled, AgentSessionEventSummarizationRetryFinished:
+	case AgentSessionEventAgentSettled:
+		// S17 (pi 503c60552): agent_settled carries aborted.
+		obj["aborted"] = e.Aborted
+	case AgentSessionEventSummarizationRetryFinished:
 		// type-only members.
 	}
 	return json.Marshal(obj)
@@ -1482,6 +1485,9 @@ func (s *AgentSession) emitAgentSettled(ctx context.Context) {
 	s.mu.Lock()
 	s.isAgentRunActive = false
 	s.isEmittingAgentSettled = true
+	// S17 (pi 503c60552): agent_settled carries aborted so cancelled runs
+	// report idle (the abort request is still set at settle time).
+	aborted := s.agentRunAbortRequested
 	s.mu.Unlock()
 	if s.cacheWarmer != nil {
 		s.cacheWarmer.OnAgentSettled()
@@ -1492,8 +1498,8 @@ func (s *AgentSession) emitAgentSettled(ctx context.Context) {
 			s.isEmittingAgentSettled = false
 			s.mu.Unlock()
 		}()
-		_, _ = s.extensionRunner.Emit(ctx, &AgentSettledEvent{Type: "agent_settled"})
-		s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventAgentSettled}})
+		_, _ = s.extensionRunner.Emit(ctx, &AgentSettledEvent{Type: "agent_settled", Aborted: aborted})
+		s.emit(&AgentSessionEvent{AgentEvent: agent.AgentEvent{Type: AgentSessionEventAgentSettled, Aborted: aborted}})
 	}()
 
 	// Runs queued by agent_settled handlers wait until every settled handler

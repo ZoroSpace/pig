@@ -165,6 +165,35 @@ func generateModels(ctx context.Context) error {
 		})
 	}
 
+	// Add Claude Haiku 5.5 until models.dev includes it (pi f76c1db66). Prompts over
+	// 100k input tokens are billed at 5x for the whole request.
+	// https://platform.claude.com/docs/en/models/haiku-5-5/overview
+	if !hasProviderModel(allModels, ai.ProviderAnthropic, "claude-haiku-5-5") {
+		allModels = append(allModels, &ai.Model{
+			ID: "claude-haiku-5-5", Name: "Claude Haiku 5.5",
+			API: ai.ApiAnthropicMessages, Provider: ai.ProviderAnthropic, BaseURL: "https://api.anthropic.com",
+			Reasoning: true,
+			ThinkingLevelMap: ai.ThinkingLevelMap{
+				ai.ModelThinkingOff:     nil,
+				ai.ModelThinkingMinimal: nil,
+				ai.ModelThinkingLow:     lo.ToPtr("low"),
+				ai.ModelThinkingMedium:  lo.ToPtr("medium"),
+				ai.ModelThinkingHigh:    lo.ToPtr("high"),
+				ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ai.ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost: ai.ModelCost{
+				ModelCostRates: ai.ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125},
+				Tiers: []ai.ModelCostTier{{
+					ModelCostRates:   ai.ModelCostRates{Input: 0.5, Output: 2.5, CacheRead: 0.05, CacheWrite: 0.625},
+					InputTokensAbove: 100000,
+				}},
+			},
+			ContextWindow: 1000000, MaxTokens: 128000,
+		})
+	}
+
 	// The authenticated Copilot catalog advertised these models on
 	// 2026-09-22, but models.dev did not include them yet (pi 27c072e98).
 	for _, model := range missingCopilotModels() {
@@ -178,11 +207,12 @@ func generateModels(ctx context.Context) error {
 		if candidate.Provider == ai.ProviderGithubCopilot && githubCopilotExtendedContextModels[candidate.ID] {
 			candidate.ContextWindow = 1000000
 		}
-		// models.dev may list Opus 5.5 / Sonnet 5.5 before their effort
+		// models.dev may list Opus 5.5 / Sonnet 5.5 / Haiku 5.5 before their effort
 		// metadata is complete (pi b7f4b05c7; v0.99.1 extends to Sonnet 5.5
-		// and GitHub Copilot Opus 5.5, c90d9ea58 + fde38ed7c).
+		// and GitHub Copilot Opus 5.5, c90d9ea58 + fde38ed7c; v1.1.0 adds
+		// Haiku 5.5, f76c1db66).
 		if (candidate.Provider == ai.ProviderAnthropic &&
-			(candidate.ID == "claude-opus-5-5" || candidate.ID == "claude-sonnet-5-5")) ||
+			(candidate.ID == "claude-opus-5-5" || candidate.ID == "claude-sonnet-5-5" || candidate.ID == "claude-haiku-5-5")) ||
 			(candidate.Provider == ai.ProviderGithubCopilot && candidate.ID == "claude-opus-5.5") {
 			mergeThinkingLevelMap(candidate, ai.ThinkingLevelMap{
 				ai.ModelThinkingOff:     nil,

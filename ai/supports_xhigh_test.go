@@ -177,6 +177,42 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 		supportsXhighAssertLevels(t, model, "low", "medium", "high", "xhigh", "max")
 	})
 
+	// S17 (pi f76c1db66 + a2eef9eb6): Claude Haiku 5.5 joins the catalog with
+	// its prompt-length pricing tier and adaptive thinking metadata.
+	t.Run("includes Claude Haiku 5.5 with tiered pricing and adaptive thinking", func(t *testing.T) {
+		model := supportsXhighModel(t, ProviderAnthropic, "claude-haiku-5-5")
+		if model.Cost.Input != 0.1 || model.Cost.Output != 0.5 || model.Cost.CacheRead != 0.01 || model.Cost.CacheWrite != 0.125 {
+			t.Fatalf("haiku-5-5 cost = %+v", model.Cost.ModelCostRates)
+		}
+		if len(model.Cost.Tiers) != 1 {
+			t.Fatalf("haiku-5-5 tiers = %+v, want exactly one", model.Cost.Tiers)
+		}
+		tier := model.Cost.Tiers[0]
+		if tier.InputTokensAbove != 100000 || tier.Input != 0.5 || tier.Output != 2.5 || tier.CacheRead != 0.05 || tier.CacheWrite != 0.625 {
+			t.Fatalf("haiku-5-5 tier = %+v", tier)
+		}
+		if model.ContextWindow != 1000000 || model.MaxTokens != 128000 {
+			t.Fatalf("haiku-5-5 context = %d/%d", model.ContextWindow, model.MaxTokens)
+		}
+		compat, ok := model.Compat.(*AnthropicMessagesCompat)
+		if !ok || compat == nil {
+			t.Fatalf("haiku-5-5 compat = %T", model.Compat)
+		}
+		if compat.ForceAdaptiveThinking == nil || !*compat.ForceAdaptiveThinking {
+			t.Error("haiku-5-5 must force adaptive thinking")
+		}
+		if compat.SupportsMidConvoEffort == nil || !*compat.SupportsMidConvoEffort {
+			t.Error("haiku-5-5 must support mid-convo effort")
+		}
+		if compat.SupportsMidConvoSystemMessages == nil || !*compat.SupportsMidConvoSystemMessages {
+			t.Error("haiku-5-5 must support mid-convo system messages")
+		}
+		if compat.SupportsTemperature == nil || *compat.SupportsTemperature {
+			t.Error("haiku-5-5 must not support temperature")
+		}
+		supportsXhighAssertLevels(t, model, "low", "medium", "high", "xhigh", "max")
+	})
+
 	t.Run("does not support off for GPT-6.1 Sol", func(t *testing.T) {
 		// OpenAI and Codex reject reasoning.effort "none" for GPT-6.1 Sol.
 		expected := map[ProviderID][]string{

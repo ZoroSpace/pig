@@ -5300,6 +5300,63 @@ var MODELS = map[ProviderID]map[string]Model{
 				CacheRetentionLong:  3600,
 			},
 		},
+		// S17 (pi f76c1db66): claude-haiku-5-5 until models.dev includes it.
+		// Prompts over 100k input tokens are billed at 5x for the whole request.
+		// Hand-inserted (S14/S16-1 precedent: models.dev live drift exceeds the
+		// pi catalog; shape mirrors what the pipeline produces for it — same
+		// compat/prompt-cache/image-limit metadata as claude-sonnet-5-5).
+		"claude-haiku-5-5": {
+			ID:        "claude-haiku-5-5",
+			Name:      "Claude Haiku 5.5",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderAnthropic,
+			BaseURL:   "https://api.anthropic.com",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				MaxRequestBytes: 33554432,
+				Images: &ModelImageInputLimits{
+					MaxPerRequest: 600,
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost: ModelCost{
+				ModelCostRates: ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125},
+				Tiers: []ModelCostTier{{
+					ModelCostRates:   ModelCostRates{Input: 0.5, Output: 2.5, CacheRead: 0.05, CacheWrite: 0.625},
+					InputTokensAbove: 100000,
+				}},
+			},
+			ContextWindow: 1000000,
+			MaxTokens:     128000,
+			Compat: &AnthropicMessagesCompat{
+				SupportsTemperature:            lo.ToPtr(false),
+				ForceAdaptiveThinking:          lo.ToPtr(true),
+				SupportsStrictTools:            lo.ToPtr(true),
+				SupportsMidConvoEffort:         lo.ToPtr(true),
+				SupportsMidConvoSystemMessages: lo.ToPtr(true),
+				SupportsMidConvoToolChanges:    lo.ToPtr(true),
+			},
+			PromptCache: ModelPromptCache{
+				CacheRetentionShort: 300,
+				CacheRetentionLong:  3600,
+			},
+		},
 	},
 	ProviderID("azure"): {
 		"deepseek-v4-pro": {

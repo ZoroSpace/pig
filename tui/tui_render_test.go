@@ -797,10 +797,12 @@ func (t *boundedWriteTerminal) ClearFromCursor()                                
 func (t *boundedWriteTerminal) ClearScreen()                                     {}
 func (t *boundedWriteTerminal) SetTitle(title string)                            {}
 func (t *boundedWriteTerminal) SetProgress(active bool)                          {}
-func (t *boundedWriteTerminal) Columns() int                                     { return t.cols }
-func (t *boundedWriteTerminal) Rows() int                                        { return t.rows }
-func (t *boundedWriteTerminal) KittyProtocolActive() bool                        { return false }
-func (t *boundedWriteTerminal) ModifyOtherKeysActive() bool                      { return false }
+
+func (t *boundedWriteTerminal) SetProgramStatus(status ProgramStatus) {}
+func (t *boundedWriteTerminal) Columns() int                          { return t.cols }
+func (t *boundedWriteTerminal) Rows() int                             { return t.rows }
+func (t *boundedWriteTerminal) KittyProtocolActive() bool             { return false }
+func (t *boundedWriteTerminal) ModifyOtherKeysActive() bool           { return false }
 
 func TestTuiBoundedRenderOutputSplitsLargeFullRenderWithoutChangingItsOutput(t *testing.T) {
 	terminal := newBoundedWriteTerminal()

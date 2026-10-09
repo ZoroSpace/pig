@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/ZoroSpace/pig/ai"
@@ -220,14 +221,58 @@ func modalities(values []string) []ai.ModelInput {
 	return out
 }
 
-// openRouterCost converts pricing from $/token to $/million tokens.
+// openRouterPerMillion converts one $/token rate to $/million tokens,
+// falling back when the rate is absent (pi: perMillion — parseFloat on the
+// string, empty/absent keeps the fallback).
+func openRouterPerMillion(value *string, fallback float64) float64 {
+	if value == nil || *value == "" {
+		return fallback
+	}
+	f, err := strconv.ParseFloat(*value, 64)
+	if err != nil {
+		return fallback
+	}
+	return roundCost(f * 1_000_000)
+}
+
+// openRouterCost converts pricing from $/token to $/million tokens. S17
+// (pi 943a10e74): prompt-length overrides become request-wide tiers;
+// time-of-day overrides are skipped because ModelCost cannot express them.
 func openRouterCost(model *OpenRouterModel) ai.ModelCost {
-	return ai.ModelCost{ModelCostRates: ai.ModelCostRates{
-		Input:      roundCost(parseFloatDefault(model.Pricing, func(p *OpenRouterPricing) *string { return p.Prompt }) * 1_000_000),
-		Output:     roundCost(parseFloatDefault(model.Pricing, func(p *OpenRouterPricing) *string { return p.Completion }) * 1_000_000),
-		CacheRead:  roundCost(parseFloatDefault(model.Pricing, func(p *OpenRouterPricing) *string { return p.InputCacheRead }) * 1_000_000),
-		CacheWrite: roundCost(parseFloatDefault(model.Pricing, func(p *OpenRouterPricing) *string { return p.InputCacheWrite }) * 1_000_000),
-	}}
+	pricing := model.Pricing
+	base := ai.ModelCostRates{
+		Input:      openRouterPerMillion(pricingFieldString(pricing, func(p *OpenRouterPricing) *string { return p.Prompt }), 0),
+		Output:     openRouterPerMillion(pricingFieldString(pricing, func(p *OpenRouterPricing) *string { return p.Completion }), 0),
+		CacheRead:  openRouterPerMillion(pricingFieldString(pricing, func(p *OpenRouterPricing) *string { return p.InputCacheRead }), 0),
+		CacheWrite: openRouterPerMillion(pricingFieldString(pricing, func(p *OpenRouterPricing) *string { return p.InputCacheWrite }), 0),
+	}
+	var tiers []ai.ModelCostTier
+	if pricing != nil {
+		for i := range pricing.Overrides {
+			override := &pricing.Overrides[i]
+			if override.MinPromptTokens == nil || override.UTCStart != nil || override.UTCEnd != nil || override.UTCDays != nil {
+				continue
+			}
+			tiers = append(tiers, ai.ModelCostTier{
+				ModelCostRates: ai.ModelCostRates{
+					Input:      openRouterPerMillion(override.Prompt, base.Input),
+					Output:     openRouterPerMillion(override.Completion, base.Output),
+					CacheRead:  openRouterPerMillion(override.InputCacheRead, base.CacheRead),
+					CacheWrite: openRouterPerMillion(override.InputCacheWrite, base.CacheWrite),
+				},
+				InputTokensAbove: *override.MinPromptTokens,
+			})
+		}
+	}
+	return ai.ModelCost{ModelCostRates: base, Tiers: tiers}
+}
+
+// pricingFieldString reads a rate from a possibly-nil pricing object.
+func pricingFieldString(p *OpenRouterPricing, get func(p *OpenRouterPricing) *string) *string {
+	if p == nil {
+		return nil
+	}
+	return get(p)
 }
 
 // openRouterContextWindow is top_provider.context_length ||

@@ -159,6 +159,8 @@ func (v *VirtualTerminal) SetTitle(title string) {
 }
 func (v *VirtualTerminal) SetProgress(active bool) {}
 
+func (v *VirtualTerminal) SetProgramStatus(status ProgramStatus) {}
+
 // --- Test-specific methods (pi: same names) ---------------------------------
 
 // SendInput simulates keyboard input.

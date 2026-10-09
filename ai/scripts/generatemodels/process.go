@@ -172,7 +172,7 @@ func processAnthropicModels(data ModelsDevCatalog) []*ai.Model {
 			BaseURL:       "https://api.anthropic.com",
 			Reasoning:     boolVal(m.Reasoning),
 			Input:         inputOf(m),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		})
@@ -214,7 +214,7 @@ func processOpenAIModels(data ModelsDevCatalog) []*ai.Model {
 			BaseURL:       "https://api.openai.com/v1",
 			Reasoning:     boolVal(m.Reasoning),
 			Input:         inputOf(m),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		})
@@ -274,7 +274,7 @@ func processMetaModels(data ModelsDevCatalog) []*ai.Model {
 			BaseURL:       "https://api.meta.ai/v1",
 			Reasoning:     boolVal(m.Reasoning),
 			Input:         inputOf(m),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		})
@@ -302,7 +302,7 @@ func processGroqModels(data ModelsDevCatalog) []*ai.Model {
 			BaseURL:       "https://api.groq.com/openai/v1",
 			Reasoning:     boolVal(m.Reasoning),
 			Input:         inputOf(m),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		})
@@ -330,7 +330,7 @@ func processCerebrasModels(data ModelsDevCatalog) []*ai.Model {
 			BaseURL:       "https://api.cerebras.ai/v1",
 			Reasoning:     boolVal(m.Reasoning),
 			Input:         inputOf(m),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		})
@@ -401,7 +401,7 @@ func processZaiModels(data ModelsDevCatalog) []*ai.Model {
 				BaseURL:       variant.baseURL,
 				Reasoning:     boolVal(m.Reasoning),
 				Input:         inputOf(m),
-				Cost:          modelsDevFlatCostOf(referenceCost),
+				Cost:          modelsDevCostOf(referenceCost),
 				Compat:        compat,
 				ContextWindow: int64Or(limitContext(m), 4096),
 				MaxTokens:     int64Or(limitOutput(m), 4096),
@@ -517,7 +517,7 @@ func processBasetenModels(provider *ModelsDevProvider) []*ai.Model {
 			// Baseten's GLM-5.2 endpoints are text-only despite models.dev
 			// reporting image input (pi: supportsImageInput).
 			Input:         basetenInputOf(m, isGLM52),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			Compat:        compat,
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
@@ -574,7 +574,7 @@ func processFireworksModels(provider *ModelsDevProvider) []*ai.Model {
 			Provider:      ai.ProviderFireworks,
 			Reasoning:     boolVal(m.Reasoning),
 			Input:         inputOf(m),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
 		}
@@ -652,7 +652,7 @@ func processNvidiaModels(data ModelsDevCatalog, nvidiaNimModelIDs map[string]str
 			Headers:       nvidiaHeaders,
 			Reasoning:     boolVal(m.Reasoning),
 			Input:         inputOf(m),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			Compat:        copyOpenAICompat(nvidiaOpenAICompat),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
@@ -692,7 +692,7 @@ func processTogetherModels(data ModelsDevCatalog) []*ai.Model {
 			BaseURL:       togetherBaseURL,
 			Reasoning:     reasoning,
 			Input:         inputOf(m),
-			Cost:          modelsDevFlatCostOf(m.Cost),
+			Cost:          modelsDevCostOf(m.Cost),
 			Compat:        getTogetherCompat(modelID, reasoning),
 			ContextWindow: int64Or(limitContext(m), 4096),
 			MaxTokens:     int64Or(limitOutput(m), 4096),
@@ -738,7 +738,7 @@ func processMinimaxModels(data ModelsDevCatalog) []*ai.Model {
 				BaseURL:       variant.baseURL,
 				Reasoning:     boolVal(m.Reasoning),
 				Input:         inputOf(m),
-				Cost:          modelsDevFlatCostOf(m.Cost),
+				Cost:          modelsDevCostOf(m.Cost),
 				ContextWindow: int64Or(limitContext(m), 4096),
 				MaxTokens:     int64Or(limitOutput(m), 4096),
 			})
@@ -858,20 +858,12 @@ func processMoonshotModels(data ModelsDevCatalog) []*ai.Model {
 				compat.ThinkingFormat = lo.ToPtr(ai.ThinkingFormatOpenAI)
 				compat.SupportsReasoningEffort = lo.ToPtr(true)
 			}
+			// S17 (pi a2eef9eb6): Moonshot does not bill cache writes; models.dev
+			// lists the input rate as cache_write for Kimi K3, so the catalog cost
+			// is ignored and the pinned rates are used verbatim.
 			cost := modelsDevFlatCostOf(m.Cost)
 			if isKimiK3 {
-				if cost.Input == 0 {
-					cost.Input = kimiK3Cost.Input
-				}
-				if cost.Output == 0 {
-					cost.Output = kimiK3Cost.Output
-				}
-				if cost.CacheRead == 0 {
-					cost.CacheRead = kimiK3Cost.CacheRead
-				}
-				if cost.CacheWrite == 0 {
-					cost.CacheWrite = kimiK3Cost.CacheWrite
-				}
+				cost = ai.ModelCost{ModelCostRates: kimiK3Cost}
 			}
 			models = append(models, &ai.Model{
 				ID:            modelID,
@@ -911,7 +903,7 @@ func processHuggingFaceModels(data ModelsDevCatalog) []*ai.Model {
 			BaseURL:   "https://router.huggingface.co/v1",
 			Reasoning: boolVal(m.Reasoning),
 			Input:     inputOf(m),
-			Cost:      modelsDevFlatCostOf(m.Cost),
+			Cost:      modelsDevCostOf(m.Cost),
 			Compat: &ai.OpenAICompletionsCompat{
 				SupportsDeveloperRole: lo.ToPtr(false),
 			},
@@ -1138,7 +1130,7 @@ func processCloudflareModels(data ModelsDevCatalog) []*ai.Model {
 				BaseURL:       api.CloudflareWorkersAIBaseURL,
 				Reasoning:     boolVal(m.Reasoning),
 				Input:         inputOf(m),
-				Cost:          modelsDevFlatCostOf(m.Cost),
+				Cost:          modelsDevCostOf(m.Cost),
 				Compat:        &ai.OpenAICompletionsCompat{SendSessionAffinityHeaders: lo.ToPtr(true)},
 				ContextWindow: int64Or(limitContext(m), 4096),
 				MaxTokens:     int64Or(limitOutput(m), 4096),
@@ -1205,7 +1197,7 @@ func processCloudflareModels(data ModelsDevCatalog) []*ai.Model {
 				BaseURL:       baseURL,
 				Reasoning:     boolVal(m.Reasoning),
 				Input:         inputOf(m),
-				Cost:          modelsDevFlatCostOf(m.Cost),
+				Cost:          modelsDevCostOf(m.Cost),
 				Compat:        compat,
 				ContextWindow: int64Or(limitContext(m), 4096),
 				MaxTokens:     int64Or(limitOutput(m), 4096),
@@ -1238,7 +1230,7 @@ func processCloudflareModels(data ModelsDevCatalog) []*ai.Model {
 				BaseURL:       api.CloudflareAIGatewayCompatBaseURL,
 				Reasoning:     boolVal(m.Reasoning),
 				Input:         inputOf(m),
-				Cost:          modelsDevFlatCostOf(m.Cost),
+				Cost:          modelsDevCostOf(m.Cost),
 				Compat:        &ai.OpenAICompletionsCompat{SendSessionAffinityHeaders: lo.ToPtr(true)},
 				ContextWindow: int64Or(limitContext(m), 4096),
 				MaxTokens:     int64Or(limitOutput(m), 4096),
@@ -1387,7 +1379,7 @@ func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
 				Reasoning:        boolVal(m.Reasoning),
 				ThinkingLevelMap: derefThinkingLevelMap(thinkingLevelMap),
 				Input:            inputOf(m),
-				Cost:             modelsDevFlatCostOf(m.Cost),
+				Cost:             modelsDevCostOf(m.Cost),
 				Compat:           compat,
 				ContextWindow:    int64Or(limitContext(m), 4096),
 				MaxTokens:        int64Or(limitOutput(m), 4096),
@@ -1509,7 +1501,7 @@ func processXiaomiModels(data ModelsDevCatalog) []*ai.Model {
 				BaseURL:       variant.baseURL,
 				Reasoning:     boolVal(m.Reasoning),
 				Input:         inputOf(m),
-				Cost:          modelsDevFlatCostOf(m.Cost),
+				Cost:          modelsDevCostOf(m.Cost),
 				Compat:        copyOpenAICompat(xiaomiCompat),
 				ContextWindow: int64Or(limitContext(m), 4096),
 				MaxTokens:     int64Or(limitOutput(m), 4096),
@@ -1581,7 +1573,7 @@ func processQwenTokenPlanModels(data ModelsDevCatalog) []*ai.Model {
 				BaseURL:   variant.baseURL,
 				Reasoning: boolVal(m.Reasoning),
 				Input:     inputOf(m),
-				Cost:      modelsDevFlatCostOf(m.Cost),
+				Cost:      modelsDevCostOf(m.Cost),
 				Compat:    compat,
 				ThinkingLevelMap: func() ai.ThinkingLevelMap {
 					if thinkingLevelMap != nil {

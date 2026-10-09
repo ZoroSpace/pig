@@ -979,6 +979,9 @@ func (e *AgentBeforeSettleEvent) EventType() string { return e.Type }
 // AgentSettledEvent).
 type AgentSettledEvent struct {
 	Type string `json:"type"`
+	// Aborted reports whether the run ended because it was aborted, for
+	// example with Escape (pi: AgentSettledEvent.aborted, S17 503c60552).
+	Aborted bool `json:"aborted"`
 }
 
 func (e *AgentSettledEvent) EventType() string { return e.Type }

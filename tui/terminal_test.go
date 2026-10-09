@@ -14,6 +14,38 @@ import (
 	"time"
 )
 
+// syncBuffer is a bytes.Buffer safe for concurrent Write (terminal
+// goroutines) and String/Len (test assertions): the OSC 7501 and negotiation
+// paths write from the readLoop goroutine while tests read snapshots.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (w *syncBuffer) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
+}
+
+func (w *syncBuffer) WriteString(s string) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.WriteString(s)
+}
+
+func (w *syncBuffer) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.String()
+}
+
+func (w *syncBuffer) Len() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Len()
+}
+
 func TestResolveEscapeTimeoutMs(t *testing.T) {
 	t.Run("uses PI_TUI_ESC_TIMEOUT when configured", func(t *testing.T) {
 		t.Setenv("PI_TUI_ESC_TIMEOUT", "80")
@@ -115,7 +147,7 @@ func TestNormalizeAppleTerminalInput(t *testing.T) {
 // negotiationHarness mirrors pi's setupNegotiation test harness.
 type negotiationHarness struct {
 	terminal *ProcessTerminal
-	writes   *bytes.Buffer
+	writes   *syncBuffer
 	mu       sync.Mutex
 	input    string
 	hasInput bool
@@ -126,7 +158,7 @@ type negotiationHarness struct {
 func setupNegotiation(t *testing.T) *negotiationHarness {
 	t.Helper()
 	terminal := NewProcessTerminal()
-	writes := &bytes.Buffer{}
+	writes := &syncBuffer{}
 	pipeReader, pipeWriter := io.Pipe()
 	terminal.in = pipeReader
 	terminal.out = writes
@@ -149,12 +181,35 @@ func (h *negotiationHarness) send(data string) {
 	}
 }
 
-func (h *negotiationHarness) waitForInput(timeout time.Duration) bool {
+// waitForWrite polls until writes contains substring or the timeout elapses;
+// it reports whether the substring appeared. Input handling is asynchronous
+// (readLoop goroutine), so sequence assertions must wait (pi's tests are
+// synchronous on the Node event loop).
+func (h *negotiationHarness) waitForWrite(substring string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		h.mu.Lock()
-		has := h.hasInput
+		found := strings.Contains(h.writes.String(), substring)
 		h.mu.Unlock()
+		if found {
+			return true
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	return false
+}
+
+// sawInput reports whether any input reached the handler so far.
+func (h *negotiationHarness) sawInput() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.hasInput
+}
+
+func (h *negotiationHarness) waitForInput(timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		has := h.sawInput()
 		if has {
 			return true
 		}
@@ -180,7 +235,9 @@ func countSubstrings(s, sub string) int {
 func TestProcessTerminalKittyNegotiation(t *testing.T) {
 	t.Run("queries Kitty mode before enabling modifyOtherKeys fallback", func(t *testing.T) {
 		h := setupNegotiation(t)
-		if got := h.writes.String(); !strings.HasPrefix(got, "\x1b[>7u\x1b[?u\x1b[c") {
+		// S17 (pi 503c60552): the OSC 7501 program status query rides between
+		// the Kitty query and the DA sentinel.
+		if got := h.writes.String(); !strings.HasPrefix(got, "\x1b[>7u\x1b[?u\x1b]7501;?\x1b\\\x1b[c") {
 			t.Fatalf("first writes = %q", got)
 		}
 		if strings.Contains(h.writes.String(), "\x1b[>4;2m") {
@@ -395,4 +452,125 @@ func TestAppendWriteLog(t *testing.T) {
 	if string(data) != "hello world" {
 		t.Fatalf("log = %q", data)
 	}
+}
+
+// TestProcessTerminalProgramStatus ports the OSC 7501 half of pi's
+// terminal.test.ts "program status (OSC 7501)" describe block (S17
+// 503c60552, #10607).
+func TestProcessTerminalProgramStatus(t *testing.T) {
+	const working = "\x1b]7501;state=working:app=pi\x1b\\"
+	const clear = "\x1b]7501;state=clear\x1b\\"
+
+	t.Run("reports the latest status once the terminal answers the query before DA", func(t *testing.T) {
+		h := setupNegotiation(t)
+		h.terminal.SetProgramStatus(ProgramStatus{State: ProgramStatusWorking, App: "pi"})
+		if strings.Contains(h.writes.String(), working) {
+			t.Fatal("nothing may be written before the terminal answers")
+		}
+
+		h.send("\x1b]7501;?\x1b\\")
+		if !h.waitForWrite(working, 2*time.Second) {
+			t.Fatal("the confirmed status must be re-sent")
+		}
+		if h.sawInput() {
+			t.Fatal("the reply must not reach the input handler")
+		}
+		if got := h.writes.String(); strings.Count(got, working) != 1 {
+			t.Fatalf("the confirmed status must be re-sent once: %q", got)
+		}
+		h.send("\x1b[?62;4;52c")
+
+		h.terminal.SetProgramStatus(ProgramStatus{State: ProgramStatusDone})
+		if got := h.writes.String(); !strings.HasSuffix(got, "\x1b]7501;state=done\x1b\\") {
+			t.Fatalf("tail = %q", got[len(got)-40:])
+		}
+	})
+
+	t.Run("reports nothing when DA arrives first and swallows late replies", func(t *testing.T) {
+		h := setupNegotiation(t)
+		h.send("\x1b[?62;4;52c")
+		h.send("\x1b]7501;?\x07")
+		time.Sleep(50 * time.Millisecond) // let both replies settle
+		h.terminal.SetProgramStatus(ProgramStatus{State: ProgramStatusWorking, App: "pi"})
+
+		if h.sawInput() {
+			t.Fatal("the reply must not reach the input handler")
+		}
+		if strings.Contains(h.writes.String(), "\x1b]7501;state=") {
+			t.Fatal("a terminal that answered DA first does not support OSC 7501")
+		}
+	})
+
+	t.Run("skips the query when PI_PROGRAM_STATUS is set", func(t *testing.T) {
+		t.Setenv("PI_PROGRAM_STATUS", "1")
+		h := setupNegotiation(t)
+		if got := h.writes.String(); !strings.HasPrefix(got, "\x1b[>7u\x1b[?u\x1b[c") {
+			t.Fatalf("override 1 skips the query: %q", got)
+		}
+		h.terminal.SetProgramStatus(ProgramStatus{State: ProgramStatusWorking, App: "pi"})
+		if !strings.HasSuffix(h.writes.String(), working) {
+			t.Fatal("override 1 reports without confirmation")
+		}
+
+		t.Setenv("PI_PROGRAM_STATUS", "0")
+		h0 := setupNegotiation(t)
+		if got := h0.writes.String(); !strings.HasPrefix(got, "\x1b[>7u\x1b[?u\x1b[c") {
+			t.Fatalf("override 0 skips the query: %q", got)
+		}
+		h0.terminal.SetProgramStatus(ProgramStatus{State: ProgramStatusWorking, App: "pi"})
+		if strings.Contains(h0.writes.String(), working) {
+			t.Fatal("override 0 never reports")
+		}
+	})
+
+	t.Run("does not let a DA reply from before a restart end the new query", func(t *testing.T) {
+		h := setupNegotiation(t)
+		h.terminal.SetProgramStatus(ProgramStatus{State: ProgramStatusWorking, App: "pi"})
+		h.terminal.Stop()
+		// Restart in place (the harness owns one terminal instance). The old
+		// readLoop must exit first: io.Pipe hands each Write to exactly one
+		// Reader, and a lingering old loop would swallow the replies.
+		time.Sleep(50 * time.Millisecond)
+		h.terminal.queryAndEnableKittyProtocol()
+
+		// The first start's replies arrive late: its DA, then the second
+		// start's reply and DA.
+		h.send("\x1b[?62;4;52c")
+		h.send("\x1b]7501;?\x1b\\")
+		h.send("\x1b[?62;4;52c")
+		if !strings.HasSuffix(h.writes.String(), working) {
+			t.Fatal("the late DA from the first start must not end the new query")
+		}
+		if h.sawInput() {
+			t.Fatal("replies must not reach the input handler")
+		}
+	})
+
+	t.Run("clears the status on stop and reports it again after restart", func(t *testing.T) {
+		h := setupNegotiation(t)
+		h.terminal.SetProgramStatus(ProgramStatus{State: ProgramStatusWorking, App: "pi"})
+		h.send("\x1b]7501;?\x1b\\")
+		if !h.waitForWrite(working, 2*time.Second) {
+			t.Fatal("confirmation must re-send the status")
+		}
+		h.terminal.Stop()
+		if got := h.writes.String(); !strings.Contains(got, clear) {
+			t.Fatal("stop must clear the status")
+		}
+
+		// Stopped: nothing is written until the restarted terminal confirms
+		// support again.
+		afterStop := h.writes.Len()
+		h.terminal.SetProgramStatus(ProgramStatus{State: ProgramStatusWorking, App: "pi"})
+		if h.writes.Len() != afterStop {
+			t.Fatal("stopped terminal must not report")
+		}
+
+		time.Sleep(50 * time.Millisecond) // old readLoop exits before the restart reads
+		h.terminal.queryAndEnableKittyProtocol()
+		h.send("\x1b]7501;?\x1b\\")
+		if !h.waitForWrite(working, 2*time.Second) {
+			t.Fatal("the restarted terminal reports again after confirmation")
+		}
+	})
 }

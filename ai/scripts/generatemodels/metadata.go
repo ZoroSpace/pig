@@ -117,7 +117,7 @@ func supportsAnthropicMidConvoEffort(modelID string) bool {
 	id := strings.ToLower(modelID)
 	id = regexp.MustCompile(`^~?anthropic/`).ReplaceAllString(id, "")
 	return regexp.MustCompile(`^claude-opus-(?:5|5[.-]5)(?:-\d{8})?$`).MatchString(id) ||
-		regexp.MustCompile(`^claude-sonnet-5[.-]5(?:-\d{8})?$`).MatchString(id) ||
+		regexp.MustCompile(`^claude-(?:sonnet|haiku)-5[.-]5(?:-\d{8})?$`).MatchString(id) ||
 		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`).MatchString(id)
 }
 
@@ -127,7 +127,7 @@ func supportsAnthropicMidConvoEffort(modelID string) bool {
 // opus 5 to 5[.-]5).
 func supportsAnthropicMidConvoSystemMessages(modelID string) bool {
 	return regexp.MustCompile(`^claude-opus-(?:4[.-]8|5(?:[.-]5)?)(?:-\d{8})?$`).MatchString(modelID) ||
-		regexp.MustCompile(`^claude-sonnet-5[.-]5(?:-\d{8})?$`).MatchString(modelID) ||
+		regexp.MustCompile(`^claude-(?:sonnet|haiku)-5[.-]5(?:-\d{8})?$`).MatchString(modelID) ||
 		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)?(?:-\d{8})?$`).MatchString(modelID)
 }
 
@@ -1154,6 +1154,8 @@ func isAnthropicAdaptiveThinkingModel(modelID string) bool {
 		strings.Contains(modelID, "sonnet-4.6") ||
 		strings.Contains(modelID, "sonnet-5") ||
 		strings.Contains(modelID, "sonnet.5") ||
+		strings.Contains(modelID, "haiku-5") ||
+		strings.Contains(modelID, "haiku.5") ||
 		strings.Contains(modelID, "fable-5")
 }
 
@@ -1168,7 +1170,9 @@ func isAnthropicTemperatureUnsupportedModel(modelID string) bool {
 		strings.Contains(id, "opus-5") ||
 		strings.Contains(id, "opus.5") ||
 		strings.Contains(id, "sonnet-5-5") ||
-		strings.Contains(id, "sonnet-5.5")
+		strings.Contains(id, "sonnet-5.5") ||
+		strings.Contains(id, "haiku-5-5") ||
+		strings.Contains(id, "haiku-5.5")
 }
 
 // qwenTokenPlanProviderIds (pi: QWEN_TOKEN_PLAN_PROVIDER_IDS) — the deepseek
@@ -1242,7 +1246,8 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 		if strings.Contains(model.ID, "opus-4-7") || strings.Contains(model.ID, "opus-4.7") ||
 			strings.Contains(model.ID, "opus-4-8") || strings.Contains(model.ID, "opus-4.8") ||
 			strings.Contains(model.ID, "opus-5") || strings.Contains(model.ID, "opus.5") ||
-			strings.Contains(model.ID, "sonnet-5") || strings.Contains(model.ID, "sonnet.5") {
+			strings.Contains(model.ID, "sonnet-5") || strings.Contains(model.ID, "sonnet.5") ||
+			strings.Contains(model.ID, "haiku-5") || strings.Contains(model.ID, "haiku.5") {
 			mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingXHigh: lo.ToPtr("xhigh"), ai.ModelThinkingMax: lo.ToPtr("max")})
 		}
 		if strings.Contains(model.ID, "fable-5") {

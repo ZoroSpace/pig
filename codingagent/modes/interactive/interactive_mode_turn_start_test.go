@@ -30,6 +30,8 @@ func (t *turnProgressTerminal) SetProgress(active bool) {
 	t.progressCalls = append(t.progressCalls, active)
 }
 
+func (t *turnProgressTerminal) SetProgramStatus(status tui.ProgramStatus) {}
+
 // turnStartTUI exposes the terminal surface handleEvent's turn_start branch
 // consumes.
 type turnStartTUI struct {

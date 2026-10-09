@@ -116,6 +116,25 @@ type OpenRouterPricing struct {
 	Completion      *string `json:"completion"`
 	InputCacheRead  *string `json:"input_cache_read"`
 	InputCacheWrite *string `json:"input_cache_write"`
+	// Overrides are conditional prices (S17 943a10e74: prompt-length
+	// overrides become request-wide tiers; time-of-day overrides are
+	// skipped because ModelCost cannot express them).
+	Overrides []OpenRouterPricingOverride `json:"overrides"`
+}
+
+// OpenRouterPricingOverride is a conditional price (pi:
+// OpenRouterPricingOverride). MinPromptTokens selects prompt-length pricing;
+// the utc_* fields select time-of-day or weekday pricing. Missing rates keep
+// the base price.
+type OpenRouterPricingOverride struct {
+	MinPromptTokens *int64   `json:"min_prompt_tokens"`
+	UTCStart        *float64 `json:"utc_start"`
+	UTCEnd          *float64 `json:"utc_end"`
+	UTCDays         []string `json:"utc_days"`
+	Prompt          *string  `json:"prompt"`
+	Completion      *string  `json:"completion"`
+	InputCacheRead  *string  `json:"input_cache_read"`
+	InputCacheWrite *string  `json:"input_cache_write"`
 }
 
 // OpenRouterTopProvider carries the top provider's limits (pi: top_provider).
@@ -175,12 +194,18 @@ type AIGatewayModel struct {
 	Pricing       *AIGatewayPricing `json:"pricing"`
 }
 
-// AIGatewayPricing is per-token USD as string|number (pi: pricing).
+// AIGatewayPricing is per-token USD as string|number (pi: AiGatewayPricing in
+// ai-gateway-pricing.ts). Each rate lists its own prompt-length brackets
+// (S17 943a10e74: per-rate tiers become request-wide tiers).
 type AIGatewayPricing struct {
-	Input           json.Number `json:"input"`
-	Output          json.Number `json:"output"`
-	InputCacheRead  json.Number `json:"input_cache_read"`
-	InputCacheWrite json.Number `json:"input_cache_write"`
+	Input                json.Number          `json:"input"`
+	Output               json.Number          `json:"output"`
+	InputCacheRead       json.Number          `json:"input_cache_read"`
+	InputCacheWrite      json.Number          `json:"input_cache_write"`
+	InputTiers           []AiGatewayPriceTier `json:"input_tiers"`
+	OutputTiers          []AiGatewayPriceTier `json:"output_tiers"`
+	InputCacheReadTiers  []AiGatewayPriceTier `json:"input_cache_read_tiers"`
+	InputCacheWriteTiers []AiGatewayPriceTier `json:"input_cache_write_tiers"`
 }
 
 // number returns the pi toNumber(value) value: non-finite and empty become 0.
@@ -210,14 +235,6 @@ func orString(s, fallback string) string {
 func int64Or(v *int64, fallback int64) int64 {
 	if v == nil || *v == 0 {
 		return fallback
-	}
-	return *v
-}
-
-// floatVal is pi's `x?.cost?.input || 0`.
-func floatVal(v *float64) float64 {
-	if v == nil {
-		return 0
 	}
 	return *v
 }
@@ -265,14 +282,58 @@ func basetenInputOf(m *ModelsDevModel, isGLM52 bool) []ai.ModelInput {
 	return []ai.ModelInput{ai.ModelInputText}
 }
 
-// modelsDevCostOf converts a models.dev cost to ModelCost (pi: the inline
-// `cost: { input: m.cost?.input || 0, ... }` four-field form; tiers are not
-// carried for the ported providers — pi uses getModelsDevCost only for
-// github-copilot, which pig has not ported yet).
-// modelsDevFlatCostOf builds the flat cost shape used by every inline
-// models.dev block except github-copilot (pi: the inline
-// `cost: { input: m.cost?.input || 0, ... }` literals — no tiers).
+// modelsDevCostOf converts a models.dev cost to ModelCost (pi:
+// getModelsDevCost). S17 (pi 943a10e74): every models.dev-sourced cost goes
+// through this helper — the hand-built four-field literals are gone except
+// the custom sites (kimi-coding impliedCost, moonshot Kimi K3 pin, vercel
+// typesafe, google-vertex, mistral-conversations), so context tiers survive
+// for all ported providers.
+func modelsDevCostOf(c *ModelsDevCost) ai.ModelCost {
+	var base ai.ModelCostRates
+	var tiers []ai.ModelCostTier
+	if c != nil {
+		base = modelCostRatesOf(c)
+		// pi: getModelsDevCost keeps context-sized tiers only; a rate a tier
+		// does not list keeps the base price (`tier.input ?? base.input`).
+		for _, tier := range c.Tiers {
+			if tier.Tier == nil || tier.Tier.Type != "context" || tier.Tier.Size == nil {
+				continue
+			}
+			rates := base
+			if tier.Input != nil {
+				rates.Input = *tier.Input
+			}
+			if tier.Output != nil {
+				rates.Output = *tier.Output
+			}
+			if tier.CacheRead != nil {
+				rates.CacheRead = *tier.CacheRead
+			}
+			if tier.CacheWrite != nil {
+				rates.CacheWrite = *tier.CacheWrite
+			}
+			tiers = append(tiers, ai.ModelCostTier{
+				ModelCostRates:   rates,
+				InputTokensAbove: *tier.Tier.Size,
+			})
+		}
+	}
+	return ai.ModelCost{
+		ModelCostRates: base,
+		Tiers:          tiers,
+	}
+}
+
+// modelsDevFlatCostOf builds the flat cost shape used by the custom sites
+// pi keeps as literals (kimi-coding impliedCost merge, moonshot Kimi K3 pin):
+// the `cost: { input: m.cost?.input || 0, ... }` four-field form, no tiers.
 func modelsDevFlatCostOf(c *ModelsDevCost) ai.ModelCost {
+	return ai.ModelCost{ModelCostRates: modelCostRatesOf(c)}
+}
+
+// modelCostRatesOf flattens a models.dev cost to its four base rates
+// (pi: `cost?.input || 0` — nil and 0 both become 0).
+func modelCostRatesOf(c *ModelsDevCost) ai.ModelCostRates {
 	var rates ai.ModelCostRates
 	if c != nil {
 		if c.Input != nil {
@@ -288,38 +349,7 @@ func modelsDevFlatCostOf(c *ModelsDevCost) ai.ModelCost {
 			rates.CacheWrite = *c.CacheWrite
 		}
 	}
-	return ai.ModelCost{ModelCostRates: rates}
-}
-func modelsDevCostOf(c *ModelsDevCost) ai.ModelCost {
-	var input, output, cacheRead, cacheWrite *float64
-	var tiers []ai.ModelCostTier
-	if c != nil {
-		input, output, cacheRead, cacheWrite = c.Input, c.Output, c.CacheRead, c.CacheWrite
-		// pi: getModelsDevCost keeps context-sized tiers only.
-		for _, tier := range c.Tiers {
-			if tier.Tier == nil || tier.Tier.Type != "context" || tier.Tier.Size == nil {
-				continue
-			}
-			tiers = append(tiers, ai.ModelCostTier{
-				ModelCostRates: ai.ModelCostRates{
-					Input:      floatVal(tier.Input),
-					Output:     floatVal(tier.Output),
-					CacheRead:  floatVal(tier.CacheRead),
-					CacheWrite: floatVal(tier.CacheWrite),
-				},
-				InputTokensAbove: *tier.Tier.Size,
-			})
-		}
-	}
-	return ai.ModelCost{
-		ModelCostRates: ai.ModelCostRates{
-			Input:      floatVal(input),
-			Output:     floatVal(output),
-			CacheRead:  floatVal(cacheRead),
-			CacheWrite: floatVal(cacheWrite),
-		},
-		Tiers: tiers,
-	}
+	return rates
 }
 
 // roundCost is pi's Number(value.toFixed(6)).

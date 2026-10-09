@@ -407,6 +407,10 @@ type InteractiveMode struct {
 	// Shutdown state
 	shutdownRequested bool
 
+	// Reports working, blocked, done, and error states to terminals that
+	// support OSC 7501 (pi: programStatus, S17 503c60552).
+	programStatus *ProgramStatusReporter
+
 	// bugReportHintShown: the issue-tracker hint (pi's /bug hint; pig-only
 	// wording — /bug is not shipped) renders at most once per session so
 	// error output stays readable (pi v0.86.0: bugReportHintShown).
@@ -764,6 +768,11 @@ func (m *InteractiveMode) Init() error {
 	// can use interactive dialogs
 	m.ui.Start()
 	m.isInitialized = true
+	m.programStatus = NewProgramStatusReporter(
+		func() tui.Terminal { return m.ui.Terminal() },
+		func() string { name, _ := m.sessionManager().GetSessionName(); return name },
+	)
+	m.programStatus.Report()
 
 	m.themeController.ApplyFromSettings()
 	// The startup header bakes theme colors into its text; wait for the
@@ -1854,6 +1863,11 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 	}
 
 	m.footer.Invalidate()
+	// S17 (pi 503c60552): program status tracking sits before the switch so
+	// every event type it consumes updates the terminal status too.
+	if m.programStatus != nil {
+		m.programStatus.HandleEvent(event)
+	}
 
 	switch event.Type {
 	case agent.AgentEventAgentStart:
@@ -5697,7 +5711,7 @@ func (m *InteractiveMode) mutateUI(fn func()) {
 type interactiveExtensionUIContext struct{ m *InteractiveMode }
 
 func (u *interactiveExtensionUIContext) Select(ctx context.Context, title string, options []string, opts *core.ExtensionUIDialogOptions) (string, bool) {
-	return u.m.showExtensionSelector(ctx, title, options, opts)
+	return u.m.showExtensionSelector(ctx, title, options, opts, nil)
 }
 
 func (u *interactiveExtensionUIContext) Confirm(ctx context.Context, title string, message string, opts *core.ExtensionUIDialogOptions) bool {
@@ -5831,7 +5845,7 @@ func (u *interactiveExtensionUIContext) SetToolsExpanded(ctx context.Context, ex
 // value/undefined). pi's opts.signal is the caller's ctx per repo rules;
 // the dialog auto-dismisses on ctx cancellation.
 func (m *InteractiveMode) showExtensionSelector(ctx context.Context, title string, options []string,
-	opts *core.ExtensionUIDialogOptions) (string, bool) {
+	opts *core.ExtensionUIDialogOptions, blocked *blockedStatus) (string, bool) {
 	if ctx != nil && ctx.Err() != nil {
 		return "", false
 	}
@@ -5874,10 +5888,34 @@ func (m *InteractiveMode) showExtensionSelector(ctx context.Context, title strin
 		m.editorContainer.AddChild(m.extensionSelector)
 		m.ui.SetFocus(m.extensionSelector)
 	})
+	// S17 (pi 503c60552): extension dialogs share the editor slot; opening
+	// one replaces the status of a displaced one.
+	if blocked == nil {
+		blocked = &blockedStatus{kind: tui.ProgramStatusBlockedQuestion, message: title}
+	}
+	m.reportBlockedDialog("extension-dialog", blocked.kind, blocked.message)
 	m.ui.RequestRender(false)
 
 	result := <-resultCh
 	return result, result != ""
+}
+
+// reportBlockedDialog reports a `blocked` program status for an open dialog
+// (pi: programStatus.setBlocked call sites). Nil-safe for tests and paths
+// that run before Init.
+func (m *InteractiveMode) reportBlockedDialog(source string, kind tui.ProgramStatusBlockedKind, message string) {
+	if m.programStatus == nil {
+		return
+	}
+	m.programStatus.SetBlocked(source, &blockedStatus{kind: kind, message: message})
+}
+
+// clearBlockedDialog clears a dialog's blocked report (pi: setBlocked(source, undefined)).
+func (m *InteractiveMode) clearBlockedDialog(source string) {
+	if m.programStatus == nil {
+		return
+	}
+	m.programStatus.SetBlocked(source, nil)
 }
 
 // hideExtensionSelector hides the extension selector (pi:
@@ -5889,6 +5927,7 @@ func (m *InteractiveMode) hideExtensionSelector() {
 		m.editorContainer.AddChild(m.editor)
 		m.ui.SetFocus(m.editor)
 	})
+	m.clearBlockedDialog("extension-dialog")
 	m.ui.RequestRender(false)
 }
 
@@ -5896,7 +5935,7 @@ func (m *InteractiveMode) hideExtensionSelector() {
 // showExtensionConfirm).
 func (m *InteractiveMode) showExtensionConfirm(ctx context.Context, title string, message string,
 	opts *core.ExtensionUIDialogOptions) bool {
-	result, ok := m.showExtensionSelector(ctx, fmt.Sprintf("%s\n%s", title, message), []string{"Yes", "No"}, opts)
+	result, ok := m.showExtensionSelector(ctx, fmt.Sprintf("%s\n%s", title, message), []string{"Yes", "No"}, opts, &blockedStatus{kind: tui.ProgramStatusBlockedPermission, message: title})
 	return ok && result == "Yes"
 }
 
@@ -5951,6 +5990,7 @@ func (m *InteractiveMode) showExtensionInput(ctx context.Context, title string, 
 		m.editorContainer.AddChild(m.extensionInput)
 		m.ui.SetFocus(m.extensionInput)
 	})
+	m.reportBlockedDialog("extension-dialog", tui.ProgramStatusBlockedQuestion, title)
 	m.ui.RequestRender(false)
 
 	result := <-resultCh
@@ -5965,6 +6005,7 @@ func (m *InteractiveMode) hideExtensionInput() {
 		m.editorContainer.AddChild(m.editor)
 		m.ui.SetFocus(m.editor)
 	})
+	m.clearBlockedDialog("extension-dialog")
 	m.ui.RequestRender(false)
 }
 
@@ -5996,6 +6037,7 @@ func (m *InteractiveMode) showExtensionEditor(ctx context.Context, title string,
 		m.editorContainer.AddChild(m.extensionEditor)
 		m.ui.SetFocus(m.extensionEditor)
 	})
+	m.reportBlockedDialog("extension-dialog", tui.ProgramStatusBlockedQuestion, title)
 	m.ui.RequestRender(false)
 
 	result := <-resultCh
@@ -6010,6 +6052,7 @@ func (m *InteractiveMode) hideExtensionEditor() {
 		m.editorContainer.AddChild(m.editor)
 		m.ui.SetFocus(m.editor)
 	})
+	m.clearBlockedDialog("extension-dialog")
 	m.ui.RequestRender(false)
 }
 
@@ -7100,7 +7143,7 @@ func (m *InteractiveMode) handleTreeNavigation(entryID string, done func()) {
 				"No summary",
 				"Summarize",
 				"Summarize with custom prompt",
-			}, nil)
+			}, nil, nil)
 
 			if !ok {
 				// User pressed escape - re-show tree selector with same selection
@@ -7898,7 +7941,7 @@ func (m *InteractiveMode) showApiKeyLoginDialog(providerID string, providerName 
 		})
 	}
 
-	err := m.loginProvider(dialog, providerID, auth.AuthTypeAPIKey)
+	err := m.loginProvider(dialog, providerID, providerName, auth.AuthTypeAPIKey)
 	if err != nil {
 		restoreEditor()
 		errorMsg := err.Error()
@@ -8006,7 +8049,10 @@ func (m *InteractiveMode) notifyAuthDialog(dialog *components.LoginDialogCompone
 
 // loginProvider runs the provider login flow against the dialog (pi:
 // loginProvider).
-func (m *InteractiveMode) loginProvider(dialog *components.LoginDialogComponent, providerID string, method auth.AuthType) error {
+func (m *InteractiveMode) loginProvider(dialog *components.LoginDialogComponent, providerID string, providerName string, method auth.AuthType) error {
+	// S17 (pi 503c60552): the login dialog reports `blocked` with kind "auth".
+	m.reportBlockedDialog("login", tui.ProgramStatusBlockedAuth, "Log in to "+providerName)
+	defer m.clearBlockedDialog("login")
 	interaction := &loginDialogInteraction{m: m, dialog: dialog}
 	// pi: { getDeviceId: () => this.settingsManager.getOrCreateDeviceId() }.
 	settingsManager := m.session().SettingsManager
@@ -8035,7 +8081,7 @@ func (m *InteractiveMode) showLoginDialog(providerID string, providerName string
 		})
 	}
 
-	err := m.loginProvider(dialog, providerID, auth.AuthTypeOAuth)
+	err := m.loginProvider(dialog, providerID, providerName, auth.AuthTypeOAuth)
 	if err != nil {
 		restoreEditor()
 		errorMsg := err.Error()
@@ -8610,6 +8656,10 @@ func (m *InteractiveMode) rebindCurrentSession(renderBeforeBind bool) error {
 	if m.unsubscribe != nil {
 		m.unsubscribe()
 		m.unsubscribe = nil
+	}
+	// S17 (pi 503c60552): forget the previous session's run.
+	if m.programStatus != nil {
+		m.programStatus.Reset()
 	}
 
 	// pi calls applyRuntimeSettings here (rebindCurrentSession's first step):

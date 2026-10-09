@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -73,6 +74,12 @@ func registeredRedirectURL(client *OAuthClientInformation) string {
 // signInMcpServer signs a server in (pi: signInMcpServer). The manager wraps
 // this with reconnect + challenge bookkeeping.
 func signInMcpServer(ctx context.Context, deps flowDeps, serverURL string, settings OAuthSettings, challenge OAuthChallenge, prompt SignInPrompt, openURL func(string)) error {
+	// S17 (pi f10993bc7): every request to the authorization server is bounded
+	// by oauthRequestTimeout (pi: flow fetch = timedFetch() — previously only
+	// refreshes were bounded).
+	if deps.client == nil {
+		deps.client = &http.Client{Timeout: oauthRequestTimeout}
+	}
 	stored, err := deps.store.Load(deps.serverName, serverURL)
 	if err != nil {
 		return err
