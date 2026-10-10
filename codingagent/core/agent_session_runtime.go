@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
 )
 
@@ -52,7 +53,11 @@ func (e *SessionImportFileNotFoundError) Error() string {
 }
 
 // extractUserMessageText flattens user message content to text (pi:
-// extractUserMessageText).
+// extractUserMessageText). User content arrives in two forms (the value-form
+// family): runtime-constructed messages carry UserContent.Parts, while JSON
+// decoding fills UserContent.String — reading only one form returned "" for
+// every live fork's selectedText (docs/fix/2026-10-10-fork-nil-options-panic.md;
+// same semantics as messageTextContent's UserMessage branch).
 func extractUserMessageText(content any) string {
 	if text, ok := content.(string); ok {
 		return text
@@ -61,18 +66,16 @@ func extractUserMessageText(content any) string {
 	if !ok {
 		// pi filters {type,text} shapes; pig's decoded user content is
 		// []types.Content or UserContent.String.
-		if userContent, ok := content.(types.UserContent); ok {
+		userContent, ok := content.(types.UserContent)
+		if !ok {
+			return ""
+		}
+		if userContent.Parts == nil {
 			return userContent.String
 		}
-		return ""
+		parts = userContent.Parts
 	}
-	var texts []string
-	for _, part := range parts {
-		if text, ok := part.(*types.TextContent); ok {
-			texts = append(texts, text.Text)
-		}
-	}
-	return strings.Join(texts, "")
+	return ai.ContentText(parts, "")
 }
 
 // AgentSessionRuntime owns the current AgentSession plus its cwd-bound
@@ -369,10 +372,17 @@ type ForkResult struct {
 }
 
 // Fork forks the session at (or before) an entry and replaces the runtime
-// (pi: fork).
+// (pi: fork). options may be nil — pi reads options?.position / options?.
+// withSession through optional chaining, and the interactive /fork picker
+// calls Fork without options (nil options crashed agent_session_runtime.go
+// at options.WithSession; see docs/fix/2026-10-10-fork-nil-options-panic.md).
+// Normalization follows the SwitchSession / NewSession idiom above.
 func (r *AgentSessionRuntime) Fork(ctx context.Context, entryID string, options *ForkOptions) (*ForkResult, error) {
+	if options == nil {
+		options = &ForkOptions{}
+	}
 	position := "before"
-	if options != nil && options.Position != "" {
+	if options.Position != "" {
 		position = options.Position
 	}
 	cancelled, err := r.emitBeforeFork(ctx, entryID, position)
@@ -400,9 +410,17 @@ func (r *AgentSessionRuntime) Fork(ctx context.Context, entryID string, options 
 		if messageEntry.Base().ParentID != nil {
 			targetLeafID = *messageEntry.Base().ParentID
 		}
-		if userMessage, ok := messageEntry.Message.(*types.UserMessage); ok {
+		// pi: extractUserMessageText(selectedEntry.message.content). pig's
+		// message entries carry the AgentMessage in both value and pointer
+		// forms (the value-form family), so the UserMessage assertion must
+		// accept both — the pointer-only form fell through to the whole-message
+		// fallback and selectedText came out empty.
+		switch userMessage := messageEntry.Message.(type) {
+		case types.UserMessage:
 			selectedText = extractUserMessageText(userMessage.Content)
-		} else {
+		case *types.UserMessage:
+			selectedText = extractUserMessageText(userMessage.Content)
+		default:
 			selectedText = extractUserMessageText(messageEntry.Message)
 		}
 	}

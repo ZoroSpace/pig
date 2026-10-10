@@ -95,6 +95,7 @@
 **登记规则**：每起 fix 完成后在下方「现有文件」列表补一条**一行摘要**（现象 + 根因），详情一律落对应 md；**禁止把长摘要写回本文件**。**每起 fix 必须同时落地回归测试函数**（stash 验证红→绿，fix 文档写明测试函数名与验证方式）。**README 同步义务**：fix 或批次若改变用户可见面，同批更新 README 对应段 + `docs/handoffs/verify-matrix.md`。
 
 现有文件：
+- `2026-10-10-fork-nil-options-panic.md`：/fork 后发消息没反应（Fork 缺 nil options 归一化，替换后 panic 被 RecoverPanic 吞掉致 UI 未重绑；顺修 selectedText 双形态丢失，家族第六例）
 - `2026-10-03-restored-tool-results-dropped.md`：`--continue` 后工具卡片恒 muted 且输出不显示（toolResult 指针-only 断言丢值形态，双形态家族第五例）
 - `2026-10-02-auth-select-stale-frame.md`：/login 对话框画面冻结（showAuthSelect 丢 requestRender）
 - `2026-10-02-theme-style-colorfgbg-env.md`：TestThemeStyles 受宿主 COLORFGBG 漂移影响（t.Setenv 加固）

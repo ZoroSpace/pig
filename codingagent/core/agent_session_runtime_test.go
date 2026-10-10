@@ -259,3 +259,107 @@ func TestAgentSessionRuntimeImportPreservesSameNameSession(t *testing.T) {
 		t.Fatalf("active session = %q", string(active))
 	}
 }
+
+// TestForkNilOptionsReplacesSessionAndRebinds locks the /fork picker crash
+// (docs/fix/2026-10-10-fork-nil-options-panic.md): pi's fork treats options
+// as optional (options?.withSession), and the interactive /fork picker calls
+// Fork with nil. Before the fix Fork dereferenced options.WithSession in
+// every replacement branch — the persisted branched branch panicked AFTER
+// the runtime had already swapped sessions, the picker goroutine's panic
+// containment swallowed it, and rebindSession never ran. The UI stayed
+// bound to the disposed session while the new session ran prompts silently:
+// "fork 后发消息没反应" (panic report: component interactive.fork,
+// agent_session_runtime.go:474).
+func TestForkNilOptionsReplacesSessionAndRebinds(t *testing.T) {
+	cwd := t.TempDir()
+	sessionManager, err := CreateSessionManager(cwd, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeHost := newRuntimeHostForTest(t, cwd, sessionManager)
+	defer runtimeHost.Dispose()
+
+	rebindCalled := false
+	runtimeHost.SetRebindSession(func(session *AgentSession) error {
+		rebindCalled = true
+		return nil
+	})
+
+	ctx := context.Background()
+	if err := runtimeHost.Session().Prompt(ctx, "first message", nil); err != nil {
+		t.Fatalf("first prompt: %v", err)
+	}
+	msgs := runtimeHost.Session().GetUserMessagesForForking()
+	if len(msgs) == 0 {
+		t.Fatal("no fork candidates")
+	}
+
+	result, err := runtimeHost.Fork(ctx, msgs[len(msgs)-1].EntryID, nil)
+	if err != nil {
+		t.Fatalf("fork with nil options: %v", err)
+	}
+	if result.Cancelled {
+		t.Fatal("fork cancelled")
+	}
+	if result.SelectedText != "first message" {
+		t.Fatalf("fork selectedText = %q, want %q", result.SelectedText, "first message")
+	}
+	if !rebindCalled {
+		t.Fatal("rebindSession never ran (UI left bound to the disposed session)")
+	}
+
+	newSession := runtimeHost.Session()
+	if newSession.SessionManager.GetSessionFile() == sessionManager.GetSessionFile() {
+		t.Fatalf("branched fork kept the same session file %q", sessionManager.GetSessionFile())
+	}
+	// The reported symptom: a prompt submitted after the fork must actually
+	// run on the replacement session.
+	if err := newSession.Prompt(ctx, "after fork", nil); err != nil {
+		t.Fatalf("prompt after fork: %v", err)
+	}
+}
+
+// TestForkNilOptionsInMemorySession covers the same nil-options contract on
+// the non-persisted branch (the fork reuses the in-memory session manager
+// instead of opening a branched file).
+func TestForkNilOptionsInMemorySession(t *testing.T) {
+	cwd := t.TempDir()
+	sessionManager, err := InMemorySession(cwd, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeHost := newRuntimeHostForTest(t, cwd, sessionManager)
+	defer runtimeHost.Dispose()
+
+	rebindCalled := false
+	runtimeHost.SetRebindSession(func(session *AgentSession) error {
+		rebindCalled = true
+		return nil
+	})
+
+	ctx := context.Background()
+	if err := runtimeHost.Session().Prompt(ctx, "first message", nil); err != nil {
+		t.Fatalf("first prompt: %v", err)
+	}
+	msgs := runtimeHost.Session().GetUserMessagesForForking()
+	if len(msgs) == 0 {
+		t.Fatal("no fork candidates")
+	}
+
+	result, err := runtimeHost.Fork(ctx, msgs[len(msgs)-1].EntryID, nil)
+	if err != nil {
+		t.Fatalf("fork with nil options: %v", err)
+	}
+	if result.Cancelled {
+		t.Fatal("fork cancelled")
+	}
+	if !rebindCalled {
+		t.Fatal("rebindSession never ran")
+	}
+	if runtimeHost.Session() == nil {
+		t.Fatal("session not replaced")
+	}
+	if err := runtimeHost.Session().Prompt(ctx, "after fork", nil); err != nil {
+		t.Fatalf("prompt after fork: %v", err)
+	}
+}
