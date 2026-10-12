@@ -96,6 +96,7 @@
 
 现有文件：
 - `2026-10-13-scrollback-duplication-window-repaint.md`：滚动历史整段重复文字（shrink-spanning 滑窗重绘把视口上方 k 行重写、与 scrollback 旧副本重叠；滑动量 >8 改走 fullRender 逐行精确重建，≤8 保留滑窗）
+- `2026-10-12-models-json-volcengine-thinking-format.md`：models.json 写 thinkingFormat "volcengine" 整文件被拒（校验枚举漏了 pig 自有格式；解码链路本通，补枚举一行；烧钱实验顺带发现）
 - `2026-10-10-edit-details-map-form.md`：--continue 后 edit 卡片丢 diff（Details map/指针双形态，家族第七例；真正元凶 EditToolDetails 缺 json tag 写出大写键属线格式违规，已钉 camelCase 守卫；其余五渲染器同族降级已知不修）
 - `2026-10-10-fork-nil-options-panic.md`：/fork 后发消息没反应（Fork 缺 nil options 归一化，替换后 panic 被 RecoverPanic 吞掉致 UI 未重绑；顺修 selectedText 双形态丢失，家族第六例）
 - `2026-10-03-restored-tool-results-dropped.md`：`--continue` 后工具卡片恒 muted 且输出不显示（toolResult 指针-only 断言丢值形态，双形态家族第五例）

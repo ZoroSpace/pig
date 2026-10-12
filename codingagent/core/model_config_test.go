@@ -4,10 +4,13 @@
 package core
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ZoroSpace/pig/ai"
 )
 
 func TestModelConfigEmptyPathYieldsEmptyConfig(t *testing.T) {
@@ -151,6 +154,57 @@ func TestModelConfigAcceptsCommentsAndTrailingCommas(t *testing.T) {
 	}
 	if provider := config.GetProvider("custom"); provider == nil || provider.Name != "Custom" {
 		t.Fatalf("provider = %+v", provider)
+	}
+}
+
+func TestModelConfigAcceptsVolcengineThinkingFormat(t *testing.T) {
+	// pig-only: ThinkingFormatVolcengine exists in ai/types (the built-in
+	// volcengine-plan provider's thinking format) and must be configurable
+	// through models.json as well; the validator enum missing it rejected the
+	// whole file (found 2026-10-12 during the volcengine burn experiment).
+	path := filepath.Join(t.TempDir(), "models.json")
+	content := `{
+		"providers": {
+			"arkproxy": {
+				"baseUrl": "http://127.0.0.1:9/api/coding/v3",
+				"apiKey": "sk-test",
+				"api": "openai-completions",
+				"models": [{
+					"id": "deepseek-v4.1-flash",
+					"reasoning": true,
+					"input": ["text"],
+					"contextWindow": 1024000,
+					"maxTokens": 384000,
+					"compat": { "thinkingFormat": "volcengine", "supportsReasoningEffort": false }
+				}]
+			}
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	config := LoadModelConfig(path)
+	if config.GetError() != "" {
+		t.Fatalf("error = %q", config.GetError())
+	}
+	provider := config.GetProvider("arkproxy")
+	if provider == nil || len(provider.Models) != 1 {
+		t.Fatalf("provider = %+v", provider)
+	}
+	var compatMap map[string]any
+	if err := json.Unmarshal(provider.Models[0].Compat, &compatMap); err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodeCompat(ai.ApiOpenAICompletions, compatMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oc, ok := decoded.(*ai.OpenAICompletionsCompat)
+	if !ok {
+		t.Fatalf("decoded type %T", decoded)
+	}
+	if oc.ThinkingFormat == nil || *oc.ThinkingFormat != ai.ThinkingFormatVolcengine {
+		t.Fatalf("thinkingFormat = %+v", oc.ThinkingFormat)
 	}
 }
 

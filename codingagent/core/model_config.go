@@ -303,10 +303,15 @@ func expectObject(value any, path string, errs *[]schemaError) bool {
 
 var modelsJsonInputValues = map[string]bool{"text": true, "image": true}
 
+// "volcengine" is pig-only (ai.ThinkingFormatVolcengine, the built-in
+// volcengine-plan provider's format) but must stay configurable through
+// models.json too — the validator missing it rejected the whole file
+// (2026-10-12, docs/fix/2026-10-12-models-json-volcengine-thinking-format.md).
 var modelsJsonThinkingFormatValues = map[string]bool{
 	"openai": true, "openrouter": true, "together": true, "baseten": true,
 	"deepseek": true, "zai": true, "qwen": true, "chat-template": true,
 	"qwen-chat-template": true, "string-thinking": true, "ant-ling": true,
+	"volcengine": true,
 }
 
 func expectInputArray(value any, path string, errs *[]schemaError) {
