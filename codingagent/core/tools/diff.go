@@ -46,9 +46,15 @@ func replaceTabsDiff(text string) string {
 }
 
 // renderIntraLineDiff computes the word-level diff and renders changed
-// parts with inverse video (pi: renderIntraLineDiff). diffWords groups
-// whitespace with adjacent words; leading whitespace is stripped from the
-// inverse so indentation is not highlighted.
+// parts plain (pi: renderIntraLineDiff, which uses inverse video).
+// pig-only deviation (2026-10-12, user request, two-step convergence):
+// inverse renders as a colored BACKGROUND on the terminal (the exact look
+// the BLOCK-BORDERS rework removed), and bold on the changed tokens was
+// also declined — the whole line keeps its single fg hue with no intra-line
+// emphasis. The word diff is kept for structural parity and because the
+// reconstruction concatenates back to the original content. diffWords
+// groups whitespace with adjacent words; leading whitespace is stripped
+// from the first changed part so indentation handling stays pi-shaped.
 func renderIntraLineDiff(theme UITheme, oldContent string, newContent string) (string, string) {
 	wordDiff := tools.DiffWords(oldContent, newContent)
 
@@ -66,7 +72,7 @@ func renderIntraLineDiff(theme UITheme, oldContent string, newContent string) (s
 				isFirstRemoved = false
 			}
 			if value != "" {
-				removedLine.WriteString(theme.Inverse(value))
+				removedLine.WriteString(value)
 			}
 		} else if part.Added {
 			value := part.Value
@@ -77,7 +83,7 @@ func renderIntraLineDiff(theme UITheme, oldContent string, newContent string) (s
 				isFirstAdded = false
 			}
 			if value != "" {
-				addedLine.WriteString(theme.Inverse(value))
+				addedLine.WriteString(value)
 			}
 		} else {
 			removedLine.WriteString(part.Value)
@@ -94,11 +100,12 @@ type RenderDiffOptions struct {
 	FilePath string
 }
 
-// RenderDiff renders a diff string with colored lines and intra-line
-// change highlighting (pi: renderDiff):
+// RenderDiff renders a diff string with colored lines (pi: renderDiff,
+// with the pig-only no-intra-line-emphasis deviation noted on
+// renderIntraLineDiff):
 //   - context lines: toolDiffContext
-//   - removed lines: toolDiffRemoved, with inverse on changed tokens
-//   - added lines: toolDiffAdded, with inverse on changed tokens
+//   - removed lines: toolDiffRemoved, plain fg (no intra-line emphasis)
+//   - added lines: toolDiffAdded, plain fg (no intra-line emphasis)
 func RenderDiff(theme UITheme, diffText string, options RenderDiffOptions) string {
 	_ = options
 	lines := strings.Split(diffText, "\n")

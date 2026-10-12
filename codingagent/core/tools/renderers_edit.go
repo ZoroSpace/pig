@@ -56,7 +56,11 @@ func (c *EditCallRenderComponent) snapshot() (preview *EditPreview, argsKey *str
 }
 
 func newEditCallRenderComponent() *EditCallRenderComponent {
-	return &EditCallRenderComponent{Box: tui.NewBox(1, 1, func(text string) string { return text })}
+	// pig-only deviation (2026-10-10): pi uses Box(1, 1) because edit
+	// self-renders its frame; pig renders edit in the default shell where the
+	// ToolExecutionComponent's contentBox already pads (see the RenderShell
+	// note in edit.go), so the box padding is zero to avoid a double indent.
+	return &EditCallRenderComponent{Box: tui.NewBox(0, 0, func(text string) string { return text })}
 }
 
 // getEditCallRenderComponent resolves the call component (pi:
@@ -145,6 +149,41 @@ func renderToolPathFromArgs(theme UITheme, args any, cwd string) string {
 	return RenderToolPath(rawPathFromArgs(args), theme, cwd, "")
 }
 
+// editDetailsDiff extracts the diff artifacts from result details (pi reads
+// properties off the plain details object). Double-form family: live events
+// carry *EditToolDetails (agent_loop createToolResultMessage passes the
+// tool's struct through), session restore decodes the JSONL `details` field
+// into map[string]any (types.ToolResultMessage.Details any) — a pointer-only
+// assertion dropped the diff on restored sessions
+// (docs/fix/2026-10-10-edit-details-map-form.md).
+func editDetailsDiff(details any) (string, *int) {
+	switch d := details.(type) {
+	case *EditToolDetails:
+		return d.Diff, d.FirstChangedLine
+	case EditToolDetails:
+		return d.Diff, d.FirstChangedLine
+	case map[string]any:
+		// Wire keys are camelCase (pi parity; pig sessions written after the
+		// json-tag fix). Sessions written before the fix carried capitalized
+		// keys — accept both when reading (docs/fix/2026-10-10-edit-details-map-form.md).
+		diff, _ := d["diff"].(string)
+		if diff == "" {
+			diff, _ = d["Diff"].(string)
+		}
+		var firstChangedLine *int
+		line, ok := d["firstChangedLine"].(float64)
+		if !ok {
+			line, ok = d["FirstChangedLine"].(float64)
+		}
+		if ok {
+			lineInt := int(line)
+			firstChangedLine = &lineInt
+		}
+		return diff, firstChangedLine
+	}
+	return "", nil
+}
+
 // formatEditResult renders the settled result body (pi: formatEditResult;
 // "" = undefined).
 func formatEditResult(theme UITheme, args any, preview *EditPreview, result ToolRenderResult, isError bool) string {
@@ -182,9 +221,7 @@ func formatEditResult(theme UITheme, args any, preview *EditPreview, result Tool
 
 	resultDiff := ""
 	if !isError && result.Details != nil {
-		if details, ok := result.Details.(*EditToolDetails); ok && details.Diff != "" {
-			resultDiff = details.Diff
-		}
+		resultDiff, _ = editDetailsDiff(result.Details)
 	}
 	filePath := ""
 	if rawPath != nil {
@@ -337,10 +374,7 @@ func editRenderResult(result ToolRenderResult, _ ToolRenderResultOptions, theme 
 	var resultDiff string
 	var firstChangedLine *int
 	if !context.IsError && result.Details != nil {
-		if details, ok := result.Details.(*EditToolDetails); ok {
-			resultDiff = details.Diff
-			firstChangedLine = details.FirstChangedLine
-		}
+		resultDiff, firstChangedLine = editDetailsDiff(result.Details)
 	}
 	changed := false
 	callComponent := state.CallComponent
@@ -377,7 +411,9 @@ func editRenderResult(result ToolRenderResult, _ ToolRenderResultOptions, theme 
 		return component
 	}
 	component.AddChild(tui.NewSpacer(1))
-	component.AddChild(tui.NewText(output, 1, 0))
+	// pig-only deviation (2026-10-10): pi pads the text because the result
+	// container self-renders; the default shell's contentBox pads instead.
+	component.AddChild(tui.NewText(output, 0, 0))
 	return component
 }
 

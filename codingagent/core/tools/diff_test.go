@@ -37,30 +37,32 @@ func TestRenderDiffContextAndAddRemoveColors(t *testing.T) {
 	}
 }
 
-func TestRenderDiffIntraLineInverse(t *testing.T) {
+func TestRenderDiffIntraLinePlainFg(t *testing.T) {
 	theme.InitTheme("dark", false)
 
-	// Single removed + single added line → word-level intra-line diff with
-	// inverse on the changed token, indentation left un-highlighted.
+	// pig-only deviation (2026-10-12, docs/feat/BUILTIN-THEME-PALETTES.md
+	// §BLOCK-BORDERS 九批): pi highlights intra-line changed tokens with
+	// inverse video, which renders as a colored BACKGROUND on the terminal;
+	// pig renders the whole line in its single fg hue with no intra-line
+	// emphasis (bold was tried and declined the same day). This test
+	// replaces the ported inverse assertions (declared adaptation, same
+	// precedent as the user_message 3-line form).
 	diffText := strings.Join([]string{
 		"-1 return old",
 		"+1 return new",
 	}, "\n")
 	got := RenderDiff(theme.Current(), diffText, RenderDiffOptions{})
 
-	if !strings.Contains(got, theme.Current().Inverse("old")) {
-		t.Errorf("removed change not inverse-highlighted: %q", got)
+	// No reverse video, no bold — the fg hue alone marks the change.
+	if strings.Contains(got, "\x1b[7m") {
+		t.Errorf("inverse video leaked into diff render: %q", got)
 	}
-	if !strings.Contains(got, theme.Current().Inverse("new")) {
-		t.Errorf("added change not inverse-highlighted: %q", got)
+	if strings.Contains(got, theme.Current().Bold("old")) || strings.Contains(got, theme.Current().Bold("new")) {
+		t.Errorf("changed tokens bold-highlighted: %q", got)
 	}
-	// Unchanged word "return" must appear once per line without inverse.
-	if strings.Count(got, "return") != 2 {
-		t.Errorf("expected unchanged word on both lines: %q", got)
-	}
-	// The leading indent ("-1 " / "+1 ") must not be inside the inverse.
-	if strings.Contains(got, theme.Current().Inverse("-1 ")) || strings.Contains(got, theme.Current().Inverse("+1 ")) {
-		t.Errorf("prefix inverse-highlighted: %q", got)
+	// Content preserved on both lines.
+	if strings.Count(got, "return") != 2 || !strings.Contains(got, "old") || !strings.Contains(got, "new") {
+		t.Errorf("expected unchanged word on both lines and changed words present: %q", got)
 	}
 }
 

@@ -77,15 +77,19 @@ type EditToolInput struct {
 	Edits []Edit `json:"edits"`
 }
 
-// EditToolDetails carries the diff artifacts (pi: EditToolDetails).
+// EditToolDetails carries the diff artifacts (pi: EditToolDetails). Wire
+// keys are camelCase for session-JSONL parity with pi (edit.ts
+// EditToolDetails { diff, patch, firstChangedLine? }); the tags were
+// missing until 2026-10-10, so pig wrote capitalized keys
+// (docs/fix/2026-10-10-edit-details-map-form.md).
 type EditToolDetails struct {
 	// Diff is the display-oriented diff of the changes made.
-	Diff string
+	Diff string `json:"diff"`
 	// Patch is the standard unified patch of the changes made.
-	Patch string
+	Patch string `json:"patch"`
 	// FirstChangedLine is the line number of the first change in the new
 	// file (for editor navigation); nil = pi's undefined.
-	FirstChangedLine *int
+	FirstChangedLine *int `json:"firstChangedLine,omitempty"`
 }
 
 // EditOperations are pluggable operations for the edit tool; override these
@@ -236,8 +240,12 @@ func CreateEditToolDefinition(cwd string, options *EditToolOptions) *ToolDefinit
 		// getExperimentalToolSampling()).
 		ConstrainedSampling: types.ConstrainedSamplingConfig{Type: "json_schema", Strict: "prefer"},
 		PrepareArguments:    prepareEditArguments,
-		RenderShell:         "self",
-		NewRenderState:      func() any { return &EditRenderState{} },
+		// pig-only deviation (2026-10-10): pi sets renderShell: "self" here; pig
+		// drops it so edit renders in the default shell and gets the state-colored
+		// corner frame like every other framed tool (user request, see
+		// docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS). The renderers' own
+		// padding is adjusted to match (renderers_edit.go).
+		NewRenderState: func() any { return &EditRenderState{} },
 		Execute: func(ctx context.Context, toolCallID string, params any, onUpdate agent.AgentToolUpdateCallback, toolCtx ToolExecuteContext) (agent.AgentToolResult, error) {
 			input, err := decodeToolParams[EditToolInput](params)
 			if err != nil {

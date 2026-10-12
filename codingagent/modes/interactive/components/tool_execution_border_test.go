@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
+	codingagentutils "github.com/ZoroSpace/pig/codingagent/utils"
 )
 
 // pig-only regression (2026-10-03,
@@ -103,3 +105,75 @@ func TestUserMessageNoBackgroundFill(t *testing.T) {
 }
 
 var _ = types.KindText
+
+// pig-only regression (2026-10-10,
+// docs/fix/2026-10-10-edit-details-map-form.md): the restored-session path
+// decodes toolResult.details into map[string]any, and the pointer-only
+// *EditToolDetails assertion dropped the diff (double-form family). The
+// framed edit block must render the diff from both shapes.
+func TestEditToolResultDetailsMapForm(t *testing.T) {
+	initTestTheme(t)
+
+	definition := createBaseToolDefinition("edit")
+	definition.NewRenderState = tools.EditRenderers.NewRenderState
+	definition.RenderCall = tools.EditRenderers.RenderCall
+	definition.RenderResult = tools.EditRenderers.RenderResult
+	args := map[string]any{
+		"path":  "/tmp/x.py",
+		"edits": []any{map[string]any{"oldText": "a", "newText": "b"}},
+	}
+
+	for name, details := range map[string]any{
+		"pointer (live)":    &tools.EditToolDetails{Diff: "-old line\n+new line"},
+		"map (camelCase)":   map[string]any{"diff": "-old line\n+new line"},
+		"map (legacy keys)": map[string]any{"Diff": "-old line\n+new line"},
+		"value (defensive)": tools.EditToolDetails{Diff: "-old line\n+new line"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			component := NewToolExecutionComponent("edit", "call-details-form", args, ToolExecutionOptions{}, definition, &toolExecutionFakeTUI{}, mustCwd(t))
+			component.UpdateResult(ToolExecutionResult{Content: textContent("ok"), Details: details}, false)
+			out := codingagentutils.StripAnsi(strings.Join(component.Render(60), "\n"))
+			if !strings.Contains(out, "-old line") || !strings.Contains(out, "+new line") {
+				t.Fatalf("diff missing for %s details: %q", name, out)
+			}
+		})
+	}
+}
+
+// pig-only regression (2026-10-10, same doc §BLOCK-BORDERS): edit joined the
+// default shell and renders the state-colored corner frame like write (pi
+// self-renders edit; deviation note lives on edit.go's RenderShell field).
+// Stash-red check: restoring RenderShell: "self" in edit.go drops the frame.
+func TestEditToolFramedShell(t *testing.T) {
+	initTestTheme(t)
+
+	definition := createBaseToolDefinition("edit")
+	definition.NewRenderState = tools.EditRenderers.NewRenderState
+	definition.RenderCall = tools.EditRenderers.RenderCall
+	definition.RenderResult = tools.EditRenderers.RenderResult
+	args := map[string]any{
+		"path":  "/tmp/x.py",
+		"edits": []any{map[string]any{"oldText": "a", "newText": "b"}},
+	}
+	component := NewToolExecutionComponent("edit", "call-edit-frame", args, ToolExecutionOptions{}, definition, &toolExecutionFakeTUI{}, mustCwd(t))
+	component.UpdateResult(ToolExecutionResult{Content: textContent("")}, false)
+
+	lines := component.Render(60)
+	joined := strings.Join(lines, "\n")
+	if len(lines) < 4 {
+		t.Fatalf("expected framed render, got %d lines: %q", len(lines), joined)
+	}
+	if !strings.Contains(lines[1], "┌") || !strings.Contains(lines[1], ruleLine("success")) {
+		t.Fatalf("top rule missing or not success-colored: %q", lines[1])
+	}
+	if !strings.Contains(lines[len(lines)-1], "└") || !strings.Contains(lines[len(lines)-1], ruleLine("success")) {
+		t.Fatalf("bottom rule missing or not success-colored: %q", lines[len(lines)-1])
+	}
+	assertNoBackgroundFill(t, joined)
+
+	// Header indented exactly once (contentBox padding), not twice.
+	header := codingagentutils.StripAnsi(lines[2])
+	if !strings.HasPrefix(header, " edit ") {
+		t.Fatalf("edit header missing or double-indented: %q", header)
+	}
+}

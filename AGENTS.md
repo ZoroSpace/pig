@@ -86,7 +86,7 @@
 **Phase 3/4 早期批次（2026-09-02~09-08，harness/session/core/print 模式 CLI 7 子批，Phase 0-4 交付）**：过程决策与偏差原文已整体迁移 `docs/batches/2026-09.md`；print 模式 CLI 拆批与里程碑 M1/M2 定义见 git 历史本文件 §4。
 
 **dogfooding 插批 feat（活偏差已入上文偏差清单，此处只留索引）**：
-- PROV-VOLC-PLAN（09-10 火山 Coding Plan provider）· LATEX（09-10）· PANIC-RESILIENCE（09-11）· WINDOWS-SUPPORT（09-16）· CJK-WORD-SEG / CJK-SEG-MODE / CJK-SETTINGS（09-12~14）· TUI-LOGO（09-13 起多次追加）· FOOTER-RESOURCE-STATS（09-14 起四次收敛）· MAC-CLIPBOARD-IMAGE / CLIPBOARD-IMAGE-PLACEHOLDER（09-16）· SLASH-COMMANDS-COMPLETION（09-18）· MCP-1 / MCP-2 / MCP 渲染器（09-27）· TEST-SUITE-RUNTIME（09-30）· WRITE-PREVIEW-FLICKER（09-30 fix）· BUILTIN-THEME-PALETTES + BLOCK-BORDERS + 整框化（10-03，主题部分同日撤销）——文档见 `docs/feat/`、`docs/fix/` 对应文件。
+- PROV-VOLC-PLAN（09-10 火山 Coding Plan provider）· LATEX（09-10）· PANIC-RESILIENCE（09-11）· WINDOWS-SUPPORT（09-16）· CJK-WORD-SEG / CJK-SEG-MODE / CJK-SETTINGS（09-12~14）· TUI-LOGO（09-13 起多次追加）· FOOTER-RESOURCE-STATS（09-14 起四次收敛）· MAC-CLIPBOARD-IMAGE / CLIPBOARD-IMAGE-PLACEHOLDER（09-16）· SLASH-COMMANDS-COMPLETION（09-18）· MCP-1 / MCP-2 / MCP 渲染器（09-27）· TEST-SUITE-RUNTIME（09-30）· WRITE-PREVIEW-FLICKER（09-30 fix）· BUILTIN-THEME-PALETTES + BLOCK-BORDERS + 整框化（10-03，主题部分同日撤销）· EDIT-FRAME（10-10，edit 去 self-render 入 default shell 获角点整框 + diff 行内变更去强调（Inverse→Bold→纯前景同日收敛），见 BUILTIN-THEME-PALETTES §BLOCK-BORDERS 八/九批）——文档见 `docs/feat/`、`docs/fix/` 对应文件。
 
 ## docs/fix/：bug 排查记录（登记规则）
 
@@ -95,6 +95,7 @@
 **登记规则**：每起 fix 完成后在下方「现有文件」列表补一条**一行摘要**（现象 + 根因），详情一律落对应 md；**禁止把长摘要写回本文件**。**每起 fix 必须同时落地回归测试函数**（stash 验证红→绿，fix 文档写明测试函数名与验证方式）。**README 同步义务**：fix 或批次若改变用户可见面，同批更新 README 对应段 + `docs/handoffs/verify-matrix.md`。
 
 现有文件：
+- `2026-10-10-edit-details-map-form.md`：--continue 后 edit 卡片丢 diff（Details map/指针双形态，家族第七例；真正元凶 EditToolDetails 缺 json tag 写出大写键属线格式违规，已钉 camelCase 守卫；其余五渲染器同族降级已知不修）
 - `2026-10-10-fork-nil-options-panic.md`：/fork 后发消息没反应（Fork 缺 nil options 归一化，替换后 panic 被 RecoverPanic 吞掉致 UI 未重绑；顺修 selectedText 双形态丢失，家族第六例）
 - `2026-10-03-restored-tool-results-dropped.md`：`--continue` 后工具卡片恒 muted 且输出不显示（toolResult 指针-only 断言丢值形态，双形态家族第五例）
 - `2026-10-02-auth-select-stale-frame.md`：/login 对话框画面冻结（showAuthSelect 丢 requestRender）
