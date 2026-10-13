@@ -50,6 +50,19 @@ func newBoundedTerminalWriter(write func(data string)) *boundedTerminalWriter {
 	return &boundedTerminalWriter{write: write}
 }
 
+// maxShrinkWindowSlide caps the viewport slide painted by
+// repaintVisibleWindow. Sliding the viewport up by k rows rewrites physical
+// rows that sit k rows above the old viewport — those new-buffer rows already
+// exist in scrollback, so the terminal ends up with a duplicated copy of the
+// overlap region (the user-visible "repeated text in scroll history" bug,
+// docs/fix/2026-10-13-scrollback-duplication-window-repaint.md). Slides at or
+// under this bound keep the smooth window repaint (a few duplicated boundary
+// rows are imperceptible); larger slides — compaction rebuilds, ctrl+o
+// collapse of tall cards — are rare, so fullRender(true) (pi parity: wipe
+// screen+scrollback and reprint the whole buffer) is the correct trade:
+// visually louder but scrollback-exact.
+const maxShrinkWindowSlide = 8
+
 // append appends terminal data, flushing full chunks as needed. Callers must
 // call flush() after the final append.
 func (w *boundedTerminalWriter) append(value string) {
@@ -705,10 +718,19 @@ func (m *TuiMainScreen) doRender() error {
 		} else {
 			// Content shrank while changes start above the viewport: the
 			// viewport must slide up to keep the buffer bottom (editor/input)
-			// visible, which relative-only painting cannot express. Repaint
-			// just the visible window — fullRender(true) here is what still
-			// stormed (tall tool-call live output collapsing fires this on
-			// every completion, pi #5023/#9255).
+			// visible, which relative-only painting cannot express. Small
+			// slides repaint just the visible window — fullRender(true) here
+			// is what still stormed (tall tool-call live output collapsing
+			// fires this on every completion, pi #5023/#9255). Larger slides
+			// would duplicate slide-many scrollback rows in the rewrite (see
+			// maxShrinkWindowSlide), so they fall back to the scrollback-exact
+			// full render; the events that slide that far are rare.
+			slide := prevViewportTop - (len(newLines) - height)
+			if slide > maxShrinkWindowSlide {
+				logRedraw(fmt.Sprintf("shrink spanning viewportTop — full render (slide %d > %d)", slide, maxShrinkWindowSlide))
+				fullRender(true)
+				return nil
+			}
 			logRedraw(fmt.Sprintf("shrink spanning viewportTop — window repaint (%d < %d)", firstChanged, prevViewportTop))
 			repaintVisibleWindow()
 			return nil

@@ -568,12 +568,21 @@ func (v *VirtualTerminal) csiLocked(data string, i int) int {
 					v.buf[v.cursorY].cells[k] = vtCell{}
 				}
 			}
-		case 2, 3: // entire viewport (3 also clears scrollback in xterm)
+		case 2: // entire viewport
 			v.buf = v.buf[:v.viewportY]
 			for r := 0; r < v.rows; r++ {
 				v.buf = append(v.buf, vtLine{cells: make([]vtCell, v.cols)})
 			}
 			v.cursorY = v.viewportY
+		case 3: // also clear scrollback (xterm Erase Saved Lines)
+			// pig only ever emits 3J right after 2J+H (fullRender), so wiping
+			// the on-screen rows here too is unobservable for pig's usage.
+			v.buf = make([]vtLine, v.rows)
+			for r := range v.buf {
+				v.buf[r] = vtLine{cells: make([]vtCell, v.cols)}
+			}
+			v.viewportY = 0
+			v.cursorY = 0
 		}
 	case 'K': // EL — erase in line
 		mode := csiParam(params, 0, 0)
