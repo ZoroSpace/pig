@@ -501,18 +501,18 @@ func matchesAnyPattern(filePath string, patterns []string, baseDir string) bool 
 	}
 
 	for _, pattern := range patterns {
-		normalizedPattern := toPosixPath(pattern)
-		if utils.Minimatch(rel, normalizedPattern) ||
-			utils.Minimatch(name, normalizedPattern) ||
-			utils.Minimatch(filePathPosix, normalizedPattern) {
+		normalizedPattern := toPosixPath(utils.NormalizePath(pattern, nil))
+		if utils.Minimatch(normalizedPattern, rel) ||
+			utils.Minimatch(normalizedPattern, name) ||
+			utils.Minimatch(normalizedPattern, filePathPosix) {
 			return true
 		}
 		if !isSkillFile {
 			return false
 		}
-		if utils.Minimatch(parentRel, normalizedPattern) ||
-			utils.Minimatch(parentName, normalizedPattern) ||
-			utils.Minimatch(parentDirPosix, normalizedPattern) {
+		if utils.Minimatch(normalizedPattern, parentRel) ||
+			utils.Minimatch(normalizedPattern, parentName) ||
+			utils.Minimatch(normalizedPattern, parentDirPosix) {
 			return true
 		}
 	}
@@ -524,7 +524,7 @@ func normalizeExactPattern(pattern string) string {
 	if strings.HasPrefix(normalized, "./") || strings.HasPrefix(normalized, ".\\") {
 		normalized = normalized[2:]
 	}
-	return toPosixPath(normalized)
+	return toPosixPath(utils.NormalizePath(normalized, nil))
 }
 
 func matchesAnyExactPattern(filePath string, patterns []string, baseDir string) bool {

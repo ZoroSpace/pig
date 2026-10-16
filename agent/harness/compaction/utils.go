@@ -144,6 +144,12 @@ func truncateForSummary(text string, maxChars int) string {
 
 // SerializeConversation serializes LLM messages to plain text for
 // summarization prompts (pi: serializeConversation).
+//
+// Thinking is omitted. Providers return summaries of the real reasoning, and
+// replayed thinking is often not part of the model's live context: for example,
+// a block that does not match its request is dropped. Including it can make the
+// summarization request larger than the context it summarizes. Visible text,
+// tool calls, and tool results record what happened.
 func SerializeConversation(messages []types.Message) string {
 	var parts []string
 
@@ -155,14 +161,11 @@ func SerializeConversation(messages []types.Message) string {
 				parts = append(parts, fmt.Sprintf("[User]: %s", content))
 			}
 		case types.AssistantMessage:
-			var thinkingParts []string
 			var toolCalls []string
 
 			hasText := false
 			for _, block := range m.Content {
 				switch b := block.(type) {
-				case types.ThinkingContent:
-					thinkingParts = append(thinkingParts, b.Thinking)
 				case types.ToolCall:
 					keys := make([]string, 0, len(b.Arguments))
 					for k := range b.Arguments {
@@ -179,9 +182,6 @@ func SerializeConversation(messages []types.Message) string {
 				}
 			}
 
-			if len(thinkingParts) > 0 {
-				parts = append(parts, fmt.Sprintf("[Assistant thinking]: %s", strings.Join(thinkingParts, "\n")))
-			}
 			if hasText {
 				parts = append(parts, fmt.Sprintf("[Assistant]: %s", ai.ContentText(m.Content, "\n")))
 			}

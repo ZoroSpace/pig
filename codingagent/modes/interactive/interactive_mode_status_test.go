@@ -257,9 +257,9 @@ func TestStatusIndicatorRoutesThroughEditorOptIn(t *testing.T) {
 
 			indicators := []statusItemForTest{
 				components.NewWorkingStatusIndicator(m.ui, "Working", nil, nil),
-				components.NewCompactionStatusIndicator(m.ui, components.CompactionReasonManual),
-				components.NewCompactionStatusIndicator(m.ui, components.CompactionReasonThreshold),
-				components.NewCompactionStatusIndicator(m.ui, components.CompactionReasonOverflow),
+				components.NewCompactionStatusIndicator(m.ui, components.CompactionReasonManual, nil),
+				components.NewCompactionStatusIndicator(m.ui, components.CompactionReasonThreshold, nil),
+				components.NewCompactionStatusIndicator(m.ui, components.CompactionReasonOverflow, nil),
 				components.NewBranchSummaryStatusIndicator(m.ui),
 				components.NewRetryStatusIndicator(m.ui, 1, 3, 1000),
 			}

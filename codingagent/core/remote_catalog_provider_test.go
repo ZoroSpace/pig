@@ -17,6 +17,7 @@ import (
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/auth"
 	"github.com/ZoroSpace/pig/codingagent"
+	"github.com/samber/lo"
 )
 
 type notUsedStreams struct{}
@@ -441,5 +442,135 @@ func TestRemoteCatalogTreatsUnimplementedPiDevCatalogRoutesAsAnUnavailableOverla
 	}
 	if stored.CheckedAt == nil {
 		t.Fatal("checkedAt missing")
+	}
+}
+
+// refreshProviderPhase drives one refresh phase with an explicit allowNetwork
+// flag (pi: refreshProvider with { allowNetwork }).
+func refreshProviderPhase(t *testing.T, provider ai.Provider, store ai.ModelsStore, allowNetwork bool, force bool) error {
+	t.Helper()
+	ctx := context.Background()
+	providerID := provider.ID()
+	publish := func(publication ai.ModelsPublication) (bool, error) {
+		if publication.DeletePersist {
+			if err := store.Delete(ctx, providerID); err != nil {
+				return false, err
+			}
+		} else if publication.Persist != nil {
+			if err := store.Write(ctx, providerID, publication.Persist); err != nil {
+				return false, err
+			}
+		}
+		if publication.Update != nil {
+			publication.Update()
+		}
+		return true, nil
+	}
+	stored, err := store.Read(ctx, providerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refresher, ok := provider.(catalogRefresher)
+	if !ok {
+		t.Fatal("provider does not support RefreshModels")
+	}
+	return refresher.RefreshModels(ctx, &ai.RefreshModelsContext{
+		Credential:   &auth.ApiKeyCredential{},
+		Stored:       stored,
+		Publish:      publish,
+		AllowNetwork: allowNetwork,
+		Force:        force,
+		Context:      ctx,
+	})
+}
+
+func personalizedBuiltinProvider() ai.Provider {
+	return ai.CreateProvider(&ai.CreateProviderOptions{
+		ID:     "test-provider",
+		Auth:   auth.ProviderAuth{APIKey: stubCatalogAuth{}},
+		Models: []ai.Model{catalogTestModel("static")},
+		API:    notUsedStreams{},
+	})
+}
+
+// TestPersonalizedCatalogKeepsTheSavedListWhenPersonalizationFails pins that a
+// failed personalization leaves the saved list in place and saves nothing (pi:
+// "keeps the saved list and saves nothing when personalization fails").
+func TestPersonalizedCatalogKeepsTheSavedListWhenPersonalizationFails(t *testing.T) {
+	server := newCatalogServer(t, []catalogResponse{{status: http.StatusNotFound, body: "not found"}})
+	store := &ai.InMemoryModelsStore{}
+	saved := &ai.ModelsStoreEntry{Models: []ai.Model{catalogTestModel("allowed")}, CheckedAt: lo.ToPtr(int64(1))}
+	if err := store.Write(context.Background(), "test-provider", saved); err != nil {
+		t.Fatal(err)
+	}
+	personalize := func(catalog []ai.Model, refreshCtx *ai.RefreshModelsContext) ([]ai.Model, error) {
+		return nil, fmt.Errorf("user models request failed")
+	}
+	provider := WithPersonalizedCatalog(personalizedBuiltinProvider(), personalize, server.URL, nil)
+
+	err := refreshProviderPhase(t, provider, store, true, false)
+	if err == nil || !strings.Contains(err.Error(), "user models request failed") {
+		t.Fatalf("err = %v, want user models request failed", err)
+	}
+	if got := modelIDs(provider.GetModels()); len(got) != 1 || got[0] != "allowed" {
+		t.Fatalf("models = %v, want [allowed]", got)
+	}
+	stored := mustReadStore(t, store, provider.ID())
+	if len(stored.Models) != 1 || stored.Models[0].ID != "allowed" || stored.CheckedAt == nil || *stored.CheckedAt != 1 {
+		t.Fatalf("stored = %+v, want the saved list unchanged", stored)
+	}
+}
+
+// TestPersonalizedCatalogRestoresSavedListAndFallsBackWhenEmpty pins the
+// offline restore behavior (pi: "restores a saved list as is, and falls back
+// to the built-in models only when it is empty").
+func TestPersonalizedCatalogRestoresSavedListAndFallsBackWhenEmpty(t *testing.T) {
+	personalize := func(catalog []ai.Model, refreshCtx *ai.RefreshModelsContext) ([]ai.Model, error) {
+		return nil, fmt.Errorf("not used offline")
+	}
+	store := &ai.InMemoryModelsStore{}
+	provider := WithPersonalizedCatalog(personalizedBuiltinProvider(), personalize, "", nil)
+
+	// Older pig versions stored the plain pi.dev catalog here, and saved an
+	// empty list after a missing pi.dev catalog or a failed first request.
+	// Only such an entry can be empty, so an empty list falls back to the
+	// built-in models.
+	if err := store.Write(context.Background(), provider.ID(), &ai.ModelsStoreEntry{Models: []ai.Model{}, CheckedAt: lo.ToPtr(int64(1))}); err != nil {
+		t.Fatal(err)
+	}
+	if err := refreshProviderPhase(t, provider, store, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := modelIDs(provider.GetModels()); len(got) != 1 || got[0] != "static" {
+		t.Fatalf("models = %v, want [static]", got)
+	}
+
+	// A key that may use no chat models keeps its image models and shows no
+	// chat models.
+	imageModel := ai.Model{
+		Type:     ai.ModelTypeImage,
+		ID:       "image",
+		Name:     "image",
+		API:      ai.ImageApiOpenRouter,
+		Provider: "test-provider",
+		BaseURL:  "https://example.test/v1",
+		Input:    []ai.ModelInput{ai.ModelInputText},
+		Output:   []ai.ModelInput{ai.ModelInputImage},
+	}
+	if err := store.Write(context.Background(), provider.ID(), &ai.ModelsStoreEntry{Models: []ai.Model{imageModel}, CheckedAt: lo.ToPtr(int64(1))}); err != nil {
+		t.Fatal(err)
+	}
+	if err := refreshProviderPhase(t, provider, store, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := provider.GetModels(); len(got) != 0 {
+		t.Fatalf("chat models = %v, want empty", got)
+	}
+	all, ok := provider.(interface{ GetAllModels() []ai.Model })
+	if !ok {
+		t.Fatal("provider does not expose GetAllModels")
+	}
+	if got := modelIDs(all.GetAllModels()); len(got) != 1 || got[0] != "image" {
+		t.Fatalf("all models = %v, want [image]", got)
 	}
 }

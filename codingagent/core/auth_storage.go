@@ -40,6 +40,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -265,6 +266,30 @@ const (
 	asyncLockMaxDelay   = 2 * time.Second
 )
 
+// maxEpermRetries caps the separate Windows EPERM retry budget; the async
+// deadline is for waiting on another holder (pi: MAX_EPERM_RETRIES).
+const maxEpermRetries = 5
+
+// authLockIsWindows is a seam over pi's process.platform === "win32" so the
+// Windows-only retry path is testable on other platforms.
+var authLockIsWindows = func() bool { return runtime.GOOS == "windows" }
+
+// retryableLockErrorCode returns "ELOCKED", or "EPERM" on Windows, for errors
+// worth retrying; "" means surface immediately (pi:
+// getRetryableLockErrorCode). On Windows a just-removed lock directory can
+// stay "delete pending" while another process still has it open, so mkdir
+// briefly fails with EPERM.
+func retryableLockErrorCode(err error) string {
+	code := utils.NodeErrCodeOf(err)
+	if code == "ELOCKED" {
+		return code
+	}
+	if code == "EPERM" && authLockIsWindows() {
+		return code
+	}
+	return ""
+}
+
 // lockFilePath is the lockfile location for a managed file (pig addition;
 // proper-lockfile appends .lock the same way).
 func lockFilePath(path string) string { return path + ".lock" }
@@ -416,25 +441,19 @@ func (b *FileAuthStorageBackend) writeNext(next *string) error {
 	return f.Close()
 }
 
-// acquireLockSyncWithRetry is the synchronous ELOCKED retry loop (pi:
+// acquireLockSyncWithRetry is the synchronous retry loop (pi:
 // acquireLockSyncWithRetry; pi busy-waits to stay synchronous, pig sleeps).
 func (b *FileAuthStorageBackend) acquireLockSyncWithRetry() (func() error, error) {
-	var lastErr error
-	for attempt := 1; attempt <= syncLockMaxAttempts; attempt++ {
+	for attempt := 1; ; attempt++ {
 		release, err := fsLockSyncAcquire(b.authPath)
 		if err == nil {
 			return release, nil
 		}
-		if code := utils.NodeErrCodeOf(err); code != "ELOCKED" || attempt == syncLockMaxAttempts {
+		if retryableLockErrorCode(err) == "" || attempt == syncLockMaxAttempts {
 			return nil, err
 		}
-		lastErr = err
 		time.Sleep(syncLockDelay)
 	}
-	if lastErr != nil {
-		return nil, lastErr
-	}
-	return nil, errors.New("Failed to acquire auth storage lock")
 }
 
 func (b *FileAuthStorageBackend) WithLock(ctx context.Context, fn LockFunction) error {
@@ -464,6 +483,7 @@ func (b *FileAuthStorageBackend) WithLock(ctx context.Context, fn LockFunction) 
 // (pi: acquireLockAsync).
 func (b *FileAuthStorageBackend) acquireLockAsync(ctx context.Context) (release func() error, compromised func() error, err error) {
 	deadline := time.Now().Add(asyncLockStale)
+	epermRetries := 0
 	var compromisedErr error
 	onCompromised := func(err error) {
 		if compromisedErr == nil {
@@ -489,11 +509,17 @@ func (b *FileAuthStorageBackend) acquireLockAsync(ctx context.Context) (release 
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
-		if code := utils.NodeErrCodeOf(err); code != "ELOCKED" {
+		code := retryableLockErrorCode(err)
+		if code == "" || !time.Now().Before(deadline) {
 			return nil, nil, err
 		}
-		if !time.Now().Before(deadline) {
-			return nil, nil, err
+		// The 30s deadline is for waiting on another holder; cap EPERM retries
+		// separately.
+		if code == "EPERM" {
+			epermRetries++
+			if epermRetries > maxEpermRetries {
+				return nil, nil, err
+			}
 		}
 		baseDelay := time.Duration(math.Min(float64(10*time.Millisecond)*math.Pow(2, float64(retry)), float64(asyncLockMaxDelay/2)))
 		delay := time.Duration(float64(baseDelay) * (1 + rand.Float64()))

@@ -92,3 +92,31 @@ func TestSerializeConversationDoesNotTruncateAssistantOrUserMessages(t *testing.
 		t.Fatal("long text should be present")
 	}
 }
+
+func TestSerializeConversationOmitsThinking(t *testing.T) {
+	messages := []types.Message{
+		types.AssistantMessage{
+			Role: types.RoleAssistant,
+			Content: []types.Content{
+				types.ThinkingContent{Kind: types.KindThinking, Thinking: "private reasoning"},
+				types.NewTextContent("visible reply"),
+				types.ToolCall{Kind: types.KindToolCall, ID: "tc1", Name: "read", Arguments: map[string]any{"path": "a.ts"}},
+			},
+			API:        "anthropic",
+			Provider:   "anthropic",
+			Model:      "test",
+			Usage:      types.Usage{},
+			StopReason: types.StopReasonToolUse,
+			Timestamp:  time.Now().UnixMilli(),
+		},
+	}
+
+	result := SerializeConversation(messages)
+
+	if strings.Contains(result, "thinking") || strings.Contains(result, "private reasoning") {
+		t.Fatalf("thinking should be omitted: %s", result)
+	}
+	if result != "[Assistant]: visible reply\n\n[Assistant tool calls]: read(path=\"a.ts\")" {
+		t.Fatalf("unexpected result: %s", result)
+	}
+}

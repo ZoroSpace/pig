@@ -411,7 +411,7 @@ func ResolveModelScopeFromModels(patterns []string, models []ai.Model) ResolveMo
 			var matchingModels []ai.Model
 			for _, model := range availableModels {
 				fullID := string(model.Provider) + "/" + model.ID
-				if utils.Minimatch(fullID, globPattern) || utils.Minimatch(model.ID, globPattern) {
+				if utils.Minimatch(globPattern, fullID) || utils.Minimatch(globPattern, model.ID) {
 					matchingModels = append(matchingModels, model)
 				}
 			}

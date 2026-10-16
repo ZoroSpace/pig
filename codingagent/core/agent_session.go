@@ -1094,6 +1094,7 @@ func (s *AgentSession) installAgentNextTurnRefresh() {
 			ToolGuidelines:     mergedGuidelineMaps(baseOptions.ToolGuidelines, currentOptions.ToolGuidelines),
 			PromptGuidelines:   currentOptions.PromptGuidelines,
 			AppendSystemPrompt: currentOptions.AppendSystemPrompt,
+			Sections:           currentOptions.Sections,
 			Cwd:                currentOptions.Cwd,
 			ContextFiles:       currentOptions.ContextFiles,
 			Skills:             currentOptions.Skills,
@@ -1531,6 +1532,17 @@ func (s *AgentSession) takeDeferredSettledActions() []func(ctx context.Context) 
 // handleAgentEvent is the internal handler for agent events, shared by
 // subscribe and reconnect (pi: _handleAgentEvent).
 func (s *AgentSession) handleAgentEvent(ctx context.Context, event agent.AgentEvent) {
+	// An abort requested while the run was starting (e.g. during
+	// before_agent_start) stops it here; agent_start is emitted before the
+	// first request (pi v1.2.0).
+	if event.Type == agent.AgentEventAgentStart {
+		s.mu.Lock()
+		abortRequested := s.agentRunAbortRequested
+		s.mu.Unlock()
+		if abortRequested {
+			s.Agent.Abort()
+		}
+	}
 	// When a user message starts, check if it's from either queue and remove
 	// it BEFORE emitting. This ensures the UI sees the updated queue state.
 	if event.Type == agent.AgentEventMessageStart && event.Message.MessageRole() == types.RoleUser {
@@ -2322,13 +2334,37 @@ func (s *AgentSession) toolRegistryOrder() []string {
 // Prompting
 // ============================================================================
 
-// runAgentPrompt runs the prompt and drains post-run continuation (pi:
-// _runAgentPrompt).
-func (s *AgentSession) runAgentPrompt(ctx context.Context, messages []agent.AgentMessage) error {
+// startRun starts a run from a user or custom message (pi: _startRun). The
+// session counts as busy from here on, so messages sent while
+// before_agent_start handlers run are queued into this run instead of
+// starting another, and an abort requested meanwhile aborts the run as soon
+// as it exists. onStarted is called once the run's messages are prepared,
+// before the first request.
+func (s *AgentSession) startRun(ctx context.Context, trigger BeforeAgentStartTrigger, onStarted func()) error {
 	s.mu.Lock()
-	s.agentRunAbortRequested = false
 	s.isAgentRunActive = true
+	s.agentRunAbortRequested = false
 	s.mu.Unlock()
+
+	messages, err := s.prepareRun(ctx, trigger)
+	if err != nil {
+		s.mu.Lock()
+		s.isAgentRunActive = false
+		s.mu.Unlock()
+		s.flushPendingBashMessages()
+		s.flushPendingCustomMessages()
+		s.resolveIdleWaitIfIdle()
+		return err
+	}
+	// Messages held while the run was starting go before its starting
+	// messages, as they would have while idle. No run exists yet, so they
+	// cannot split a tool call from its result.
+	s.flushPendingBashMessages()
+	s.flushPendingCustomMessages()
+	if onStarted != nil {
+		onStarted()
+	}
+
 	settled := false
 	defer func() {
 		s.mu.Lock()
@@ -2380,6 +2416,100 @@ func (s *AgentSession) runAgentPrompt(ctx context.Context, messages []agent.Agen
 	settled = true
 	s.emitAgentSettled(ctx)
 	return nil
+}
+
+// prepareRun prepares a run and returns its starting messages (pi:
+// _prepareRun): compact first when needed, emit before_agent_start, apply the
+// run's prompt options and tool loadout, and build the starting message
+// followed by pending nextTurn messages (consumed here) and handler messages,
+// with a system patch first when the prompt changed.
+func (s *AgentSession) prepareRun(ctx context.Context, trigger BeforeAgentStartTrigger) ([]agent.AgentMessage, error) {
+	// Check if we need to compact before sending (catches aborted responses).
+	// The starting message is sent below, so do not call agent.continue() here.
+	if lastAssistant := s.findLastAssistantMessage(); lastAssistant != nil {
+		if _, err := s.checkCompaction(ctx, lastAssistant, false, nil); err != nil {
+			return nil, err
+		}
+	}
+
+	// Emit before_agent_start before normalizing images so extension-driven
+	// model selection determines the resize profile used for the request and
+	// history (pi v0.87.0 reorder).
+	s.mu.Lock()
+	selectedToolsBefore := append([]string{}, s.baseSystemPromptOptions.SelectedTools...)
+	s.mu.Unlock()
+	result, err := s.extensionRunner.EmitBeforeAgentStart(ctx, trigger, s.baseSystemPromptOptionsSnapshot())
+	if err != nil {
+		return nil, err
+	}
+	// Handlers may edit event.systemPromptOptions.selectedTools or call
+	// setActiveTools(), which updates the live loadout instead. An explicit
+	// edit wins; otherwise the live loadout is authoritative, so a
+	// setActiveTools() call is not undone here (pi v0.86.0).
+	handlerEditedTools := len(result.SystemPromptOptions.SelectedTools) != len(selectedToolsBefore)
+	if !handlerEditedTools {
+		for i, name := range result.SystemPromptOptions.SelectedTools {
+			if name != selectedToolsBefore[i] {
+				handlerEditedTools = true
+				break
+			}
+		}
+	}
+	if !handlerEditedTools {
+		result.SystemPromptOptions.SelectedTools = s.GetActiveToolNames()
+	}
+
+	messages := []agent.AgentMessage{}
+	if trigger.MessageType == "custom" {
+		messages = append(messages, *trigger.Message)
+	} else {
+		normalizedImages, hints := s.normalizePromptImages(trigger.Images)
+		userText := trigger.Prompt
+		if len(hints) > 0 {
+			userText = fmt.Sprintf("%s\n\n%s", trigger.Prompt, strings.Join(hints, "\n"))
+		}
+		userContent := types.UserContent{Parts: []types.Content{types.NewTextContent(userText)}}
+		for _, image := range normalizedImages {
+			userContent.Parts = append(userContent.Parts, image)
+		}
+		messages = append(messages, types.UserMessage{
+			Role:      types.RoleUser,
+			Content:   userContent,
+			Timestamp: time.Now().UnixMilli(),
+		})
+	}
+
+	// Inject any pending "nextTurn" messages as context alongside the starting
+	// message.
+	s.mu.Lock()
+	for _, msg := range s.pendingNextTurnMessages {
+		messages = append(messages, msg)
+	}
+	s.pendingNextTurnMessages = nil
+	s.mu.Unlock()
+
+	for _, msg := range result.Messages {
+		messages = append(messages, harness.CustomMessage{
+			Role:       "custom",
+			CustomType: msg.CustomType,
+			// Untyped extensions can pass null/missing content; normalize at ingestion.
+			Content:   normalizePayloadContent(msg.Content),
+			Display:   msg.Display,
+			Details:   msg.Details,
+			Timestamp: time.Now().UnixMilli(),
+		})
+	}
+	// Apply the prompt and tool loadout for the next request (pi v0.86.0:
+	// _preparePromptAndToolLoadout returns a system message patching the
+	// prompt sections the model currently has).
+	updateMessage := s.preparePromptAndToolLoadout(&result.SystemPromptOptions)
+	s.mu.Lock()
+	s.runSystemPromptOptions = &result.SystemPromptOptions
+	s.mu.Unlock()
+	if updateMessage != nil {
+		messages = append([]agent.AgentMessage{*updateMessage}, messages...)
+	}
+	return messages, nil
 }
 
 // agentRunAbortRequestedLocked reads the abort flag (pig-only helper).
@@ -2544,7 +2674,6 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 	if options != nil {
 		preflightResult = options.PreflightResult
 	}
-	var messages []agent.AgentMessage
 
 	// pi v0.99.1: accepted prompts report how they were dispatched; rejected
 	// prompts report nothing (the throw is the signal).
@@ -2628,10 +2757,6 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 			return nil
 		}
 
-		// Flush any pending bash and custom messages before the new prompt
-		s.flushPendingBashMessages()
-		s.flushPendingCustomMessages()
-
 		// Validate model
 		if s.Model() == nil {
 			return fmt.Errorf("%s", FormatNoModelSelectedMessage())
@@ -2657,106 +2782,15 @@ func (s *AgentSession) Prompt(ctx context.Context, text string, options *PromptO
 			return fmt.Errorf("%s", FormatNoApiKeyFoundMessage(string(model.Provider)))
 		}
 
-		// Check if we need to compact before sending (catches aborted responses).
-		// The user's new prompt is sent below, so do not call agent.continue() here.
-		if lastAssistant := s.findLastAssistantMessage(); lastAssistant != nil {
-			if _, err := s.checkCompaction(ctx, lastAssistant, false, nil); err != nil {
-				return err
-			}
-		}
-
-		// Emit before_agent_start before normalizing images so extension-driven
-		// model selection determines the resize profile used for the request
-		// and history (pi v0.87.0 reorder).
-		s.mu.Lock()
-		selectedToolsBefore := append([]string{}, s.baseSystemPromptOptions.SelectedTools...)
-		s.mu.Unlock()
-		result, err := s.extensionRunner.EmitBeforeAgentStart(ctx, expandedText, currentImages, s.baseSystemPromptOptionsSnapshot())
-		if err != nil {
-			return err
-		}
-		// Handlers may edit event.systemPromptOptions.selectedTools or call
-		// setActiveTools(), which updates the live loadout instead. An
-		// explicit edit wins; otherwise the live loadout is authoritative,
-		// so a setActiveTools() call is not undone here (pi v0.86.0).
-		handlerEditedTools := len(result.SystemPromptOptions.SelectedTools) != len(selectedToolsBefore)
-		if !handlerEditedTools {
-			for i, name := range result.SystemPromptOptions.SelectedTools {
-				if name != selectedToolsBefore[i] {
-					handlerEditedTools = true
-					break
-				}
-			}
-		}
-		if !handlerEditedTools {
-			result.SystemPromptOptions.SelectedTools = s.GetActiveToolNames()
-		}
-
-		normalizedImages, hints := s.normalizePromptImages(currentImages)
-		userText := expandedText
-		if len(hints) > 0 {
-			userText = fmt.Sprintf("%s\n\n%s", expandedText, strings.Join(hints, "\n"))
-		}
-		currentImages = normalizedImages
-
-		// Build messages only after hooks and image normalization have
-		// completed (pi v0.87.0).
-		messages = []agent.AgentMessage{}
-
-		// Add user message
-		userContent := types.UserContent{Parts: []types.Content{types.NewTextContent(userText)}}
-		for _, image := range currentImages {
-			userContent.Parts = append(userContent.Parts, image)
-		}
-		messages = append(messages, types.UserMessage{
-			Role:      types.RoleUser,
-			Content:   userContent,
-			Timestamp: time.Now().UnixMilli(),
-		})
-
-		// Inject any pending "nextTurn" messages as context alongside the user message
-		s.mu.Lock()
-		for _, msg := range s.pendingNextTurnMessages {
-			messages = append(messages, msg)
-		}
-		s.pendingNextTurnMessages = nil
-		s.mu.Unlock()
-
-		for _, msg := range result.Messages {
-			messages = append(messages, harness.CustomMessage{
-				Role:       "custom",
-				CustomType: msg.CustomType,
-				// Untyped extensions can pass null/missing content; normalize at ingestion.
-				Content:   normalizePayloadContent(msg.Content),
-				Display:   msg.Display,
-				Details:   msg.Details,
-				Timestamp: time.Now().UnixMilli(),
-			})
-		}
-		// Apply the prompt and tool loadout for the next request (pi v0.86.0:
-		// _preparePromptAndToolLoadout returns a system message patching the
-		// prompt sections the model currently has).
-		updateMessage := s.preparePromptAndToolLoadout(&result.SystemPromptOptions)
-		s.mu.Lock()
-		s.runSystemPromptOptions = &result.SystemPromptOptions
-		s.mu.Unlock()
-		if updateMessage != nil {
-			messages = append([]agent.AgentMessage{*updateMessage}, messages...)
-		}
-		return nil
+		return s.startRun(ctx, BeforeAgentStartTrigger{
+			MessageType: "user",
+			Prompt:      expandedText,
+			Images:      currentImages,
+		}, started)
 	}()
 
-	if runErr != nil {
-		// pi v0.99.1: rejected prompts report nothing; the error is the signal.
-		return runErr
-	}
-	if messages == nil {
-		// Extension command executed or input handled: no prompt to send.
-		return nil
-	}
-
-	started()
-	return s.runAgentPrompt(ctx, messages)
+	// pi v0.99.1: rejected prompts report nothing; the error is the signal.
+	return runErr
 }
 
 // baseSystemPromptOptionsSnapshot copies the stored options (pi reads the
@@ -3234,15 +3268,16 @@ func (s *AgentSession) SendCustomMessage(ctx context.Context, message *CustomMes
 		s.mu.Lock()
 		if s.isEmittingAgentSettled {
 			// Runs started by agent_settled handlers wait until every settled
-			// handler completes (pi v0.87.0).
+			// handler completes (pi v0.87.0). Re-dispatch once settled so the
+			// message goes through the normal startRun path (pi v1.2.0).
 			s.deferredSettledActions = append(s.deferredSettledActions, func(ctx context.Context) error {
-				return s.runAgentPrompt(ctx, []agent.AgentMessage{appMessage})
+				return s.SendCustomMessage(ctx, message, options)
 			})
 			s.mu.Unlock()
 			return nil
 		}
 		s.mu.Unlock()
-		return s.runAgentPrompt(ctx, []agent.AgentMessage{appMessage})
+		return s.startRun(ctx, BeforeAgentStartTrigger{MessageType: "custom", Message: &appMessage}, nil)
 	}
 	if s.IsStreaming() {
 		// Appending now would put the message between an assistant tool call

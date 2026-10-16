@@ -281,6 +281,10 @@ func RunPrintMode(ctx context.Context, runtimeHost PrintRuntimeHost, options Pri
 								core.WriteRawStdout(text.Text + "\n")
 							}
 						}
+						if assistantMsg.StopReason == types.StopReasonLength {
+							fmt.Fprintf(os.Stderr, "Response was truncated: the model reached its output token limit.\n")
+							exitCode = 1
+						}
 					}
 				}
 			}

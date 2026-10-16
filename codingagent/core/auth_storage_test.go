@@ -624,6 +624,154 @@ func TestAuthStorageRetriesABrieflyContendedFileLock(t *testing.T) {
 	}
 }
 
+// Windows EPERM on lock acquisition (#10801): a delete-pending lock
+// directory makes mkdir briefly fail with EPERM; retry separately from
+// ELOCKED, capped at maxEpermRetries.
+func TestAuthStorageWindowsEpermOnLockAcquisition(t *testing.T) {
+	eperm := func() error { return &utils.NodeErr{Code: "EPERM", Message: "operation not permitted"} }
+
+	t.Run("retries transient EPERM on Windows (async)", func(t *testing.T) {
+		tempDir := t.TempDir()
+		authJSONPath := filepath.Join(tempDir, "auth.json")
+		writeAuthJSON(t, authJSONPath, "anthropic", map[string]any{"type": "api_key", "key": "stored"})
+		backend := NewFileAuthStorageBackend(authJSONPath)
+
+		realIsWindows := authLockIsWindows
+		authLockIsWindows = func() bool { return true }
+		t.Cleanup(func() { authLockIsWindows = realIsWindows })
+		realAcquire := fsLockAcquire
+		var calls int
+		var mu sync.Mutex
+		fsLockAcquire = func(path string, options *fsLockOptions) (func() error, error) {
+			mu.Lock()
+			calls++
+			n := calls
+			mu.Unlock()
+			if n == 1 {
+				return nil, eperm()
+			}
+			return func() error { return nil }, nil
+		}
+		t.Cleanup(func() { fsLockAcquire = realAcquire })
+
+		updateCalls := 0
+		if err := backend.WithLockAsync(context.Background(), func(current *string) (any, *string, error) {
+			updateCalls++
+			return nil, nil, nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if calls != 2 {
+			t.Fatalf("lock calls = %d, want 2", calls)
+		}
+		if updateCalls != 1 {
+			t.Fatalf("update calls = %d, want 1", updateCalls)
+		}
+	})
+
+	t.Run("surfaces persistent EPERM on Windows after a bounded number of retries (async)", func(t *testing.T) {
+		tempDir := t.TempDir()
+		authJSONPath := filepath.Join(tempDir, "auth.json")
+		writeAuthJSON(t, authJSONPath, "anthropic", map[string]any{"type": "api_key", "key": "stored"})
+		backend := NewFileAuthStorageBackend(authJSONPath)
+
+		realIsWindows := authLockIsWindows
+		authLockIsWindows = func() bool { return true }
+		t.Cleanup(func() { authLockIsWindows = realIsWindows })
+		realAcquire := fsLockAcquire
+		var calls int
+		var mu sync.Mutex
+		fsLockAcquire = func(path string, options *fsLockOptions) (func() error, error) {
+			mu.Lock()
+			calls++
+			mu.Unlock()
+			return nil, eperm()
+		}
+		t.Cleanup(func() { fsLockAcquire = realAcquire })
+
+		updateCalled := false
+		err := backend.WithLockAsync(context.Background(), func(current *string) (any, *string, error) {
+			updateCalled = true
+			return nil, nil, nil
+		})
+		if utils.NodeErrCodeOf(err) != "EPERM" {
+			t.Fatalf("error = %v, want EPERM", err)
+		}
+		if calls != maxEpermRetries+1 {
+			t.Fatalf("lock calls = %d, want %d", calls, maxEpermRetries+1)
+		}
+		if updateCalled {
+			t.Fatal("update ran despite persistent EPERM")
+		}
+	})
+
+	t.Run("does not retry EPERM on other platforms (async)", func(t *testing.T) {
+		tempDir := t.TempDir()
+		authJSONPath := filepath.Join(tempDir, "auth.json")
+		writeAuthJSON(t, authJSONPath, "anthropic", map[string]any{"type": "api_key", "key": "stored"})
+		backend := NewFileAuthStorageBackend(authJSONPath)
+
+		realIsWindows := authLockIsWindows
+		authLockIsWindows = func() bool { return false }
+		t.Cleanup(func() { authLockIsWindows = realIsWindows })
+		realAcquire := fsLockAcquire
+		var calls int
+		var mu sync.Mutex
+		fsLockAcquire = func(path string, options *fsLockOptions) (func() error, error) {
+			mu.Lock()
+			calls++
+			mu.Unlock()
+			return nil, eperm()
+		}
+		t.Cleanup(func() { fsLockAcquire = realAcquire })
+
+		err := backend.WithLockAsync(context.Background(), func(current *string) (any, *string, error) {
+			return nil, nil, nil
+		})
+		if utils.NodeErrCodeOf(err) != "EPERM" {
+			t.Fatalf("error = %v, want EPERM", err)
+		}
+		if calls != 1 {
+			t.Fatalf("lock calls = %d, want 1", calls)
+		}
+	})
+
+	t.Run("retries transient EPERM on Windows (sync)", func(t *testing.T) {
+		tempDir := t.TempDir()
+		authJSONPath := filepath.Join(tempDir, "auth.json")
+		writeAuthJSON(t, authJSONPath, "anthropic", map[string]any{"type": "api_key", "key": "stored"})
+		backend := NewFileAuthStorageBackend(authJSONPath)
+
+		realIsWindows := authLockIsWindows
+		authLockIsWindows = func() bool { return true }
+		t.Cleanup(func() { authLockIsWindows = realIsWindows })
+		realAcquire := fsLockSyncAcquire
+		var calls int
+		fsLockSyncAcquire = func(path string) (func() error, error) {
+			calls++
+			if calls == 1 {
+				return nil, eperm()
+			}
+			return func() error { return nil }, nil
+		}
+		t.Cleanup(func() { fsLockSyncAcquire = realAcquire })
+
+		updateCalls := 0
+		if err := backend.WithLock(context.Background(), func(current *string) (any, *string, error) {
+			updateCalls++
+			return nil, nil, nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if calls != 2 {
+			t.Fatalf("lock calls = %d, want 2", calls)
+		}
+		if updateCalls != 1 {
+			t.Fatalf("update calls = %d, want 1", updateCalls)
+		}
+	})
+}
+
 func TestAuthStorageSurfacesACompromisedFileStorageLock(t *testing.T) {
 	tempDir := t.TempDir()
 	authJSONPath := filepath.Join(tempDir, "auth.json")

@@ -136,9 +136,9 @@ func TestStatusIndicatorEmbedsAllIndicatorKindsInBorder(t *testing.T) {
 		EmbedWorkingStatus: true,
 	})
 	indicators := []tui.Component{
-		NewCompactionStatusIndicator(editorTUI, CompactionReasonManual),
-		NewCompactionStatusIndicator(editorTUI, CompactionReasonThreshold),
-		NewCompactionStatusIndicator(editorTUI, CompactionReasonOverflow),
+		NewCompactionStatusIndicator(editorTUI, CompactionReasonManual, nil),
+		NewCompactionStatusIndicator(editorTUI, CompactionReasonThreshold, nil),
+		NewCompactionStatusIndicator(editorTUI, CompactionReasonOverflow, nil),
 		NewBranchSummaryStatusIndicator(editorTUI),
 		NewRetryStatusIndicator(editorTUI, 1, 3, 3000),
 	}
@@ -181,3 +181,23 @@ func TestStatusIndicatorEmbedsAllIndicatorKindsInBorder(t *testing.T) {
 
 // visibleWidthOf wraps tui.VisibleWidth for the assertion above.
 func visibleWidthOf(text string) int { return tui.VisibleWidth(text) }
+
+// TestCompactionStatusIndicatorUsesColorFnOverride locks #10810: a non-nil
+// colorFn overrides both the spinner and the message colors.
+func TestCompactionStatusIndicatorUsesColorFnOverride(t *testing.T) {
+	initTestTheme(t)
+	ui := &editorBorderTUI{countRenderTUI: countRenderTUI{}}
+	colorFn := func(text string) string { return "<c>" + text + "</c>" }
+
+	overridden := NewCompactionStatusIndicator(ui, CompactionReasonManual, colorFn)
+	defer overridden.Dispose()
+	if raw := strings.Join(overridden.Render(120), "\n"); !strings.Contains(raw, "<c>") {
+		t.Fatalf("output %q missing colorFn override", raw)
+	}
+
+	plain := NewCompactionStatusIndicator(ui, CompactionReasonManual, nil)
+	defer plain.Dispose()
+	if raw := strings.Join(plain.Render(120), "\n"); strings.Contains(raw, "<c>") {
+		t.Fatalf("unexpected override in %q", raw)
+	}
+}

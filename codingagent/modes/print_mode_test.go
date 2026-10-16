@@ -197,6 +197,28 @@ func capturePrintStdout(t *testing.T) func() string {
 	}
 }
 
+// capturePrintStderr mirrors capturePrintStdout for the warning channel.
+func capturePrintStderr(t *testing.T) func() string {
+	t.Helper()
+	original := os.Stderr
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = writer
+	done := make(chan string, 1)
+	go func() {
+		data, _ := io.ReadAll(reader)
+		done <- string(data)
+	}()
+	return func() string {
+		writer.Close()
+		out := <-done
+		os.Stderr = original
+		return out
+	}
+}
+
 func TestRunPrintMode(t *testing.T) {
 	t.Run("emits session shutdown in text mode", func(t *testing.T) {
 		reply := &types.AssistantMessage{
@@ -290,6 +312,38 @@ func TestRunPrintMode(t *testing.T) {
 		}
 		if host.disposeCalls != 1 {
 			t.Fatalf("disposeCalls = %d, want 1", host.disposeCalls)
+		}
+	})
+
+	// #10799: the partial text still goes to stdout, but the truncation warns
+	// on stderr and exits non-zero.
+	t.Run("warns on stderr and returns non-zero when the response was truncated", func(t *testing.T) {
+		reply := &types.AssistantMessage{
+			Role:       types.RoleAssistant,
+			Content:    []types.Content{&types.TextContent{Kind: types.KindText, Text: "partial"}},
+			API:        ai.ApiOpenAICompletions,
+			Provider:   "openai",
+			Model:      "gpt-4o-mini",
+			StopReason: types.StopReasonLength,
+		}
+		session := printTestSession(t, reply, nil)
+		session.Agent.State().Messages = []agent.AgentMessage{reply}
+		host := &fakeRuntimeHost{session: session}
+
+		stdout := capturePrintStdout(t)
+		stderr := capturePrintStderr(t)
+		exitCode := RunPrintMode(context.Background(), host, PrintModeOptions{Mode: "text"})
+		out := stdout()
+		errOut := stderr()
+
+		if exitCode != 1 {
+			t.Fatalf("exitCode = %d, want 1", exitCode)
+		}
+		if !strings.Contains(out, "partial") {
+			t.Fatalf("stdout = %q, want it to contain the partial text", out)
+		}
+		if !strings.Contains(errOut, "Response was truncated") {
+			t.Fatalf("stderr = %q, want the truncation warning", errOut)
 		}
 	})
 }

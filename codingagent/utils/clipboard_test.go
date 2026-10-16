@@ -10,6 +10,7 @@
 package utils
 
 import (
+	"encoding/base64"
 	"os"
 	"strings"
 	"testing"
@@ -54,7 +55,7 @@ func stubOsc52(t *testing.T) *[]string {
 // WAYLAND_DISPLAY/DISPLAY/TERMUX_VERSION to "").
 func clipboardTextEnv(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION", "WAYLAND_DISPLAY", "DISPLAY", "TERMUX_VERSION"} {
+	for _, name := range []string{"SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION", "PI_CLIPBOARD_OSC52", "WAYLAND_DISPLAY", "DISPLAY", "TERMUX_VERSION"} {
 		t.Setenv(name, "")
 	}
 }
@@ -362,6 +363,34 @@ func TestCopyToClipboardRemoteOsc52WhenCommandsFail(t *testing.T) {
 		t.Fatalf("expected exactly one OSC 52 write, got %v", *osc52)
 	}
 	if !strings.HasPrefix((*osc52)[0], "\x1b]52;c;") {
+		t.Fatalf("OSC 52 payload = %q", (*osc52)[0])
+	}
+}
+
+// TestCopyToClipboardForcedOsc52AfterSuccessfulCopy ports "PI_CLIPBOARD_OSC52=1
+// emits OSC 52 after a successful copy" (regression #10826, #10835, #10114:
+// remote clients without SSH markers).
+func TestCopyToClipboardForcedOsc52AfterSuccessfulCopy(t *testing.T) {
+	clipboardTextEnv(t)
+	stubTextPlatform(t, "darwin")
+	t.Setenv("PI_CLIPBOARD_OSC52", "1")
+	callsPtr := stubClipboardRunCommandOptions(t, func(command string, args []string, options *clipboardCommandOptions) ([]byte, bool) {
+		if command == "pbcopy" {
+			return nil, true
+		}
+		return nil, false
+	})
+	osc52 := stubOsc52(t)
+	if err := CopyToClipboard("hello"); err != nil {
+		t.Fatalf("CopyToClipboard = %v", err)
+	}
+	if calls := *callsPtr; len(calls) != 1 || calls[0].command != "pbcopy" {
+		t.Fatalf("calls = %+v, want [pbcopy]", calls)
+	}
+	if len(*osc52) != 1 {
+		t.Fatalf("expected exactly one OSC 52 write, got %v", *osc52)
+	}
+	if (*osc52)[0] != "\x1b]52;c;"+base64.StdEncoding.EncodeToString([]byte("hello"))+"\x07" {
 		t.Fatalf("OSC 52 payload = %q", (*osc52)[0])
 	}
 }

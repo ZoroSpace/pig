@@ -170,10 +170,56 @@ func remoteModels(entry *ai.ModelsStoreEntry, localGeneratedAt *int64) []ai.Mode
 	if entry == nil {
 		return nil
 	}
-	if localGeneratedAt != nil && (entry.LastModified == nil || *entry.LastModified <= *localGeneratedAt) {
+	if !catalogIsNewer(entry.LastModified, localGeneratedAt) {
 		return nil
 	}
 	return entry.Models
+}
+
+// catalogIsNewer reports whether a catalog is newer than the model data shipped
+// with pig (pi: isNewer). A nil localGeneratedAt means "no generated catalog
+// timestamp", so any catalog is newer.
+func catalogIsNewer(lastModified *int64, localGeneratedAt *int64) bool {
+	if localGeneratedAt == nil {
+		return true
+	}
+	return lastModified != nil && *lastModified > *localGeneratedAt
+}
+
+// readCatalog reads a successful pi.dev catalog response. A missing or invalid
+// Last-Modified header is 0 (pi: readCatalog).
+func readCatalog(providerID string, response *agentutils.FetchResponse) ([]ai.Model, *int64, string, error) {
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	models, err := parseCatalog(providerID, body)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	var lastModified int64
+	if parsed, err := http.ParseTime(response.Header.Get("Last-Modified")); err == nil {
+		lastModified = parsed.UnixMilli()
+	}
+	return models, lo.ToPtr(lastModified), response.Header.Get("Etag"), nil
+}
+
+// requestCatalog fetches one provider catalog from pi.dev (pi: requestCatalog).
+// types= asks for every supported model type; a server that ignores the
+// parameter still answers with the legacy chat-only shard, which parseCatalog
+// accepts (pi: ?types=chat,image,classifier, #9763).
+func requestCatalog(ctx context.Context, providerID string, catalogBaseURL string, validator string) (*agentutils.FetchResponse, error) {
+	catalogURL := catalogBaseURL + "/api/models/providers/" + url.PathEscape(providerID) + "?types=chat,image,classifier"
+	headers := map[string]string{
+		"accept":     "application/json",
+		"User-Agent": agentutils.GetPiUserAgent(codingagent.Version),
+	}
+	if validator != "" {
+		headers["if-none-match"] = validator
+	}
+	return agentutils.FetchWithRetry(ctx, http.MethodGet, catalogURL, headers, &agentutils.FetchRetryOptions{
+		AttemptTimeoutMs: lo.ToPtr(int64(remoteCatalogAttemptTimeoutMs)),
+	})
 }
 
 type remoteCatalogProvider struct {
@@ -251,20 +297,7 @@ func (p *remoteCatalogProvider) RefreshModels(ctx context.Context, refreshCtx *a
 	if stored != nil && len(stored.Models) > 0 {
 		validator = stored.ETag
 	}
-	// types= asks for every supported model type; a server that ignores the
-	// parameter still answers with the legacy chat-only shard, which
-	// parseCatalog accepts (pi: ?types=chat,image,classifier, #9763).
-	catalogURL := p.catalogBaseURL + "/api/models/providers/" + url.PathEscape(p.Provider.ID()) + "?types=chat,image,classifier"
-	headers := map[string]string{
-		"accept":     "application/json",
-		"User-Agent": agentutils.GetPiUserAgent(codingagent.Version),
-	}
-	if validator != "" {
-		headers["if-none-match"] = validator
-	}
-	response, err := agentutils.FetchWithRetry(ctx, http.MethodGet, catalogURL, headers, &agentutils.FetchRetryOptions{
-		AttemptTimeoutMs: lo.ToPtr(int64(remoteCatalogAttemptTimeoutMs)),
-	})
+	response, err := requestCatalog(ctx, p.Provider.ID(), p.catalogBaseURL, validator)
 	if err != nil {
 		return err
 	}
@@ -312,17 +345,9 @@ func (p *remoteCatalogProvider) RefreshModels(ctx context.Context, refreshCtx *a
 		}
 		return fmt.Errorf("Model catalog request failed for %s: %d", p.Provider.ID(), response.StatusCode)
 	}
-	body, err := io.ReadAll(response.Body)
+	refreshed, lastModified, etag, err := readCatalog(p.Provider.ID(), response)
 	if err != nil {
 		return err
-	}
-	refreshed, err := parseCatalog(p.Provider.ID(), body)
-	if err != nil {
-		return err
-	}
-	var lastModified int64
-	if parsed, err := http.ParseTime(response.Header.Get("Last-Modified")); err == nil {
-		lastModified = parsed.UnixMilli()
 	}
 	if ctx.Err() != nil {
 		return nil
@@ -330,8 +355,8 @@ func (p *remoteCatalogProvider) RefreshModels(ctx context.Context, refreshCtx *a
 	entry := &ai.ModelsStoreEntry{
 		Models:       refreshed,
 		CheckedAt:    &checkedAt,
-		LastModified: lo.ToPtr(lastModified),
-		ETag:         response.Header.Get("Etag"),
+		LastModified: lastModified,
+		ETag:         etag,
 	}
 	published := remoteModels(entry, p.localGeneratedAt)
 	_, err = refreshCtx.Publish(ai.ModelsPublication{
@@ -353,6 +378,151 @@ func WithRemoteCatalog(provider ai.Provider, catalogBaseURL string, localGenerat
 	}
 	return &remoteCatalogProvider{
 		Provider:         provider,
+		catalogBaseURL:   catalogBaseURL,
+		localGeneratedAt: localGeneratedAt,
+	}
+}
+
+// PersonalizeCatalog replaces the catalog with a credential-specific model
+// list (pi: PersonalizeCatalog).
+type PersonalizeCatalog func(catalog []ai.Model, context *ai.RefreshModelsContext) ([]ai.Model, error)
+
+type personalizedCatalogProvider struct {
+	ai.Provider
+	mu               sync.Mutex
+	personalModels   []ai.Model
+	personalize      PersonalizeCatalog
+	catalogBaseURL   string
+	localGeneratedAt *int64
+}
+
+func (p *personalizedCatalogProvider) setPersonalModels(models []ai.Model) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.personalModels = models
+}
+
+func (p *personalizedCatalogProvider) personalModelsSnapshot() []ai.Model {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.personalModels
+}
+
+// builtinModels returns the provider's full built-in catalog (pi:
+// builtinModels = getAllModels?.() ?? getModels()).
+func (p *personalizedCatalogProvider) builtinModels() []ai.Model {
+	if all, ok := p.Provider.(ai.ProviderAllModels); ok {
+		return all.GetAllModels()
+	}
+	return p.Provider.GetModels()
+}
+
+// getAllModels returns the saved personalized list, or the built-in models
+// when nothing is saved (pi: getAllModels).
+func (p *personalizedCatalogProvider) getAllModels() []ai.Model {
+	if personal := p.personalModelsSnapshot(); len(personal) > 0 {
+		return personal
+	}
+	return p.builtinModels()
+}
+
+func (p *personalizedCatalogProvider) GetModels() []ai.Model {
+	var chat []ai.Model
+	for _, model := range p.getAllModels() {
+		if model.IsModelType(ai.ModelTypeChat) {
+			chat = append(chat, model)
+		}
+	}
+	return chat
+}
+
+// GetAllModels returns the saved personalized list across every model type
+// (pi: getAllModels stacks the full list).
+func (p *personalizedCatalogProvider) GetAllModels() []ai.Model {
+	return p.getAllModels()
+}
+
+// RefreshModels refreshes the persisted personalized catalog (pi:
+// withPersonalizedCatalog refreshModels). The saved entry holds the
+// personalized list, not the pi.dev catalog, and replaces the catalog
+// including offline. The refresh interval and etag revalidation are skipped.
+// An empty list (nothing saved yet, or an empty catalog saved by an older pig
+// after a failed or missing pi.dev catalog) falls back to the built-in models.
+func (p *personalizedCatalogProvider) RefreshModels(ctx context.Context, refreshCtx *ai.RefreshModelsContext) error {
+	stored := refreshCtx.Stored
+	var restored []ai.Model
+	if stored != nil {
+		for _, model := range stored.Models {
+			if string(model.Provider) == p.Provider.ID() {
+				restored = append(restored, model)
+			}
+		}
+	}
+	ok, err := refreshCtx.Publish(ai.ModelsPublication{
+		Update: func() {
+			p.setPersonalModels(restored)
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	if !refreshCtx.AllowNetwork || ctx.Err() != nil {
+		return nil
+	}
+
+	response, err := requestCatalog(ctx, p.Provider.ID(), p.catalogBaseURL, "")
+	if err != nil {
+		return err
+	}
+	defer response.Close()
+	if ctx.Err() != nil {
+		return nil
+	}
+	var remote []ai.Model
+	if response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusNotImplemented {
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			return fmt.Errorf("Model catalog request failed for %s: %d", p.Provider.ID(), response.StatusCode)
+		}
+		models, lastModified, _, err := readCatalog(p.Provider.ID(), response)
+		if err != nil {
+			return err
+		}
+		if catalogIsNewer(lastModified, p.localGeneratedAt) {
+			remote = models
+		}
+	}
+	personalized, err := p.personalize(mergeModels(p.builtinModels(), remote), refreshCtx)
+	if err != nil {
+		return err
+	}
+	if ctx.Err() != nil {
+		return nil
+	}
+	checkedAt := time.Now().UnixMilli()
+	_, err = refreshCtx.Publish(ai.ModelsPublication{
+		Persist: &ai.ModelsStoreEntry{Models: personalized, CheckedAt: &checkedAt},
+		Update: func() {
+			p.setPersonalModels(personalized)
+		},
+	})
+	return err
+}
+
+// WithPersonalizedCatalog wraps a built-in provider so that, on each network
+// refresh, the catalog (built-in models plus a newer pi.dev catalog) is passed
+// through personalize and the result is saved (pi: withPersonalizedCatalog).
+// An empty catalogBaseURL defaults to https://pi.dev; a nil localGeneratedAt
+// means "no generated catalog timestamp".
+func WithPersonalizedCatalog(provider ai.Provider, personalize PersonalizeCatalog, catalogBaseURL string, localGeneratedAt *int64) ai.Provider {
+	if catalogBaseURL == "" {
+		catalogBaseURL = defaultCatalogBaseURL
+	}
+	return &personalizedCatalogProvider{
+		Provider:         provider,
+		personalize:      personalize,
 		catalogBaseURL:   catalogBaseURL,
 		localGeneratedAt: localGeneratedAt,
 	}

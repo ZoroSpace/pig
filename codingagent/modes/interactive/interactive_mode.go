@@ -2211,7 +2211,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 			m.session().AbortCompaction()
 		}
 		m.abortMu.Unlock()
-		m.showStatusIndicator(components.NewCompactionStatusIndicator(m.ui, components.CompactionStatusReason(event.Reason)))
+		m.showStatusIndicator(components.NewCompactionStatusIndicator(m.ui, components.CompactionStatusReason(event.Reason), m.embeddedStatusColorFn()))
 		m.ui.RequestRender(false)
 
 	case core.AgentSessionEventCompactionEnd:
@@ -2303,7 +2303,7 @@ func (m *InteractiveMode) handleEvent(ctx context.Context, event *core.AgentSess
 		if event.SummaryRetrySource == "branchSummary" {
 			m.showStatusIndicator(components.NewBranchSummaryStatusIndicator(m.ui))
 		} else {
-			m.showStatusIndicator(components.NewCompactionStatusIndicator(m.ui, components.CompactionStatusReason(event.Reason)))
+			m.showStatusIndicator(components.NewCompactionStatusIndicator(m.ui, components.CompactionStatusReason(event.Reason), m.embeddedStatusColorFn()))
 		}
 		m.ui.RequestRender(false)
 
@@ -3335,6 +3335,31 @@ func (m *InteractiveMode) setEditorWorkingStatusIndicator(indicator components.S
 	return true
 }
 
+// editorEmbedsStatus reports whether the active editor opted into border
+// embedding (pi: isEmbeddedStatus).
+func (m *InteractiveMode) editorEmbedsStatus() bool {
+	editor, ok := m.editor.(*components.CustomEditor)
+	return ok && editor.EmbedWorkingStatus
+}
+
+// embeddedStatusColorFn returns the editor border color for an embedded status
+// indicator, or nil when the editor does not embed it (pi: the colorFn built
+// from isEmbeddedStatus).
+func (m *InteractiveMode) embeddedStatusColorFn() func(string) string {
+	editor, ok := m.editor.(*components.CustomEditor)
+	if !ok || !editor.EmbedWorkingStatus {
+		return nil
+	}
+	if editor.BorderColor != nil {
+		return editor.BorderColor
+	}
+	level := m.session().ThinkingLevel()
+	if level == "" {
+		level = "off"
+	}
+	return theme.Current().GetThinkingBorderColor(level)
+}
+
 // showStatusIndicator swaps the status container content (pi:
 // showStatusIndicator). A working indicator is embedded into the editor's
 // top border instead of occupying a standalone row when possible.
@@ -3382,18 +3407,7 @@ func (m *InteractiveMode) clearStatusIndicator(kind components.StatusIndicatorKi
 // the editor border color when the editor embeds it (pi:
 // showWorkingStatusIndicator, v0.85.1).
 func (m *InteractiveMode) showWorkingStatusIndicator() {
-	var colorFn func(string) string
-	if editor, ok := m.editor.(*components.CustomEditor); ok && editor.EmbedWorkingStatus {
-		borderColor := editor.BorderColor
-		if borderColor == nil {
-			level := m.session().ThinkingLevel()
-			if level == "" {
-				level = "off"
-			}
-			borderColor = theme.Current().GetThinkingBorderColor(level)
-		}
-		colorFn = borderColor
-	}
+	colorFn := m.embeddedStatusColorFn()
 	message := m.defaultWorkingMessage
 	if m.workingMessage != nil {
 		message = *m.workingMessage

@@ -251,6 +251,21 @@ func CreateModelRuntime(ctx context.Context, options *CreateModelRuntimeOptions)
 	for _, provider := range providers.BuiltinProviders() {
 		// pi maps the radius provider through untouched; pig has no radius
 		// provider yet (deferred with the OAuth batch).
+		if provider.ID() == "radius" {
+			providerList = append(providerList, provider)
+			continue
+		}
+		// OpenRouter narrows the catalog to the models, limits and prices of
+		// the user's key.
+		if provider.ID() == "openrouter" {
+			providerList = append(providerList, WithPersonalizedCatalog(
+				provider,
+				providers.PersonalizeOpenRouterCatalog,
+				lo.FromPtr(options).CatalogBaseURL,
+				lo.ToPtr(builtinModelDataGeneratedAt),
+			))
+			continue
+		}
 		providerList = append(providerList, WithRemoteCatalog(provider, lo.FromPtr(options).CatalogBaseURL, lo.ToPtr(builtinModelDataGeneratedAt)))
 	}
 

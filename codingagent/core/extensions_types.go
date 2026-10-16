@@ -1153,12 +1153,19 @@ type ThinkingLevelSelectEvent struct {
 
 func (e *ThinkingLevelSelectEvent) EventType() string { return e.Type }
 
-// BeforeAgentStartEvent fires before the agent run starts (pi:
-// BeforeAgentStartEvent).
+// BeforeAgentStartEvent fires before an agent run starts, from a submitted
+// prompt, RPC prompt, sendUserMessage, or an idle custom message with
+// triggerTurn (pi: BeforeAgentStartEvent; v1.2.0 splits it into a union on
+// messageType — pig keeps the single-struct discriminator pattern).
+// MessageType "user" carries Prompt/Images; "custom" carries Message.
 type BeforeAgentStartEvent struct {
-	Type   string               `json:"type"`
-	Prompt string               `json:"prompt"`
+	Type        string `json:"type"`
+	MessageType string `json:"messageType"`
+	// Prompt is the raw user prompt text after expansion (messageType "user").
+	Prompt string               `json:"prompt,omitempty"`
 	Images []types.ImageContent `json:"images,omitempty"`
+	// Message is the custom message that starts the run (messageType "custom").
+	Message *harness.CustomMessage `json:"message,omitempty"`
 	// SystemPrompt is the current system prompt, rendered from
 	// systemPromptOptions and earlier handler changes (pi v0.86.0: a
 	// getter; pig renders it once per handler dispatch).

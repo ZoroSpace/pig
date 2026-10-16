@@ -17,10 +17,22 @@ import (
 	"sync"
 
 	"github.com/ZoroSpace/pig/agent"
+	"github.com/ZoroSpace/pig/agent/harness"
 	"github.com/ZoroSpace/pig/ai/types"
 	aiutils "github.com/ZoroSpace/pig/ai/utils"
 	"github.com/ZoroSpace/pig/tui"
 )
+
+// BeforeAgentStartTrigger is the message that starts a run: the
+// before_agent_start event without its prompt fields (pi:
+// BeforeAgentStartTrigger). MessageType "user" carries Prompt/Images;
+// "custom" carries Message.
+type BeforeAgentStartTrigger struct {
+	MessageType string                 `json:"messageType"`
+	Prompt      string                 `json:"prompt,omitempty"`
+	Images      []types.ImageContent   `json:"images,omitempty"`
+	Message     *harness.CustomMessage `json:"message,omitempty"`
+}
 
 // ExtensionRuntime is the shared runtime state referenced by extension APIs
 // (pi: ExtensionRuntime = ExtensionRuntimeState + ExtensionActions; the
@@ -939,8 +951,7 @@ func (r *ExtensionRunner) EmitToolCall(ctx context.Context, event *ToolCallEvent
 // forceSystemPrompt, and later handlers observe earlier mutations).
 func (r *ExtensionRunner) EmitBeforeAgentStart(
 	ctx context.Context,
-	prompt string,
-	images []types.ImageContent,
+	trigger BeforeAgentStartTrigger,
 	systemPromptOptions BuildSystemPromptOptions,
 ) (*BeforeAgentStartCombinedResult, error) {
 	currentOptions := NormalizeBuildSystemPromptOptions(systemPromptOptions)
@@ -958,8 +969,10 @@ func (r *ExtensionRunner) EmitBeforeAgentStart(
 		for _, handler := range handlers {
 			event := &BeforeAgentStartEvent{
 				Type:                "before_agent_start",
-				Prompt:              prompt,
-				Images:              images,
+				MessageType:         trigger.MessageType,
+				Prompt:              trigger.Prompt,
+				Images:              trigger.Images,
+				Message:             trigger.Message,
 				SystemPrompt:        renderCurrentSystemPrompt(),
 				SystemPromptOptions: &currentOptions,
 			}

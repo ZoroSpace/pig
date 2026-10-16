@@ -290,6 +290,21 @@ func TestResolveModelScopePreservesCLIWarningOutput(t *testing.T) {
 	}
 }
 
+// TestResolveModelScopeMatchesGlobPatternsAgainstProviderQualifiedIDs locks
+// the Minimatch argument order (glob, value): a swapped call would match
+// nothing and emit a "No models match pattern" diagnostic.
+func TestResolveModelScopeMatchesGlobPatternsAgainstProviderQualifiedIDs(t *testing.T) {
+	registry := &stubResolverRuntime{available: resolverAllModels}
+
+	result, err := ResolveModelScopeWithDiagnostics(context.Background(), []string{"anthropic/claude-*"}, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.ScopedModels) != 1 || result.ScopedModels[0].Model.ID != "claude-sonnet-4-5" {
+		t.Fatalf("scopedModels = %+v, want [claude-sonnet-4-5]", result.ScopedModels)
+	}
+}
+
 func TestResolveModelScopeResolvesBracketedModelIDsAsExactReferencesBeforeGlobMatching(t *testing.T) {
 	bracketedModel := resolverModel("bracketed-model[1m]", "Bracketed Model", "custom", "https://example.invalid", true)
 	models := append(append([]ai.Model(nil), resolverAllModels...), bracketedModel)

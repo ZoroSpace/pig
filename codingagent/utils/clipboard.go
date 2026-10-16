@@ -42,12 +42,15 @@ var clipboardRunCommandOptionsFn = runClipboardCommand
 var osc52Writer = func(b []byte) (int, error) { return os.Stdout.Write(b) }
 
 // isRemoteSession reports whether the session runs over SSH/Mosh (pi:
-// isRemoteSession).
+// isRemoteSession). Remote sessions also emit OSC 52 so the client terminal
+// receives the copy. PI_CLIPBOARD_OSC52=1 covers remote clients that leave no
+// SSH markers, such as multiplexer attaches (#10114, #10835) or IDE daemons
+// (#10826).
 func isRemoteSession(env func(string) string) bool {
 	if env == nil {
 		env = os.Getenv
 	}
-	return env("SSH_CONNECTION") != "" || env("SSH_CLIENT") != "" || env("MOSH_CONNECTION") != ""
+	return env("SSH_CONNECTION") != "" || env("SSH_CLIENT") != "" || env("MOSH_CONNECTION") != "" || env("PI_CLIPBOARD_OSC52") == "1"
 }
 
 // emitOsc52 writes the text to the system clipboard via OSC 52 (pi:

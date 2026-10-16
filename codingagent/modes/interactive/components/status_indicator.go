@@ -193,8 +193,9 @@ const (
 )
 
 // NewCompactionStatusIndicator builds the compaction indicator (pi: class
-// CompactionStatusIndicator).
-func NewCompactionStatusIndicator(ui tui.TUI, reason CompactionStatusReason) *StatusIndicator {
+// CompactionStatusIndicator). A non-nil colorFn overrides both the spinner and
+// text colors (used when the indicator is embedded in the editor border).
+func NewCompactionStatusIndicator(ui tui.TUI, reason CompactionStatusReason, colorFn func(string) string) *StatusIndicator {
 	cancelHint := "(" + tools.KeyText("app.interrupt") + " to cancel)"
 	var label string
 	if reason == CompactionReasonManual {
@@ -206,11 +207,19 @@ func NewCompactionStatusIndicator(ui tui.TUI, reason CompactionStatusReason) *St
 		}
 		label = prefix + "Auto-compacting... " + cancelHint
 	}
+	spinnerFg := colorFn
+	if spinnerFg == nil {
+		spinnerFg = func(spinner string) string { return theme.Fg("accent", spinner) }
+	}
+	textFg := colorFn
+	if textFg == nil {
+		textFg = func(text string) string { return theme.Fg("muted", text) }
+	}
 	return NewStatusIndicator(
 		StatusKindCompaction,
 		ui,
-		func(spinner string) string { return theme.Fg("accent", spinner) },
-		func(text string) string { return theme.Fg("muted", text) },
+		spinnerFg,
+		textFg,
 		label,
 		nil,
 	)

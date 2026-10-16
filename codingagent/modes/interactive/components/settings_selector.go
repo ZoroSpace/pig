@@ -1100,7 +1100,7 @@ func NewSettingsSelectorComponent(config *SettingsConfig, callbacks *SettingsCal
 	items[skillCommandsIndex+1] = &tui.SettingItem{
 		Id:           "show-hardware-cursor",
 		Label:        "Show hardware cursor",
-		Description:  "Show the terminal cursor while still positioning it for IME support",
+		Description:  "Use the terminal cursor instead of Pig's drawn cursor",
 		CurrentValue: boolSettingValue(config.ShowHardwareCursor),
 		Values:       []string{"true", "false"},
 	}

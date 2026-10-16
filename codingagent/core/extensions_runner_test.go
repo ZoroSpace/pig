@@ -72,7 +72,7 @@ func TestNoExtensionPathEmitDefaults(t *testing.T) {
 		t.Fatalf("expected continue, got %+v", result)
 	}
 
-	combined, err := runner.EmitBeforeAgentStart(ctx, "hello", nil, BuildSystemPromptOptions{Cwd: "/tmp/project"})
+	combined, err := runner.EmitBeforeAgentStart(ctx, BeforeAgentStartTrigger{MessageType: "user", Prompt: "hello"}, BuildSystemPromptOptions{Cwd: "/tmp/project"})
 	if err != nil {
 		t.Fatal(err)
 	}
