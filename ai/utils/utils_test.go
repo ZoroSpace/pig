@@ -44,11 +44,61 @@ func TestRepairJSON(t *testing.T) {
 	cases := map[string]string{
 		`{"a":"hello` + "\n" + `world"}`: `{"a":"hello\nworld"}`,
 		`{"a":"\q"}`:                     `{"a":"\\q"}`,
+		// #10868: invalid \u escapes (e.g. LaTeX \usepackage) are literal text.
+		`{"a":"\url{x}"}`: `{"a":"\\url{x}"}`,
 	}
 	for input, want := range cases {
 		if got := RepairJSON(input); got != want {
 			t.Errorf("RepairJSON(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestParseStreamingJSONKeepsInvalidUnicodeEscapes(t *testing.T) {
+	// #10868: fields after an invalid \u escape are kept, not dropped.
+	raw := `{"path":"a.tex","content":"\usepackage{x}","mode":"w"}`
+	got := ParseStreamingJSON(&raw)
+	if got["path"] != "a.tex" || got["content"] != `\usepackage{x}` || got["mode"] != "w" {
+		t.Fatalf("parseStreamingJson = %v", got)
+	}
+	valid := `{"text":"caf\u00e9 \url"}`
+	if got := ParseStreamingJSON(&valid); got["text"] != `café \url` {
+		t.Fatalf("valid escape = %v", got)
+	}
+	cut := `{"text":"ab\u00`
+	if got := ParseStreamingJSON(&cut); got["text"] != "ab" {
+		t.Fatalf("cut-off escape = %v", got)
+	}
+}
+
+func TestParseToolCallArguments(t *testing.T) {
+	// #10897: complete JSON parses and repairs invalid escapes.
+	args, argErr := ParseToolCallArguments(`{"kind":"seek","note":"\url"}`)
+	if argErr != "" || args["kind"] != "seek" || args["note"] != `\url` {
+		t.Fatalf("args = %v, err = %q", args, argErr)
+	}
+	// Empty text yields empty arguments and no error.
+	if args, argErr := ParseToolCallArguments(""); argErr != "" || len(args) != 0 {
+		t.Fatalf("empty args = %v, err = %q", args, argErr)
+	}
+	// Malformed JSON keeps no valid prefix, and reports the raw text.
+	raw := `{"action":"apply","actions":[{"kind":"seek","time":.5}]}`
+	args, argErr = ParseToolCallArguments(raw)
+	if len(args) != 0 {
+		t.Fatalf("malformed args = %v, want empty", args)
+	}
+	if !strings.Contains(argErr, "\n\nReceived arguments:\n") || !strings.HasSuffix(argErr, raw) {
+		t.Fatalf("malformed error = %q", argErr)
+	}
+	// Cut-off JSON is not completed.
+	raw = `{"kind":"seek","clipId":"clip-fl`
+	if args, argErr = ParseToolCallArguments(raw); len(args) != 0 || !strings.HasSuffix(argErr, raw) {
+		t.Fatalf("cut-off args = %v, err = %q", args, argErr)
+	}
+	// Non-object JSON is rejected.
+	args, argErr = ParseToolCallArguments("[1,2]")
+	if len(args) != 0 || argErr != "Tool arguments must be a JSON object\n\nReceived arguments:\n[1,2]" {
+		t.Fatalf("array args = %v, err = %q", args, argErr)
 	}
 }
 

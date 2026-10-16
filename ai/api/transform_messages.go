@@ -10,6 +10,42 @@ import (
 
 const nonVisionUserImagePlaceholder = "(image omitted: model does not support images)"
 const nonVisionToolImagePlaceholder = "(tool image omitted: model does not support images)"
+const errorToolImagePlaceholder = "(image attached after the tool results)"
+
+// SplitErrorToolResult is an error tool result split into a text-only result
+// and the images to send after the tool results (pi: SplitErrorToolResult).
+type SplitErrorToolResult struct {
+	// Content is the result content with each run of images replaced by a note.
+	Content []types.Content
+	// Caption names the tool call, to send before Images.
+	Caption string
+	Images  []types.ImageContent
+}
+
+// SplitErrorToolResultImages splits the images out of an error tool result,
+// for APIs that reject images in error results (Anthropic, and Claude on
+// Bedrock). Send the returned content as the tool result and the caption and
+// images after all tool results of the turn, in the same user message. Returns
+// nil for results that need no split (pi: splitErrorToolResultImages, #10794).
+func SplitErrorToolResultImages(msg *types.ToolResultMessage) *SplitErrorToolResult {
+	if !msg.IsError {
+		return nil
+	}
+	images := make([]types.ImageContent, 0)
+	for _, block := range msg.Content {
+		if image, ok := block.(types.ImageContent); ok {
+			images = append(images, image)
+		}
+	}
+	if len(images) == 0 {
+		return nil
+	}
+	return &SplitErrorToolResult{
+		Content: replaceImagesWithPlaceholder(msg.Content, errorToolImagePlaceholder),
+		Caption: "Images from the error result of tool call " + msg.ToolCallID + " (" + msg.ToolName + "):",
+		Images:  images,
+	}
+}
 
 func replaceImagesWithPlaceholder(content []types.Content, placeholder string) []types.Content {
 	result := make([]types.Content, 0, len(content))
@@ -93,24 +129,25 @@ func TransformMessages(messages []types.Message, model *types.Model, normalizeTo
 			for _, block := range m.Content {
 				switch b := block.(type) {
 				case types.ThinkingContent:
-					if b.Redacted {
-						if isSameModel {
-							transformedContent = append(transformedContent, b)
-						}
+					// Thinking from another model is dropped. Signatures and
+					// encrypted reasoning are only valid for the model that
+					// produced them, and sending readable thinking as plain
+					// text makes the new model treat it as part of the visible
+					// reply.
+					if !isSameModel {
 						continue
 					}
-					if isSameModel && b.ThinkingSignature != "" {
+					// Keep redacted and signed blocks even if the thinking text
+					// is empty (OpenAI encrypted reasoning); they are needed for
+					// replay.
+					if b.Redacted || b.ThinkingSignature != "" {
 						transformedContent = append(transformedContent, b)
 						continue
 					}
 					if strings.TrimSpace(b.Thinking) == "" {
 						continue
 					}
-					if isSameModel {
-						transformedContent = append(transformedContent, b)
-					} else {
-						transformedContent = append(transformedContent, types.NewTextContent(b.Thinking))
-					}
+					transformedContent = append(transformedContent, b)
 				case types.TextContent:
 					if isSameModel {
 						transformedContent = append(transformedContent, b)

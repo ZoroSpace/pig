@@ -91,6 +91,21 @@ func TestIsRetryableAssistantErrorMatchesUpstreamProviderReturnedError(t *testin
 	}
 }
 
+func TestIsRetryableAssistantErrorMatchesGatewayForwardAndServiceUnavailable(t *testing.T) {
+	// Regression for pi #10920 (gateway "Unable to forward upstream stream")
+	// and #10965 ("The service is temporarily unavailable").
+	for _, errorMessage := range []string{
+		"Unable to forward upstream stream",
+		"The service is temporarily unavailable. Please retry later.",
+		"Service unavailable: The service is temporarily unavailable.",
+	} {
+		message := retryTestMessage("", types.StopReasonError, errorMessage)
+		if !IsRetryableAssistantError(message) {
+			t.Fatalf("%q should be retryable", errorMessage)
+		}
+	}
+}
+
 func TestRetryDelayMsCapsAgentRetryDelay(t *testing.T) {
 	// Regression for pi #8826.
 	if got := RetryDelayMs(&RetryPolicy{BaseDelayMs: 2000}, 6); got != 60000 {

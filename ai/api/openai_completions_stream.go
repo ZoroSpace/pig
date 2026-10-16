@@ -612,7 +612,7 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 						push(types.AssistantMessageEvent{Type: types.EventToolCallDelta, ContentIndex: contentIndex, Delta: *delta, Partial: output})
 					}
 				} else if b.hasPartialArgs {
-					b.content.Arguments = utils.ParseStreamingJSON(&b.partialArgs)
+					b.content.Arguments, b.content.ArgumentsError = utils.ParseToolCallArguments(b.partialArgs)
 				}
 				b.finalize()
 				toolCall := b.content

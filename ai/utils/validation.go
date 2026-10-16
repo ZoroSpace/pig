@@ -555,6 +555,9 @@ func ValidateToolCall(tools []types.Tool, toolCall *types.ToolCall) (any, error)
 // way. Returns the validated (and potentially coerced) arguments, or an error
 // with the formatted message callers embed into error tool results.
 func ValidateToolArguments(tool *types.Tool, toolCall *types.ToolCall) (any, error) {
+	if toolCall.ArgumentsError != "" {
+		return nil, fmt.Errorf("Invalid arguments for tool %q: %s", toolCall.Name, toolCall.ArgumentsError)
+	}
 	args := deepCopyJSONValue(toolCall.Arguments)
 
 	var schema jsonSchema

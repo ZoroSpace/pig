@@ -15,11 +15,11 @@ import (
 // convertAnthropicToolResult converts one tool result message (pi:
 // convertToolResult). v0.86.0 removed the tool_reference deferred-load
 // placement: transcript system messages carry tool declarations instead.
-func convertAnthropicToolResult(msg *types.ToolResultMessage) map[string]any {
+func convertAnthropicToolResult(msg *types.ToolResultMessage, content []types.Content) map[string]any {
 	return map[string]any{
 		"type":        "tool_result",
 		"tool_use_id": msg.ToolCallID,
-		"content":     convertContentBlocks(msg.Content),
+		"content":     convertContentBlocks(content),
 		"is_error":    msg.IsError,
 	}
 }
@@ -112,14 +112,7 @@ func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken 
 					if text, ok := item.(types.TextContent); ok {
 						blocks = append(blocks, map[string]any{"type": "text", "text": utils.SanitizeSurrogates(text.Text)})
 					} else if image, ok := item.(types.ImageContent); ok {
-						blocks = append(blocks, map[string]any{
-							"type": "image",
-							"source": map[string]any{
-								"type":       "base64",
-								"media_type": image.MimeType,
-								"data":       image.Data,
-							},
-						})
+						blocks = append(blocks, convertImageBlock(image))
 					}
 				}
 				var filteredBlocks []map[string]any
@@ -213,20 +206,35 @@ func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken 
 			// Collect all consecutive toolResult messages, needed for z.ai
 			// Anthropic endpoint.
 			var toolResults []map[string]any
+			// Anthropic rejects error tool results that contain anything but
+			// text, so their images follow all tool results of the turn, which
+			// must come first in the user message (#10794).
+			var errorImages []map[string]any
 			j := i
 			for j < len(transformedMessages) {
 				next, ok := transformedMessages[j].(types.ToolResultMessage)
 				if !ok {
 					break
 				}
-				toolResults = append(toolResults, convertAnthropicToolResult(&next))
+				split := SplitErrorToolResultImages(&next)
+				content := next.Content
+				if split != nil {
+					content = split.Content
+				}
+				toolResults = append(toolResults, convertAnthropicToolResult(&next, content))
+				if split != nil {
+					errorImages = append(errorImages, map[string]any{"type": "text", "text": split.Caption})
+					for _, image := range split.Images {
+						errorImages = append(errorImages, convertImageBlock(image))
+					}
+				}
 				j++
 			}
 
 			// Skip the messages we've already processed.
 			i = j - 1
 
-			params = append(params, map[string]any{"role": "user", "content": toolResults})
+			params = append(params, map[string]any{"role": "user", "content": append(toolResults, errorImages...)})
 		}
 	}
 

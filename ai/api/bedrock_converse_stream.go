@@ -848,7 +848,7 @@ func handleBedrockContentBlockStop(event *brtypes.ContentBlockStopEvent, output 
 		thinking := output.Content[pos].(types.ThinkingContent)
 		push(types.AssistantMessageEvent{Type: types.EventThinkingEnd, ContentIndex: pos, Content: thinking.Thinking, Partial: output})
 	case types.ToolCall:
-		content.Arguments = utils.ParseStreamingJSON(&block.partialJson)
+		content.Arguments, content.ArgumentsError = utils.ParseToolCallArguments(block.partialJson)
 		// Finalize in-place and strip the scratch buffer so replay only
 		// carries parsed arguments.
 		output.Content[pos] = content
@@ -1301,37 +1301,45 @@ func convertBedrockMessages(llmContext *types.TranscriptContext, model *types.Mo
 			// Collect all consecutive toolResult messages into a single user
 			// message; Bedrock requires all tool results to be in one message.
 			var toolResults []bedrockContentBlock
-
-			// Add current tool result with all content blocks combined
-			toolResults = append(toolResults, bedrockContentBlock{
-				ToolResult: &bedrockToolResultBlock{
-					ToolUseID: msg.ToolCallID,
-					Content:   convertBedrockToolResultContent(msg.Content),
-					Status:    bedrockToolResultStatus(msg.IsError),
-				},
-			})
-
-			// Look ahead for consecutive toolResult messages
-			j := i + 1
+			// Claude rejects error tool results that contain anything but text,
+			// so for Claude their images follow all tool results of the turn
+			// (#10794). Other models keep them in place.
+			var errorImages []bedrockContentBlock
+			j := i
 			for j < len(transformedMessages) {
 				next, ok := transformedMessages[j].(types.ToolResultMessage)
 				if !ok {
 					break
 				}
+				var split *SplitErrorToolResult
+				if isAnthropicClaudeModel(model) {
+					split = SplitErrorToolResultImages(&next)
+				}
+				content := next.Content
+				if split != nil {
+					content = split.Content
+				}
 				toolResults = append(toolResults, bedrockContentBlock{
 					ToolResult: &bedrockToolResultBlock{
 						ToolUseID: next.ToolCallID,
-						Content:   convertBedrockToolResultContent(next.Content),
+						Content:   convertBedrockToolResultContent(content),
 						Status:    bedrockToolResultStatus(next.IsError),
 					},
 				})
+				if split != nil {
+					caption := split.Caption
+					errorImages = append(errorImages, bedrockContentBlock{Text: &caption})
+					for _, image := range split.Images {
+						errorImages = append(errorImages, bedrockContentBlock{Image: createBedrockImageBlock(image.MimeType, image.Data)})
+					}
+				}
 				j++
 			}
 
 			// Skip the messages we've already processed
 			i = j - 1
 
-			result = append(result, bedrockMessage{Role: "user", Content: toolResults})
+			result = append(result, bedrockMessage{Role: "user", Content: append(toolResults, errorImages...)})
 		}
 	}
 

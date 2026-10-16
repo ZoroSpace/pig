@@ -1138,10 +1138,7 @@ func ProcessResponsesStream(events iter.Seq[*responsesStreamEvent], output *type
 				if args == "" {
 					args = slot.toolCall.partialJSON
 				}
-				if args == "" {
-					args = "{}"
-				}
-				slot.toolCall.content.Arguments = utils.ParseStreamingJSON(&args)
+				slot.toolCall.content.Arguments, slot.toolCall.content.ArgumentsError = utils.ParseToolCallArguments(args)
 				if item.Namespace != "" {
 					slot.toolCall.content.Namespace = item.Namespace
 				}

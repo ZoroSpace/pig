@@ -228,6 +228,19 @@ func TestValidateToolArgumentsPreservesNullableUnionArms(t *testing.T) {
 	})
 }
 
+func TestValidateToolArgumentsReportsMalformedArgumentsError(t *testing.T) {
+	// #10897: a finished tool call whose arguments were malformed carries
+	// argumentsError; validation fails with it instead of validating {}.
+	tool, toolCall := createToolCallWithPlainSchema(t, map[string]any{"type": "string"}, "x")
+	tool.Name = "echo"
+	toolCall.Arguments = map[string]any{}
+	toolCall.ArgumentsError = "Unexpected token"
+	_, err := ValidateToolArguments(tool, toolCall)
+	if err == nil || err.Error() != `Invalid arguments for tool "echo": Unexpected token` {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestValidateToolCallNotFound(t *testing.T) {
 	tool, toolCall := createToolCallWithPlainSchema(t, map[string]any{"type": "string"}, "x")
 	tool.Name = "echo"

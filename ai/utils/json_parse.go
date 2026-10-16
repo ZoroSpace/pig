@@ -71,7 +71,7 @@ func isHexDigits(s string) bool {
 
 func isValidJSONEscape(c byte) bool {
 	switch c {
-	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u':
+	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 		return true
 	}
 	return false
@@ -119,6 +119,28 @@ func ParseJSONWithRepair(input string) (any, error) {
 		return value2, nil
 	}
 	return nil, &malformedJSONError{msg: "cannot parse json: " + input}
+}
+
+// ParseToolCallArguments parses the model's complete arguments text of a
+// finished tool call (pi: parseToolCallArguments). Unlike ParseStreamingJSON it
+// never keeps a partially parsed prefix: once the call is finished, text that
+// is not a valid JSON object means the model sent malformed arguments. In that
+// case arguments is an empty map and argumentsError describes the problem,
+// including the text the model sent, so tool validation can report it back to
+// the model.
+func ParseToolCallArguments(jsonStr string) (map[string]any, string) {
+	if strings.TrimSpace(jsonStr) == "" {
+		return map[string]any{}, ""
+	}
+	value, err := ParseJSONWithRepair(jsonStr)
+	if err != nil {
+		return map[string]any{}, err.Error() + "\n\nReceived arguments:\n" + jsonStr
+	}
+	parsed, ok := value.(map[string]any)
+	if !ok {
+		return map[string]any{}, "Tool arguments must be a JSON object\n\nReceived arguments:\n" + jsonStr
+	}
+	return parsed, ""
 }
 
 // ParseStreamingJSON attempts to parse potentially incomplete JSON during

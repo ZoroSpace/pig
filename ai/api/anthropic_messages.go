@@ -254,6 +254,19 @@ func fromClaudeCodeName(name string, tools []types.Tool) string {
 	return name
 }
 
+// convertImageBlock converts one image content block to Anthropic's image
+// source shape (pi: convertImageBlock).
+func convertImageBlock(image types.ImageContent) map[string]any {
+	return map[string]any{
+		"type": "image",
+		"source": map[string]any{
+			"type":       "base64",
+			"media_type": image.MimeType,
+			"data":       image.Data,
+		},
+	}
+}
+
 // convertContentBlocks converts text/image content to Anthropic API format
 // (pi: convertContentBlocks): a plain string when there are no images, else a
 // content block array with a placeholder text block when there are no text
@@ -283,14 +296,7 @@ func convertContentBlocks(content []types.Content) any {
 			continue
 		}
 		image := block.(types.ImageContent)
-		blocks = append(blocks, map[string]any{
-			"type": "image",
-			"source": map[string]any{
-				"type":       "base64",
-				"media_type": image.MimeType,
-				"data":       image.Data,
-			},
-		})
+		blocks = append(blocks, convertImageBlock(image))
 	}
 	// If only images (no text), add a placeholder text block.
 	if !hasText {
@@ -677,14 +683,6 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 	currentTools := utils.GetCurrentTools(normalizedContext.Messages)
 
 	go func() {
-		providerThinkingLevel := ""
-		if compat, ok := model.Compat.(*types.AnthropicMessagesCompat); ok && compat != nil &&
-			compat.SupportsMidConvoEffort != nil && *compat.SupportsMidConvoEffort {
-			providerThinkingLevel = string(options.Effort)
-			if providerThinkingLevel == "" {
-				providerThinkingLevel = "high"
-			}
-		}
 		output := &types.AssistantMessage{
 			Role:       types.RoleAssistant,
 			Content:    []types.Content{},
@@ -694,9 +692,6 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 			Usage:      types.Usage{},
 			StopReason: types.StopReasonPending,
 			Timestamp:  time.Now().UnixMilli(),
-		}
-		if providerThinkingLevel != "" {
-			output.ProviderThinkingLevel = providerThinkingLevel
 		}
 
 		// blocks backs output.Content: every created block lands here and
@@ -797,9 +792,12 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
-				params, hasPreferredStrictTools, err := buildAnthropicParams(model, normalizedContext, created.isOAuthToken, options, disablePreferredStrictTools)
+				params, hasPreferredStrictTools, providerThinkingLevel, err := buildAnthropicParams(model, normalizedContext, created.isOAuthToken, options, disablePreferredStrictTools)
 				if err != nil {
 					return err
+				}
+				if providerThinkingLevel != "" {
+					output.ProviderThinkingLevel = providerThinkingLevel
 				}
 				if options.OnPayload != nil {
 					if next := options.OnPayload(params, model); next != nil {
@@ -974,7 +972,7 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 					case types.ThinkingContent:
 						push(types.AssistantMessageEvent{Type: types.EventThinkingEnd, ContentIndex: blockIndex, Content: b.Thinking, Partial: output})
 					case types.ToolCall:
-						b.Arguments = utils.ParseStreamingJSON(&block.partialJSON)
+						b.Arguments, b.ArgumentsError = utils.ParseToolCallArguments(block.partialJSON)
 						// Finalize in place and strip the scratch buffer so
 						// replay only carries parsed arguments (pi: delete
 						// block.partialJson).
@@ -1485,11 +1483,16 @@ func shouldUseFineGrainedToolStreamingBeta(model *types.Model, llmContext *types
 // buildAnthropicParams builds the message create request body (pi:
 // buildParams). The params are plain JSON maps so optional fields serialize
 // on demand and OnPayload consumers can inspect the wire shape.
-func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContext, isOAuthToken bool, options *AnthropicOptions, disablePreferredStrictTools bool) (map[string]any, bool, error) {
+func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContext, isOAuthToken bool, options *AnthropicOptions, disablePreferredStrictTools bool) (map[string]any, bool, string, error) {
 	_, cacheControl := getCacheControl(model, options.CacheRetention, options.Env)
 	compat := getAnthropicCompat(model)
 	compatModel, _ := model.Compat.(*types.AnthropicMessagesCompat)
 	midConvoEffort := compatModel != nil && compatModel.SupportsMidConvoEffort != nil && *compatModel.SupportsMidConvoEffort
+	// Effort cannot change between messages while thinking is disabled, so
+	// "off" sends no effort markers.
+	thinkingDisabled := model.Reasoning && options.ThinkingEnabled != nil && !*options.ThinkingEnabled &&
+		thinkingLevelOffAllowed(model)
+	effortMessages := midConvoEffort && !thinkingDisabled
 	initialSystemMessage := utils.GetInitialSystemMessage(llmContext.Messages)
 	initialSystemText := ""
 	if initialSystemMessage != nil {
@@ -1536,9 +1539,9 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 			return convertToolDefinitions(tools, nil)
 		}
 	}
-	converted, err := convertAnthropicMessages(conversationMessages, isOAuthToken, cacheControl, compat.allowEmptySignature, managedEffortProvider(model), messageToolConverter)
+	converted, err := convertAnthropicMessages(conversationMessages, isOAuthToken, cacheControl, compat.allowEmptySignature, managedEffortProvider(model, effortMessages), messageToolConverter)
 	if err != nil {
-		return nil, false, err
+		return nil, false, "", err
 	}
 	activeEffort := options.Effort
 	if activeEffort == "" {
@@ -1551,7 +1554,7 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 		"max_tokens": maxTokensValue(options, model),
 		"stream":     true,
 	}
-	if midConvoEffort {
+	if effortMessages {
 		params["messages"] = insertThinkingLevelMessages(converted, activeEffort)
 	}
 	if len(betaFeatures) > 0 {
@@ -1599,7 +1602,7 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 		// tool_removal, so the cached prefix survives every tool change.
 		initialConverted, err := convertToolDefinitions(initialTools, toolCacheControl)
 		if err != nil {
-			return nil, false, err
+			return nil, false, "", err
 		}
 		placeholder := map[string]any{
 			"name":        deferredToolPlaceholderName,
@@ -1618,44 +1621,44 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 		if len(tools) > 0 {
 			convertedTools, err := convertToolDefinitions(tools, toolCacheControl)
 			if err != nil {
-				return nil, false, err
+				return nil, false, "", err
 			}
 			params["tools"] = convertedTools
 		}
 	}
 
-	// Managed effort models always use adaptive thinking so prefix mismatches
-	// can be dropped instead of surfacing as persistent 400 responses.
-	if midConvoEffort {
+	// Managed effort models use adaptive thinking so prefix mismatches can be
+	// dropped instead of surfacing as persistent 400 responses.
+	if thinkingDisabled {
+		// No effort is sent, so the model default applies. Anthropic rejects
+		// `block_binding` with disabled thinking.
+		params["thinking"] = map[string]any{"type": "disabled"}
+	} else if effortMessages {
 		params["thinking"] = map[string]any{
 			"type":          "adaptive",
 			"display":       thinkingDisplayValue(options),
 			"block_binding": map[string]any{"prefix_mismatch_behavior": "drop_block"},
 		}
 		params["output_config"] = map[string]any{"effort": "high"}
-	} else if model.Reasoning {
-		if options.ThinkingEnabled != nil && *options.ThinkingEnabled {
-			// Default to "summarized" so Opus 4.7 and Mythos Preview behave
-			// like older Claude 4 models (whose API default is also
-			// "summarized").
-			display := thinkingDisplayValue(options)
-			if compatModel != nil && compatModel.ForceAdaptiveThinking != nil && *compatModel.ForceAdaptiveThinking {
-				// Adaptive thinking: Claude decides when and how much to
-				// think.
-				params["thinking"] = map[string]any{"type": "adaptive", "display": display}
-				if options.Effort != "" {
-					params["output_config"] = map[string]any{"effort": string(options.Effort)}
-				}
-			} else {
-				// Budget-based thinking for older models.
-				budget := int64(1024)
-				if options.ThinkingBudgetTokens != nil && *options.ThinkingBudgetTokens != 0 {
-					budget = *options.ThinkingBudgetTokens
-				}
-				params["thinking"] = map[string]any{"type": "enabled", "budget_tokens": budget, "display": display}
+	} else if model.Reasoning && options.ThinkingEnabled != nil && *options.ThinkingEnabled {
+		// Default to "summarized" so Opus 4.7 and Mythos Preview behave
+		// like older Claude 4 models (whose API default is also
+		// "summarized").
+		display := thinkingDisplayValue(options)
+		if compatModel != nil && compatModel.ForceAdaptiveThinking != nil && *compatModel.ForceAdaptiveThinking {
+			// Adaptive thinking: Claude decides when and how much to
+			// think.
+			params["thinking"] = map[string]any{"type": "adaptive", "display": display}
+			if options.Effort != "" {
+				params["output_config"] = map[string]any{"effort": string(options.Effort)}
 			}
-		} else if options.ThinkingEnabled != nil && !*options.ThinkingEnabled && thinkingLevelOffAllowed(model) {
-			params["thinking"] = map[string]any{"type": "disabled"}
+		} else {
+			// Budget-based thinking for older models.
+			budget := int64(1024)
+			if options.ThinkingBudgetTokens != nil && *options.ThinkingBudgetTokens != 0 {
+				budget = *options.ThinkingBudgetTokens
+			}
+			params["thinking"] = map[string]any{"type": "enabled", "budget_tokens": budget, "display": display}
 		}
 	}
 
@@ -1682,7 +1685,11 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 		params["fallbacks"] = fallbacks
 	}
 
-	return params, hasPreferredStrictTools, nil
+	providerThinkingLevel := ""
+	if effortMessages {
+		providerThinkingLevel = string(activeEffort)
+	}
+	return params, hasPreferredStrictTools, providerThinkingLevel, nil
 }
 
 // anthropicStrictToolLimitMessages are the API error messages that mean the
@@ -1746,11 +1753,9 @@ func thinkingDisplayValue(options *AnthropicOptions) string {
 }
 
 // managedEffortProvider returns the provider for mid-conversation effort
-// marker reconstruction (pi: model.compat?.supportsMidConvoEffort === true ?
-// model.provider : undefined).
-func managedEffortProvider(model *types.Model) string {
-	compat, ok := model.Compat.(*types.AnthropicMessagesCompat)
-	if !ok || compat == nil || compat.SupportsMidConvoEffort == nil || !*compat.SupportsMidConvoEffort {
+// marker reconstruction (pi: effortMessages ? model.provider : undefined).
+func managedEffortProvider(model *types.Model, effortMessages bool) string {
+	if !effortMessages {
 		return ""
 	}
 	return string(model.Provider)

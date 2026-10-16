@@ -561,6 +561,10 @@ type ToolCall struct {
 	// Namespace is the OpenAI Responses namespace for calls to dynamically
 	// loaded or namespaced tools.
 	Namespace string `json:"namespace,omitempty"`
+	// ArgumentsError is set when the model's complete arguments text was not a
+	// valid JSON object. Arguments is then empty. Describes the problem and
+	// includes the text the model sent; tool argument validation fails with it.
+	ArgumentsError string `json:"argumentsError,omitempty"`
 }
 
 func (c TextContent) ContentKind() ContentKind     { return c.Kind }
