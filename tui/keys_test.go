@@ -888,3 +888,28 @@ func TestParseKey(t *testing.T) {
 		}
 	})
 }
+
+// TestIsValidKeyId ports the KeyIdSchema grammar pi validates keybinding
+// configs against (pi #9880).
+func TestIsValidKeyId(t *testing.T) {
+	valid := []string{
+		"a", "z", "0", "9", "escape", "esc", "f12", "pageUp", "space",
+		"ctrl+c", "shift+enter", "alt+up", "super+a",
+		"ctrl+shift+alt+super+" + "x",
+		"shift+=", "+", "ctrl++", "shift+ctrl+p",
+	}
+	for _, id := range valid {
+		if !IsValidKeyId(id) {
+			t.Errorf("IsValidKeyId(%q) = false, want true", id)
+		}
+	}
+	invalid := []string{
+		"", "A", "ab", "ctrl", "ctrl+", "ctrl+ctrl+c", "shift+shift+a",
+		"ctrl+alt+ctrl+a", "ctrl+notakey", "ctrl+ ", "unknown",
+	}
+	for _, id := range invalid {
+		if IsValidKeyId(id) {
+			t.Errorf("IsValidKeyId(%q) = true, want false", id)
+		}
+	}
+}

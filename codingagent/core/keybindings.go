@@ -342,22 +342,27 @@ var keybindingNameMigrations = map[string]string{
 func toKeybindingsConfig(value map[string]any) tui.KeybindingsConfig {
 	config := tui.KeybindingsConfig{}
 	for key, binding := range value {
+		if key == "$schema" {
+			continue
+		}
 		if s, ok := binding.(string); ok {
-			config[key] = []tui.KeyId{s}
+			if tui.IsValidKeyId(s) {
+				config[key] = []tui.KeyId{s}
+			}
 			continue
 		}
 		if arr, ok := binding.([]any); ok {
-			allStrings := true
+			valid := true
 			ids := []tui.KeyId{}
 			for _, entry := range arr {
 				s, ok := entry.(string)
-				if !ok {
-					allStrings = false
+				if !ok || !tui.IsValidKeyId(s) {
+					valid = false
 					break
 				}
 				ids = append(ids, tui.KeyId(s))
 			}
-			if allStrings {
+			if valid {
 				config[key] = ids
 			}
 		}

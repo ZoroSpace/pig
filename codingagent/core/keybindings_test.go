@@ -166,6 +166,35 @@ func TestKeybindingsMigrationLoadsLegacyNames(t *testing.T) {
 	})
 }
 
+// TestKeybindingsConfigValueValidation ports pi #9880: toKeybindingsConfig
+// validates each binding against the KeyId grammar, drops invalid values, and
+// skips the $schema marker.
+func TestKeybindingsConfigValueValidation(t *testing.T) {
+	agentDir := t.TempDir()
+	config := `{
+  "$schema": "https://example.com/keybindings.schema.json",
+  "app.session.new": "ctrl+n",
+  "extension.action": ["alt+x"],
+  "app.clear": 42,
+  "app.exit": "not a key!",
+  "app.interrupt": "ctrl+ctrl+c",
+  "app.model.select": ["escape", 7]
+}
+`
+	if err := os.WriteFile(filepath.Join(agentDir, "keybindings.json"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := CreateKeybindingsManager(agentDir).GetUserBindings()
+	want := map[string][]tui.KeyId{
+		"app.session.new":  {"ctrl+n"},
+		"extension.action": {"alt+x"},
+	}
+	if !keyConfigEqual(got, want) {
+		t.Fatalf("userBindings = %v, want %v", got, want)
+	}
+}
+
 func keyConfigEqual(a, b tui.KeybindingsConfig) bool {
 	if len(a) != len(b) {
 		return false

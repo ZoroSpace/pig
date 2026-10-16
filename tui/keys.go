@@ -157,6 +157,58 @@ var shiftedSymbolKeys = map[string]bool{
 // MODIFIER_NAMES).
 var modifierNames = []string{"shift", "alt", "ctrl", "super"}
 
+// baseKeyNames is the set of named or symbolic base keys accepted by
+// IsValidKeyId; single lowercase letters and digits are accepted separately
+// (pi key-id baseKeyPattern: [a-z0-9] | Object.values(Key) string members).
+var baseKeyNames = map[string]bool{
+	"escape": true, "esc": true, "enter": true, "return": true, "tab": true,
+	"space": true, "backspace": true, "delete": true, "insert": true, "clear": true,
+	"home": true, "end": true, "pageUp": true, "pageDown": true,
+	"up": true, "down": true, "left": true, "right": true,
+	"f1": true, "f2": true, "f3": true, "f4": true, "f5": true, "f6": true,
+	"f7": true, "f8": true, "f9": true, "f10": true, "f11": true, "f12": true,
+	"`": true, "-": true, "=": true, "[": true, "]": true, "\\": true,
+	";": true, "'": true, ",": true, ".": true, "/": true,
+	"!": true, "@": true, "#": true, "$": true, "%": true,
+	"^": true, "&": true, "*": true, "(": true, ")": true,
+	"_": true, "+": true, "|": true, "~": true, "{": true, "}": true,
+	":": true, "<": true, ">": true, "?": true,
+}
+
+// IsValidKeyId reports whether keyId matches the key identifier grammar pi
+// validates keybinding configs against (pi: KeyIdSchema): up to four distinct
+// ctrl/shift/alt/super modifiers followed by a base key (a lowercase letter,
+// a digit, or a named/symbolic key). Duplicate modifiers are rejected.
+func IsValidKeyId(keyId string) bool {
+	key := keyId
+	seen := 0
+	for {
+		matched := false
+		for i, name := range modifierNames {
+			if strings.HasPrefix(key, name+"+") {
+				bit := 1 << i
+				if seen&bit != 0 {
+					return false
+				}
+				seen |= bit
+				key = key[len(name)+1:]
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			break
+		}
+	}
+	if len(key) == 1 {
+		c := key[0]
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			return true
+		}
+	}
+	return baseKeyNames[key]
+}
+
 const (
 	modifierShift = 1
 	modifierAlt   = 2

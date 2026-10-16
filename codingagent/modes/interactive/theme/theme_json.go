@@ -52,6 +52,16 @@ func validateColorValue(path string, value ColorValue) (string, bool) {
 	return path + ": must be a string or a 256-color index", false
 }
 
+// sortedKeys returns a map's keys in deterministic (sorted) order.
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // ValidateThemeJson hand-validates the theme schema (pi: validateThemeJson in
 // theme-json.ts; pig hand-writes the TypeBox shape). Missing required colors
 // keep pi's diagnostic formatting; the theme name may not contain "/".
@@ -63,6 +73,16 @@ func ValidateThemeJson(label string, parsed any) (*ThemeJson, error) {
 
 	var missingColors []string
 	var otherErrors []string
+
+	// Strict additionalProperties: false at the top level (pi #9880: the
+	// TypeBox schema rejects unknown fields).
+	for _, k := range sortedKeys(top) {
+		switch k {
+		case "$schema", "name", "appearance", "vars", "colors", "export":
+		default:
+			otherErrors = append(otherErrors, "  - /"+k+": must not have additional properties")
+		}
+	}
 
 	name, hasName := top["name"]
 	if !hasName {
@@ -129,6 +149,12 @@ func ValidateThemeJson(label string, parsed any) (*ThemeJson, error) {
 			}
 			sort.Strings(keys)
 			for _, k := range keys {
+				if !knownThemeColorKeys[k] {
+					// Strict additionalProperties: false on the colors object
+					// (pi #9880).
+					otherErrors = append(otherErrors, "  - /colors/"+k+": must not have additional properties")
+					continue
+				}
 				if msg, ok := validateColorValue("/colors/"+k, colors[k]); !ok {
 					otherErrors = append(otherErrors, "  - "+msg)
 				}
@@ -141,11 +167,15 @@ func ValidateThemeJson(label string, parsed any) (*ThemeJson, error) {
 		if !ok {
 			otherErrors = append(otherErrors, "  - /export: must be object")
 		} else {
-			for _, k := range []string{"pageBg", "cardBg", "infoBg"} {
-				if val, ok := exportSection[k]; ok {
-					if msg, ok := validateColorValue("/export/"+k, val); !ok {
+			for _, k := range sortedKeys(exportSection) {
+				switch k {
+				case "pageBg", "cardBg", "infoBg":
+					if msg, ok := validateColorValue("/export/"+k, exportSection[k]); !ok {
 						otherErrors = append(otherErrors, "  - "+msg)
 					}
+				default:
+					// Strict additionalProperties: false (pi #9880).
+					otherErrors = append(otherErrors, "  - /export/"+k+": must not have additional properties")
 				}
 			}
 		}

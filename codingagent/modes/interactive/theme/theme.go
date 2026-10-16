@@ -193,6 +193,26 @@ var optionalThemeBgs = map[ThemeBg]bool{
 	BgSearchMatchBg: true,
 }
 
+// knownThemeColorKeys is the allow-list of every accepted "colors" key, used
+// by the strict theme validator's additionalProperties check (pi #9880). It
+// covers required and optional tokens, pig-only tokens included.
+var knownThemeColorKeys = func() map[string]bool {
+	known := map[string]bool{}
+	for _, c := range requiredThemeColors {
+		known[string(c)] = true
+	}
+	for c := range optionalThemeColors {
+		known[string(c)] = true
+	}
+	for _, b := range requiredThemeBgs {
+		known[string(b)] = true
+	}
+	for b := range optionalThemeBgs {
+		known[string(b)] = true
+	}
+	return known
+}()
+
 // requiredThemeColors lists every required foreground token, in schema
 // declaration order (used by the validator's missing-color diagnostics).
 var requiredThemeColors = []ThemeColor{
