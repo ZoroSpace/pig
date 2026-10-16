@@ -14,9 +14,9 @@
 - **每批收口必须预写下一批 handoff（2026-10-02 立，起因：S11-2 开工前靠 S11-1 会话上下文预消化 8 个 commit 落点，省掉开工批重翻 pi diff 与重新定位 pig 代码的 token 开销）**：每完成一批（含收口 commit 之前），在当前会话上下文还热着时把**下一批**的开工稿写进 `docs/handoffs/`：逐 commit 消化 pi diff、核实 pig 落点（文件/函数/行号/测试基建）、预判偏差与跳过项（引用不做清单裁决），做到开工批「照单施工、无需再翻 pi 仓库」。下一批范围未定时至少写「下一批候选 + 已知落点」段。首例：docs/handoffs/S11-2.md（4 实移 4 零操作声明）。
 - **git worktree 并行开发规范（2026-09-12 立）**：用户要求用 git worktree 并行开发时按此执行——① **适用判据**：小 feature/fix 且**改动文件集合不相交**才并行（`interactive_mode.go`、`agent_session.go`、`BuiltinProviders`、`ai/models_generated.go`、`ai/index.go`、`go.mod` 是大磁铁/共享注册面，双方都碰就串行）；S 系基线同步批等动多区域的大迭代**独占串行**，期间并行小 fix 会无谓扩大冲突面。② **流程四步**：`git worktree add ../pig-<fix|feat>-<主题> -b <fix|feat>/<主题>` → 在 worktree 内正常开工（读 AGENTS.md + 对应 `docs/fix/`、`docs/feat/` 先例，回归测试 stash 验证照常走）→ 各分支独立过 §3.5 验收门 → master `git merge --no-ff` 合流（后合的一方先 rebase/merge master，**终审再跑一遍全量 `-race`**）→ `git worktree remove`。③ **共享写入点**：`AGENTS.md` 是唯一必然双写的文件（fix 在 `docs/fix/` 现有文件列表补一行、feat 在「批次索引」补一行），均为单行追加，后合者手工并、成本≈0；`docs/fix/`、`docs/feat/`、`docs/handoffs/` 每起独立文件，天然零冲突；`go.mod`/`go.sum` 双方都加了依赖则合流后 `go mod tidy`；`models_generated.go` 必冲突，rebase 后重跑生成脚本勿手工并。④ **全量 `-race` 错峰**：两个 worktree 同时跑会撞 `ai/auth` 的固定端口（codex 1455 / anthropic 53692，见 `docs/fix/2026-09-12-oauth-callback-listener-leak-flaky.md`）假红 `bind: address already in use`，错开几分钟或并行期间单跑时跳过该包。⑤ Go build cache 内容寻址共享（~/.cache/go-build），两 worktree 编译缓存大部分复用，并行成本远低于 node_modules 世界。并行 agent 的 tmux 窗格由用户自己开，agent 不感知、不管理 tmux（仅在需要真 TTY 冒烟时按既有 tmux 规则建临时 session）。
 
-## 当前状态（2026-10-09）
+## 当前状态（2026-10-16）
 
-- **pig 基线跟踪 pi v1.1.0**（S17 单批收口：ai 模型/定价 + MCP OAuth 取消语义 + OSC 7501 program status，跳过 release/npm/docs/TS 测试 5 commit）；全量 `go test ./... -race` 32 包全绿（generatemodels 首次带测试）；最近一批 = S17（handoff：`docs/handoffs/S17.md`）。
+- **pig 基线跟踪 pi v1.2.0**（S18 系列收口：ai retry/anthropic strict fallback/OpenRouter 个性化目录 + agent_session `startRun` 拆分与 custom run + TUI stdin buffer/fake-cursor/keys shifted symbol + MCP RFC 9207 + lean 配置校验；跳过 durable/chord/codemode/pi-env/schema 发布管线）；全量 `go test ./... -race` 32 包全绿；最近一批 = S18（handoff：`docs/handoffs/SYNC-S18-v1.2.0.md`，计划稿 `SYNC-S18-pre-digest.md`）。
 - **Dogfooding（2026-09-11 起）**：用户日常自用 pig，pi 保留作 fallback 与规格书。约定：① 日常撞到的 pig bug 一律走 `docs/fix/` 登记 + 回归测试锁定流程；② 缺 provider/adapter 卡住日常时按需提前拉起移植批；③ **真机验证矩阵** `docs/handoffs/verify-matrix.md`——provider 真机/OAuth 验证逐家解锁，每拿到一个 key 按表销账。
 - **真机冒烟测试**一律 `//go:build smoke` 门控移出默认门禁（跑法见 `docs/feat/TEST-SUITE-RUNTIME.md`）；冒烟启动必须 mock provider / 清凭证（见仓库机制 tmux 条）。
 - 路线余量：Phase 8 余量（photon/wazero、telemetry、goreleaser、/share、terminal-image）顺序由用户拍板；dogfooding 插批随时插入。
@@ -73,6 +73,7 @@
 - S16-2 ✅（2026-10-07）agent+codingagent 区：durationMs 全链（agent loop 盖戳/事件/扩展回调/渲染面/bash Took reload 存活/线格式兼容门）+ `--tools +name/-name`（GetToolListError/applyToolModifiers/sdk 判定/reload 修饰符保留/-name 永移）+ MCP #10562 偏差面核对（disable 先 abortConnect + 面板 toggle 后台化两处回填，其余三点已覆盖零回填）— `docs/handoffs/S16-2.md`
 - S16-3 ✅（2026-10-07）TUI+interactive 区：bash ANSI 跨 chunk strip（SplitIncompleteAnsiSuffix RE2 look-ahead 改写 + bash_executor 单出口重构 + decoder FullRune 截断缓冲顺修）+ transcript 重建清选区（ResetTextSelection + renderSessionEntries 入口）+ herdr 超链接检测（detectHyperlinksCapability 仅 herdr live + PI_HYPERLINKS，其余分支 deferred）+ commit 13 outputPad 拍板前跳过 + S16 全系收口声明 — `docs/handoffs/S16-3.md`
 - S17 ✅（2026-10-09，→v1.1.0）ai 模型/定价（Haiku 5.5 手插 + 生成器 tier 保真重构 + Kimi K3 钉价 + bedrock 四函数）+ MCP OAuth 取消语义（Manager 会话级取消 + close 不刷新 + 15s 全程）+ OSC 7501 program status（PI_PROGRAM_STATUS 三值 + agent_settled.aborted + reporter 全挂钩）— `docs/handoffs/S17.md`
+- S18 ✅（2026-10-16，→v1.2.0）ai retry 正则 + anthropic strict tool 容量降级 + OpenRouter 个性化目录 / agent_session `startRun`+`prepareRun` 拆分与 custom run（磁铁）+ Windows EPERM lock 重试 + `~` 展开/Match 修复 / TUI stdin buffer 延迟回复 + fake-cursor + keys shifted symbol / MCP RFC 9207 / lean 配置校验（theme 严格 + keybinding 语法，schema 发布管线跳过）— `docs/handoffs/SYNC-S18-v1.2.0.md` + 计划稿 `SYNC-S18-pre-digest.md`
 
 **Phase 2 provider/adapter 批（2026-09-11~15，Phase 2 收口）**：
 - A1+A2 anthropic-messages adapter + provider 铺开 + Claude/Kimi OAuth — `docs/handoffs/A1.md`、`A2.md`
@@ -95,6 +96,8 @@
 **登记规则**：每起 fix 完成后在下方「现有文件」列表补一条**一行摘要**（现象 + 根因），详情一律落对应 md；**禁止把长摘要写回本文件**。**每起 fix 必须同时落地回归测试函数**（stash 验证红→绿，fix 文档写明测试函数名与验证方式）。**README 同步义务**：fix 或批次若改变用户可见面，同批更新 README 对应段 + `docs/handoffs/verify-matrix.md`。
 
 现有文件：
+- `2026-10-16-system-prompt-sections-dropped-on-next-turn-refresh.md`：同一次运行工具调用后 system prompt 段丢失（agent 下一轮刷新逐字段重建 prompt 选项时漏 `Sections`；补一行，影响所有 run 非仅自定义消息 run；移植 a447ba11f 时发现）
+- `2026-10-16-minimatch-argument-order.md`：Minimatch 参数顺序反置（调用点照抄 pi 的 `minimatch(value, pattern)`，而 pig 助手是 `Minimatch(pattern, text)`；设置项 `!`/`+`/`-`/glob 过滤与 `--model` 通配全部失效；八处调用改序 + 回归测试）
 - `2026-10-13-scrollback-duplication-window-repaint.md`：滚动历史整段重复文字（shrink-spanning 滑窗重绘把视口上方 k 行重写、与 scrollback 旧副本重叠；滑动量 >8 改走 fullRender 逐行精确重建，≤8 保留滑窗）
 - `2026-10-12-models-json-volcengine-thinking-format.md`：models.json 写 thinkingFormat "volcengine" 整文件被拒（校验枚举漏了 pig 自有格式；解码链路本通，补枚举一行；烧钱实验顺带发现）
 - `2026-10-10-edit-details-map-form.md`：--continue 后 edit 卡片丢 diff（Details map/指针双形态，家族第七例；真正元凶 EditToolDetails 缺 json tag 写出大写键属线格式违规，已钉 camelCase 守卫；其余五渲染器同族降级已知不修）
