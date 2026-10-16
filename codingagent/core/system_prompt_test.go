@@ -49,7 +49,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 				Skills:        []Skill{},
 			})
 
-			if !strings.HasPrefix(defaultPrompt, "You are an expert coding assistant operating inside pi") {
+			if !strings.HasPrefix(defaultPrompt, "You are an expert coding assistant operating inside pig") {
 				t.Fatalf("default prompt = %q", defaultPrompt)
 			}
 			if !strings.HasPrefix(customPrompt, "You are Exact.\n\n<cwd>") {

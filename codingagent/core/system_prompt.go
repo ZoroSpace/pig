@@ -275,7 +275,7 @@ func BuildSystemPromptSections(input BuildSystemPromptOptions) *types.SystemSect
 	if customPrompt != "" {
 		promptSections.set("preamble", customPrompt)
 	} else {
-		promptSections.set("preamble", "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.")
+		promptSections.set("preamble", "You are an expert coding assistant operating inside pig, a Go reimplementation of pi. You help users by reading files, executing commands, editing code, and writing new files.")
 		var visibleTools []string
 		for _, name := range selectedTools {
 			if toolSnippets[name] != "" {
