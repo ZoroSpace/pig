@@ -515,7 +515,7 @@ func (t *TuiAltScreen) afterTerminalStop(options TuiStopOptions) {
 		t.terminal.Write(beginSyncOutput + exitAltScreen + "\x1b[?25h" + endSyncOutput)
 	} else {
 		width := maxInt(1, t.terminal.Columns())
-		documentLines := t.Render(width)
+		documentLines := t.resolveFakeCursors(t.Render(width))
 		for i, line := range documentLines {
 			documentLines[i] = osc133ZonePrefixRegex.ReplaceAllString(line, "")
 		}
@@ -1005,9 +1005,6 @@ func (t *TuiAltScreen) handleViewportInput(data string) *TuiInputListenerResult 
 				t.requestRenderLocked(false)
 			}
 			return &TuiInputListenerResult{Consume: true}
-		}
-		if t.shouldDeferViewportInputToOverlay() {
-			return nil
 		}
 		t.routeWheel(wheelEvent)
 		return &TuiInputListenerResult{Consume: true}
@@ -2462,6 +2459,9 @@ func (t *TuiAltScreen) doRender() error {
 	for i, line := range nextLayout.Lines {
 		screen[i] = osc133ZonePrefixRegex.ReplaceAllString(line, "")
 	}
+	// Resolve fake cursors before highlighting and compositing, which only
+	// track SGR codes
+	screen = t.resolveFakeCursors(screen)
 	screen = t.applySearchHighlights(screen, nextLayout)
 	screen = t.compositeScrollToEndIndicator(screen, nextLayout, width)
 	screen = t.compositeOverlays(screen, width, height)

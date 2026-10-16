@@ -917,10 +917,10 @@ func TestEditorGraphemeAwareTextWrapping(t *testing.T) {
 		// Cursor should be at end (after B)
 		lines := editor.Render(width)
 
-		// The cursor (reverse video space) should be visible
+		// The cursor (fake cursor) should be visible
 		contentLine := lines[1]
-		if !strings.Contains(contentLine, "\x1b[7m") {
-			t.Error("Should have reverse video cursor")
+		if !strings.Contains(contentLine, FakeCursorStart) {
+			t.Error("Should have fake cursor")
 		}
 
 		// Line should still be correct width
@@ -960,7 +960,7 @@ func TestEditorGraphemeAwareTextWrapping(t *testing.T) {
 			if len(contentLines) != 1 {
 				t.Fatalf("paddingX=%d: %d content lines before wrap, want 1", paddingX, len(contentLines))
 			}
-			if !strings.HasSuffix(contentLines[0], "\x1b[7m \x1b[0m") {
+			if !strings.HasSuffix(contentLines[0], RenderFakeCursor(" ")) {
 				t.Errorf("paddingX=%d: cursor should be at end of line", paddingX)
 			}
 

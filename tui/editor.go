@@ -1033,12 +1033,12 @@ func (e *Editor) Render(width int) []string {
 					firstGrapheme = afterGraphemes[0].Segment
 				}
 				restAfter := after[len(firstGrapheme):]
-				cursor := "\x1b[7m" + firstGrapheme + "\x1b[0m"
+				cursor := RenderFakeCursor(firstGrapheme)
 				displayText = before + marker + cursor + restAfter
 				// lineVisibleWidth stays the same - we're replacing, not adding
 			} else {
 				// Cursor is at the end - add highlighted space
-				cursor := "\x1b[7m \x1b[0m"
+				cursor := RenderFakeCursor(" ")
 				displayText = before + marker + cursor
 				lineVisibleWidth = lineVisibleWidth + 1
 				// If cursor overflows content width into the padding, flag it

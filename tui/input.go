@@ -13,7 +13,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -551,7 +550,7 @@ func (i *Input) Render(width int) []string {
 		if i.Focused {
 			marker = CursorMarker
 		}
-		cursorChar := fmt.Sprintf("\x1b[7m%s\x1b[27m", i.placeholderStyle(atCursor))
+		cursorChar := RenderFakeCursor(i.placeholderStyle(atCursor))
 		textWithCursor := marker + cursorChar + i.placeholderStyle(afterCursor)
 		padding := strings.Repeat(" ", max(0, availableWidth-VisibleWidth(textWithCursor)))
 		return []string{i.prompt + textWithCursor + padding}
@@ -623,8 +622,9 @@ func (i *Input) Render(width int) []string {
 		marker = CursorMarker
 	}
 
-	// Use inverse video to show cursor
-	cursorChar := fmt.Sprintf("\x1b[7m%s\x1b[27m", atCursor) // ESC[7m = reverse video, ESC[27m = normal
+	// TUI draws the fake cursor in reverse video, or omits it when the
+	// hardware cursor is shown
+	cursorChar := RenderFakeCursor(atCursor)
 	textWithCursor := beforeCursor + marker + cursorChar + afterCursor
 
 	// Calculate visual width

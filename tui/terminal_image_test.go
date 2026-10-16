@@ -120,11 +120,11 @@ func TestGetCapabilitiesDetectsTrueColor(t *testing.T) {
 }
 
 func TestGetCapabilitiesDetectsHerdrHyperlinks(t *testing.T) {
-	// #10573 ports (pi b2363841a): Herdr forwards OSC 8 hyperlinks with image
-	// protocols off, and it is checked before outer-terminal detection so
-	// leaked variables like KITTY_WINDOW_ID do not enable images inside
-	// Herdr panes.
-	t.Run("enables hyperlinks without images for Herdr", func(t *testing.T) {
+	// #10573 ports (pi b2363841a): Herdr forwards OSC 8 hyperlinks, and it is
+	// checked before outer-terminal detection so leaked variables like
+	// KITTY_WINDOW_ID do not enable images inside Herdr panes. #10774 (pi
+	// 78a3c10ba) then flipped Herdr to the Kitty graphics protocol.
+	t.Run("enables hyperlinks and Kitty images for Herdr", func(t *testing.T) {
 		withCapabilityEnv(t, map[string]string{
 			"TERM_PROGRAM": "herdr", "TERM": "xterm-256color",
 			"COLORTERM": "truecolor", "KITTY_WINDOW_ID": "1",
@@ -133,8 +133,8 @@ func TestGetCapabilitiesDetectsHerdrHyperlinks(t *testing.T) {
 			if !caps.Hyperlinks {
 				t.Fatal("Hyperlinks = false, want true for Herdr")
 			}
-			if caps.Images != nil && caps.Images != false {
-				t.Fatalf("Images = %v, want off (pi images:null) under Herdr", caps.Images)
+			if caps.Images != "kitty" {
+				t.Fatalf("Images = %v, want \"kitty\" for Herdr", caps.Images)
 			}
 			if !caps.TrueColor {
 				t.Fatal("TrueColor = false, want the COLORTERM hint")

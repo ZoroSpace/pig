@@ -44,7 +44,7 @@ const iterm2ImagePrefix = "\x1b]1337;"
 
 // TerminalCapabilities describes detected terminal features.
 type TerminalCapabilities struct {
-	Images     any // pi: boolean | "kitty" | "iterm2"; false until Phase 8 detection lands
+	Images     any // pi: boolean | "kitty" | "iterm2"; nil until detected (Herdr → "kitty"; other families deferred to Phase 8)
 	TrueColor  bool
 	Hyperlinks bool
 }
@@ -95,13 +95,15 @@ func SetCellDimensions(dims CellDimensions) {
 // detectHyperlinksCapability with PI_HYPERLINKS; what a caller forces via
 // SetCapabilityOverrides (user settings' `terminal.*`) wins over both
 // (pi: getCapabilities spreads capabilityOverrides over
-// detectCapabilities). Images detection is still deferred to Phase 8, so
-// it keeps its zero value unless overridden.
+// detectCapabilities). Images detection is currently limited to the Herdr
+// branch (detectImagesCapability); the other image families remain deferred
+// to Phase 8, so Images stays nil there unless overridden.
 func GetCapabilities() TerminalCapabilities {
 	capabilitiesMu.Lock()
 	defer capabilitiesMu.Unlock()
 	if cachedCapabilities == nil {
 		caps := TerminalCapabilities{
+			Images:     detectImagesCapability(),
 			TrueColor:  detectTrueColorCapability(),
 			Hyperlinks: detectHyperlinksCapability(),
 		}
@@ -129,6 +131,20 @@ func parseBooleanCapabilityOverride(value string) *bool {
 	default:
 		return nil
 	}
+}
+
+// detectImagesCapability reports the auto-detected image protocol. Herdr
+// supports the Kitty graphics protocol and is checked before the
+// outer-terminal detection because variables like KITTY_WINDOW_ID can leak
+// into its panes (pi 78a3c10ba #10774). The remaining image families stay
+// deferred with the Phase 8 image pipeline, so this reports nil (pi
+// images:null) otherwise.
+func detectImagesCapability() any {
+	termProgram := strings.ToLower(os.Getenv("TERM_PROGRAM"))
+	if termProgram == "herdr" {
+		return "kitty"
+	}
+	return nil
 }
 
 // detectTrueColorCapability reports whether the terminal renders 24-bit

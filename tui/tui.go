@@ -240,6 +240,21 @@ func AsFocusable(component Component) Focusable {
 // (pi: CURSOR_MARKER)
 const CursorMarker = "\x1b_pi:c\x07"
 
+// Fake cursor markers - zero-width APC sequences around the text drawn as the
+// cursor. See resolveFakeCursors. (pi: FAKE_CURSOR_START / FAKE_CURSOR_END)
+const FakeCursorStart = "\x1b_pi:fc\x07"
+const FakeCursorEnd = "\x1b_pi:/fc\x07"
+
+// focusedFakeCursor matches CURSOR_MARKER + FAKE_CURSOR_START + text +
+// FAKE_CURSOR_END. Truncating the line right after the cursor cell drops the
+// end. (pi: FOCUSED_FAKE_CURSOR)
+var focusedFakeCursor = regexp.MustCompile(`(?s)(\x1b_pi:c\x07)\x1b_pi:fc\x07(.*?)(?:\x1b_pi:/fc\x07|$)`)
+
+// RenderFakeCursor wraps text in fake cursor markers. (pi: renderFakeCursor)
+func RenderFakeCursor(text string) string {
+	return FakeCursorStart + text + FakeCursorEnd
+}
+
 // OverlayAnchor is the anchor position for overlays.
 type OverlayAnchor = string
 
@@ -2059,7 +2074,7 @@ func (b *TuiBase) compositeOverlays(lines []string, termWidth int, termHeight in
 		layout := b.resolveOverlayLayout(options, 0, termWidth, termHeight)
 
 		// Render component at calculated width
-		overlayLines := component.Render(layout.width)
+		overlayLines := b.resolveFakeCursors(component.Render(layout.width))
 
 		// Apply maxHeight if specified
 		if layout.maxHeight != -1 && len(overlayLines) > layout.maxHeight {
@@ -2119,6 +2134,28 @@ func (b *TuiBase) applyLineResets(lines []string) []string {
 		}
 	}
 	return lines
+}
+
+// resolveFakeCursors resolves fake cursor markers to reverse video. When the
+// hardware cursor is shown, a fake cursor directly after CursorMarker is
+// dropped because the terminal cursor is drawn there. Fake cursors of
+// components without focus have no CursorMarker and stay visible.
+// (pi: TuiBase.resolveFakeCursors)
+func (b *TuiBase) resolveFakeCursors(lines []string) []string {
+	resolved := make([]string, len(lines))
+	for i, line := range lines {
+		if !strings.Contains(line, FakeCursorStart) {
+			resolved[i] = line
+			continue
+		}
+		if b.GetShowHardwareCursor() {
+			line = focusedFakeCursor.ReplaceAllString(line, "$1$2")
+		}
+		line = strings.ReplaceAll(line, FakeCursorStart, "\x1b[7m")
+		line = strings.ReplaceAll(line, FakeCursorEnd, "\x1b[27m")
+		resolved[i] = line
+	}
+	return resolved
 }
 
 func (b *TuiBase) compositeLineAt(baseLine string, overlayLine string, startCol int, overlayWidth int, totalWidth int) string {

@@ -149,6 +149,25 @@ func TestMatchesKeyKittyAlternateKeys(t *testing.T) {
 			t.Fatal("expected match")
 		}
 	})
+	t.Run("should match shifted symbols by their produced character", func(t *testing.T) {
+		SetKittyProtocolActive(true)
+		defer SetKittyProtocolActive(false)
+		if !MatchesKey("\x1b[61:43;2u", "+") {
+			t.Fatal("matches +")
+		}
+		if !MatchesKey("\x1b[61:43;2u", "shift+=") {
+			t.Fatal("matches shift+=")
+		}
+		if key, ok := ParseKey("\x1b[61:43;2u"); !ok || key != "+" {
+			t.Fatalf("parse = %q %v, want +", key, ok)
+		}
+		if !MatchesKey("\x1b[61:43;6u", "ctrl++") {
+			t.Fatal("matches ctrl++")
+		}
+		if key, ok := ParseKey("\x1b[61:43;6u"); !ok || key != "ctrl++" {
+			t.Fatalf("parse = %q %v, want ctrl++", key, ok)
+		}
+	})
 	t.Run("handles event type in format", func(t *testing.T) {
 		SetKittyProtocolActive(true)
 		defer SetKittyProtocolActive(false)
@@ -318,6 +337,12 @@ func TestMatchesKeyModifyOtherKeys(t *testing.T) {
 			t.Fatal("ctrl+/")
 		}
 		if key, ok := ParseKey("\x1b[27;5;47~"); !ok || key != "ctrl+/" {
+			t.Fatalf("parse = %q %v", key, ok)
+		}
+		if !MatchesKey("\x1b[27;6;43~", "ctrl++") {
+			t.Fatal("ctrl++")
+		}
+		if key, ok := ParseKey("\x1b[27;6;43~"); !ok || key != "ctrl++" {
 			t.Fatalf("parse = %q %v", key, ok)
 		}
 	})
@@ -809,6 +834,10 @@ func TestParseKey(t *testing.T) {
 		expectParse("1", "1")
 		if !MatchesKey("1", "1") {
 			t.Fatal("MatchesKey 1")
+		}
+		expectParse("+", "+")
+		if !MatchesKey("+", "+") {
+			t.Fatal("MatchesKey +")
 		}
 	})
 	t.Run("parses arrow keys", func(t *testing.T) {

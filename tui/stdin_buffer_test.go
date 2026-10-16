@@ -2,6 +2,7 @@
 package tui
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -574,4 +575,129 @@ func TestStdinBufferDestroy(t *testing.T) {
 		// Should not have emitted anything
 		h.expectSequences(t)
 	})
+}
+
+// --- Terminal Reply Strings (pi edb2eb966, v1.2.0) ---
+
+// TestStdinBufferTerminalReplySplitAtEveryHeaderBoundary ports "keeps delayed
+// <reply> intact at every split after its reply header".
+func TestStdinBufferTerminalReplySplitAtEveryHeaderBoundary(t *testing.T) {
+	replies := []string{
+		"\x1b]4;1;rgb:eaea/6c6c/6d6d\x07",
+		"\x1b]10;rgb:ffff/ffff/ffff\x1b\\",
+		"\x1b]11;rgb:0000/0000/0000\x07",
+		"\x1b]4;1;rgb:6464/6464/4d4d\x07",
+		"\x1bP>|Ghostty 1.3.1\x1b\\",
+		"\x1b_Gi=1;OK\x1b\\",
+		"\x1b]7501;?\x1b\\",
+	}
+	for _, reply := range replies {
+		match := terminalReplyHeaderRegex.FindStringIndex(reply)
+		if match == nil {
+			t.Fatalf("reply %q has no recognized header", reply)
+		}
+		headerLen := match[1]
+		for split := headerLen; split < len(reply); split++ {
+			h := newStdinBufferHarness(t, &stdinBufferOptions{TimeoutMs: 5, EscapeTimeoutMs: 5})
+			h.processInput(reply[:split])
+			waitMs(t, 15)
+			h.processInput(reply[split:] + "x")
+			h.expectSequences(t, reply, "x")
+			h.buffer.Destroy()
+		}
+	}
+}
+
+// TestStdinBufferTerminalReplyBufferedAcrossTimeouts ports "keeps an OSC
+// reply buffered across multiple expired sequence timeouts".
+func TestStdinBufferTerminalReplyBufferedAcrossTimeouts(t *testing.T) {
+	h := newStdinBufferHarness(t, &stdinBufferOptions{TimeoutMs: 10})
+	h.processInput("\x1b]4;1;rgb:eaea/6c")
+	waitMs(t, 30)
+	h.expectSequences(t)
+	h.processInput("6c/6d6d")
+	waitMs(t, 30)
+	h.expectSequences(t)
+	h.processInput("\x07")
+	h.expectSequences(t, "\x1b]4;1;rgb:eaea/6c6c/6d6d\x07")
+}
+
+// TestStdinBufferStillTimesOutBareIntroducers ports "still times out bare
+// string introducers as Alt keys".
+func TestStdinBufferStillTimesOutBareIntroducers(t *testing.T) {
+	h := newStdinBufferHarness(t, &stdinBufferOptions{TimeoutMs: 10, EscapeTimeoutMs: 10})
+	for _, prefix := range []string{"\x1b]", "\x1bP", "\x1b_"} {
+		h.processInput(prefix)
+		waitMs(t, 25)
+	}
+	h.expectSequences(t, "\x1b]", "\x1bP", "\x1b_")
+}
+
+// TestStdinBufferRecoversBatchedLegacyAltInput ports "recovers batched legacy
+// Alt input <input> within the sequence timeout".
+func TestStdinBufferRecoversBatchedLegacyAltInput(t *testing.T) {
+	ambiguous := []string{
+		"\x1b]a", "\x1b]1", "\x1b]10", "\x1b]0;title", "\x1b]4;", "\x1b]4;a;",
+		"\x1bPa", "\x1bP>", "\x1b_a", "\x1b_G", "\x1b_Gi=1",
+	}
+	for _, input := range ambiguous {
+		t.Run(fmt.Sprintf("%q", input), func(t *testing.T) {
+			h := newStdinBufferHarness(t, &stdinBufferOptions{TimeoutMs: 120, EscapeTimeoutMs: 20})
+			h.processInput(input)
+			waitMs(t, 40)
+			h.processInput("x\r\x03\x04")
+			waitMs(t, 60)
+			h.expectSequences(t)
+			waitMs(t, 120)
+			want := []string{input[:2]}
+			for _, r := range input[2:] {
+				want = append(want, string(r))
+			}
+			want = append(want, "x", "\r", "\x03", "\x04")
+			h.expectSequences(t, want...)
+			if got := h.buffer.GetBuffer(); got != "" {
+				t.Fatalf("buffer = %q", got)
+			}
+
+			h.processInput("y\r\x03\x04")
+			want = append(want, "y", "\r", "\x03", "\x04")
+			h.expectSequences(t, want...)
+			h.buffer.Destroy()
+		})
+	}
+}
+
+// TestStdinBufferRecognizesHeaderAssembledWithinTimeout ports "recognizes a
+// reply header assembled within the ambiguous-input timeout".
+func TestStdinBufferRecognizesHeaderAssembledWithinTimeout(t *testing.T) {
+	h := newStdinBufferHarness(t, &stdinBufferOptions{TimeoutMs: 10})
+	h.processInput("\x1b]1")
+	waitMs(t, 5)
+	h.processInput("0;")
+	waitMs(t, 50)
+	h.expectSequences(t)
+	h.processInput("rgb:ffff/ffff/ffff\x1b\\")
+	h.expectSequences(t, "\x1b]10;rgb:ffff/ffff/ffff\x1b\\")
+}
+
+// TestStdinBufferUnterminatedReplyAbortsOnNewEscape ports "recovers from an
+// unterminated reply when a new escape sequence arrives".
+func TestStdinBufferUnterminatedReplyAbortsOnNewEscape(t *testing.T) {
+	h := newStdinBufferHarness(t, &stdinBufferOptions{TimeoutMs: 10})
+	h.processInput("\x1b]4;1;rgb:eaea/6c")
+	waitMs(t, 30)
+	h.processInput("\x1b")
+	waitMs(t, 30)
+	h.processInput("[Ahello")
+	h.expectSequences(t, "\x1b[A", "h", "e", "l", "l", "o")
+}
+
+// TestStdinBufferCanceledReplyDiscardsWithoutSwallowing ports "discards a
+// canceled reply without swallowing subsequent input".
+func TestStdinBufferCanceledReplyDiscardsWithoutSwallowing(t *testing.T) {
+	h := newStdinBufferHarness(t, &stdinBufferOptions{TimeoutMs: 10})
+	for _, cancel := range []string{"\x18", "\x1a"} {
+		h.processInput("\x1b]11;rgb:0000" + cancel + "x")
+	}
+	h.expectSequences(t, "x", "x")
 }

@@ -144,6 +144,19 @@ var symbolKeys = map[string]bool{
 	":": true, "<": true, ">": true, "?": true,
 }
 
+// shiftedSymbolKeys is the set of symbols Kitty/modifyOtherKeys report as
+// Shift plus the physical key (pi: SHIFTED_SYMBOL_KEYS).
+var shiftedSymbolKeys = map[string]bool{
+	"~": true, "!": true, "@": true, "#": true, "$": true, "%": true,
+	"^": true, "&": true, "*": true, "(": true, ")": true,
+	"_": true, "+": true, "|": true, "{": true, "}": true,
+	":": true, "<": true, ">": true, "?": true,
+}
+
+// modifierNames is the modifier prefix order parseKeyId strips (pi:
+// MODIFIER_NAMES).
+var modifierNames = []string{"shift", "alt", "ctrl", "super"}
+
 const (
 	modifierShift = 1
 	modifierAlt   = 2
@@ -222,6 +235,22 @@ func normalizeShiftedLetterIdentityCodepoint(codepoint int, modifier int) int {
 		return codepoint + 32
 	}
 	return codepoint
+}
+
+// getLogicalShiftedSymbolCandidate resolves a shifted symbol reported by
+// Kitty/modifyOtherKeys (e.g. "+" as Shift plus the physical "=" key) into the
+// codepoint the binding names, consuming the implicit Shift while preserving
+// Ctrl/Alt/Super. Returns ok=false when the codepoint is absent or not a
+// recognized shifted symbol. (pi: getLogicalShiftedSymbolCandidate)
+func getLogicalShiftedSymbolCandidate(codepoint int, modifier int, allowedSymbols map[string]bool) (int, int, bool) {
+	if codepoint < 0 || modifier&modifierShift == 0 {
+		return 0, 0, false
+	}
+	normalizedCodepoint := normalizeKittyFunctionalCodepoint(codepoint)
+	if !allowedSymbols[string(rune(normalizedCodepoint))] {
+		return 0, 0, false
+	}
+	return normalizedCodepoint, modifier &^ modifierShift, true
 }
 
 var legacyKeySequences = map[string][]string{
@@ -521,19 +550,28 @@ func matchesKittySequence(data string, expectedCodepoint int, expectedModifier i
 	actualMod := parsed.modifier &^ lockMask
 	expectedMod := expectedModifier &^ lockMask
 
-	// Check if modifiers match
-	if actualMod != expectedMod {
-		return false
-	}
-
 	normalizedCodepoint := normalizeShiftedLetterIdentityCodepoint(
 		normalizeKittyFunctionalCodepoint(parsed.codepoint), parsed.modifier)
 	normalizedExpectedCodepoint := normalizeShiftedLetterIdentityCodepoint(
 		normalizeKittyFunctionalCodepoint(expectedCodepoint), expectedModifier)
 
-	// Primary match: codepoint matches directly after normalizing functional keys
-	if normalizedCodepoint == normalizedExpectedCodepoint {
+	// Physical match: primary codepoint and every reported modifier match.
+	if actualMod == expectedMod && normalizedCodepoint == normalizedExpectedCodepoint {
 		return true
+	}
+
+	// Logical match: Kitty reports symbols such as "+" as Shift plus the
+	// physical "=" key. Bindings name the produced symbol, so consume that
+	// implicit Shift while preserving Ctrl, Alt, and Super. The physical
+	// "shift+=" spelling remains valid through the match above.
+	if logicalCodepoint, logicalModifier, ok := getLogicalShiftedSymbolCandidate(parsed.shiftedKey, actualMod, symbolKeys); ok &&
+		(logicalModifier&^lockMask) == expectedMod &&
+		logicalCodepoint == normalizeKittyFunctionalCodepoint(expectedCodepoint) {
+		return true
+	}
+
+	if actualMod != expectedMod {
+		return false
 	}
 
 	// Alternate match: use base layout key for non-Latin keyboard layouts.
@@ -637,15 +675,19 @@ func isDigitKey(key string) bool {
 }
 
 func matchesPrintableModifyOtherKeys(data string, expectedKeycode int, expectedModifier int) bool {
-	if expectedModifier == 0 {
-		return false
-	}
 	parsed := parseModifyOtherKeysSequence(data)
-	if parsed == nil || parsed.modifier != expectedModifier {
+	if parsed == nil {
 		return false
 	}
-	return normalizeShiftedLetterIdentityCodepoint(parsed.codepoint, parsed.modifier) ==
-		normalizeShiftedLetterIdentityCodepoint(expectedKeycode, expectedModifier)
+	physicalMatch := parsed.modifier == expectedModifier &&
+		normalizeShiftedLetterIdentityCodepoint(parsed.codepoint, parsed.modifier) ==
+			normalizeShiftedLetterIdentityCodepoint(expectedKeycode, expectedModifier)
+	if physicalMatch {
+		return true
+	}
+	logicalCodepoint, logicalModifier, ok := getLogicalShiftedSymbolCandidate(
+		parsed.codepoint, parsed.modifier, shiftedSymbolKeys)
+	return ok && logicalModifier == expectedModifier && logicalCodepoint == expectedKeycode
 }
 
 func formatKeyNameWithModifiers(keyName string, modifier int) (string, bool) {
@@ -682,27 +724,35 @@ type parsedKeyId struct {
 }
 
 func parseKeyId(keyId string) *parsedKeyId {
-	parts := strings.Split(strings.ToLower(keyId), "+")
-	key := parts[len(parts)-1]
-	if key == "" {
+	key := strings.ToLower(keyId)
+	modifiers := map[string]bool{}
+	for {
+		modifier := ""
+		for _, name := range modifierNames {
+			if strings.HasPrefix(key, name+"+") {
+				modifier = name
+				break
+			}
+		}
+		if modifier == "" {
+			break
+		}
+		if modifiers[modifier] {
+			return nil
+		}
+		modifiers[modifier] = true
+		key = key[len(modifier)+1:]
+	}
+	if key == "" || (strings.Contains(key, "+") && key != "+") {
 		return nil
 	}
 	return &parsedKeyId{
 		key:   key,
-		ctrl:  containsString(parts, "ctrl"),
-		shift: containsString(parts, "shift"),
-		alt:   containsString(parts, "alt"),
-		super: containsString(parts, "super"),
+		ctrl:  modifiers["ctrl"],
+		shift: modifiers["shift"],
+		alt:   modifiers["alt"],
+		super: modifiers["super"],
 	}
-}
-
-func containsString(list []string, s string) bool {
-	for _, item := range list {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
 
 // MatchesKey matches input data against a key identifier string.
@@ -1044,7 +1094,7 @@ func MatchesKey(data string, keyId KeyId) bool {
 		}
 
 		// Check both raw char and Kitty sequence (needed for release events)
-		return data == key || matchesKittySequence(data, codepoint, 0)
+		return data == key || matchesKittySequence(data, codepoint, 0) || matchesPrintableModifyOtherKeys(data, codepoint, 0)
 	}
 
 	return false
@@ -1123,11 +1173,19 @@ func formatParsedKey(codepoint int, modifier int, baseLayoutKey int) (string, bo
 // (pi: returns undefined).
 func ParseKey(data string) (string, bool) {
 	if kitty := parseKittySequence(data); kitty != nil {
-		return formatParsedKey(kitty.codepoint, kitty.modifier, kitty.baseLayoutKey)
+		codepoint, modifier := kitty.codepoint, kitty.modifier
+		if logicalCodepoint, logicalModifier, ok := getLogicalShiftedSymbolCandidate(kitty.shiftedKey, kitty.modifier, symbolKeys); ok {
+			codepoint, modifier = logicalCodepoint, logicalModifier
+		}
+		return formatParsedKey(codepoint, modifier, kitty.baseLayoutKey)
 	}
 
 	if modifyOtherKeys := parseModifyOtherKeysSequence(data); modifyOtherKeys != nil {
-		return formatParsedKey(modifyOtherKeys.codepoint, modifyOtherKeys.modifier, -1)
+		codepoint, modifier := modifyOtherKeys.codepoint, modifyOtherKeys.modifier
+		if logicalCodepoint, logicalModifier, ok := getLogicalShiftedSymbolCandidate(modifyOtherKeys.codepoint, modifyOtherKeys.modifier, shiftedSymbolKeys); ok {
+			codepoint, modifier = logicalCodepoint, logicalModifier
+		}
+		return formatParsedKey(codepoint, modifier, -1)
 	}
 
 	// Mode-aware legacy sequences

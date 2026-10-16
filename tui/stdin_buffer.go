@@ -39,9 +39,23 @@ const (
 	bracketedPasteEnd        = "\x1b[201~"
 )
 
+// terminalReplyHeaderRegex matches the start of Color and program-status OSC
+// replies, XTVersion, and Kitty graphics replies. Until their header is
+// complete, the input may be batched legacy Alt keystrokes.
+var terminalReplyHeaderRegex = regexp.MustCompile("^\x1b(?:\\](?:1[01];|4;\\d{1,3};|7501;\\?)|P>\\||_G(?:[a-z]=\\d+,)*[a-z]=\\d+;)")
+
+// isControlString reports whether data starts an OSC, DCS, or APC string
+// (pi: isControlString).
+func isControlString(data string) bool {
+	return strings.HasPrefix(data, "\x1b]") || strings.HasPrefix(data, "\x1bP") || strings.HasPrefix(data, "\x1b_")
+}
+
 type stdinBufferOptions struct {
-	// TimeoutMs is the maximum time to wait for an incomplete sequence such
-	// as CSI or mouse (default: 50ms).
+	// TimeoutMs is the maximum time to wait for an incomplete keyboard or
+	// mouse sequence (default: 50ms). Strings with a recognized terminal
+	// reply header wait for their terminator instead, so delayed replies
+	// cannot become keypresses. Ambiguous legacy Alt-key input still uses
+	// this timeout.
 	TimeoutMs int
 	// EscapeTimeoutMs is the maximum time to wait after a lone ESC before
 	// treating it as Escape (default: 10ms). Increase for high-latency
@@ -209,6 +223,13 @@ func (b *StdinBuffer) processLocked(str string, events *[]stdinEvent) {
 	}
 
 	if len(b.buffer) > 0 {
+		// Only a recognizable reply header establishes a delimited string.
+		// Flushing it would turn a delayed tail into text and an OSC's BEL
+		// terminator into Ctrl+G (the external editor shortcut). Other input,
+		// including Alt+] followed by text, must retain bounded recovery.
+		if terminalReplyHeaderRegex.MatchString(b.buffer) {
+			return
+		}
 		timeoutMs := b.timeoutMs
 		if b.buffer == "\x1b" {
 			timeoutMs = b.escapeTimeoutMs
@@ -216,7 +237,14 @@ func (b *StdinBuffer) processLocked(str string, events *[]stdinEvent) {
 		b.timeout = time.AfterFunc(time.Duration(timeoutMs)*time.Millisecond, func() {
 			flushed := b.flushWithLock()
 			for _, sequence := range flushed {
-				b.emitDataSequence(sequence)
+				if len(sequence) > 2 && isControlString(sequence) {
+					// Recover the Alt key and reparse its tail so batched text,
+					// Enter, and control keys are not swallowed as one event.
+					b.emitDataSequence(sequence[:2])
+					b.processString(sequence[2:])
+				} else {
+					b.emitDataSequence(sequence)
+				}
 			}
 		})
 	}
@@ -500,9 +528,24 @@ func extractCompleteSequences(buffer string) (sequences []string, remainder stri
 
 		// Try to extract a sequence starting at this position
 		if strings.HasPrefix(remaining, "\x1b") {
+			terminalReply := isControlString(remaining) && terminalReplyHeaderRegex.MatchString(remaining)
 			// Find the end of this escape sequence
 			seqEnd := 1
 			for seqEnd <= len(remaining) {
+				if terminalReply && seqEnd > 2 {
+					char := remaining[seqEnd-1]
+					if char == '\x18' || char == '\x1a' {
+						// CAN and SUB cancel the string, not subsequent keyboard input.
+						pos += seqEnd
+						break
+					}
+					if char == '\x1b' && seqEnd < len(remaining) && remaining[seqEnd] != '\\' {
+						// A new escape sequence aborts an unterminated reply. Keep a
+						// trailing ESC buffered until we can distinguish it from ST.
+						pos += seqEnd - 1
+						break
+					}
+				}
 				candidate := remaining[:seqEnd]
 				status := isCompleteSequence(candidate)
 

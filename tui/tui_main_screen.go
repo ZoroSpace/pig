@@ -396,7 +396,8 @@ func (m *TuiMainScreen) doRender() error {
 	}
 
 	// Render all components to get new lines
-	newLines := m.Render(width)
+	// Resolve fake cursors before compositing so overlays and line slicing see plain SGR codes
+	newLines := m.resolveFakeCursors(m.Render(width))
 
 	// Composite overlays into the rendered lines (before differential compare)
 	if len(m.overlayStack) > 0 {

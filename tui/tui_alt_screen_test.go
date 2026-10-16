@@ -1107,6 +1107,28 @@ func TestTuiAltScreenSelectsVisibleTextWithTheMouseAndCopiesItWithOsc52AfterAGen
 	tui.Stop(nil)
 }
 
+// TestTuiAltScreenKeepsTheSelectionHighlightAfterAFakeCursorCell ports pi
+// 1cedd3272 #10697: a selection spanning a resolved fake cursor must reapply
+// its inverse video after the fake cursor's reset.
+func TestTuiAltScreenKeepsTheSelectionHighlightAfterAFakeCursorCell(t *testing.T) {
+	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(20, 4)}
+	tui := NewTuiAltScreen(terminal, nil, "", nil)
+	tui.AddChild(NewText("> "+RenderFakeCursor("a")+"bcd", 0, 0))
+	tui.Start()
+	terminal.WaitForRender()
+
+	terminal.SendInput("\x1b[<0;1;1M")
+	terminal.SendInput("\x1b[<32;6;1M")
+	terminal.SendInput("\x1b[<3;6;1m")
+	terminal.WaitForRender()
+
+	if !strings.Contains(terminal.eventsJoined(), "\x1b[27m\x1b[7mbcd") {
+		t.Fatalf("selection inverse must be reapplied after the fake cursor ends, writes = %q", terminal.eventsJoined())
+	}
+
+	tui.Stop(nil)
+}
+
 func TestTuiAltScreenUsesAnInjectedCopySelectionHandlerInsteadOfOsc52AndReportsSuccess(t *testing.T) {
 	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(20, 4)}
 	var copied []string
@@ -1625,7 +1647,7 @@ func TestTuiAltScreenRestoresKeyboardStateBeforeLeavingAltModeAndPrintsTheFullDo
 	}
 }
 
-func TestTuiAltScreenGivesWheelAndViewportKeysToAFocusedOverlay(t *testing.T) {
+func TestTuiAltScreenGivesViewportKeysToAFocusedOverlay(t *testing.T) {
 	terminal := NewVirtualTerminal(20, 6)
 	tui := NewTuiAltScreen(terminal, nil, "", nil)
 	tui.AddChild(NewText(altTestLines(12), 0, 0))
@@ -1639,8 +1661,7 @@ func TestTuiAltScreenGivesWheelAndViewportKeysToAFocusedOverlay(t *testing.T) {
 		t.Fatal("expected overlay focused")
 	}
 
-	wheel := "\x1b[<64;10;3M"
-	keys := []string{"\x1b[5~", "\x1b[6~", "\x1bOH", "\x1bOF", wheel}
+	keys := []string{"\x1b[5~", "\x1b[6~", "\x1bOH", "\x1bOF"}
 	for _, key := range keys {
 		terminal.SendInput(key)
 	}
@@ -1659,6 +1680,34 @@ func TestTuiAltScreenGivesWheelAndViewportKeysToAFocusedOverlay(t *testing.T) {
 	terminal.WaitForRender()
 	if got := tui.ViewportTop(); got >= topBefore {
 		t.Fatalf("viewportTop = %d, want < %d", got, topBefore)
+	}
+	tui.Stop(nil)
+}
+
+// TestTuiAltScreenScrollsTranscriptOnWheelInputAFocusedOverlayDoesNotHandle
+// ports pi #10769: wheel events no component handles scroll the transcript
+// instead of reaching the focused overlay's handleInput as raw input.
+func TestTuiAltScreenScrollsTranscriptOnWheelInputAFocusedOverlayDoesNotHandle(t *testing.T) {
+	terminal := NewVirtualTerminal(20, 6)
+	tui := NewTuiAltScreen(terminal, nil, "", nil)
+	tui.AddChild(NewText(altTestLines(12), 0, 0))
+	overlay := &inputOverlay{}
+	tui.Start()
+	terminal.WaitForRender()
+	topBefore := tui.ViewportTop()
+	tui.ShowOverlay(overlay, &OverlayOptions{Anchor: "top-left", Width: 10})
+	terminal.WaitForRender()
+	if !overlay.GetFocused() {
+		t.Fatal("expected overlay focused")
+	}
+
+	terminal.SendInput("\x1b[<64;3;1M")
+	terminal.WaitForRender()
+	if got := tui.ViewportTop(); got >= topBefore {
+		t.Fatalf("viewportTop = %d, want < %d", got, topBefore)
+	}
+	if got := overlay.Inputs(); len(got) != 0 {
+		t.Fatalf("overlay inputs = %q, want none", got)
 	}
 	tui.Stop(nil)
 }

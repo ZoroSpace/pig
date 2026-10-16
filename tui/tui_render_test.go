@@ -903,3 +903,97 @@ func TestTuiCrashDumpWithoutConfiguredLogDirectory(t *testing.T) {
 		t.Fatalf("crash log = %q", data)
 	}
 }
+
+// TestTuiFakeCursor ports pi's "TUI fake cursor" describe block (1cedd3272
+// #10697): editor/input wrap their drawn cursor in fake cursor markers that
+// the TUI resolves to reverse video, or drops when the hardware cursor is
+// shown.
+func TestTuiFakeCursor(t *testing.T) {
+	t.Run("draws the focused fake cursor in reverse video and omits it when the hardware cursor is shown", func(t *testing.T) {
+		terminal := NewVirtualTerminal(20, 5)
+		tui := NewTuiMainScreen(terminal, nil, "")
+		input := NewInput()
+		input.SetValue("abc")
+		tui.AddChild(input)
+		tui.SetFocus(input)
+		tui.Start()
+		terminal.WaitForRender()
+		if !strings.Contains(terminal.GetWrites(), "> \x1b[7ma\x1b[27mbc") {
+			t.Fatalf("writes = %q, want reverse-video cursor on 'a'", terminal.GetWrites())
+		}
+
+		terminal.ClearWrites()
+		tui.SetShowHardwareCursor(true)
+		terminal.WaitForRender()
+		if strings.Contains(terminal.GetWrites(), "\x1b[7m") {
+			t.Fatalf("writes = %q, want no reverse video", terminal.GetWrites())
+		}
+		if strings.Contains(terminal.GetWrites(), "\x1b_pi:") {
+			t.Fatalf("writes = %q, want no fake cursor markers", terminal.GetWrites())
+		}
+
+		tui.Stop(nil)
+	})
+
+	t.Run("keeps the fake cursor of an unfocused input when the hardware cursor is shown", func(t *testing.T) {
+		hardwareCursor := true
+		terminal := NewVirtualTerminal(20, 5)
+		tui := NewTuiMainScreen(terminal, &hardwareCursor, "")
+		input := NewInput()
+		input.SetValue("abc")
+		tui.AddChild(input)
+		tui.Start()
+		terminal.WaitForRender()
+		if !strings.Contains(terminal.GetWrites(), "> \x1b[7ma\x1b[27mbc") {
+			t.Fatalf("writes = %q, want reverse-video cursor on 'a'", terminal.GetWrites())
+		}
+		tui.Stop(nil)
+	})
+
+	t.Run("omits the focused fake cursor when truncation dropped its end marker", func(t *testing.T) {
+		hardwareCursor := true
+		terminal := NewVirtualTerminal(20, 5)
+		tui := NewTuiMainScreen(terminal, &hardwareCursor, "")
+		base := &testComponent{}
+		base.SetLines([]string{SliceByColumn("ab"+CursorMarker+RenderFakeCursor("c")+"def", 0, 3, true)})
+		tui.AddChild(base)
+		tui.Start()
+		terminal.WaitForRender()
+		writes := terminal.GetWrites()
+		if strings.Contains(writes, "\x1b[7m") {
+			t.Fatalf("writes = %q, want no reverse video", writes)
+		}
+		if !strings.Contains(writes, "\x1b[3G") {
+			t.Fatalf("writes = %q, want cursor position write", writes)
+		}
+		tui.Stop(nil)
+	})
+
+	t.Run("keeps the cursor when an overlay ends directly left of it", func(t *testing.T) {
+		for _, showHardwareCursor := range []bool{false, true} {
+			hardwareCursor := showHardwareCursor
+			terminal := NewVirtualTerminal(20, 5)
+			tui := NewTuiMainScreen(terminal, &hardwareCursor, "")
+			base := &testComponent{}
+			base.SetLines([]string{"abc" + CursorMarker + RenderFakeCursor("d") + "ef"})
+			tui.AddChild(base)
+			overlay := &testComponent{}
+			overlay.SetLines([]string{"XXX"})
+			tui.ShowOverlay(overlay, &OverlayOptions{Row: 0, Col: 0, Width: 3})
+			tui.Start()
+			terminal.WaitForRender()
+
+			writes := terminal.GetWrites()
+			if !strings.Contains(writes, "XXX") {
+				t.Fatalf("showHardwareCursor=%v: writes = %q, want overlay rendered", showHardwareCursor, writes)
+			}
+			if got := strings.Contains(writes, "\x1b[7md"); got != !showHardwareCursor {
+				t.Fatalf("showHardwareCursor=%v: has reverse-video d = %v", showHardwareCursor, got)
+			}
+			if !strings.Contains(writes, "\x1b[4G") {
+				t.Fatalf("showHardwareCursor=%v: writes = %q, want cursor at column 4", showHardwareCursor, writes)
+			}
+			tui.Stop(nil)
+		}
+	})
+}
