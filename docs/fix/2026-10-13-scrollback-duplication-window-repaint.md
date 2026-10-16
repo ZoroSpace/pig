@@ -16,7 +16,7 @@
 
 ## 根因
 
-2026-09-13 #9255 修复第二轮（commit `1b73bd2`）把「收缩跨视口」分支从 `fullRender(true)` 改为 `repaintVisibleWindow`（滑窗重绘），换取工具折叠不再跳顶重放。但滑窗的语义是：**视口向上滑 k 行**（k = 收缩量），把新 buffer 底部 h 行重写到屏幕。被重写的物理行中，最上面 k 行的新内容**在 scrollback 里已经存在一份旧副本**——终端无法「反卷回」scrollback，于是重叠区在滚动历史里出现两次。
+2026-09-13 #9255 修复第二轮（commit `2730b6b`）把「收缩跨视口」分支从 `fullRender(true)` 改为 `repaintVisibleWindow`（滑窗重绘），换取工具折叠不再跳顶重放。但滑窗的语义是：**视口向上滑 k 行**（k = 收缩量），把新 buffer 底部 h 行重写到屏幕。被重写的物理行中，最上面 k 行的新内容**在 scrollback 里已经存在一份旧副本**——终端无法「反卷回」scrollback，于是重叠区在滚动历史里出现两次。
 
 用 raw testComponent 精确复现（8 行视口，22→12 行折叠，k=10）：折叠后终端缓冲 = `buf[00..09]=row-00..09, buf[10]=card-grep, buf[11..14]=panel1-00..03(残留), buf[15..20]=row-04..09(重复!), buf[21]=card-grep(重复!), buf[22]=result-grep`。与用户粘贴的「grep 卡片 → 回答整段 ×2」同构。触发事件即 compaction 重建（本次会话 compaction 发生在提问前 9 秒，k = 整个 transcript 的收缩量）与 ctrl+o 折叠高卡片——都是 k 巨大的收缩。
 

@@ -1,12 +1,12 @@
 # 2026-09-11 交互模式工具 live 输出整段不显示（多级丢失，已收口）
 
 - **日期**：2026-09-11 23:0x（文件 mtime，第三轮收口更新）
-- **状态**：**已修复收口**——两级丢失点全部修复（77b8d02 转换器 + 本轮渲染端双形态），用户真机验证通过（echo + go test 卡片 live 输出正常）
+- **状态**：**已修复收口**——两级丢失点全部修复（ba4e88b 转换器 + 本轮渲染端双形态），用户真机验证通过（echo + go test 卡片 live 输出正常）
 - **涉及文件**：
   - `codingagent/core/tools/render_utils.go`（`GetTextOutput` 补 `*TextContent`/`*ImageContent` 分支——**本 bug 的主根因**）
   - `codingagent/core/tools/renderers_edit.go` / `renderers_write.go`（错误文本提取补指针分支）
   - `codingagent/modes/interactive/components/tool_execution.go`（image 块提取补指针分支）
-  - `codingagent/modes/interactive/interactive_mode.go`（第一轮已修：`resultToComponentResult`，77b8d02）
+  - `codingagent/modes/interactive/interactive_mode.go`（第一轮已修：`resultToComponentResult`，ba4e88b）
   - `codingagent/modes/interactive/interactive_mode_tool_result_test.go`（回归测试；本轮探针改指针形态 + 新增 handleEvent 级测试）
   - `codingagent/core/tools/render_text_output_test.go`（新增：GetTextOutput 双形态单测）
   - `codingagent/core/agent_session_tool_result_events_test.go`（第一轮：事件泵载荷契约，PASS 无偏差）
@@ -17,7 +17,7 @@
 
 ## 根因（两级丢失点，分两轮修）
 
-### 第一级（77b8d02，第一轮修复）
+### 第一级（ba4e88b，第一轮修复）
 
 `agent/agent_loop.go` 事件载荷装 `agent.AgentToolResult`，`resultToComponentResult` 只认 `types.ToolResultMessage` → 静默空。已补 value/pointer 分支并保留。
 

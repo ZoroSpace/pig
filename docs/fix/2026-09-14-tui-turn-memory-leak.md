@@ -92,6 +92,6 @@ go tool pprof -top -sample_index=inuse_space -diff_base heapA.pb.gz heapB.pb.gz
 - `pkill -f` 模式匹配自身命令行会杀掉执行中的 shell（本批实证两次）：模式用 `^/absolute/path` 锚定或避开。
 - tmux 冒烟 env 用 `PIG_CODING_AGENT_DIR`（一个 G）。
 
-## 历史排查记录（2026-09-14 白天 + 深夜，结论已被终审修正，详情见 git 历史 e17c24a/7395fb8）
+## 历史排查记录（2026-09-14 白天 + 深夜，结论已被终审修正，详情见 git 历史 08b528a/2469872）
 
 - 现象确认、排除面收敛（goroutine/线程/RSS 假象/AgentSession 核心/全局注册表/纯重渲染均排除）、pprof 分配位点指认——其中「组件/渲染管线无罪」（忠实帧探针）结论被终审维持，「组件 4-5/轮存活」「拼接串 3.5 倍」「ctx 泄漏 = 40KB/轮主犯」三个指认被终审修正（前两个为采样误读，第三个量级仅 ~2KB/轮且 refresh 侧为固定成本）。

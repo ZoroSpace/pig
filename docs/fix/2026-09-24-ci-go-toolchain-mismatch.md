@@ -19,7 +19,7 @@ compile: version "go1.26.0" does not match go tool version "go1.25.14"
 
 **CI 钉的 Go 版本与 go.mod 的 go 指令脱节**：
 
-- commit `502ddeb`（2026-09-22，image 413 修复批）中 `golang.org/x/text`、`x/sys`、`x/image` 依赖升级把 go.mod 的 go 指令抬到 **1.26.0**；
+- commit `de1afbd`（2026-09-22，image 413 修复批）中 `golang.org/x/text`、`x/sys`、`x/image` 依赖升级把 go.mod 的 go 指令抬到 **1.26.0**；
 - `.github/workflows/go.yml` 仍钉 `go-version: "1.25"`（装到 go1.25.14）。
 
 结果：CI 上每个 go 命令都发现 go.mod 要求 ≥1.26.0，`GOTOOLCHAIN=auto` 从模块代理下载 go1.26.0 工具链——部分构建路径经工具链切换正常（race 栈即证据），另一些路径在 runner 环境下出现 **go 命令（1.25.14）与 compile 二进制（1.26.0）来自不同安装** 的混用，compile 工具的 `-goversion` 自检失败即报此错。哪条路径中招取决于 runner 的 GOROOT/PATH 解析与构建缓存命中分布，故表现为「部分包失败、部分包通过」。
