@@ -6,6 +6,7 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -254,11 +255,12 @@ type stubProvider struct {
 	streams ProviderStreams
 	models  []Model
 	auth    auth.ProviderAuth
+	baseURL string
 }
 
 func (p *stubProvider) ID() string               { return p.id }
 func (p *stubProvider) Name() string             { return p.id }
-func (p *stubProvider) BaseURL() string          { return "" }
+func (p *stubProvider) BaseURL() string          { return p.baseURL }
 func (p *stubProvider) Headers() ProviderHeaders { return nil }
 func (p *stubProvider) Auth() auth.ProviderAuth  { return p.auth }
 func (p *stubProvider) GetModels() []Model       { return p.models }
@@ -413,6 +415,47 @@ func TestModelsRefreshCancelsPerProviderRefreshContext(t *testing.T) {
 	case <-refreshCtx.Done():
 	case <-time.After(2 * time.Second):
 		t.Fatal("refresh context not canceled after Refresh returned (Refresh leaks the ctx registration)")
+	}
+}
+
+// TestModelsRefreshPassesRegisteredBaseURL pins that refreshModels receives the
+// registered provider's base URL, including wrapper overrides such as a
+// models.json regional host (pi: "passes the registered provider's base URL,
+// including wrapper overrides, to refreshModels").
+func TestModelsRefreshPassesRegisteredBaseURL(t *testing.T) {
+	const want = "https://regional.example.test/v1"
+	var mu sync.Mutex
+	var baseURLs []string
+	provider := &stubRefreshingProvider{
+		stubProvider: stubProvider{
+			id:      "refreshing",
+			streams: stubStreams{},
+			models:  []Model{{ID: "m", API: ApiOpenAICompletions, Provider: "refreshing"}},
+			baseURL: want,
+		},
+		refresh: func(ctx context.Context, refreshCtx *RefreshModelsContext) error {
+			mu.Lock()
+			baseURLs = append(baseURLs, refreshCtx.BaseURL)
+			mu.Unlock()
+			return nil
+		},
+	}
+	m := NewModels(nil)
+	m.SetProvider(provider)
+
+	result := m.Refresh(context.Background(), &ModelsRefreshOptions{Providers: []string{"refreshing"}})
+	if len(result.Errors) != 0 {
+		t.Fatalf("refresh errors: %v", result.Errors)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(baseURLs) == 0 {
+		t.Fatal("RefreshModels never invoked")
+	}
+	for i, got := range baseURLs {
+		if got != want {
+			t.Fatalf("baseURLs[%d] = %q, want %q (all: %v)", i, got, want, baseURLs)
+		}
 	}
 }
 

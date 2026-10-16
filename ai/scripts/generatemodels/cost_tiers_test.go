@@ -9,18 +9,18 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/ZoroSpace/pig/ai/providers"
 )
 
 // openRouterChatCost runs one pricing shape through the OpenRouter catalog
 // builder (pi: openRouterChatCost helper).
-func openRouterChatCost(t *testing.T, pricing *OpenRouterPricing) ai.ModelCost {
+func openRouterChatCost(t *testing.T, pricing *providers.OpenRouterPricing) ai.ModelCost {
 	t.Helper()
 	catalog := buildOpenRouterCatalog([]OpenRouterModel{
 		{
-			ID:                  "anthropic/claude-haiku-5.5",
+			OpenRouterModel:     providers.OpenRouterModel{ID: "anthropic/claude-haiku-5.5", Pricing: pricing},
 			Name:                "Claude Haiku 5.5",
 			SupportedParameters: []string{"tools"},
-			Pricing:             pricing,
 		},
 	}, nil, nil)
 	if len(catalog.chat) == 0 {
@@ -58,12 +58,12 @@ func jsonNum(s string) *json.Number {
 
 func TestOpenRouterPricingOverrides(t *testing.T) {
 	t.Run("turns prompt-length overrides into tiers", func(t *testing.T) {
-		cost := openRouterChatCost(t, &OpenRouterPricing{
+		cost := openRouterChatCost(t, &providers.OpenRouterPricing{
 			Prompt:          strPtr("0.0000001"),
 			Completion:      strPtr("0.0000005"),
 			InputCacheRead:  strPtr("0.00000001"),
 			InputCacheWrite: strPtr("0.000000125"),
-			Overrides: []OpenRouterPricingOverride{{
+			Overrides: []providers.OpenRouterPricingOverride{{
 				MinPromptTokens: i64Ptr(100000),
 				Prompt:          strPtr("0.0000005"),
 				Completion:      strPtr("0.0000025"),
@@ -81,12 +81,12 @@ func TestOpenRouterPricingOverrides(t *testing.T) {
 	})
 
 	t.Run("keeps base rates missing from an override", func(t *testing.T) {
-		cost := openRouterChatCost(t, &OpenRouterPricing{
+		cost := openRouterChatCost(t, &providers.OpenRouterPricing{
 			Prompt:          strPtr("0.000002"),
 			Completion:      strPtr("0.000012"),
 			InputCacheRead:  strPtr("0.0000002"),
 			InputCacheWrite: strPtr("0.000000375"),
-			Overrides: []OpenRouterPricingOverride{{
+			Overrides: []providers.OpenRouterPricingOverride{{
 				MinPromptTokens: i64Ptr(200000),
 				Prompt:          strPtr("0.000004"),
 				Completion:      strPtr("0.000018"),
@@ -105,10 +105,10 @@ func TestOpenRouterPricingOverrides(t *testing.T) {
 	})
 
 	t.Run("skips time-of-day overrides", func(t *testing.T) {
-		cost := openRouterChatCost(t, &OpenRouterPricing{
+		cost := openRouterChatCost(t, &providers.OpenRouterPricing{
 			Prompt:     strPtr("0.000000132"),
 			Completion: strPtr("0.000000528"),
-			Overrides: []OpenRouterPricingOverride{
+			Overrides: []providers.OpenRouterPricingOverride{
 				{UTCStart: f64Ptr(0), UTCEnd: f64Ptr(1600), Prompt: strPtr("0.000000132"), Completion: strPtr("0.000000528")},
 				{UTCDays: []string{"saturday"}, MinPromptTokens: i64Ptr(1000), Prompt: strPtr("0.0000001")},
 			},

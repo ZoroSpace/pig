@@ -149,7 +149,7 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 
 	t.Run("includes Claude Sonnet 5.5 with managed effort levels and official pricing", func(t *testing.T) {
 		model := supportsXhighModel(t, ProviderAnthropic, "claude-sonnet-5-5")
-		if model.Cost.Input != 2 || model.Cost.Output != 10 || model.Cost.CacheRead != 0.2 || model.Cost.CacheWrite != 2.5 {
+		if model.Cost.Input != 2 || model.Cost.Output != 10 || model.Cost.CacheRead != 0.1 || model.Cost.CacheWrite != 2.5 {
 			t.Fatalf("sonnet-5-5 cost = %+v", model.Cost.ModelCostRates)
 		}
 		if model.ContextWindow != 1000000 || model.MaxTokens != 128000 {

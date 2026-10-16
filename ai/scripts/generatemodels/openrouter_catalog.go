@@ -9,10 +9,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/ZoroSpace/pig/ai/providers"
 )
 
 // openRouterCatalog splits the OpenRouter listings by model operation.
@@ -92,7 +92,7 @@ func buildOpenRouterCatalog(listed, imageListed, decisionListed []OpenRouterMode
 			BaseURL:  "https://openrouter.ai/api/v1",
 			Input:    input,
 			Output:   output,
-			Cost:     openRouterCost(model),
+			Cost:     providers.OpenRouterCost(model.Pricing),
 		})
 	}
 
@@ -120,7 +120,7 @@ func buildOpenRouterCatalog(listed, imageListed, decisionListed []OpenRouterMode
 			Provider:      ai.ProviderOpenRouter,
 			BaseURL:       "https://openrouter.ai/api/v1",
 			Input:         input,
-			Cost:          openRouterCost(model),
+			Cost:          providers.OpenRouterCost(model.Pricing),
 			ContextWindow: openRouterContextWindow(model),
 		})
 	}
@@ -162,7 +162,7 @@ func buildOpenRouterChatModel(model *OpenRouterModel) *ai.Model {
 		Provider:      ai.ProviderOpenRouter,
 		Reasoning:     containsString(model.SupportedParameters, "reasoning"),
 		Input:         input,
-		Cost:          openRouterCost(model),
+		Cost:          providers.OpenRouterCost(model.Pricing),
 		ContextWindow: openRouterContextWindow(model),
 		MaxTokens:     openRouterMaxTokens(model),
 	}
@@ -221,59 +221,9 @@ func modalities(values []string) []ai.ModelInput {
 	return out
 }
 
-// openRouterPerMillion converts one $/token rate to $/million tokens,
-// falling back when the rate is absent (pi: perMillion — parseFloat on the
-// string, empty/absent keeps the fallback).
-func openRouterPerMillion(value *string, fallback float64) float64 {
-	if value == nil || *value == "" {
-		return fallback
-	}
-	f, err := strconv.ParseFloat(*value, 64)
-	if err != nil {
-		return fallback
-	}
-	return roundCost(f * 1_000_000)
-}
-
-// openRouterCost converts pricing from $/token to $/million tokens. S17
-// (pi 943a10e74): prompt-length overrides become request-wide tiers;
-// time-of-day overrides are skipped because ModelCost cannot express them.
-func openRouterCost(model *OpenRouterModel) ai.ModelCost {
-	pricing := model.Pricing
-	base := ai.ModelCostRates{
-		Input:      openRouterPerMillion(pricingFieldString(pricing, func(p *OpenRouterPricing) *string { return p.Prompt }), 0),
-		Output:     openRouterPerMillion(pricingFieldString(pricing, func(p *OpenRouterPricing) *string { return p.Completion }), 0),
-		CacheRead:  openRouterPerMillion(pricingFieldString(pricing, func(p *OpenRouterPricing) *string { return p.InputCacheRead }), 0),
-		CacheWrite: openRouterPerMillion(pricingFieldString(pricing, func(p *OpenRouterPricing) *string { return p.InputCacheWrite }), 0),
-	}
-	var tiers []ai.ModelCostTier
-	if pricing != nil {
-		for i := range pricing.Overrides {
-			override := &pricing.Overrides[i]
-			if override.MinPromptTokens == nil || override.UTCStart != nil || override.UTCEnd != nil || override.UTCDays != nil {
-				continue
-			}
-			tiers = append(tiers, ai.ModelCostTier{
-				ModelCostRates: ai.ModelCostRates{
-					Input:      openRouterPerMillion(override.Prompt, base.Input),
-					Output:     openRouterPerMillion(override.Completion, base.Output),
-					CacheRead:  openRouterPerMillion(override.InputCacheRead, base.CacheRead),
-					CacheWrite: openRouterPerMillion(override.InputCacheWrite, base.CacheWrite),
-				},
-				InputTokensAbove: *override.MinPromptTokens,
-			})
-		}
-	}
-	return ai.ModelCost{ModelCostRates: base, Tiers: tiers}
-}
-
-// pricingFieldString reads a rate from a possibly-nil pricing object.
-func pricingFieldString(p *OpenRouterPricing, get func(p *OpenRouterPricing) *string) *string {
-	if p == nil {
-		return nil
-	}
-	return get(p)
-}
+// openRouterPerMillion, openRouterCost and pricingFieldString moved to
+// ai/providers/openrouter_api.go (pi: openRouterCost is shared with the
+// runtime provider so the generator and model refresh agree).
 
 // openRouterContextWindow is top_provider.context_length ||
 // context_length || 4096. JS `||` treats 0 as absent, so zero-length

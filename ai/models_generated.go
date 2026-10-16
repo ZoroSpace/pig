@@ -5284,7 +5284,7 @@ var MODELS = map[ProviderID]map[string]Model{
 					},
 				},
 			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
 			ContextWindow: 1000000,
 			MaxTokens:     128000,
 			Compat: &AnthropicMessagesCompat{

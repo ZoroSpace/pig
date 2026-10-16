@@ -778,20 +778,6 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 
 			created := createAnthropicClient(model, apiKey, options.Headers, options.Fetch, copilotDynamicHeaders, cacheSessionID, federation)
 
-			params, err := buildAnthropicParams(model, normalizedContext, created.isOAuthToken, options)
-			if err != nil {
-				return err
-			}
-			if options.OnPayload != nil {
-				if next := options.OnPayload(params, model); next != nil {
-					if nextParams, ok := next.(map[string]any); ok {
-						params = nextParams
-					}
-				}
-			}
-			// pi: params = { ...nextParams, stream: true }.
-			params["stream"] = true
-
 			timeout := 10 * time.Minute
 			if options.TimeoutMs != 0 {
 				timeout = time.Duration(options.TimeoutMs) * time.Millisecond
@@ -800,11 +786,44 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 			if options.MaxRetries != nil {
 				maxRetries = *options.MaxRetries
 			}
-			resp, err := utils.RetryProviderRequest(func() (*http.Response, error) {
-				return created.client.createMessage(ctx, params, timeout)
-			}, utils.ProviderRetryOptions{MaxRetries: maxRetries, MaxRetryDelayMs: options.MaxRetryDelayMs, Ctx: ctx})
-			if err != nil {
-				return err
+
+			// Strict-tool capacity rejections (400 invalid_request_error) retry
+			// once with preferred tools downgraded to their non-strict schemas
+			// (#10409). The loop runs before the stream starts, so a started
+			// stream is never retried.
+			disablePreferredStrictTools := false
+			var resp *http.Response
+			for {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				params, hasPreferredStrictTools, err := buildAnthropicParams(model, normalizedContext, created.isOAuthToken, options, disablePreferredStrictTools)
+				if err != nil {
+					return err
+				}
+				if options.OnPayload != nil {
+					if next := options.OnPayload(params, model); next != nil {
+						if nextParams, ok := next.(map[string]any); ok {
+							params = nextParams
+						}
+					}
+				}
+				// pi: params = { ...nextParams, stream: true }.
+				params["stream"] = true
+
+				resp, err = utils.RetryProviderRequest(func() (*http.Response, error) {
+					return created.client.createMessage(ctx, params, timeout)
+				}, utils.ProviderRetryOptions{MaxRetries: maxRetries, MaxRetryDelayMs: options.MaxRetryDelayMs, Ctx: ctx})
+				if err == nil {
+					break
+				}
+				if ctx.Err() != nil || disablePreferredStrictTools || !hasPreferredStrictTools ||
+					!isAnthropicStrictToolsLimitError(err) {
+					return err
+				}
+				disablePreferredStrictTools = true
+				utils.AppendAssistantMessageDiagnostic(output, utils.CreateAssistantMessageDiagnostic(
+					"anthropic_strict_tools_fallback", err, map[string]any{"reason": "strict_tool_limits_exceeded"}))
 			}
 			if options.OnResponse != nil {
 				options.OnResponse(types.ProviderResponse{Status: resp.StatusCode, Headers: utils.HeadersToRecord(resp.Header)}, model)
@@ -1466,7 +1485,7 @@ func shouldUseFineGrainedToolStreamingBeta(model *types.Model, llmContext *types
 // buildAnthropicParams builds the message create request body (pi:
 // buildParams). The params are plain JSON maps so optional fields serialize
 // on demand and OnPayload consumers can inspect the wire shape.
-func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContext, isOAuthToken bool, options *AnthropicOptions) (map[string]any, error) {
+func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContext, isOAuthToken bool, options *AnthropicOptions, disablePreferredStrictTools bool) (map[string]any, bool, error) {
 	_, cacheControl := getCacheControl(model, options.CacheRetention, options.Env)
 	compat := getAnthropicCompat(model)
 	compatModel, _ := model.Compat.(*types.AnthropicMessagesCompat)
@@ -1495,15 +1514,31 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 	}
 	nativeToolChanges := compat.supportsMidConvoSystemMessages && compat.supportsMidConvoToolChanges &&
 		len(initialTools) > 0
-	var convertToolDefinitions func([]types.Tool) ([]map[string]any, error)
+	hasPreferredStrictTools := false
+	convertToolDefinitions := func(tools []types.Tool, toolCacheControl *anthropicCacheControl) ([]map[string]any, error) {
+		definitions, err := convertAnthropicTools(tools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, toolCacheControl, disablePreferredStrictTools)
+		if err != nil {
+			return nil, err
+		}
+		// A converted definition stays strict only when the input preferred it
+		// and strict mode was available (pi: definition.strict === true &&
+		// config.strict === "prefer").
+		for index, definition := range definitions {
+			if strict, _ := definition["strict"].(bool); strict && index < len(tools) && isPreferredJSONSchemaStrictSampling(tools[index].ConstrainedSampling) {
+				hasPreferredStrictTools = true
+			}
+		}
+		return definitions, nil
+	}
+	var messageToolConverter func([]types.Tool) ([]map[string]any, error)
 	if nativeToolChanges {
-		convertToolDefinitions = func(tools []types.Tool) ([]map[string]any, error) {
-			return convertAnthropicTools(tools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, nil)
+		messageToolConverter = func(tools []types.Tool) ([]map[string]any, error) {
+			return convertToolDefinitions(tools, nil)
 		}
 	}
-	converted, err := convertAnthropicMessages(conversationMessages, isOAuthToken, cacheControl, compat.allowEmptySignature, managedEffortProvider(model), convertToolDefinitions)
+	converted, err := convertAnthropicMessages(conversationMessages, isOAuthToken, cacheControl, compat.allowEmptySignature, managedEffortProvider(model), messageToolConverter)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	activeEffort := options.Effort
 	if activeEffort == "" {
@@ -1562,9 +1597,9 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 		// followed by the placeholder. The list never changes afterwards: later
 		// tools are defined by value in tool_addition blocks and withdrawn by
 		// tool_removal, so the cached prefix survives every tool change.
-		initialConverted, err := convertAnthropicTools(initialTools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, toolCacheControl)
+		initialConverted, err := convertToolDefinitions(initialTools, toolCacheControl)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		placeholder := map[string]any{
 			"name":        deferredToolPlaceholderName,
@@ -1581,9 +1616,9 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 	} else {
 		tools := utils.GetCurrentTools(llmContext.Messages)
 		if len(tools) > 0 {
-			convertedTools, err := convertAnthropicTools(tools, isOAuthToken, compat.supportsEagerToolInputStreaming, compat.supportsStrictTools, toolCacheControl)
+			convertedTools, err := convertToolDefinitions(tools, toolCacheControl)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			params["tools"] = convertedTools
 		}
@@ -1647,7 +1682,49 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 		params["fallbacks"] = fallbacks
 	}
 
-	return params, nil
+	return params, hasPreferredStrictTools, nil
+}
+
+// anthropicStrictToolLimitMessages are the API error messages that mean the
+// request exceeded Anthropic's strict-tool capacity (pi: the same three
+// substrings, #10409).
+var anthropicStrictToolLimitMessages = []string{
+	"The compiled grammar is too large",
+	"Too many strict tools (",
+	"Schemas contains too many parameters with union types (",
+}
+
+// isAnthropicStrictToolsLimitError reports whether err is a 400
+// invalid_request_error whose message names a strict-tool capacity limit
+// (pi: error instanceof Anthropic.APIError && error.status === 400 &&
+// error.type === "invalid_request_error" && message.includes(...)).
+func isAnthropicStrictToolsLimitError(err error) bool {
+	norm := utils.NormalizeProviderError(err)
+	if norm.Status != 400 {
+		return false
+	}
+	var body struct {
+		Error struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal([]byte(norm.Body), &body) != nil {
+		return false
+	}
+	if body.Error.Type != "invalid_request_error" {
+		return false
+	}
+	message := body.Error.Message
+	if message == "" {
+		message = norm.Message
+	}
+	for _, marker := range anthropicStrictToolLimitMessages {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // maxTokensValue resolves the max_tokens param (pi: options?.maxTokens ??

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/ZoroSpace/pig/ai/providers"
 	"github.com/samber/lo"
 )
 
@@ -132,7 +133,7 @@ func fetchNvidiaNimModelIds(ctx context.Context) (map[string]string, error) {
 }
 
 // parseFloatDefault parses pi's `parseFloat(model.pricing?.X || "0")`.
-func parseFloatDefault(p *OpenRouterPricing, get func(*OpenRouterPricing) *string) float64 {
+func parseFloatDefault(p *providers.OpenRouterPricing, get func(*providers.OpenRouterPricing) *string) float64 {
 	if p == nil {
 		return 0
 	}

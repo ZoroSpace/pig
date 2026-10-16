@@ -42,6 +42,10 @@ type RefreshModelsContext struct {
 	// Force bypasses provider freshness checks and fetches immediately when
 	// network access is allowed.
 	Force bool
+	// BaseURL is the registered provider base URL, including configuration
+	// overrides that wrappers apply outside the provider receiving this
+	// context (pi: baseUrl).
+	BaseURL string
 	// Context is always present, including when the public refresh caller
 	// omits its context (pi: signal).
 	Context context.Context
@@ -500,7 +504,7 @@ func (m *modelsImpl) publishProviderModels(providerID string, generation int, ct
 	return true, nil
 }
 
-func (m *modelsImpl) runProviderRefreshPhase(ctx context.Context, provider dynamicProvider, providerID string, credential auth.Credential, allowNetwork bool, force bool, generation int) error {
+func (m *modelsImpl) runProviderRefreshPhase(ctx context.Context, provider dynamicProvider, providerID string, baseURL string, credential auth.Credential, allowNetwork bool, force bool, generation int) error {
 	stored, err := m.modelsStore.Read(ctx, providerID)
 	if err != nil {
 		return err
@@ -513,6 +517,7 @@ func (m *modelsImpl) runProviderRefreshPhase(ctx context.Context, provider dynam
 		},
 		AllowNetwork: allowNetwork,
 		Force:        force,
+		BaseURL:      baseURL,
 		Context:      ctx,
 	})
 }
@@ -583,7 +588,7 @@ func (m *modelsImpl) Refresh(ctx context.Context, options *ModelsRefreshOptions)
 
 				// Restore cached provider state before auth resolution or
 				// network access.
-				if err := m.runProviderRefreshPhase(refreshCtx, dyn, providerID, storedCredential, false, false, generation); err != nil {
+				if err := m.runProviderRefreshPhase(refreshCtx, dyn, providerID, provider.BaseURL(), storedCredential, false, false, generation); err != nil {
 					return err
 				}
 				if credentialErr != nil {
@@ -600,7 +605,7 @@ func (m *modelsImpl) Refresh(ctx context.Context, options *ModelsRefreshOptions)
 				if credential == nil {
 					return nil
 				}
-				return m.runProviderRefreshPhase(refreshCtx, dyn, providerID, credential, true, force, generation)
+				return m.runProviderRefreshPhase(refreshCtx, dyn, providerID, provider.BaseURL(), credential, true, force, generation)
 			}
 
 			_, err := waitOperation(refreshCtx, func() (struct{}, error) {

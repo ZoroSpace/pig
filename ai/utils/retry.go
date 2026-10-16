@@ -69,8 +69,9 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	"internal.?error",
 
 	// Wrapper/provider text for transient upstream failures, including OpenRouter
-	// "Provider returned error" responses (#2264).
-	"provider.?returned.?error",
+	// "Provider returned error" responses (#2264) and gateway wording such as
+	// "The upstream provider returned an error" (#10842).
+	"provider.?returned.?(?:an.?)?error",
 	"exceeded request buffer limit while retrying upstream",
 
 	// Network, proxy, and fetch transport failures. This includes OpenAI Codex

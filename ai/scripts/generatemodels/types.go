@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ZoroSpace/pig/ai"
+	"github.com/ZoroSpace/pig/ai/providers"
 )
 
 // ModelsDevModel is one models.dev catalog entry (pi: ModelsDevModel).
@@ -86,15 +87,15 @@ type OpenRouterResponse struct {
 	Data []OpenRouterModel `json:"data"`
 }
 
-// OpenRouterModel is one OpenRouter model (pi: fetchOpenRouterModels).
+// OpenRouterModel is one OpenRouter model (pi: OpenRouterModelListItem extends
+// OpenRouterModel). The runtime fields (id/context_length/top_provider/pricing)
+// are shared with providers.OpenRouterModel; the generator adds the listing
+// metadata it consumes.
 type OpenRouterModel struct {
-	ID                  string                       `json:"id"`
+	providers.OpenRouterModel
 	Name                string                       `json:"name"`
 	SupportedParameters []string                     `json:"supported_parameters"`
 	Architecture        *OpenRouterArchitecture      `json:"architecture"`
-	Pricing             *OpenRouterPricing           `json:"pricing"`
-	TopProvider         *OpenRouterTopProvider       `json:"top_provider"`
-	ContextLength       *int64                       `json:"context_length"`
 	Reasoning           *OpenRouterReasoningMetadata `json:"reasoning"`
 }
 
@@ -108,39 +109,6 @@ type OpenRouterArchitecture struct {
 	// architecture.input_modalities / output_modalities).
 	InputModalities  []string `json:"input_modalities"`
 	OutputModalities []string `json:"output_modalities"`
-}
-
-// OpenRouterPricing is per-token USD as strings (pi: pricing).
-type OpenRouterPricing struct {
-	Prompt          *string `json:"prompt"`
-	Completion      *string `json:"completion"`
-	InputCacheRead  *string `json:"input_cache_read"`
-	InputCacheWrite *string `json:"input_cache_write"`
-	// Overrides are conditional prices (S17 943a10e74: prompt-length
-	// overrides become request-wide tiers; time-of-day overrides are
-	// skipped because ModelCost cannot express them).
-	Overrides []OpenRouterPricingOverride `json:"overrides"`
-}
-
-// OpenRouterPricingOverride is a conditional price (pi:
-// OpenRouterPricingOverride). MinPromptTokens selects prompt-length pricing;
-// the utc_* fields select time-of-day or weekday pricing. Missing rates keep
-// the base price.
-type OpenRouterPricingOverride struct {
-	MinPromptTokens *int64   `json:"min_prompt_tokens"`
-	UTCStart        *float64 `json:"utc_start"`
-	UTCEnd          *float64 `json:"utc_end"`
-	UTCDays         []string `json:"utc_days"`
-	Prompt          *string  `json:"prompt"`
-	Completion      *string  `json:"completion"`
-	InputCacheRead  *string  `json:"input_cache_read"`
-	InputCacheWrite *string  `json:"input_cache_write"`
-}
-
-// OpenRouterTopProvider carries the top provider's limits (pi: top_provider).
-type OpenRouterTopProvider struct {
-	ContextLength       *int64 `json:"context_length"`
-	MaxCompletionTokens *int64 `json:"max_completion_tokens"`
 }
 
 // stringOrList decodes a JSON value that may be a string ("text->image") or a

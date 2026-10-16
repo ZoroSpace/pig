@@ -76,6 +76,21 @@ func TestIsRetryableAssistantErrorMatchesPendingStreamCanceled(t *testing.T) {
 	}
 }
 
+func TestIsRetryableAssistantErrorMatchesUpstreamProviderReturnedError(t *testing.T) {
+	// Regression for pi #10842: gateway wording such as "The upstream provider
+	// returned an error" now that the optional article is allowed.
+	for _, errorMessage := range []string{
+		"Provider returned error",
+		"The upstream provider returned an error",
+		"provider returned an error",
+	} {
+		message := retryTestMessage("", types.StopReasonError, errorMessage)
+		if !IsRetryableAssistantError(message) {
+			t.Fatalf("%q should be retryable", errorMessage)
+		}
+	}
+}
+
 func TestRetryDelayMsCapsAgentRetryDelay(t *testing.T) {
 	// Regression for pi #8826.
 	if got := RetryDelayMs(&RetryPolicy{BaseDelayMs: 2000}, 6); got != 60000 {
