@@ -28,6 +28,9 @@ type mockOAuthServer struct {
 	refreshes    int             // refresh-grant hits
 	tokenErr     string          // forced token endpoint error body
 	accessTokens map[string]bool // issued access tokens
+	// omitAuthServerMeta makes the authorization server metadata endpoint 404,
+	// exercising the no-discovered-metadata fallback (RFC 9207 iss rejection).
+	omitAuthServerMeta bool
 }
 
 func newMockOAuthServer(t *testing.T) *mockOAuthServer {
@@ -41,6 +44,13 @@ func newMockOAuthServer(t *testing.T) *mockOAuthServer {
 	})
 	// Authorization server metadata (the server root doubles as the AS).
 	mux.HandleFunc("/.well-known/oauth-authorization-server", func(w http.ResponseWriter, r *http.Request) {
+		m.mu.Lock()
+		omit := m.omitAuthServerMeta
+		m.mu.Unlock()
+		if omit {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"registration_endpoint":%q,`+
 			`"response_types_supported":["code"],"grant_types_supported":["authorization_code","refresh_token"],`+
@@ -165,6 +175,8 @@ type scriptedPrompt struct {
 	mock    *mockOAuthServer
 	browser bool
 	authURL string
+	// omitIss leaves the RFC 9207 iss parameter off the redirect.
+	omitIss bool
 }
 
 func (p *scriptedPrompt) ShowAuthorizationURL(raw string) {
@@ -176,8 +188,11 @@ func (p *scriptedPrompt) ShowAuthorizationURL(raw string) {
 	if err != nil {
 		p.t.Fatalf("auth URL: %v", err)
 	}
-	target := fmt.Sprintf("%s?code=the-code&state=%s&iss=%s",
-		u.Query().Get("redirect_uri"), url.QueryEscape(u.Query().Get("state")), url.QueryEscape(p.mock.s.URL))
+	target := fmt.Sprintf("%s?code=the-code&state=%s",
+		u.Query().Get("redirect_uri"), url.QueryEscape(u.Query().Get("state")))
+	if !p.omitIss {
+		target += "&iss=" + url.QueryEscape(p.mock.s.URL)
+	}
 	resp, err := http.Get(target) //nolint:noctx // test-local callback server
 	if err != nil {
 		p.t.Logf("browser callback: %v", err)
@@ -199,8 +214,12 @@ func (p *scriptedPrompt) PromptForRedirectURL(ctx context.Context) (string, erro
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s?code=the-code&state=%s&iss=%s",
-		u.Query().Get("redirect_uri"), url.QueryEscape(u.Query().Get("state")), url.QueryEscape(p.mock.s.URL)), nil
+	target := fmt.Sprintf("%s?code=the-code&state=%s",
+		u.Query().Get("redirect_uri"), url.QueryEscape(u.Query().Get("state")))
+	if !p.omitIss {
+		target += "&iss=" + url.QueryEscape(p.mock.s.URL)
+	}
+	return target, nil
 }
 
 func TestSignInBrowserFlow(t *testing.T) {
@@ -246,6 +265,51 @@ func TestSignInPastedRedirectURL(t *testing.T) {
 	state, _ := store.Load("docs", mock.serverURL())
 	if state == nil || state.Tokens == nil || !strings.HasPrefix(state.Tokens.AccessToken, "access-") {
 		t.Fatalf("tokens after paste sign-in: %+v", state)
+	}
+}
+
+// TestSignInRejectsIssWithoutMetadata ports pi c5f5b3282: when no authorization
+// server metadata was discovered there is no issuer to compare an RFC 9207
+// `iss` with, so the response must be rejected before the code exchange.
+func TestSignInRejectsIssWithoutMetadata(t *testing.T) {
+	mock := newMockOAuthServer(t)
+	defer mock.close()
+	mock.mu.Lock()
+	mock.omitAuthServerMeta = true
+	mock.mu.Unlock()
+	store := NewCredentialStore(t.TempDir()+"/mcp-auth.json", "")
+	deps := flowDeps{store: store, serverName: "docs"}
+
+	prompt := &scriptedPrompt{t: t, mock: mock, browser: true}
+	err := signInMcpServer(context.Background(), deps, mock.serverURL(), OAuthSettings{}, OAuthChallenge{}, prompt, nil)
+	if err == nil || !strings.Contains(err.Error(), "issuer mismatch") {
+		t.Fatalf("want issuer mismatch error, got %v", err)
+	}
+	tokens, _, _ := mock.counts()
+	if tokens != 0 {
+		t.Fatalf("token endpoint hit %d times, want 0 (rejected before exchange)", tokens)
+	}
+}
+
+// TestSignInAllowsOmittedIssWithoutMetadata ports pi c5f5b3282: without metadata
+// and without an `iss` parameter there is nothing to verify, so the exchange
+// proceeds.
+func TestSignInAllowsOmittedIssWithoutMetadata(t *testing.T) {
+	mock := newMockOAuthServer(t)
+	defer mock.close()
+	mock.mu.Lock()
+	mock.omitAuthServerMeta = true
+	mock.mu.Unlock()
+	store := NewCredentialStore(t.TempDir()+"/mcp-auth.json", "")
+	deps := flowDeps{store: store, serverName: "docs"}
+
+	prompt := &scriptedPrompt{t: t, mock: mock, omitIss: true}
+	if err := signInMcpServer(context.Background(), deps, mock.serverURL(), OAuthSettings{}, OAuthChallenge{}, prompt, nil); err != nil {
+		t.Fatalf("sign-in without iss and without metadata: %v", err)
+	}
+	state, _ := store.Load("docs", mock.serverURL())
+	if state == nil || state.Tokens == nil || !strings.HasPrefix(state.Tokens.AccessToken, "access-") {
+		t.Fatalf("tokens after sign-in: %+v", state)
 	}
 }
 

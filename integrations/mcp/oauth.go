@@ -176,6 +176,11 @@ type oauthEndpoints struct {
 	Issuer                            string
 	TokenEndpointAuthMethods          []string
 	AuthorizationResponseIssParameter bool
+	// HasMetadata records whether authorization server metadata was actually
+	// discovered (or configured). Without it there is no issuer to compare an
+	// RFC 9207 `iss` against, so a response carrying `iss` must be rejected
+	// (pi c5f5b3282).
+	HasMetadata bool
 }
 
 func endpointsFromMeta(asm *oauthex.AuthServerMeta) *oauthEndpoints {
@@ -186,6 +191,7 @@ func endpointsFromMeta(asm *oauthex.AuthServerMeta) *oauthEndpoints {
 		Issuer:                            asm.Issuer,
 		TokenEndpointAuthMethods:          asm.TokenEndpointAuthMethodsSupported,
 		AuthorizationResponseIssParameter: asm.AuthorizationResponseIssParameterSupported,
+		HasMetadata:                       true,
 	}
 }
 
@@ -906,6 +912,15 @@ func runFlowOnce(ctx context.Context, deps flowDeps, input flowInput, allowRedir
 	return flowRedirect, pending, nil
 }
 
+// formatIssuer renders an expected/received issuer for the RFC 9207 mismatch
+// error, mirroring pi's OAuthIssuerMismatchError formatting (undefined → none).
+func formatIssuer(issuer string) string {
+	if issuer == "" {
+		return "none"
+	}
+	return strconv.Quote(issuer)
+}
+
 // completeExchange exchanges a callback's authorization code (pi: the
 // authorizeMcp call with authorizationCode). On a dead client registration it
 // re-registers once and retries (pi: invalidateCredentials("all") + re-run).
@@ -919,10 +934,17 @@ func completeExchange(ctx context.Context, deps flowDeps, input flowInput, pendi
 		if client == nil {
 			return errors.New("OAuth client information is missing during code exchange")
 		}
-		// RFC 9207: never send a code from another authorization server.
-		if pending.endpoints.AuthorizationResponseIssParameter || iss != "" {
-			if iss != pending.endpoints.Issuer {
-				return fmt.Errorf("OAuth issuer mismatch: expected %q, received %q", pending.endpoints.Issuer, iss)
+		// RFC 9207: never send a code from another authorization server to
+		// this one. Without metadata there is no issuer to compare with, so
+		// any `iss` is rejected (pi c5f5b3282).
+		issParameterSupported := pending.endpoints.HasMetadata && pending.endpoints.AuthorizationResponseIssParameter
+		if iss != "" || issParameterSupported {
+			expected := ""
+			if pending.endpoints.HasMetadata {
+				expected = pending.endpoints.Issuer
+			}
+			if iss != expected {
+				return fmt.Errorf("OAuth issuer mismatch: expected %s, received %s", formatIssuer(expected), formatIssuer(iss))
 			}
 		}
 		tokens, err := exchangeAuthorizationCode(ctx, pending.endpoints, client, code, pending.verifier, input.redirectURL, pending.resource, deps.client)
