@@ -268,3 +268,49 @@ func TestFooterComponentWidthHandling(t *testing.T) {
 		}
 	})
 }
+
+// TestFooterProviderPrefixAlwaysShown is THE regression for the pig-only
+// deviation in docs/feat/FOOTER-PROVIDER-PREFIX.md: pi prepends the provider
+// only when 2+ providers are available; pig shows it even with exactly one
+// (user request, 2026-10-16). The width fallback (drop the prefix, keep the
+// model) must survive.
+func TestFooterProviderPrefixAlwaysShown(t *testing.T) {
+	t.Run("shows the provider prefix with a single available provider", func(t *testing.T) {
+		view, _ := createFooterSession(footerSessionOptions{
+			modelId:  "deepseek-v4-flash",
+			provider: "volcengine-plan",
+		})
+		footer := NewFooterComponentWithView(nil, view, createFooterData(1))
+
+		statsLine := utils.StripAnsi(footer.Render(120)[1])
+		if !strings.HasSuffix(statsLine, "(volcengine-plan) deepseek-v4-flash") {
+			t.Fatalf("stats line %q should end with the right-aligned provider+model", statsLine)
+		}
+	})
+
+	t.Run("shows the provider prefix with several available providers too", func(t *testing.T) {
+		view, _ := createFooterSession(footerSessionOptions{provider: "volcengine-plan"})
+		footer := NewFooterComponentWithView(nil, view, createFooterData(2))
+
+		statsLine := utils.StripAnsi(footer.Render(120)[1])
+		if !strings.Contains(statsLine, "(volcengine-plan) test-model") {
+			t.Fatalf("stats line %q missing provider prefix", statsLine)
+		}
+	})
+
+	t.Run("drops the provider prefix when it does not fit the width", func(t *testing.T) {
+		view, _ := createFooterSession(footerSessionOptions{
+			modelId:  strings.Repeat("m", 40),
+			provider: "very-long-provider-name",
+		})
+		footer := NewFooterComponentWithView(nil, view, createFooterData(1))
+
+		statsLine := utils.StripAnsi(footer.Render(60)[1])
+		if strings.Contains(statsLine, "very-long-provider-name") {
+			t.Fatalf("stats line %q should fall back to model-only when too wide", statsLine)
+		}
+		if !strings.HasSuffix(statsLine, strings.Repeat("m", 40)) {
+			t.Fatalf("stats line %q should keep the model name", statsLine)
+		}
+	})
+}

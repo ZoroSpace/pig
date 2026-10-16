@@ -42,6 +42,7 @@
 10. **autocomplete stale accept 守卫** `autocompleteAcceptIsCurrent`（pig-only，`docs/fix/2026-09-18-autocomplete-stale-accept-mangles-text.md`）。
 11. **主屏视口重绘三分支修复**（pig 独立偏差，pi 上游 #9255 仍 open；`docs/fix/2026-09-13-main-screen-viewport-redraw-jump.md`）。
 12. **协议值与服务端点保留 pi 形态**（X-BILLING-INVOKE-ORIGIN、pi.dev URL 族、User-Agent `pi/` 等），文案 Pig 化。
+13. **footer 右下角始终显示 provider 前缀**：`(provider) model` 不再受「可用 provider 数 > 1」门控（pi 原行为仅多 provider 时显示）；宽度回退保留（`docs/feat/FOOTER-PROVIDER-PREFIX.md`）。
 
 ## 移植教训速查（跨批有效）
 
@@ -87,7 +88,7 @@
 **Phase 3/4 早期批次（2026-09-02~09-08，harness/session/core/print 模式 CLI 7 子批，Phase 0-4 交付）**：过程决策与偏差原文已整体迁移 `docs/batches/2026-09.md`；print 模式 CLI 拆批与里程碑 M1/M2 定义见 git 历史本文件 §4。
 
 **dogfooding 插批 feat（活偏差已入上文偏差清单，此处只留索引）**：
-- PROV-VOLC-PLAN（09-10 火山 Coding Plan provider）· LATEX（09-10）· PANIC-RESILIENCE（09-11）· WINDOWS-SUPPORT（09-16）· CJK-WORD-SEG / CJK-SEG-MODE / CJK-SETTINGS（09-12~14）· TUI-LOGO（09-13 起多次追加）· FOOTER-RESOURCE-STATS（09-14 起四次收敛）· MAC-CLIPBOARD-IMAGE / CLIPBOARD-IMAGE-PLACEHOLDER（09-16）· SLASH-COMMANDS-COMPLETION（09-18）· MCP-1 / MCP-2 / MCP 渲染器（09-27）· TEST-SUITE-RUNTIME（09-30）· WRITE-PREVIEW-FLICKER（09-30 fix）· BUILTIN-THEME-PALETTES + BLOCK-BORDERS + 整框化（10-03，主题部分同日撤销）· EDIT-FRAME（10-10，edit 去 self-render 入 default shell 获角点整框 + diff 行内变更去强调（Inverse→Bold→纯前景同日收敛），见 BUILTIN-THEME-PALETTES §BLOCK-BORDERS 八/九批）——文档见 `docs/feat/`、`docs/fix/` 对应文件。
+- PROV-VOLC-PLAN（09-10 火山 Coding Plan provider）· LATEX（09-10）· PANIC-RESILIENCE（09-11）· WINDOWS-SUPPORT（09-16）· CJK-WORD-SEG / CJK-SEG-MODE / CJK-SETTINGS（09-12~14）· TUI-LOGO（09-13 起多次追加）· FOOTER-RESOURCE-STATS（09-14 起四次收敛）· MAC-CLIPBOARD-IMAGE / CLIPBOARD-IMAGE-PLACEHOLDER（09-16）· SLASH-COMMANDS-COMPLETION（09-18）· MCP-1 / MCP-2 / MCP 渲染器（09-27）· TEST-SUITE-RUNTIME（09-30）· WRITE-PREVIEW-FLICKER（09-30 fix）· BUILTIN-THEME-PALETTES + BLOCK-BORDERS + 整框化（10-03，主题部分同日撤销）· EDIT-FRAME（10-10，edit 去 self-render 入 default shell 获角点整框 + diff 行内变更去强调（Inverse→Bold→纯前景同日收敛），见 BUILTIN-THEME-PALETTES §BLOCK-BORDERS 八/九批）· FOOTER-PROVIDER-PREFIX（10-16，footer 右下角单 provider 也显示 `(provider)` 前缀）——文档见 `docs/feat/`、`docs/fix/` 对应文件。
 
 ## docs/fix/：bug 排查记录（登记规则）
 

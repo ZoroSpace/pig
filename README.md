@@ -184,6 +184,7 @@ pig 把 pi 自研的 pi-tui **整库移植**，没用任何现成 TUI 框架—�
 - 编辑器**中文分词**：内置中文词典（gse），Ctrl+方向键按词跳转/删除，不再逐字挪动
 - 修复了一整类 pi 上游的 CJK 渲染问题：中文表格对齐、CJK 相邻行内公式、中文标点斜体定界
 - 内置**火山引擎 Coding Plan** provider，国内开箱即用
+- footer 右下角始终显示当前 provider（pi 仅在多 provider 时显示，pig 单 provider 也显示）
 
 ### 🌳 会话管理：一棵可分支回溯的树
 

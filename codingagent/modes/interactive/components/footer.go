@@ -147,9 +147,11 @@ type FooterTUI interface {
 }
 
 // FooterComponent is the footer line pair: pwd (branch, session name) and
-// token/context stats with the right-aligned model name. When resource
-// stats are enabled (pig-only), the stats line gains a "| CPU·MEM…"
-// segment.
+// token/context stats with the right-aligned model name. pig deviation: the
+// model is always prefixed with "(provider) " when it fits (pi shows the
+// prefix only with 2+ available providers — see Render and
+// docs/feat/FOOTER-PROVIDER-PREFIX.md). When resource stats are enabled
+// (pig-only), the stats line gains a "| CPU·MEM…" segment.
 type FooterComponent struct {
 	mu sync.Mutex
 
@@ -566,10 +568,18 @@ func (f *FooterComponent) Render(width int) []string {
 		}
 	}
 
-	// Prepend the provider in parentheses if there are multiple providers
-	// and there's enough room
+	// Prepend the provider in parentheses when there's enough room.
+	//
+	// pig deviation (2026-10-16, docs/feat/FOOTER-PROVIDER-PREFIX.md): pi
+	// prepends the provider only when more than one provider is available
+	// (getAvailableProviderCount() > 1), hiding it in single-provider
+	// setups; pig always shows it so the active provider stays visible even
+	// with exactly one configured provider. The width fallback is
+	// unchanged: too wide → model name only. The available-provider count
+	// is still tracked on the provider for pi parity (extension view), it
+	// just no longer gates this line.
 	rightSide := rightSideWithoutProvider
-	if f.footerData.GetAvailableProviderCount() > 1 && state.Model != nil {
+	if state.Model != nil {
 		rightSide = fmt.Sprintf("(%s) %s", state.Model.Provider, rightSideWithoutProvider)
 		if statsLeftWidth+minPadding+tui.VisibleWidth(rightSide) > width {
 			// Too wide, fall back
