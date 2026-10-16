@@ -23,7 +23,7 @@
 **Golden 对照（vs 全局 pi 0.85.1 二进制，同一真实 131 行会话）**：
 - **payload 语义零差异**（131 entry 逐路径 walk，`{}`）
 - **pi 的 `$&` mangling artifact 字节级一致**：highlight.min.js 正则字符类 `[-+*\/?!$&|:...]` 中的 `$&` 被 JS `.replace` 展开为字面 `{{HIGHLIGHT_JS}}`，pi 产物与 pig 产物该处完全相同（`grep -c` 双方 =1，jsStringReplace 复刻成功）
-- 骨架差异仅三类、全部已声明：CSS var 排序（Go map 无序 → sorted）、`--imagePlaceholder`（pig-only token）、四个中性灰值（用户自己的 pig 提交 70378d6，非本批引入）
+- 骨架差异仅三类、全部已声明：CSS var 排序（Go map 无序 → sorted）、`--imagePlaceholder`（pig-only token）、四个中性灰值（用户自己的 pig 提交 2552fad，非本批引入）
 - 手编 fixture 首轮出现的 payload 差异（timestamp / usage.cost 子键）系 fixture 字段不真实 + S1 typed-remarshal 既有声明行为，非本批 bug
 
 **冒烟（tmux 真 TTY + mock SSE 端点）**：① `--export` CLI 双端点对照（上）② 交互 `/export` 全链路：mock 对话 pong → `/export <path>.html` → 状态行 + 286KB HTML（9 entries、leafId、4 活动工具入 payload）③ migrations：agent 目录预置 hooks/+commands/ → 启动打印 "Migrated Global commands/ → prompts/" + 弃用警告 + URL + "Press any key to continue..."，按键后 TUI 正常挂载且按键不泄漏进编辑器，commands/ 目录已改名 ④ 顺手确认 logo 版本号 v0.86.0（codingagent.Version 常量 S6-3b 已更新，旧二进制未编译所致）。
@@ -32,7 +32,7 @@
 
 1. **pi index.ts 拆两半（Go import-cycle 强制）**：package core 必须调用 exporthtml（AgentSession.ExportToHtml），exporthtml 又需要 core 的 SessionManager/SessionEntry 类型 → 环。拆分：模板半区（SessionData/ToolHtmlRenderer 接口/generateHtml/theme 色彩推导）留 exporthtml；会话半区（exportSessionToHtml/exportFromFile/preRenderCustomTools）落 `core/export_html.go`。SessionData.Header/Entries 用 `any` 承载 core 类型（marshal 走各自 pi 兼容 tag）。TEMPLATE_RENDERED_TOOLS 因拆分导出为 IsTemplateRenderedTool（pi 为模块私有）。
 2. **jsStringReplace 复刻 ECMA-262 GetSubstitution**：pi 用 `.replace()` 注入模板；替换串中的 `$&`/`` $` ``/`$'`/`$$` 会展开，`$n`（无捕获组）字面。highlight.min.js 含一处 `$&` → pi 导出产物里它是字面 `{{HIGHLIGHT_JS}}`（无害的 pi 固有 quirk）。pig 用 strings.Replace 会产出"更正确但不同"的输出 → 破坏字节对齐。jsStringReplace ~40 行逐语义复刻（node v24.14 实测 pin：含 `$'` 展开后自然尾随再跟一次的双重形态）。
-3. **测试期望三轮返工全为测试侧错误**：① style 清空后不开 span（pi hasStyle 判定）；② 截断扩展序列剩余参数按普通 SGR 处理（48;2;1;2 → dim+bold）；③ `$'` 的"双重尾巴"是我对 JS 语义的理解错，node 实测后确认实现正确；④ trimRenderedResultLines 只裁头尾不裁中间；⑤ deriveExportColors g+15 算术；⑥ toolPendingBg 等主题值差异来自用户自己的 70378d6 提交。
+3. **测试期望三轮返工全为测试侧错误**：① style 清空后不开 span（pi hasStyle 判定）；② 截断扩展序列剩余参数按普通 SGR 处理（48;2;1;2 → dim+bold）；③ `$'` 的"双重尾巴"是我对 JS 语义的理解错，node 实测后确认实现正确；④ trimRenderedResultLines 只裁头尾不裁中间；⑤ deriveExportColors g+15 算术；⑥ toolPendingBg 等主题值差异来自用户自己的 2552fad 提交。
 4. **ThemeFunc 懒解析**（pi theme Proxy 语义）：pi 的 deps.theme 是 Proxy，未初始化时在**渲染器内部首次访问**才 throw → 被 try/catch 吃掉 → 静默回落结构化渲染。pig 若传 `*Theme` 会在构造期 panic。ThemeFunc 在 recover 守卫的渲染调用内解析，行为等价。
 5. **SessionData.Tools 用 `*[]ToolSummary`**：pi `state?.tools?.map()` 对空数组产出 `"tools":[]`，Go omitempty 会把空切片整个省掉。nil = 缺席（state undefined），非 nil（含空）= 在场。
 6. **裸 `/export` 在无会话文件时报 "Nothing to export yet"**：pig 与 pi 一致——会话文件在首条 assistant 消息 flush 时才物化（pi 同型 flush 机制）。交互测试 fixture 需先 AppendMessage 一条 assistant 才能导出。

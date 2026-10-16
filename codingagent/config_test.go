@@ -27,7 +27,7 @@ func TestVersionTracksPiBaseline(t *testing.T) {
 
 // TestCIWorkflowGoVersionTracksGoMod pins the CI workflow's Go version to
 // go.mod's go directive. Regression lock for
-// docs/fix/2026-09-24-ci-go-toolchain-mismatch.md: commit 44cabf6 bumped
+// docs/fix/2026-09-24-ci-go-toolchain-mismatch.md: commit 502ddeb bumped
 // go.mod to 1.26.0 (x/text、x/sys、x/image deps) without bumping the workflow,
 // so CI installed go1.25.14 while GOTOOLCHAIN auto-downloaded go1.26.0 —
 // mixed-version builds failed with `compile: version "go1.26.0" does not

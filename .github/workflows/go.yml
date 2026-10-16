@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Pin must track go.mod's go directive (deps x/text、x/sys、x/image
-      # forced 1.26.0 in 44cabf6); a mismatch makes GOTOOLCHAIN auto-download
+      # forced 1.26.0 in 502ddeb); a mismatch makes GOTOOLCHAIN auto-download
       # a second toolchain mid-job and mixed-version builds fail with
       # `compile: version ... does not match go tool version ...`.
       - uses: actions/setup-go@v5
