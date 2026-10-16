@@ -274,5 +274,5 @@ Phase 7 扩展系统已裁决不做（见不做清单）。sidecar 协议设计�
 1. **钉正式 tag，永不追 main**：同步目标恒为「当时最新正式 tag」，不追无版本的中间态
 2. **不逐版跟进**：多版累积一次消化更便宜（每版固定成本 = 全量回归 + 快照 + 偏差记录）；但大漂移可按区拆系列批（S6/S8/S10/S11 先例）
 3. **分区消化，风险序**：线格式核对（硬约束优先）→ ai/agent/session 增量 → TUI 增量 → coding-agent 增量，每区做完跑全仓回归
-4. **收尾动作**：本文件重新 pin + 偏差清单归档 + Version bump（`TestVersionTracksPiBaseline` 守卫）+ 双向兼容门（v3 四向实测或按 handoff 声明沿用）
-5. **pi 仓库只读**：对比用 `git fetch` + `git diff <old-tag>..<new-tag>` 或独立 worktree；catalog golden 上游漂移可整文件重 sync（C2 先例）
+4. **收尾动作**：本文件重新 pin + 偏差清单归档 + Version bump（`TestVersionTracksPiBaseline` 守卫）+ 双向兼容门（v3 四向实测或按 handoff 声明沿用）+ **打 annotated tag 并 push**（`git tag -a v<version> <收口commit> -m 'pig v<version>: 基线同步至 pi v<version>（<批次摘要>）'` 后 `git push origin v<version>`；tag 名 = pig `Version` 常量值。历史教训：v1.0.1/v1.1.0/v1.2.0 三次收口漏打，2026-10-16 补打——此后每批必须打，防 tag 系列再断）
+5. **pi 仓库只读**：对比用 `git fetch` + `git diff <old-tag>..<new-tag>` 或独立 worktree；catalog golden 上游漂移可整文件 re-sync（C2 先例）
