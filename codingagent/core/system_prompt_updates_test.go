@@ -147,7 +147,7 @@ func TestSystemPromptDeclaredOnceAndReusedAcrossResume(t *testing.T) {
 	if systemMessage.Content.String != "" {
 		t.Fatalf("head content = %q, want empty", systemMessage.Content.String)
 	}
-	wantKeys := []string{"preamble", "tools", "rules", "docs", "cwd"}
+	wantKeys := []string{"preamble", "tools", "rules", "cwd"}
 	if len(systemMessage.Sections.Keys) != len(wantKeys) {
 		t.Fatalf("section keys = %v, want %v", systemMessage.Sections.Keys, wantKeys)
 	}

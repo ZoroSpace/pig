@@ -594,7 +594,11 @@ func TestBoundaryKeepsReplacementVerbatimThroughThresholdCompaction(t *testing.T
 		}, nil
 	}
 	harness := createFauxHarness(t, &fauxHarnessOptions{
-		contextWindow: 2000,
+		// contextWindow 2000 in pi: the system prompt there includes a docs
+		// section (~250 tokens); pig dropped it, so the threshold moves down.
+		// 1500 sits well below the post-removal critical range while keeping
+		// the test's intent (threshold compaction fires on these short msgs).
+		contextWindow: 1500,
 		maxTokens:     100,
 		settings:      Settings{"compaction": map[string]any{"enabled": true, "keepRecentTokens": float64(1), "reserveTokens": float64(0)}},
 		extensions: []*Extension{

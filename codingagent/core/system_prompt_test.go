@@ -128,21 +128,6 @@ func TestBuildSystemPrompt(t *testing.T) {
 				t.Fatalf("prompt = %q", both)
 			}
 		})
-
-		t.Run("instructs models to resolve pi docs and examples under absolute base paths", func(t *testing.T) {
-			prompt := BuildSystemPrompt(BuildSystemPromptOptions{
-				ContextFiles: []ContextFile{},
-				Skills:       []Skill{},
-				Cwd:          mustGetwdForPrompt(),
-			})
-
-			if !strings.Contains(prompt, "- When reading pi docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory") {
-				t.Fatalf("prompt = %q", prompt)
-			}
-			if !strings.Contains(prompt, "environment variables (docs/environment-variables.md)") {
-				t.Fatalf("prompt = %q", prompt)
-			}
-		})
 	})
 
 	t.Run("custom tool snippets", func(t *testing.T) {

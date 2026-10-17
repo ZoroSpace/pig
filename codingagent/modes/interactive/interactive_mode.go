@@ -7936,8 +7936,6 @@ func (m *InteractiveMode) showApiKeyLoginDialog(providerID string, providerName 
 	if providerID == "amazon-bedrock" {
 		dialog.ShowDetails([]string{
 			theme.Current().Fg("text", "You can also use an AWS profile, IAM keys, or role-based credentials."),
-			theme.Current().Fg("muted", "See:"),
-			theme.Current().Fg("accent", "  "+path.Join(codingagent.GetDocsPath(), "providers.md")),
 		})
 	}
 

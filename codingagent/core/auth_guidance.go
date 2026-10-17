@@ -1,23 +1,16 @@
 // pi: src/core/auth-guidance.ts — auth/setup guidance messages.
+//
+// Segment deviation: pi's getProviderLoginHelp lists docs/providers.md and
+// docs/models.md under the package dir; those files do not exist in the pig
+// repo (the pi docs were not ported), so the path lines are dropped.
 package core
-
-import (
-	"path/filepath"
-	"strings"
-
-	"github.com/ZoroSpace/pig/codingagent"
-)
 
 const unknownProvider = "unknown"
 
 // GetProviderLoginHelp returns the provider login guidance (pi:
 // getProviderLoginHelp).
 func GetProviderLoginHelp() string {
-	return strings.Join([]string{
-		"Use /login to log into a provider via OAuth or API key. See:",
-		"  " + filepath.Join(codingagent.GetDocsPath(), "providers.md"),
-		"  " + filepath.Join(codingagent.GetDocsPath(), "models.md"),
-	}, "\n")
+	return "Use /login to log into a provider via OAuth or API key."
 }
 
 // FormatNoModelsAvailableMessage formats the no-models guidance (pi:

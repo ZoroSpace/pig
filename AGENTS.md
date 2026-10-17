@@ -176,15 +176,14 @@ pig/
 ├── ai/                             # ← packages/ai（types/ auth/ api/ compat/ providers/；models_generated.go 生成物禁手改）
 ├── agent/                          # ← packages/agent（harness/ search/）
 ├── tui/                            # ← packages/tui（pi-tui 全量）
-├── protocol/ client/ server/       # ← 同名 pi 包（Phase 5 不做，仅骨架）
-├── sessionbackends/ telemetry/ evals/
+├── telemetry/                      # 叶子（noop 实现）
 ├── codingagent/                    # ← packages/coding-agent（core/ modes/ server/ client/ cli/ extensions/ utils/）
 ├── integrations/<name>/            # pig 内建外部系统集成叶子包（mcp 先例）
 ├── cmd/pig/main.go                 # ← coding-agent src/main.ts + cli.ts
 └── scripts/
 ```
 
-依赖方向（= pi build 顺序，depguard 固化）：`tui`/`telemetry` 叶子 → `ai` → `agent` → `protocol`/`client`/`server` → `codingagent`（依赖全部）；`integrations/` 只依赖其 SDK + stdlib。测试贴代码（`_test.go` + 各包 `testdata/`）；生成物统一 `_generated.go` 后缀。
+依赖方向（= pi build 顺序，depguard 固化）：`tui`/`telemetry` 叶子 → `ai` → `agent` → `codingagent`（依赖全部）；`integrations/` 只依赖其 SDK + stdlib。测试贴代码（`_test.go` + 各包 `testdata/`）；生成物统一 `_generated.go` 后缀。
 
 ### 3.2 扩展边界
 
