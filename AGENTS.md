@@ -98,6 +98,7 @@
 **登记规则**：每起 fix 完成后在下方「现有文件」列表补一条**一行摘要**（现象 + 根因），详情一律落对应 md；**禁止把长摘要写回本文件**。**每起 fix 必须同时落地回归测试函数**（stash 验证红→绿，fix 文档写明测试函数名与验证方式）。**README 同步义务**：fix 或批次若改变用户可见面，同批更新 README 对应段 + `docs/handoffs/verify-matrix.md`。
 
 现有文件：
+- `2026-10-17-mcp-panel-signin-test-race.md`：MCP 面板登录测试竞态（signInSelected 同步渲染登录屏、异步 goroutine 调 SignIn，测试见屏幕即读 calls；改 waitFor 轮询）
 - `2026-10-16-system-prompt-sections-dropped-on-next-turn-refresh.md`：同一次运行工具调用后 system prompt 段丢失（agent 下一轮刷新逐字段重建 prompt 选项时漏 `Sections`；补一行，影响所有 run 非仅自定义消息 run；移植 a447ba11f 时发现）
 - `2026-10-16-minimatch-argument-order.md`：Minimatch 参数顺序反置（调用点照抄 pi 的 `minimatch(value, pattern)`，而 pig 助手是 `Minimatch(pattern, text)`；设置项 `!`/`+`/`-`/glob 过滤与 `--model` 通配全部失效；八处调用改序 + 回归测试）
 - `2026-10-13-scrollback-duplication-window-repaint.md`：滚动历史整段重复文字（shrink-spanning 滑窗重绘把视口上方 k 行重写、与 scrollback 旧副本重叠；滑动量 >8 改走 fullRender 逐行精确重建，≤8 保留滑窗）

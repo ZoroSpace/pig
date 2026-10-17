@@ -495,12 +495,14 @@ func TestMCPPanelSignInAndCancel(t *testing.T) {
 	h.waitFor("sign-in screen", func() bool {
 		return strings.Contains(h.output(), "Sign in to docs")
 	})
-	provider.mu.Lock()
-	calls := strings.Join(provider.calls, ",")
-	provider.mu.Unlock()
-	if !strings.Contains(calls, "signin:docs") {
-		t.Fatalf("ctrl+s must call SignIn, calls = %s", calls)
-	}
+	// The screen renders synchronously but SignIn runs in a background
+	// goroutine (mcp_panel.go signInSelected), so the call record must be
+	// awaited rather than checked immediately after the screen appears.
+	h.waitFor("signin call", func() bool {
+		provider.mu.Lock()
+		defer provider.mu.Unlock()
+		return strings.Contains(strings.Join(provider.calls, ","), "signin:docs")
+	})
 
 	h.input(mcpKeyEscape)
 	h.waitFor("sign-in cancelled", func() bool {
