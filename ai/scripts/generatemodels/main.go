@@ -141,15 +141,20 @@ func generateModels(ctx context.Context) error {
 		if (candidate.Provider == ai.ProviderAnthropic &&
 			(candidate.ID == "claude-opus-5-5" || candidate.ID == "claude-sonnet-5-5" || candidate.ID == "claude-haiku-5-5")) ||
 			(candidate.Provider == ai.ProviderGithubCopilot && candidate.ID == "claude-opus-5.5") {
-			mergeThinkingLevelMap(candidate, ai.ThinkingLevelMap{
-				ai.ModelThinkingOff:     nil,
+			overrides := ai.ThinkingLevelMap{
 				ai.ModelThinkingMinimal: nil,
 				ai.ModelThinkingLow:     lo.ToPtr("low"),
 				ai.ModelThinkingMedium:  lo.ToPtr("medium"),
 				ai.ModelThinkingHigh:    lo.ToPtr("high"),
 				ai.ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ai.ModelThinkingMax:     lo.ToPtr("max"),
-			})
+			}
+			// Haiku 5.5 accepts disabled thinking; Opus 5.5 and Sonnet 5.5
+			// reject it.
+			if candidate.ID != "claude-haiku-5-5" {
+				overrides[ai.ModelThinkingOff] = nil
+			}
+			mergeThinkingLevelMap(candidate, overrides)
 		}
 		if (candidate.Provider == ai.ProviderAnthropic || candidate.Provider == ai.ProviderOpenCode || candidate.Provider == ai.ProviderOpenCodeGo) &&
 			(candidate.ID == "claude-opus-4-6" ||
@@ -279,6 +284,7 @@ func generateModels(ctx context.Context) error {
 		applyOpenAICompletionsTranscriptMetadata(model)
 		applyOpenAIResponsesTranscriptMetadata(model)
 		applyOpenAIExplicitPromptCacheMetadata(model)
+		applyOpenAIMidConvoEffortMetadata(model)
 		applyPromptCacheMetadata(model)
 		applyImageInputMetadata(model)
 	}
@@ -585,8 +591,8 @@ type providerCatalog struct {
 }
 
 // opencodeClassifierModels are the hardcoded OpenCode Zen Jev classifiers
-// (pi: OPENCODE_CLASSIFIER_MODELS). Neither the /zen/v1/models listing nor
-// models.dev carries metadata for them.
+// (pi: OPENCODE_CLASSIFIER_MODELS). Neither the /inference/v1/models listing
+// nor models.dev carries metadata for them.
 // https://opencode.ai/docs/zen
 func opencodeClassifierModels() []*ai.Model {
 	return []*ai.Model{
@@ -596,7 +602,7 @@ func opencodeClassifierModels() []*ai.Model {
 			Name:          "Jev 1.13",
 			API:           ai.ClassifierApiTypesafeSystemOne,
 			Provider:      ai.ProviderOpenCode,
-			BaseURL:       "https://opencode.ai/zen/v1",
+			BaseURL:       "https://opencode.ai/inference/v1",
 			Input:         []ai.ModelInput{ai.ModelInputText},
 			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 0.042}},
 			ContextWindow: 32000,
@@ -607,7 +613,7 @@ func opencodeClassifierModels() []*ai.Model {
 			Name:          "Jev 1.13 Free",
 			API:           ai.ClassifierApiTypesafeSystemOne,
 			Provider:      ai.ProviderOpenCode,
-			BaseURL:       "https://opencode.ai/zen/v1",
+			BaseURL:       "https://opencode.ai/inference/v1",
 			Input:         []ai.ModelInput{ai.ModelInputText},
 			Cost:          ai.ModelCost{},
 			ContextWindow: 32000,

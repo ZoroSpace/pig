@@ -73,8 +73,13 @@ var kimiCodingImpliedCosts = map[string]ai.ModelCostRates{
 	"k3":                        {Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0},
 	"kimi-for-coding":           {Input: 0.95, Output: 4, CacheRead: 0.19, CacheWrite: 0},
 	"kimi-for-coding-highspeed": {Input: 1.9, Output: 8, CacheRead: 0.38, CacheWrite: 0},
-	"kimi-k2-thinking":          {Input: 0.6, Output: 2.5, CacheRead: 0.15, CacheWrite: 0},
 }
+
+// kimiCodingK3StyleModelIDs is pi's KIMI_CODING_K3_STYLE_MODEL_IDS: models
+// whose /coding/v1/models entry reports effort levels and dynamic tool loading
+// (tools declared in later system messages). Highspeed reports neither and
+// rejects tool-bearing system messages with a 400.
+var kimiCodingK3StyleModelIDs = stringSet("k3", "k3-256k", "kimi-for-coding")
 
 var openRouterKimiK3ModelIds = stringSet("moonshotai/kimi-k3", "~moonshotai/kimi-latest")
 
@@ -119,6 +124,23 @@ func supportsAnthropicMidConvoEffort(modelID string) bool {
 	return regexp.MustCompile(`^claude-opus-(?:5|5[.-]5)(?:-\d{8})?$`).MatchString(id) ||
 		regexp.MustCompile(`^claude-(?:sonnet|haiku)-5[.-]5(?:-\d{8})?$`).MatchString(id) ||
 		regexp.MustCompile(`^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`).MatchString(id)
+}
+
+// anthropicDisabledThinkingModels is pi's ANTHROPIC_DISABLED_THINKING_MODELS:
+// Claude models that accept `thinking: {type: "disabled"}` alongside
+// per-message effort. Opus 5.5, Sonnet 5.5, Fable 5.1, and Mythos 5.1 reject
+// it.
+// https://platform.claude.com/docs/en/build-with-claude/thinking#configuring-thinking
+var anthropicDisabledThinkingModels = stringSet("claude-opus-5", "claude-haiku-5-5", "claude-haiku-5.5")
+
+// supportsAnthropicDisabledThinkingWithMidConvoEffort (pi:
+// supportsAnthropicDisabledThinkingWithMidConvoEffort). Strips OpenRouter's
+// "anthropic/" or "~anthropic/" prefix and any dated snapshot suffix.
+func supportsAnthropicDisabledThinkingWithMidConvoEffort(modelID string) bool {
+	id := strings.ToLower(modelID)
+	id = regexp.MustCompile(`^~?anthropic/`).ReplaceAllString(id, "")
+	id = regexp.MustCompile(`-\d{8}$`).ReplaceAllString(id, "")
+	return anthropicDisabledThinkingModels[id]
 }
 
 // supportsAnthropicMidConvoSystemMessages reports whether the exact model id
@@ -736,9 +758,10 @@ func applyAnthropicMessagesCompatMetadata(model *ai.Model) {
 	compat := getAnthropicMessagesCompat(string(model.Provider), model.ID)
 	if compat != nil {
 		mergeAnthropicMessagesCompat(model, compat)
-		if compat.SupportsMidConvoEffort != nil {
-			// pi: mergeThinkingLevelMap(model, { off: null }) — the effort
-			// transport accepts an explicit off level.
+		if compat.SupportsMidConvoEffort != nil &&
+			!supportsAnthropicDisabledThinkingWithMidConvoEffort(model.ID) {
+			// pi: mergeThinkingLevelMap(model, { off: null }) — Opus 5.5 and
+			// friends reject disabled thinking, so off is not a valid level.
 			mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil})
 		}
 	}
@@ -903,6 +926,11 @@ var openAIMidConvoSystemMessageModelIDs = openAIToolSearchModelIDs
 var openAICodexAdditionalToolsModelIDs = stringSet(
 	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol",
 )
+
+// openAIMidConvoEffortModelIDs is pi's OPENAI_MID_CONVO_EFFORT_MODEL_IDS.
+// OpenAI documents configuration_update for the GPT-6 family.
+// https://developers.openai.com/api/docs/guides/reasoning
+var openAIMidConvoEffortModelIDs = stringSet("gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol")
 
 // applyOpenAIToolSearchMetadata (pi: applyOpenAIToolSearchMetadata).
 func applyOpenAIToolSearchMetadata(model *ai.Model) {
@@ -1111,6 +1139,21 @@ func applyOpenAIExplicitPromptCacheMetadata(model *ai.Model) {
 		return
 	}
 	mergeOpenAIResponsesCompat(model, &ai.OpenAIResponsesCompat{SupportsExplicitPromptCacheMode: lo.ToPtr(true)})
+}
+
+// applyOpenAIMidConvoEffortMetadata (pi:
+// applyOpenAIMidConvoEffortMetadata). GPT-6 models accept
+// `configuration_update` input items that change the reasoning effort without
+// changing the cached prompt prefix. Not enabled for openai-codex (Codex CLI
+// keeps it behind a flag that is off by default) or proxies.
+func applyOpenAIMidConvoEffortMetadata(model *ai.Model) {
+	if model.Provider != ai.ProviderOpenAI || model.API != ai.ApiOpenAIResponses {
+		return
+	}
+	if !openAIMidConvoEffortModelIDs[model.ID] {
+		return
+	}
+	mergeOpenAIResponsesCompat(model, &ai.OpenAIResponsesCompat{SupportsMidConvoEffort: lo.ToPtr(true)})
 }
 
 // supportsOpenAiXhigh (pi).

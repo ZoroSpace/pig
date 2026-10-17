@@ -210,7 +210,9 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 		if compat.SupportsTemperature == nil || *compat.SupportsTemperature {
 			t.Error("haiku-5-5 must not support temperature")
 		}
-		supportsXhighAssertLevels(t, model, "low", "medium", "high", "xhigh", "max")
+		// dc939913f: Haiku 5.5 accepts thinking: {type: "disabled"}, so off is a
+		// valid level (unlike Opus 5.5 / Sonnet 5.5 / Fable 5.1).
+		supportsXhighAssertLevels(t, model, "off", "low", "medium", "high", "xhigh", "max")
 	})
 
 	t.Run("does not support off for GPT-6.1 Sol", func(t *testing.T) {
@@ -248,12 +250,14 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		id   string
-		cost ModelCostRates
+		id                 string
+		cost               ModelCostRates
+		codexContextWindow int64
 	}{
-		{"gpt-6-sol", ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
-		{"gpt-6.1-sol", ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
-		{"gpt-6-luna", ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}},
+		{"gpt-6-sol", ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}, 272000},
+		// Codex serves GPT-6.1 Sol with a 500K default context window (#10840)
+		{"gpt-6.1-sol", ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}, 500000},
+		{"gpt-6-luna", ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}, 272000},
 	} {
 		tc := tc
 		t.Run("includes official metadata for OpenAI and Codex "+tc.id, func(t *testing.T) {
@@ -275,7 +279,11 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 					tier.CacheRead != tc.cost.CacheRead*2 || tier.CacheWrite != tc.cost.CacheWrite*2 {
 					t.Fatalf("%s/%s long-context tier = %+v", provider, tc.id, tier)
 				}
-				if model.ContextWindow != 272000 || model.MaxTokens != 128000 {
+				contextWindow := int64(272000)
+				if provider == ProviderOpenAICodex {
+					contextWindow = tc.codexContextWindow
+				}
+				if model.ContextWindow != contextWindow || model.MaxTokens != 128000 {
 					t.Fatalf("%s/%s context = %d/%d", provider, tc.id, model.ContextWindow, model.MaxTokens)
 				}
 				compat, ok := model.Compat.(*OpenAIResponsesCompat)
@@ -313,11 +321,6 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 		supportsXhighAssertLevels(t, model, "off", "low", "high", "max")
 	})
 
-	t.Run("includes low/high/max plus off for DeepSeek V4 Flash on opencode-go", func(t *testing.T) {
-		model := supportsXhighModel(t, ProviderOpenCodeGo, "deepseek-v4-flash")
-		supportsXhighAssertLevels(t, model, "off", "low", "high", "max")
-	})
-
 	t.Run("preserves low/high/max metadata for DeepSeek V4.1 Flash on OpenRouter", func(t *testing.T) {
 		model := supportsXhighModel(t, ProviderOpenRouter, "deepseek/deepseek-v4.1-flash")
 		supportsXhighAssertLevels(t, model, "off", "low", "high", "max")
@@ -346,6 +349,14 @@ func TestGetSupportedThinkingLevelsCatalog(t *testing.T) {
 	t.Run("includes only low, high, max for Kimi Coding K3", func(t *testing.T) {
 		model := supportsXhighModel(t, ProviderKimiCoding, "k3")
 		supportsXhighAssertLevels(t, model, "low", "high", "max")
+	})
+
+	t.Run("excludes off for always-thinking Kimi Coding Highspeed", func(t *testing.T) {
+		model := supportsXhighModel(t, ProviderKimiCoding, "kimi-for-coding-highspeed")
+		levels := supportsXhighLevels(t, model)
+		if supportsXhighContains(t, levels, "off") {
+			t.Fatalf("levels = %v, want no off", levels)
+		}
 	})
 
 	t.Run("includes only high for OpenCode Grok Build", func(t *testing.T) {

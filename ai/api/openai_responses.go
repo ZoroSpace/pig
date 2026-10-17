@@ -40,6 +40,21 @@ var openAIResponsesToolCallProviders = map[string]struct{}{
 // https://github.com/earendil-works/pi/issues/6265
 const openAIResponsesMinOutputTokens = int64(16)
 
+// Fixed reasoning.effort while configuration_update items carry the thinking
+// level (pi: CONFIGURATION_UPDATE_REQUEST_EFFORT).
+const configurationUpdateRequestEffort = "medium"
+
+// isChatGPTSignIn reports whether the credential is a Sign in with ChatGPT
+// access token: OpenAI API keys start with `sk-`; a different credential sent
+// directly to OpenAI is a Sign in with ChatGPT access token (pi:
+// isChatGPTSignIn).
+func isChatGPTSignIn(model *types.Model, apiKey string) bool {
+	return model.Provider == "openai" &&
+		model.BaseURL == "https://api.openai.com/v1" &&
+		apiKey != "" &&
+		!strings.HasPrefix(apiKey, "sk-")
+}
+
 // OpenAIResponsesOptions are the openai-responses request options (pi:
 // OpenAIResponsesOptions extends StreamOptions).
 type OpenAIResponsesOptions struct {
@@ -128,6 +143,7 @@ type resolvedOpenAIResponsesCompat struct {
 	supportsToolSearch              bool
 	supportsExplicitPromptCacheMode bool
 	supportsMaxOutputTokens         bool
+	supportsMidConvoEffort          bool
 }
 
 // getResponsesCompat resolves the model's openai-responses compat with
@@ -144,6 +160,7 @@ func getResponsesCompat(model *types.Model) resolvedOpenAIResponsesCompat {
 		supportsToolSearch:              false,
 		supportsExplicitPromptCacheMode: false,
 		supportsMaxOutputTokens:         true,
+		supportsMidConvoEffort:          false,
 	}
 	if compat == nil {
 		return resolved
@@ -178,7 +195,27 @@ func getResponsesCompat(model *types.Model) resolvedOpenAIResponsesCompat {
 	if compat.SupportsMaxOutputTokens != nil {
 		resolved.supportsMaxOutputTokens = *compat.SupportsMaxOutputTokens
 	}
+	if compat.SupportsMidConvoEffort != nil {
+		resolved.supportsMidConvoEffort = *compat.SupportsMidConvoEffort
+	}
 	return resolved
+}
+
+// getConfigurationUpdateEffort returns the effort to send in
+// configuration_update items, or nil to send it as reasoning.effort (pi:
+// getConfigurationUpdateEffort).
+func getConfigurationUpdateEffort(model *types.Model, options *OpenAIResponsesOptions, compat resolvedOpenAIResponsesCompat) *string {
+	if !compat.supportsMidConvoEffort ||
+		options == nil || options.ReasoningEffort == "" ||
+		// Sign in with ChatGPT rejects configuration_update items.
+		isChatGPTSignIn(model, options.APIKey) {
+		return nil
+	}
+	effort := string(options.ReasoningEffort)
+	if mapped, ok := model.ThinkingLevelMap[options.ReasoningEffort]; ok && mapped != nil {
+		effort = *mapped
+	}
+	return &effort
 }
 
 // getResponsesPromptCacheRetention resolves prompt_cache_retention (pi:
@@ -225,6 +262,8 @@ func streamOpenAIResponses(ctx context.Context, model *types.Model, llmContext *
 	normalizedContext := utils.ResolveTranscript(llmContext, getResponsesCompat(model).supportsMidConvoSystemMessages)
 
 	go func() {
+		compat := getResponsesCompat(model)
+		configurationUpdateEffort := getConfigurationUpdateEffort(model, options, compat)
 		output := &types.AssistantMessage{
 			Role:       types.RoleAssistant,
 			Content:    []types.Content{},
@@ -234,6 +273,9 @@ func streamOpenAIResponses(ctx context.Context, model *types.Model, llmContext *
 			Usage:      types.Usage{},
 			StopReason: types.StopReasonPending,
 			Timestamp:  time.Now().UnixMilli(),
+		}
+		if configurationUpdateEffort != nil {
+			output.ProviderThinkingLevel = *configurationUpdateEffort
 		}
 
 		// Content snapshotting is owned by ProcessResponsesStream: its block
@@ -286,10 +328,9 @@ func streamOpenAIResponses(ctx context.Context, model *types.Model, llmContext *
 			if cacheRetention != types.CacheRetentionNone {
 				cacheSessionID = options.SessionID
 			}
-			compat := getResponsesCompat(model)
 			grammarToolInputProperties := CreateGrammarToolInputProperties(utils.GetDeclaredTools(normalizedContext.Messages), compat.supportsOpenAIGrammarTools)
 			client := createResponsesClient(model, normalizedContext, apiKey, options.Headers, options.Fetch, cacheSessionID, compat)
-			params := buildResponsesParams(model, normalizedContext, options, compat, grammarToolInputProperties)
+			params := buildResponsesParams(model, normalizedContext, options, compat, grammarToolInputProperties, configurationUpdateEffort)
 			if options.OnPayload != nil {
 				if next := options.OnPayload(params, model); next != nil {
 					if nextParams, ok := next.(map[string]any); ok {
@@ -507,7 +548,7 @@ func (c *openAIResponsesClient) createResponse(ctx context.Context, params map[s
 }
 
 // buildResponsesParams builds the Responses request body (pi: buildParams).
-func buildResponsesParams(model *types.Model, llmContext *types.TranscriptContext, options *OpenAIResponsesOptions, compat resolvedOpenAIResponsesCompat, grammarToolInputProperties map[string]string) map[string]any {
+func buildResponsesParams(model *types.Model, llmContext *types.TranscriptContext, options *OpenAIResponsesOptions, compat resolvedOpenAIResponsesCompat, grammarToolInputProperties map[string]string, configurationUpdateEffort *string) map[string]any {
 	transcriptTools := utils.ResolveTranscriptTools(
 		llmContext.Messages,
 		compat.supportsAdditionalTools || compat.supportsToolSearch,
@@ -517,6 +558,7 @@ func buildResponsesParams(model *types.Model, llmContext *types.TranscriptContex
 		SupportsMidConvoSystemMessages: lo.ToPtr(compat.supportsMidConvoSystemMessages),
 		SupportsAdditionalTools:        lo.ToPtr(compat.supportsAdditionalTools),
 		SupportsToolSearch:             lo.ToPtr(compat.supportsToolSearch),
+		ConfigurationUpdateEffort:      configurationUpdateEffort,
 		ToolOptions: &ConvertResponsesToolsOptions{
 			SupportsStrictMode:         &compat.supportsStrictMode,
 			SupportsOpenAIGrammarTools: &compat.supportsOpenAIGrammarTools,
@@ -572,11 +614,15 @@ func buildResponsesParams(model *types.Model, llmContext *types.TranscriptContex
 	}
 	if model.Reasoning {
 		if reasoningEffort != "" {
-			effort := string(reasoningEffort)
+			requestedEffort := string(reasoningEffort)
 			if options.ReasoningEffort != "" {
 				if mapped, ok := model.ThinkingLevelMap[options.ReasoningEffort]; ok && mapped != nil {
-					effort = *mapped
+					requestedEffort = *mapped
 				}
+			}
+			effort := requestedEffort
+			if configurationUpdateEffort != nil {
+				effort = configurationUpdateRequestEffort
 			}
 			summary := options.ReasoningSummary
 			if summary == "" {

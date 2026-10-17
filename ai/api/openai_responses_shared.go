@@ -133,6 +133,16 @@ type ConvertResponsesMessagesOptions struct {
 	SupportsAdditionalTools        *bool
 	SupportsToolSearch             *bool
 	ToolOptions                    *ConvertResponsesToolsOptions
+	// ConfigurationUpdateEffort is the effort for the reply being generated.
+	// When set, the thinking level is sent as configuration_update items
+	// instead of a changing reasoning.effort, which would invalidate the
+	// prompt cache. Each item sets the effort from that point on: one goes
+	// before every earlier reply with the level recorded on it
+	// (ProviderThinkingLevel), and one with this effort goes at the end.
+	// Earlier input therefore never changes. OpenAI documents the item before
+	// user messages only. After tool results it was verified on gpt-6-luna
+	// (October 2026) to be accepted and to apply to the next reply.
+	ConfigurationUpdateEffort *string
 }
 
 // ConvertResponsesToolsOptions are the tool-conversion options (pi:
@@ -269,6 +279,12 @@ func ConvertResponsesMessages(model *types.Model, llmContext *types.TranscriptCo
 	includeInitialSystemMessage := true
 	if options != nil && options.IncludeSystemPrompt != nil {
 		includeInitialSystemMessage = *options.IncludeSystemPrompt
+	}
+	pushConfigurationUpdate := func(effort string) {
+		messages = append(messages, map[string]any{
+			"type":      "configuration_update",
+			"reasoning": map[string]any{"effort": effort},
+		})
 	}
 	instructionRole := "system"
 	supportsDeveloperRole := true
@@ -449,6 +465,9 @@ func ConvertResponsesMessages(model *types.Model, llmContext *types.TranscriptCo
 				if len(output) == 0 {
 					continue
 				}
+				if options != nil && options.ConfigurationUpdateEffort != nil && isSameModel && m.ProviderThinkingLevel != "" {
+					pushConfigurationUpdate(m.ProviderThinkingLevel)
+				}
 				messages = append(messages, output...)
 			case types.ToolResultMessage:
 				parts := strings.SplitN(m.ToolCallID, "|", 2)
@@ -479,6 +498,9 @@ func ConvertResponsesMessages(model *types.Model, llmContext *types.TranscriptCo
 		}
 	}
 
+	if options != nil && options.ConfigurationUpdateEffort != nil {
+		pushConfigurationUpdate(*options.ConfigurationUpdateEffort)
+	}
 	return messages
 }
 

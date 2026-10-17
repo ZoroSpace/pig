@@ -279,6 +279,43 @@ func TestReasoningDetailsMergesConsecutiveTextAndSummaryDeltas(t *testing.T) {
 	assertReplayedReasoningDetails(t, srv, captured, assistantMessage, expectedDetails)
 }
 
+// https://github.com/earendil-works/pi/issues/10926
+func TestReasoningAndContentInOneDelta(t *testing.T) {
+	t.Run("places thinking before text when one delta carries reasoning_content and content", func(t *testing.T) {
+		srv, _ := reasoningDetailsServer(t, reasoningDetailsChunk(t, `{"role":"assistant","reasoning_content":"thinking","content":"answer"}`, `"stop"`))
+
+		assistantMessage := runReasoningDetailsStream(t, srv, nil)
+
+		if len(assistantMessage.Content) != 2 {
+			t.Fatalf("content = %#v, want thinking + text", assistantMessage.Content)
+		}
+		thinking, ok := assistantMessage.Content[0].(types.ThinkingContent)
+		if !ok || thinking.Thinking != "thinking" || thinking.ThinkingSignature != "reasoning_content" {
+			t.Fatalf("content[0] = %#v", assistantMessage.Content[0])
+		}
+		text, ok := assistantMessage.Content[1].(types.TextContent)
+		if !ok || text.Text != "answer" {
+			t.Fatalf("content[1] = %#v", assistantMessage.Content[1])
+		}
+	})
+
+	t.Run("places thinking before text when one delta carries reasoning_details and content", func(t *testing.T) {
+		srv, _ := reasoningDetailsServer(t, reasoningDetailsChunk(t, `{"reasoning_details":[{"type":"reasoning.encrypted","id":"call_1","data":"encrypted-signature"}],"content":"answer"}`, `"stop"`))
+
+		assistantMessage := runReasoningDetailsStream(t, srv, nil)
+
+		if len(assistantMessage.Content) != 2 {
+			t.Fatalf("content = %#v, want thinking + text", assistantMessage.Content)
+		}
+		if _, ok := assistantMessage.Content[0].(types.ThinkingContent); !ok {
+			t.Fatalf("content[0] = %#v, want thinking", assistantMessage.Content[0])
+		}
+		if _, ok := assistantMessage.Content[1].(types.TextContent); !ok {
+			t.Fatalf("content[1] = %#v, want text", assistantMessage.Content[1])
+		}
+	})
+}
+
 // pi: openai-completions-vllm-priority.test.ts — compat.vllmPriority becomes
 // the top-level priority request field.
 func TestVllmPrioritySentAsTopLevelRequestField(t *testing.T) {

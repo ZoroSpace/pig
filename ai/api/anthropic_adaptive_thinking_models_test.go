@@ -43,9 +43,6 @@ func TestAnthropicAdaptiveThinkingModelMetadata(t *testing.T) {
 		"anthropic/claude-opus-4-8",
 		"anthropic/claude-opus-5",
 		"anthropic/claude-sonnet-5",
-		"kimi-coding/kimi-for-coding",
-		"kimi-coding/k3",
-		"kimi-coding/kimi-for-coding-highspeed",
 	}
 	var flagged []string
 	for providerID, models := range catalogModelsSorted(t) {

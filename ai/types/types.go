@@ -1480,6 +1480,12 @@ type OpenAIResponsesCompat struct {
 	// max_output_tokens parameter. Some Codex-protocol gateways reject it.
 	// Default: true.
 	SupportsMaxOutputTokens *bool `json:"supportsMaxOutputTokens,omitempty"`
+	// SupportsMidConvoEffort: whether thinking level changes are sent as
+	// configuration_update input items instead of changing reasoning.effort,
+	// so a change keeps the prompt cache. Only used by the openai-responses
+	// API, and ignored with Sign in with ChatGPT on the openai provider.
+	// Default: false.
+	SupportsMidConvoEffort *bool `json:"supportsMidConvoEffort,omitempty"`
 }
 
 // AnthropicMessagesCompat carries compatibility settings for

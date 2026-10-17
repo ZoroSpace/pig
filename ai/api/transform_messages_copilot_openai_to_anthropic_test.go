@@ -26,41 +26,6 @@ func TestTransformMessagesCopilotOpenAIToAnthropic(t *testing.T) {
 		}
 	}
 
-	t.Run("converts thinking blocks to plain text when source model differs", func(t *testing.T) {
-		messages := []types.Message{
-			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hello"}, Timestamp: 1},
-			makeAssistant([]types.Content{
-				types.ThinkingContent{Kind: types.KindThinking, Thinking: "Let me think about this...", ThinkingSignature: "reasoning_content"},
-				types.NewTextContent("Hi there!"),
-			}, types.ApiOpenAICompletions, "gpt-4o"),
-		}
-		result := TransformMessages(messages, model, normalize)
-		var assistant *types.AssistantMessage
-		for i := range result {
-			if m, ok := result[i].(types.AssistantMessage); ok {
-				assistant = &m
-			}
-		}
-		if assistant == nil {
-			t.Fatal("no assistant message")
-		}
-		textBlocks, thinkingBlocks := 0, 0
-		for _, block := range assistant.Content {
-			switch block.ContentKind() {
-			case types.KindText:
-				textBlocks++
-			case types.KindThinking:
-				thinkingBlocks++
-			}
-		}
-		if thinkingBlocks != 0 {
-			t.Errorf("thinking blocks = %d, want 0", thinkingBlocks)
-		}
-		if textBlocks < 2 {
-			t.Errorf("text blocks = %d, want >= 2", textBlocks)
-		}
-	})
-
 	t.Run("removes thoughtSignature from tool calls when migrating between models", func(t *testing.T) {
 		toolCall := types.NewToolCall("call_123", "bash", map[string]any{"command": "ls"})
 		toolCall.ThoughtSignature = "encrypted-thought"

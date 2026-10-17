@@ -228,6 +228,88 @@ func TestBedrockConvertMessagesSkipsUnknownContentTypes(t *testing.T) {
 		}
 	})
 
+	// Regression for #10794: Claude rejects error tool results that contain
+	// images.
+	t.Run("moves images of error tool results after the tool results", func(t *testing.T) {
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{
+			types.AssistantMessage{
+				Role: types.RoleAssistant,
+				Content: []types.Content{
+					types.NewToolCall("call-1", "codemode", map[string]any{}),
+					types.NewToolCall("call-2", "read", map[string]any{}),
+				},
+				API: "bedrock-converse-stream", Provider: "amazon-bedrock", Model: bedrockBaseModel.ID,
+				Usage: emptyUsage(), StopReason: types.StopReasonToolUse, Timestamp: 1,
+			},
+			types.ToolResultMessage{
+				Role: types.RoleToolResult, ToolCallID: "call-1", ToolName: "codemode",
+				Content: []types.Content{
+					types.NewTextContent("Script failed"),
+					types.NewImageContent("AAAA", "image/png"),
+					types.NewTextContent("Script error"),
+				},
+				IsError: true, Timestamp: 2,
+			},
+			types.ToolResultMessage{
+				Role: types.RoleToolResult, ToolCallID: "call-2", ToolName: "read",
+				Content: []types.Content{types.NewImageContent("BBBB", "image/png")},
+				IsError: false, Timestamp: 3,
+			},
+		}})
+		payload := captureBedrockPayload(t, context, bedrockBaseModel)
+		if len(payload.Messages) != 2 {
+			t.Fatalf("unexpected messages: %+v", payload.Messages)
+		}
+		content := payload.Messages[1].Content
+		if len(content) != 4 {
+			t.Fatalf("content length = %d, want 4: %+v", len(content), content)
+		}
+		first := content[0].ToolResult
+		if first == nil || first.ToolUseID != "call-1" || first.Status != "error" {
+			t.Fatalf("content[0] = %+v", content[0])
+		}
+		if len(first.Content) != 3 || first.Content[0].Text == nil || *first.Content[0].Text != "Script failed" ||
+			first.Content[1].Text == nil || *first.Content[1].Text != "(image attached after the tool results)" ||
+			first.Content[2].Text == nil || *first.Content[2].Text != "Script error" {
+			t.Fatalf("first tool result content = %+v", first.Content)
+		}
+		second := content[1].ToolResult
+		if second == nil || second.Status != "success" || len(second.Content) != 1 ||
+			second.Content[0].Image == nil || second.Content[0].Image.Format != "png" {
+			t.Fatalf("content[1] = %+v", content[1])
+		}
+		if content[2].Text == nil || *content[2].Text != "Images from the error result of tool call call-1 (codemode):" {
+			t.Fatalf("content[2] = %+v", content[2])
+		}
+		if content[3].Image == nil || content[3].Image.Format != "png" {
+			t.Fatalf("content[3] = %+v", content[3])
+		}
+	})
+
+	t.Run("keeps images in error tool results for non-Claude models", func(t *testing.T) {
+		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{
+			types.ToolResultMessage{
+				Role: types.RoleToolResult, ToolCallID: "call-1", ToolName: "codemode",
+				Content: []types.Content{
+					types.NewTextContent("Script failed"),
+					types.NewImageContent("AAAA", "image/png"),
+				},
+				IsError: true, Timestamp: 1,
+			},
+		}})
+		payload := captureBedrockPayload(t, context, bedrockNovaModel)
+		if len(payload.Messages) != 1 || len(payload.Messages[0].Content) != 1 {
+			t.Fatalf("unexpected messages: %+v", payload.Messages)
+		}
+		result := payload.Messages[0].Content[0].ToolResult
+		if result == nil || result.Status != "error" || len(result.Content) != 2 {
+			t.Fatalf("tool result = %+v", result)
+		}
+		if result.Content[0].Text == nil || *result.Content[0].Text != "Script failed" || result.Content[1].Image == nil {
+			t.Fatalf("tool result content = %+v", result.Content)
+		}
+	})
+
 	t.Run("skips assistant messages with only unknown content blocks", func(t *testing.T) {
 		context := utils.NormalizeContext(&types.Context{Messages: []types.Message{types.AssistantMessage{
 			Role:       types.RoleAssistant,

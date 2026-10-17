@@ -9,7 +9,7 @@ import (
 )
 
 // OpenCodeGoProvider is the built-in OpenCode Go provider (pi:
-// opencodeGoProvider) — a three-protocol provider; the catalog routes per
+// opencodeGoProvider) — a four-protocol provider; the catalog routes per
 // model.
 func OpenCodeGoProvider() ai.Provider {
 	return ai.CreateProvider(&ai.CreateProviderOptions{
@@ -19,11 +19,13 @@ func OpenCodeGoProvider() ai.Provider {
 			APIKey: auth.EnvAPIKeyAuth("OpenCode API key", []string{"OPENCODE_API_KEY"}),
 		},
 		Models: GetBuiltinModels(types.ProviderOpenCodeGo),
-		// v0.86.0: session-header wrapper (pi: #9326).
+		// v0.86.0: session-header wrapper (pi: #9326). v1.3.0 adds
+		// google-generative-ai (the /inference/go base has a Gemini route).
 		APIByAPI: map[string]ai.ProviderStreams{
-			string(types.ApiAnthropicMessages): WithOpenCodeSessionHeader(api.AnthropicMessages{}),
-			string(types.ApiOpenAICompletions): WithOpenCodeSessionHeader(api.OpenAICompletions{}),
-			string(types.ApiOpenAIResponses):   WithOpenCodeSessionHeader(api.OpenAIResponses{}),
+			string(types.ApiAnthropicMessages):  WithOpenCodeSessionHeader(api.AnthropicMessages{}),
+			string(types.ApiGoogleGenerativeAI): WithOpenCodeSessionHeader(api.GoogleGenerativeAI{}),
+			string(types.ApiOpenAICompletions):  WithOpenCodeSessionHeader(api.OpenAICompletions{}),
+			string(types.ApiOpenAIResponses):    WithOpenCodeSessionHeader(api.OpenAIResponses{}),
 		},
 	})
 }

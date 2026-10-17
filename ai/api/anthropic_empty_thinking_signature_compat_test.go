@@ -145,29 +145,3 @@ func TestAnthropicEmptySignaturePreservedWhenAllowEmptySignatureEnabled(t *testi
 		t.Errorf("assistant block = %#v, want thinking with empty signature", block)
 	}
 }
-
-func TestAnthropicEmptySignatureAllowsForKimiCoding(t *testing.T) {
-	for _, modelID := range []string{"k3"} {
-		t.Run(modelID, func(t *testing.T) {
-			model := catalogAnthropicModel(t, types.ProviderKimiCoding, modelID)
-			if model.Provider != types.ProviderKimiCoding {
-				t.Fatalf("provider = %q, want kimi-coding", model.Provider)
-			}
-			compat, ok := model.Compat.(*types.AnthropicMessagesCompat)
-			if !ok || compat.AllowEmptySignature == nil || !*compat.AllowEmptySignature {
-				t.Fatal("expected catalog compat allowEmptySignature: true")
-			}
-			model.BaseURL = unreachableAnthropicBaseURL
-			payload := captureSimplePayload(t, model, emptySignatureTestContext(" ", "internal reasoning", types.ProviderKimiCoding, modelID), nil)
-			assistantMessages := findAssistantMessages(payload)
-			if len(assistantMessages) != 1 {
-				t.Fatalf("assistant messages = %#v, want one", assistantMessages)
-			}
-			content := normalizeAny(assistantMessages[0].(map[string]any)["content"])
-			block, _ := content[0].(map[string]any)
-			if block["type"] != "thinking" || block["thinking"] != "internal reasoning" || block["signature"] != "" {
-				t.Errorf("assistant block = %#v, want thinking with empty signature", block)
-			}
-		})
-	}
-}

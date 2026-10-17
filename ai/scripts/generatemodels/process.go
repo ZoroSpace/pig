@@ -748,73 +748,91 @@ func processMinimaxModels(data ModelsDevCatalog) []*ai.Model {
 	return models
 }
 
-// processKimiCodingModels (pi: loadModelsDevData kimi-code-plan-global block;
-// renamed from "kimi-for-coding" in v0.86.0).
+// kimiOpenAICompat is pi's KIMI_OPENAI_COMPAT: Kimi Chat Completions settings
+// shared by Moonshot and Kimi Coding.
+var kimiOpenAICompat = &ai.OpenAICompletionsCompat{
+	SupportsStore:           lo.ToPtr(false),
+	SupportsDeveloperRole:   lo.ToPtr(false),
+	SupportsReasoningEffort: lo.ToPtr(false),
+	MaxTokensField:          lo.ToPtr(ai.MaxTokensPlain),
+	SupportsStrictMode:      lo.ToPtr(false),
+	ThinkingFormat:          lo.ToPtr(ai.ThinkingFormatDeepSeek),
+}
+
+// kimiK3OpenAICompat is pi's KIMI_K3_OPENAI_COMPAT: Kimi K3-style models take
+// reasoning_effort and need earlier reasoning sent back.
+var kimiK3OpenAICompat = withCompat(kimiOpenAICompat, func(c *ai.OpenAICompletionsCompat) {
+	c.RequiresReasoningContentOnAssistantMessages = lo.ToPtr(true)
+	c.ThinkingFormat = lo.ToPtr(ai.ThinkingFormatOpenAI)
+	c.SupportsReasoningEffort = lo.ToPtr(true)
+})
+
+// processKimiCodingModels (pi: createKimiCodingModels, v1.3.0 a3f265b1c). Kimi
+// Coding uses Chat Completions, the same protocol as the official Kimi Code
+// client. The alias normalization from the pre-v1.3.0 Anthropic implementation
+// is gone with the re-land.
 func processKimiCodingModels(data ModelsDevCatalog) []*ai.Model {
 	provider := data["kimi-code-plan-global"]
 	if provider == nil || provider.Models == nil {
 		return nil
 	}
 	kimiModels := provider.Models
-	_, hasCanonicalModel := kimiModels["kimi-for-coding"]
-	kimiAliases := stringSet("k2p5", "k2p6", "k2p7")
 
 	var models []*ai.Model
 	for modelID, m := range kimiModels {
 		if !boolVal(m.ToolCall) {
 			continue
 		}
-		// models.dev may expose versioned aliases (e.g. k2p5/k2p6/k2p7).
-		// Normalize aliases to the canonical model id and drop duplicates when
-		// the canonical model exists.
-		if kimiAliases[modelID] && hasCanonicalModel {
-			continue
-		}
-		normalizedID := modelID
-		normalizedName := orString(m.Name, modelID)
-		if kimiAliases[modelID] {
-			normalizedID = "kimi-for-coding"
-			normalizedName = "Kimi For Coding"
-		}
-		isKimiK3 := normalizedID == "k3"
-		allowEmptySignature := isKimiK3 || normalizedID == "kimi-for-coding"
-		impliedCost := kimiCodingImpliedCosts[normalizedID]
+		isK3Style := kimiCodingK3StyleModelIDs[modelID]
+		impliedCost := kimiCodingImpliedCosts[modelID]
 
-		compat := &ai.AnthropicMessagesCompat{ForceAdaptiveThinking: lo.ToPtr(true)}
-		if allowEmptySignature {
-			compat.AllowEmptySignature = lo.ToPtr(true)
+		compat := copyOpenAICompat(kimiOpenAICompat)
+		if isK3Style {
+			compat = copyOpenAICompat(kimiK3OpenAICompat)
+		}
+		compat.SupportsMidConvoSystemMessages = lo.ToPtr(true)
+		if isK3Style {
+			compat.SupportsMidConvoToolAdditions = lo.ToPtr(true)
+		}
+
+		// K3-style models send reasoning_effort, so expose the effort values
+		// models.dev lists; Kimi Code reports every model as always-thinking.
+		thinkingLevelMap := ai.ThinkingLevelMap{ai.ModelThinkingOff: nil}
+		if isK3Style {
+			if effortLevels := getEffortThinkingLevelMap(m.ReasoningOptions); effortLevels != nil {
+				thinkingLevelMap = *effortLevels
+				thinkingLevelMap[ai.ModelThinkingOff] = nil
+			}
 		}
 
 		cost := modelsDevFlatCostOf(m.Cost)
-		if impliedCost.Input != 0 || impliedCost.Output != 0 || impliedCost.CacheRead != 0 || impliedCost.CacheWrite != 0 {
-			if cost.Input == 0 {
-				cost.Input = impliedCost.Input
-			}
-			if cost.Output == 0 {
-				cost.Output = impliedCost.Output
-			}
-			if cost.CacheRead == 0 {
-				cost.CacheRead = impliedCost.CacheRead
-			}
-			if cost.CacheWrite == 0 {
-				cost.CacheWrite = impliedCost.CacheWrite
-			}
+		if cost.Input == 0 {
+			cost.Input = impliedCost.Input
+		}
+		if cost.Output == 0 {
+			cost.Output = impliedCost.Output
+		}
+		if cost.CacheRead == 0 {
+			cost.CacheRead = impliedCost.CacheRead
+		}
+		if cost.CacheWrite == 0 {
+			cost.CacheWrite = impliedCost.CacheWrite
 		}
 
 		models = append(models, &ai.Model{
-			ID:            normalizedID,
-			Name:          normalizedName,
-			API:           ai.ApiAnthropicMessages,
-			Provider:      ai.ProviderKimiCoding,
-			BaseURL:       "https://api.kimi.com/coding",
-			Compat:        compat,
-			Reasoning:     isKimiK3 || boolVal(m.Reasoning),
-			Input:         inputOf(m),
-			Cost:          cost,
-			ContextWindow: int64Or(limitContext(m), 4096),
-			MaxTokens:     int64Or(limitOutput(m), 4096),
+			ID:               modelID,
+			Name:             orString(m.Name, modelID),
+			API:              ai.ApiOpenAICompletions,
+			Provider:         ai.ProviderKimiCoding,
+			BaseURL:          "https://api.kimi.com/coding/v1",
+			Compat:           compat,
+			Reasoning:        boolVal(m.Reasoning),
+			Input:            inputOf(m),
+			Cost:             cost,
+			ContextWindow:    int64Or(limitContext(m), 4096),
+			MaxTokens:        int64Or(limitOutput(m), 4096),
+			ThinkingLevelMap: thinkingLevelMap,
 		})
-		recordModelsDevReasoningOptions("kimi-coding", normalizedID, m)
 	}
 	return models
 }
@@ -832,15 +850,6 @@ var moonshotVariants = []moonshotVariant{
 }
 
 func processMoonshotModels(data ModelsDevCatalog) []*ai.Model {
-	moonshotCompat := &ai.OpenAICompletionsCompat{
-		SupportsStore:           lo.ToPtr(false),
-		SupportsDeveloperRole:   lo.ToPtr(false),
-		SupportsReasoningEffort: lo.ToPtr(false),
-		MaxTokensField:          lo.ToPtr(ai.MaxTokensPlain),
-		SupportsStrictMode:      lo.ToPtr(false),
-		ThinkingFormat:          lo.ToPtr(ai.ThinkingFormatDeepSeek),
-	}
-
 	var models []*ai.Model
 	for _, variant := range moonshotVariants {
 		provider := data[variant.key]
@@ -852,11 +861,9 @@ func processMoonshotModels(data ModelsDevCatalog) []*ai.Model {
 				continue
 			}
 			isKimiK3 := modelID == "kimi-k3"
-			compat := copyOpenAICompat(moonshotCompat)
+			compat := copyOpenAICompat(kimiOpenAICompat)
 			if isKimiK3 {
-				compat.RequiresReasoningContentOnAssistantMessages = lo.ToPtr(true)
-				compat.ThinkingFormat = lo.ToPtr(ai.ThinkingFormatOpenAI)
-				compat.SupportsReasoningEffort = lo.ToPtr(true)
+				compat = copyOpenAICompat(kimiK3OpenAICompat)
 			}
 			// S17 (pi a2eef9eb6): Moonshot does not bill cache writes; models.dev
 			// lists the input rate as cache_write for Kimi K3, so the catalog cost
@@ -1252,8 +1259,8 @@ func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
 		basePath string
 	}
 	variants := []openCodeVariant{
-		{key: "opencode", provider: ai.ProviderOpenCode, basePath: "https://opencode.ai/zen"},
-		{key: "opencode-go", provider: ai.ProviderOpenCodeGo, basePath: "https://opencode.ai/zen/go"},
+		{key: "opencode", provider: ai.ProviderOpenCode, basePath: "https://opencode.ai/inference"},
+		{key: "opencode-go", provider: ai.ProviderOpenCodeGo, basePath: "https://opencode.ai/inference/go"},
 	}
 
 	var models []*ai.Model
@@ -1334,16 +1341,9 @@ func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
 
 			// Fix known mismatches between models.dev npm data and actual
 			// OpenCode Go endpoint behaviour. models.dev reports these models
-			// as @ai-sdk/anthropic, but the OpenCode Go endpoints either
-			// don't accept Anthropic SDK auth (MiniMax M2.7) or are served
-			// through the OpenAI-compatible /v1/chat/completions path (Qwen
-			// 3.5/3.6). Switch them to openai-completions so requests use
-			// Bearer auth and the standard /v1/chat/completions endpoint.
+			// as @ai-sdk/anthropic, but OpenCode Go serves them through the
+			// OpenAI-compatible /v1/chat/completions path (Qwen 3.5/3.6).
 			if variant.provider == ai.ProviderOpenCodeGo {
-				if modelID == "minimax-m2.7" {
-					apiKind = ai.ApiOpenAICompletions
-					baseURL = variant.basePath + "/v1"
-				}
 				if modelID == "qwen3.5-plus" || modelID == "qwen3.6-plus" {
 					apiKind = ai.ApiOpenAICompletions
 					baseURL = variant.basePath + "/v1"
@@ -1467,9 +1467,22 @@ func processGitHubCopilotModels(data ModelsDevCatalog) []*ai.Model {
 // URL, keys from platform.xiaomimimo.com); the three `xiaomi-token-plan-*`
 // providers cover prepaid Token Plan endpoints in cn / ams / sgp.
 func processXiaomiModels(data ModelsDevCatalog) []*ai.Model {
+	// MiMo Chat Completions only documents thinking.type enabled/disabled and
+	// rejects some reasoning_effort values (e.g. "minimal"). Xiaomi documents
+	// all effort levels as identical, so expose only off and high.
 	xiaomiCompat := &ai.OpenAICompletionsCompat{
+		SupportsReasoningEffort:                     lo.ToPtr(false),
 		RequiresReasoningContentOnAssistantMessages: lo.ToPtr(true),
-		ThinkingFormat: lo.ToPtr(ai.ThinkingFormatDeepSeek),
+		ThinkingFormat:                              lo.ToPtr(ai.ThinkingFormatDeepSeek),
+	}
+	xiaomiThinkingLevelMap := ai.ThinkingLevelMap{
+		ai.ModelThinkingOff:     lo.ToPtr("off"),
+		ai.ModelThinkingMinimal: nil,
+		ai.ModelThinkingLow:     nil,
+		ai.ModelThinkingMedium:  nil,
+		ai.ModelThinkingHigh:    lo.ToPtr("high"),
+		ai.ModelThinkingXHigh:   nil,
+		ai.ModelThinkingMax:     nil,
 	}
 	type xiaomiVariant struct {
 		source   string
@@ -1493,7 +1506,7 @@ func processXiaomiModels(data ModelsDevCatalog) []*ai.Model {
 			if !boolVal(m.ToolCall) || m.Status == "deprecated" {
 				continue
 			}
-			models = append(models, &ai.Model{
+			model := &ai.Model{
 				ID:            modelID,
 				Name:          modelsDevName(m, modelID),
 				API:           ai.ApiOpenAICompletions,
@@ -1505,8 +1518,11 @@ func processXiaomiModels(data ModelsDevCatalog) []*ai.Model {
 				Compat:        copyOpenAICompat(xiaomiCompat),
 				ContextWindow: int64Or(limitContext(m), 4096),
 				MaxTokens:     int64Or(limitOutput(m), 4096),
-			})
-			recordModelsDevReasoningOptions(string(variant.provider), modelID, m)
+			}
+			if model.Reasoning {
+				model.ThinkingLevelMap = cloneThinkingLevelMap(xiaomiThinkingLevelMap)
+			}
+			models = append(models, model)
 		}
 	}
 	return models

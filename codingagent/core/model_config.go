@@ -536,7 +536,7 @@ func validateOpenAIResponsesCompatFields(value map[string]any, path string, errs
 	allowed := map[string]bool{
 		"supportsDeveloperRole": true, "sessionAffinityFormat": true, "supportsLongCacheRetention": true,
 		"supportsStrictMode": true, "supportsOpenAIGrammarTools": true,
-		"supportsMaxOutputTokens": true,
+		"supportsMaxOutputTokens": true, "supportsMidConvoEffort": true,
 	}
 	matches := true
 	for key := range value {
@@ -548,7 +548,7 @@ func validateOpenAIResponsesCompatFields(value map[string]any, path string, errs
 	if !matches {
 		return false
 	}
-	for _, key := range []string{"supportsDeveloperRole", "supportsLongCacheRetention", "supportsStrictMode", "supportsOpenAIGrammarTools", "supportsMaxOutputTokens"} {
+	for _, key := range []string{"supportsDeveloperRole", "supportsLongCacheRetention", "supportsStrictMode", "supportsOpenAIGrammarTools", "supportsMaxOutputTokens", "supportsMidConvoEffort"} {
 		if entry, present := value[key]; present {
 			expectBool(entry, path+"."+key, errs)
 		}

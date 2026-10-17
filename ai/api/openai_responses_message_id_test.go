@@ -19,7 +19,7 @@ func TestOpenAIResponsesMessageIDConversion(t *testing.T) {
 		assistant := types.AssistantMessage{
 			Role: types.RoleAssistant,
 			Content: []types.Content{
-				types.NewThinkingContent("private reasoning"),
+				types.NewTextContent("first answer"),
 				types.NewTextContent("visible answer"),
 			},
 			API: types.ApiAnthropicMessages, Provider: types.ProviderAnthropic,

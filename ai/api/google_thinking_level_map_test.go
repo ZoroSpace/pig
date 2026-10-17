@@ -297,6 +297,31 @@ func TestGoogleThinkingLevelMapPreservesNativeMediumEffortForGemini31Pro(t *test
 	}
 }
 
+// Regression test for https://github.com/earendil-works/pi/issues/10890
+func TestGoogleThinkingLevelMapUsesThinkingLevelsForGemini4(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		capture func() *googleGenerateContentParams
+	}{
+		{"google", func() *googleGenerateContentParams {
+			return captureGooglePayload(t, googleTLMModel("gemini-4-argon", types.ThinkingLevelMap{}), types.ThinkingLevel(types.ModelThinkingMedium), nil)
+		}},
+		{"vertex", func() *googleGenerateContentParams {
+			return captureVertexPayload(t, vertexTLMModel("gemini-4-argon", types.ThinkingLevelMap{}), types.ThinkingLevel(types.ModelThinkingMedium), nil)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := tc.capture()
+			if payload.Config == nil || payload.Config.ThinkingConfig == nil {
+				t.Fatalf("config = %+v", payload.Config)
+			}
+			if payload.Config.ThinkingConfig.ThinkingLevel != "MEDIUM" || !payload.Config.ThinkingConfig.IncludeThoughts {
+				t.Fatalf("thinkingConfig = %+v", payload.Config.ThinkingConfig)
+			}
+		})
+	}
+}
+
 func TestGoogleThinkingLevelMapDisablesGemini25ThinkingWhenReasoningOmitted(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

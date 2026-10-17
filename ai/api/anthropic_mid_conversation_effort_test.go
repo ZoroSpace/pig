@@ -56,10 +56,17 @@ func midConvoAssistant(t *testing.T, model *types.Model, level string) types.Ass
 // captureMidConvo runs stream() with an OnPayload capture (pi: capture).
 func captureMidConvo(t *testing.T, model *types.Model, llmContext *types.TranscriptContext, effort AnthropicEffort) (map[string]any, types.AssistantMessage) {
 	t.Helper()
+	return captureMidConvoOpts(t, model, llmContext, effort, lo.ToPtr(true))
+}
+
+// captureMidConvoOpts is captureMidConvo with an explicit thinkingEnabled
+// (pi: capture(model, context, { effort, thinkingEnabled })).
+func captureMidConvoOpts(t *testing.T, model *types.Model, llmContext *types.TranscriptContext, effort AnthropicEffort, thinkingEnabled *bool) (map[string]any, types.AssistantMessage) {
+	t.Helper()
 	options := &AnthropicOptions{}
 	options.APIKey = "test-key"
 	options.CacheRetention = types.CacheRetentionNone
-	options.ThinkingEnabled = lo.ToPtr(true)
+	options.ThinkingEnabled = thinkingEnabled
 	if effort != "" {
 		options.Effort = effort
 	}
@@ -189,6 +196,54 @@ func TestAnthropicMidConversationEffortSkipsLegacyAndForeignAssistants(t *testin
 	}
 }
 
+func TestAnthropicMidConversationEffortOffThinkingDisabled(t *testing.T) {
+	model := managedModel(t)
+	model.ThinkingLevelMap = types.ThinkingLevelMap{
+		types.ModelThinkingMinimal: nil,
+		types.ModelThinkingLow:     lo.ToPtr("low"),
+		types.ModelThinkingMedium:  lo.ToPtr("medium"),
+		types.ModelThinkingHigh:    lo.ToPtr("high"),
+		types.ModelThinkingMax:     lo.ToPtr("max"),
+	}
+	// Anthropic rejects block_binding with disabled thinking, and rejects
+	// effort markers that change level (here low, then medium) while thinking
+	// is disabled.
+	payload, message := captureMidConvoOpts(t, model, utils.NormalizeContext(&types.Context{Messages: []types.Message{
+		midConvoUser("one", 1),
+		midConvoAssistant(t, model, "low"),
+		midConvoUser("two", 2),
+		midConvoAssistant(t, model, "medium"),
+		midConvoUser("three", 3),
+	}}), "", lo.ToPtr(false))
+	if !stringMapEqual(mapOf(t, payload["thinking"]), map[string]any{"type": "disabled"}) {
+		t.Errorf("thinking = %#v, want disabled", payload["thinking"])
+	}
+	if payload["output_config"] != nil {
+		t.Errorf("output_config = %#v, want undefined", payload["output_config"])
+	}
+	if markers := effortMarkers(t, payload); len(markers) != 0 {
+		t.Errorf("markers = %#v, want none", markers)
+	}
+	if message.ProviderThinkingLevel != "" {
+		t.Errorf("providerThinkingLevel = %q, want unset", message.ProviderThinkingLevel)
+	}
+}
+
+func TestAnthropicMidConversationEffortOffUnsupportedKeepsAdaptive(t *testing.T) {
+	payload, message := captureMidConvoOpts(t, managedModel(t), utils.NormalizeContext(&types.Context{Messages: []types.Message{midConvoUser("one", 1)}}), "", lo.ToPtr(false))
+	thinking := mapOf(t, payload["thinking"])
+	if thinking["type"] != "adaptive" {
+		t.Errorf("thinking = %#v, want adaptive", thinking)
+	}
+	markers := effortMarkers(t, payload)
+	if len(markers) != 1 || !stringMapEqual(markers[0], map[string]any{"role": "system", "content": []any{}, "output_config": map[string]any{"effort": "high"}}) {
+		t.Errorf("markers = %#v", markers)
+	}
+	if message.ProviderThinkingLevel != "high" {
+		t.Errorf("providerThinkingLevel = %q, want high", message.ProviderThinkingLevel)
+	}
+}
+
 func TestAnthropicMidConversationEffortUnsupportedModelsUseTopLevelEffort(t *testing.T) {
 	model := managedModel(t)
 	model.Compat = &types.AnthropicMessagesCompat{ForceAdaptiveThinking: lo.ToPtr(true)}
@@ -242,5 +297,28 @@ func TestAnthropicMidConversationEffortCatalogGates(t *testing.T) {
 	}
 	if compat.AllowedFallbackModels != nil {
 		t.Errorf("opus-4-8 fallbacks = %#v, want none", compat.AllowedFallbackModels)
+	}
+}
+
+// TestAnthropicDisabledThinkingCatalogGates ports pi's "supports off only on
+// managed models that accept disabled thinking" (dc939913f): Opus 5 and Haiku
+// 5.5 keep off valid (no null mapping), while Opus 5.5 / Sonnet 5.5 / Fable
+// 5.1 pin off to null.
+func TestAnthropicDisabledThinkingCatalogGates(t *testing.T) {
+	for _, id := range []string{"claude-opus-5", "claude-haiku-5-5"} {
+		model := catalogAnthropicModel(t, types.ProviderAnthropic, id)
+		compat, ok := model.Compat.(*types.AnthropicMessagesCompat)
+		if !ok || compat.SupportsMidConvoEffort == nil || !*compat.SupportsMidConvoEffort {
+			t.Errorf("%s must be mid-convo-effort managed", id)
+		}
+		if off, present := model.ThinkingLevelMap[types.ModelThinkingOff]; present && off == nil {
+			t.Errorf("%s thinkingLevelMap.off = null, want a valid level", id)
+		}
+	}
+	for _, id := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1"} {
+		model := catalogAnthropicModel(t, types.ProviderAnthropic, id)
+		if off, present := model.ThinkingLevelMap[types.ModelThinkingOff]; !present || off != nil {
+			t.Errorf("%s thinkingLevelMap.off = %#v, want null", id, off)
+		}
 	}
 }

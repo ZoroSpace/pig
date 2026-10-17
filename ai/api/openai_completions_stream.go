@@ -657,12 +657,9 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 			}
 
 			delta := choice.Delta
-			if delta.Content != nil && *delta.Content != "" {
-				block := ensureTextBlock()
-				block.content.Text += *delta.Content
-				push(types.AssistantMessageEvent{Type: types.EventTextDelta, ContentIndex: getContentIndex(block), Delta: *delta.Content, Partial: output})
-			}
-
+			// Handle reasoning before content: some proxies (e.g. LiteLLM)
+			// aggregate reasoning and answer into one delta, and the thinking
+			// block must precede the text block.
 			// Some endpoints return reasoning in reasoning_content
 			// (llama.cpp), or reasoning (other openai compatible endpoints).
 			// Use the first non-empty reasoning field to avoid duplication
@@ -687,6 +684,26 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 				block.content.Thinking += *field.value
 				push(types.AssistantMessageEvent{Type: types.EventThinkingDelta, ContentIndex: getContentIndex(block), Delta: *field.value, Partial: output})
 				break
+			}
+
+			if len(delta.ReasoningDetails) > 0 {
+				for _, detail := range delta.ReasoningDetails {
+					if !isOpenAIReasoningDetail(detail) {
+						continue
+					}
+					ensureThinkingBlock("")
+					// Keep provider replay data in the existing signature slot.
+					// OpenRouter streams reasoning_details as deltas: consecutive
+					// text/summary deltas are merged into logical entries, while
+					// encrypted entries remain opaque and discrete.
+					streamedReasoningDetails = appendOpenAIReasoningDetail(streamedReasoningDetails, detail.(map[string]any))
+				}
+			}
+
+			if delta.Content != nil && *delta.Content != "" {
+				block := ensureTextBlock()
+				block.content.Text += *delta.Content
+				push(types.AssistantMessageEvent{Type: types.EventTextDelta, ContentIndex: getContentIndex(block), Delta: *delta.Content, Partial: output})
 			}
 
 			for _, toolCall := range delta.ToolCalls {
@@ -716,20 +733,6 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 					}
 				}
 				push(types.AssistantMessageEvent{Type: types.EventToolCallDelta, ContentIndex: getContentIndex(block), Delta: deltaStr, Partial: output})
-			}
-
-			if len(delta.ReasoningDetails) > 0 {
-				for _, detail := range delta.ReasoningDetails {
-					if !isOpenAIReasoningDetail(detail) {
-						continue
-					}
-					ensureThinkingBlock("")
-					// Keep provider replay data in the existing signature slot.
-					// OpenRouter streams reasoning_details as deltas: consecutive
-					// text/summary deltas are merged into logical entries, while
-					// encrypted entries remain opaque and discrete.
-					streamedReasoningDetails = appendOpenAIReasoningDetail(streamedReasoningDetails, detail.(map[string]any))
-				}
 			}
 		}
 

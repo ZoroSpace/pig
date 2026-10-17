@@ -339,6 +339,10 @@ func UsesGoogleThinkingLevel(model *types.Model) bool {
 	if regexp.MustCompile(`gemini-3(?:\.\d+)?-(?:pro|flash)`).MatchString(id) {
 		return true
 	}
+	// Match Gemini 4 and later, such as gemini-4-argon (#10890).
+	if regexp.MustCompile(`gemini-(?:[4-9]|[1-9]\d)`).MatchString(id) {
+		return true
+	}
 	if id == "gemini-flash-latest" || id == "gemini-flash-lite-latest" {
 		return true
 	}

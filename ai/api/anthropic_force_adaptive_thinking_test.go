@@ -53,27 +53,6 @@ func TestAnthropicForceAdaptiveThinkingPayload(t *testing.T) {
 		}
 	})
 
-	for _, tc := range []struct {
-		modelID   string
-		reasoning types.ThinkingLevel
-		effort    string
-	}{
-		{"kimi-for-coding", types.ThinkingLevelMedium, "medium"},
-		{"k3", types.ThinkingLevelMax, "max"},
-		{"kimi-for-coding-highspeed", types.ThinkingLevelMedium, "medium"},
-	} {
-		t.Run("kimi-coding "+tc.modelID, func(t *testing.T) {
-			model := catalogAnthropicModel(t, types.ProviderKimiCoding, tc.modelID)
-			payload := capture(model, tc.reasoning)
-			if !stringMapEqual(payload.thinking, map[string]any{"type": "adaptive", "display": "summarized"}) {
-				t.Errorf("thinking = %#v", payload.thinking)
-			}
-			if !stringMapEqual(payload.outputConfig, map[string]any{"effort": tc.effort}) {
-				t.Errorf("output_config = %#v, want effort %s", payload.outputConfig, tc.effort)
-			}
-		})
-	}
-
 	t.Run("allows built-in adaptive models to opt out with forceAdaptiveThinking false", func(t *testing.T) {
 		model := catalogAnthropicModel(t, types.ProviderAnthropic, "claude-opus-4-8")
 		model.Compat = &types.AnthropicMessagesCompat{ForceAdaptiveThinking: lo.ToPtr(false)}

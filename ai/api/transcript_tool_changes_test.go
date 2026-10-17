@@ -660,6 +660,75 @@ func TestTranscriptKimiAdditionsInToolBearingSystemMessages(t *testing.T) {
 	}
 }
 
+// kimiCodingTranscriptModel fetches a generated kimi-coding model and points
+// it at the unreachable base URL used by the capture helper.
+func kimiCodingTranscriptModel(t *testing.T, id string) *types.Model {
+	t.Helper()
+	model, ok := ai.MODELS[types.ProviderKimiCoding][id]
+	if !ok {
+		t.Fatalf("model kimi-coding/%s not in catalog", id)
+	}
+	model.BaseURL = "http://127.0.0.1:9"
+	return &model
+}
+
+// TestTranscriptKimiCodingAnchorAdditions is pi #10720: Kimi Coding uses Chat
+// Completions so K3-style models keep added tools out of the top-level list.
+func TestTranscriptKimiCodingAnchorAdditions(t *testing.T) {
+	for _, modelID := range []string{"k3", "k3-256k", "kimi-for-coding"} {
+		modelID := modelID
+		t.Run("anchors additions for Kimi Coding "+modelID, func(t *testing.T) {
+			payload := captureTranscriptPayload(t, kimiCodingTranscriptModel(t, modelID), transcriptAdditionContext())
+
+			var toolNames []string
+			for _, tool := range payloadMaps(t, payload, "tools") {
+				function := tool["function"].(map[string]any)
+				name, _ := function["name"].(string)
+				toolNames = append(toolNames, name)
+			}
+			if !equalStrings(toolNames, []string{"base_tool"}) {
+				t.Fatalf("tools = %v", toolNames)
+			}
+			var bearerNames []string
+			for _, message := range payloadMaps(t, payload, "messages") {
+				if _, has := message["tools"]; !has {
+					continue
+				}
+				for _, tool := range payloadMaps(t, message, "tools") {
+					function := tool["function"].(map[string]any)
+					name, _ := function["name"].(string)
+					bearerNames = append(bearerNames, name)
+				}
+			}
+			if !equalStrings(bearerNames, []string{"late_tool"}) {
+				t.Fatalf("tool-bearing tools = %v", bearerNames)
+			}
+		})
+	}
+}
+
+// TestTranscriptKimiCodingHighspeedTopLevelTools is pi #10720: Kimi Code
+// Highspeed rejects tool-bearing system messages and keeps added tools
+// top-level.
+func TestTranscriptKimiCodingHighspeedTopLevelTools(t *testing.T) {
+	payload := captureTranscriptPayload(t, kimiCodingTranscriptModel(t, "kimi-for-coding-highspeed"), transcriptAdditionContext())
+
+	var toolNames []string
+	for _, tool := range payloadMaps(t, payload, "tools") {
+		function := tool["function"].(map[string]any)
+		name, _ := function["name"].(string)
+		toolNames = append(toolNames, name)
+	}
+	if !equalStrings(toolNames, []string{"base_tool", "late_tool"}) {
+		t.Fatalf("tools = %v", toolNames)
+	}
+	for _, message := range payloadMaps(t, payload, "messages") {
+		if _, has := message["tools"]; has {
+			t.Fatalf("unexpected dynamic tool message: %#v", message)
+		}
+	}
+}
+
 func TestTranscriptKimiK2SystemTextInline(t *testing.T) {
 	model := transcriptModelBase(t)
 	model.ID = "kimi-k2.7-code"

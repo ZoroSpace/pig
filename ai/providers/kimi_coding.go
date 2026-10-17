@@ -14,12 +14,12 @@ func KimiCodingProvider() ai.Provider {
 	return ai.CreateProvider(&ai.CreateProviderOptions{
 		ID:      "kimi-coding",
 		Name:    "Kimi For Coding",
-		BaseURL: "https://api.kimi.com/coding",
+		BaseURL: "https://api.kimi.com/coding/v1",
 		Auth: auth.ProviderAuth{
 			APIKey: auth.EnvAPIKeyAuth("Kimi API key", []string{"KIMI_API_KEY"}),
 			OAuth:  auth.KimiCodingOAuth{},
 		},
 		Models: GetBuiltinModels(types.ProviderKimiCoding),
-		API:    api.AnthropicMessages{},
+		API:    api.OpenAICompletions{},
 	})
 }
