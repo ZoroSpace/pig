@@ -20,7 +20,7 @@ pig 与 pi 做到**行为规格级对齐**：pi 的 TypeScript 代码就是 pig 
 
 这个项目始于一次学习：在研究 pi agent 时，一些 TypeScript 的写法读不透，索性把读到的逻辑翻成 Go——翻完发现理解顺畅多了，随即起意：干脆全部翻译、复刻一遍。
 
-于是用 pi + glm-5.3-flash 模型驱动开发，从零开始，10 天构建出 pig：底层的会话存储格式、中间层的 agent 循环与工具执行、流式事件协议，到上层的按键手感与交互体验，全部对齐 pi v0.84.3；随后又用一天追平 v0.85.1，现已对齐至 v0.87.1。自 2026-09-11 起（[b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)），pig 自身的开发也已切换到 pig 上进行（pi 保留作规格书与 fallback），此后长期维护：**pi 出一个新版本，就对齐一个版本。**
+于是用 pi + glm-5.3-flash 模型驱动开发，从零开始，10 天构建出 pig：底层的会话存储格式、中间层的 agent 循环与工具执行、流式事件协议，到上层的按键手感与交互体验，全部对齐 pi v0.84.3；随后又用一天追平 v0.85.1，现已对齐至 v1.3.0。自 2026-09-11 起（[b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)），pig 自身的开发也已切换到 pig 上进行（pi 保留作规格书与 fallback），此后长期维护：**pi 出一个新版本，就对齐一个版本。**
 
 这里的"对齐"是文件、函数、struct 级的一一对应：上游每改一处，pig 侧都能精确定位到对应的文件与函数。这种粒度既是当初看懂 pi 的方式，也是能持续跟进上游迭代的保障。个别包与实验特性因 pi 仍在快速迭代而暂缓（见[能力边界](#与-pi-的能力边界)），等上游稳定后会写进本项目。
 
@@ -35,10 +35,10 @@ pig 与 pi 做到**行为规格级对齐**：pi 的 TypeScript 代码就是 pig 
 | 启动开销 | CLI 启动约 25ms、峰值内存约 40MB |
 | 默认配置 | `~/.pig/agent`，项目级配置目录为 `.pig/` |
 | 会话格式 | 与 pi JSONL 双向兼容（v3/v4 两代格式实测互读） |
-| Provider | 39 家内置、约 1400 个模型、7 种 API 协议适配器 |
+| Provider | 41 家内置、约 1500 个模型、7 种 API 协议适配器 |
 | 真实服务验证 | DeepSeek、火山方舟 Coding Plan、Google（部分；其余见[验证分层](#provider实现--验证要分开看)） |
 | MCP 客户端 | 内建（pi 无原生支持，走社区扩展 pi-mcp-adapter） |
-| 测试 | 1800+ 测试函数 · 55 个包 · `-race` 全绿 |
+| 测试 | 2100+ 测试函数 · 44 个包 · `-race` 全绿 |
 | License | MIT |
 
 ## 快速开始
@@ -100,11 +100,11 @@ pig 是纯 Go 实现，编译产物为**单个静态二进制**，拷到任何 L
 
 这是 pig 最刻意的设计约束，也是它区别于"又一个 CLI agent"的地方：
 
-- **会话记录双向兼容**：pig 写的 JSONL 会话，pi 读得懂；反之亦然（用 pi v0.87.1 真实代码实测）。你今天的 pi 会话，明天可以在 pig 里继续，随时来回切换
+- **会话记录双向兼容**：pig 写的 JSONL 会话，pi 读得懂；反之亦然（用 pi v1.3.0 真实代码实测）。你今天的 pi 会话，明天可以在 pig 里继续，随时来回切换
 - **逐字段一致的模型目录**：内置模型 catalog 由生成脚本产出，与 pi 的模型数据逐字段零差异
 - **配置隔离，互不踩踏**：pig 用 `~/.pig/`，pi 用 `~/.pi/`，两套目录完全独立；想共用存量数据见[从 pi 迁移](#从-pi-迁移数据)
 
-### 🌐 模型接入：39 家 provider，7 种 API 协议
+### 🌐 模型接入：41 家 provider，7 种 API 协议
 
 各家模型服务的接口格式互不相同（OpenAI、Anthropic、Gemini 的 API 长得完全不一样）。pig 为每种接口格式移植了独立的适配器，事件语义（usage、tool call 边界、思考块、缓存命中、中止/错误/重试）逐协议对齐：
 
@@ -118,7 +118,7 @@ pig 是纯 Go 实现，编译产物为**单个静态二进制**，拷到任何 L
 | google-generative-ai | Google Gemini / OpenCode Zen |
 | google-vertex | Vertex AI（含 ADC 服务账号认证） |
 
-内置 39 家 provider、约 1400 个模型开箱即用；非内置端点通过 `models.json` 自定义 provider 挂进来。Anthropic / Kimi / OpenAI Codex / xAI / GitHub Copilot 已移植 OAuth 登录（浏览器 + device code 双流程，目前为 mock 级验证，真实登录链路待销账）。
+内置 41 家 provider、约 1500 个模型开箱即用；非内置端点通过 `models.json` 自定义 provider 挂进来。Anthropic / Kimi / OpenAI Codex / xAI / GitHub Copilot 已移植 OAuth 登录（浏览器 + device code 双流程，目前为 mock 级验证，真实登录链路待销账）。
 
 ### 🛠 干活的工具：内置七件套
 
@@ -190,9 +190,9 @@ pig 把 pi 自研的 pi-tui **整库移植**，没用任何现成 TUI 框架—�
 
 pig 的会话记录天然支持**分支**：从任意历史节点重走、树形导航、分支间对比。配合自动压缩（上下文将满时自动总结裁剪，压缩边界保留）、自动重试（指数退避）、steering / follow-up 双队列，长会话不易失控。
 
-### 🧪 工程质量：1800+ 个测试函数压阵
+### 🧪 工程质量：2100+ 个测试函数压阵
 
-pig 的行为对齐有测试兜底：**21 万行 Go 源码 + 9.9 万行测试，1800+ 个测试函数，55 个包，`-race` 全绿**。pi 的大部分测试文件被 test-for-test 移植（含 @xterm/headless 终端仿真的 TUI golden 测试），每个修复都带回归测试锁定。崩溃韧性：任何 goroutine panic 落盘到 `~/.pig/agent/logs/` 并尽力恢复，不静默丢会话。
+pig 的行为对齐有测试兜底：**23 万行 Go 源码 + 11 万行测试，2100+ 个测试函数，44 个包，`-race` 全绿**。pi 的大部分测试文件被 test-for-test 移植（含 @xterm/headless 终端仿真的 TUI golden 测试），每个修复都带回归测试锁定。崩溃韧性：任何 goroutine panic 落盘到 `~/.pig/agent/logs/` 并尽力恢复，不静默丢会话。
 
 ## 日常用法
 
@@ -333,7 +333,7 @@ cp -a ~/.pi/agent ~/.pig/agent
 
 | 能力 | pi | pig |
 | --- | --- | --- |
-| 交互 / print / JSON 三模式、7 种 API 协议、39 家 provider、模型 catalog | ✅ | ✅ 对齐 |
+| 交互 / print / JSON 三模式、7 种 API 协议、41 家 provider、模型 catalog | ✅ | ✅ 对齐 |
 | 会话树 / 分支 / 压缩 / 导出 HTML | ✅ | ✅ |
 | TUI（编辑器、补全、主题、鼠标、搜索）与 Markdown / LaTeX / Mermaid | ✅ | ✅ pi-tui 全量移植 |
 | 中文分词与 CJK 渲染修复、macOS Ctrl+V 剪贴板贴图（粘贴显示 `[Image N]` 占位符） | — | ✅ pig 增强（pi 走 native addon，pig 用 osascript 零依赖实现） |
@@ -346,7 +346,7 @@ cp -a ~/.pi/agent ~/.pig/agent
 
 两个大块按计划押后：
 
-- **harness runtime / 上半部分**：v0.85.1 的 `agent-harness` 门面与 events 重写、`hooks`、`execution` 正在快速迭代，等上游稳定再评估（已迁移的 session、JSONL、compaction、tools 不受影响）
+- **harness runtime（新版门面）**：pi 已将 `agent-harness` 重构迁至 `packages/durable`（scheduler / inbox / live / submissions / task-graph 等新门面）。pig 侧 `agent/harness` 已迁移 v0.87 时代的 session、JSONL、compaction、tools、events、context 主体；新版 durable 门面按需排期
 - **pi 的 experimental 代码**（远程编排等实验性架构）：暂不跟进
 
 ## 项目结构
