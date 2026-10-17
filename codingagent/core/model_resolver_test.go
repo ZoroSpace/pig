@@ -6,6 +6,7 @@ package core
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 
@@ -69,167 +70,179 @@ func (s *stubResolverRuntime) GetModel(providerID, modelID string) (ai.Model, bo
 	return ai.Model{}, false
 }
 
-func TestParseModelPatternSimplePatternsWithoutColons(t *testing.T) {
-	t.Run("exact match returns model with undefined thinking level", func(t *testing.T) {
-		result := ParseModelPattern("claude-sonnet-4-5", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "claude-sonnet-4-5" {
-			t.Fatalf("model = %v", result.Model)
-		}
-		if result.ThinkingLevel != "" || result.Warning != "" {
-			t.Fatalf("thinkingLevel = %q, warning = %q", result.ThinkingLevel, result.Warning)
-		}
-	})
-
-	t.Run("partial match returns best model with undefined thinking level", func(t *testing.T) {
-		result := ParseModelPattern("sonnet", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "claude-sonnet-4-5" {
-			t.Fatalf("model = %v", result.Model)
-		}
-		if result.ThinkingLevel != "" || result.Warning != "" {
-			t.Fatalf("thinkingLevel = %q, warning = %q", result.ThinkingLevel, result.Warning)
-		}
-	})
-
-	t.Run("no match returns undefined model and thinking level", func(t *testing.T) {
-		result := ParseModelPattern("nonexistent", resolverAllModels, nil)
-		if result.Model != nil || result.ThinkingLevel != "" || result.Warning != "" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
+// referenceModel builds a resolver reference-catalog fixture (pi:
+// referenceModel).
+func referenceModel(provider, id string) ai.Model {
+	return ai.Model{
+		ID:            id,
+		Name:          id,
+		API:           ai.ApiOpenAICompletions,
+		Provider:      ai.ProviderID(provider),
+		BaseURL:       "https://example.invalid",
+		Reasoning:     true,
+		Input:         []ai.ModelInput{ai.ModelInputText},
+		Cost:          ai.ModelCost{},
+		ContextWindow: 128000,
+		MaxTokens:     8192,
+	}
 }
 
-func TestParseModelPatternsWithValidThinkingLevels(t *testing.T) {
-	t.Run("sonnet:high returns sonnet with high thinking level", func(t *testing.T) {
-		result := ParseModelPattern("sonnet:high", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "claude-sonnet-4-5" || result.ThinkingLevel != "high" || result.Warning != "" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
+var referenceCatalog = []ai.Model{
+	referenceModel("anthropic", "claude-sonnet-4-5"),
+	referenceModel("anthropic", "claude-sonnet-4-5-20250929"),
+	referenceModel("anthropic", "claude-opus-4-8"),
+	referenceModel("anthropic", "exact"),
+	// Fuzzy-matches "shared"; an ambiguous exact "shared" must not fall through to it.
+	referenceModel("anthropic", "shared-pro"),
+	referenceModel("openai", "gpt-4o"),
+	referenceModel("openrouter", "qwen/qwen3-coder:exacto"),
+	referenceModel("openrouter", "openai/gpt-4o:extended"),
+	referenceModel("gw-a", "shared"),
+	referenceModel("gw-a", "anthropic/future"),
+	referenceModel("gw-a", "anthropic/exact"),
+	referenceModel("gw-a", "anthropic/claude-opus-4.8"),
+	referenceModel("gw-a", "anthropic/claude-opus"),
+	referenceModel("gw-b", "shared"),
+	referenceModel("gw-b", "anthropic/future"),
+	referenceModel("gw-b", "claude-opus-4-8"),
+	referenceModel("gw-b", "gw-b/free"),
+	referenceModel("gw-b", "zz:free"),
+}
 
-	t.Run("gpt-4o:medium returns gpt-4o with medium thinking level", func(t *testing.T) {
-		result := ParseModelPattern("gpt-4o:medium", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "gpt-4o" || result.ThinkingLevel != "medium" || result.Warning != "" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
+type refExpect struct {
+	status        string // "resolved" | "ambiguous" | "not-found"
+	model         string
+	thinkingLevel agent.ThinkingLevel
+	warning       string
+	ambiguous     []string
+	usableCount   int
+}
 
-	t.Run("all valid thinking levels work", func(t *testing.T) {
-		for _, level := range []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"} {
-			result := ParseModelPattern("sonnet:"+level, resolverAllModels, nil)
-			if result.Model == nil || result.Model.ID != "claude-sonnet-4-5" || string(result.ThinkingLevel) != level || result.Warning != "" {
-				t.Fatalf("level %s: result = %+v", level, result)
+type refCase struct {
+	name           string
+	text           string
+	expected       refExpect
+	usable         []string
+	provider       string
+	thinkingSuffix string // empty = "strict"
+	fuzzy          *bool
+}
+
+var referenceCases = []refCase{
+	// Reference syntax
+	{name: "exact id", text: "claude-sonnet-4-5", expected: refExpect{status: "resolved", model: "anthropic/claude-sonnet-4-5"}},
+	{name: "exact id is case-insensitive", text: "GPT-4O", expected: refExpect{status: "resolved", model: "openai/gpt-4o"}},
+	{name: "fuzzy prefers aliases over dated ids", text: "sonnet", expected: refExpect{status: "resolved", model: "anthropic/claude-sonnet-4-5"}},
+	{name: "thinking suffix", text: "sonnet:high", expected: refExpect{status: "resolved", model: "anthropic/claude-sonnet-4-5", thinkingLevel: "high"}},
+	{name: "colon in a literal id is not a thinking suffix", text: "qwen/qwen3-coder:exacto", expected: refExpect{status: "resolved", model: "openrouter/qwen/qwen3-coder:exacto"}},
+	{name: "provider prefix, colon id, and thinking suffix", text: "openrouter/qwen/qwen3-coder:exacto:high", expected: refExpect{status: "resolved", model: "openrouter/qwen/qwen3-coder:exacto", thinkingLevel: "high"}},
+	{name: "raw id wins when the provider prefix names no matching model", text: "openai/gpt-4o:extended", expected: refExpect{status: "resolved", model: "openrouter/openai/gpt-4o:extended"}},
+	{name: "fuzzy searches the prefixed provider first", text: "openrouter/qwen", expected: refExpect{status: "resolved", model: "openrouter/qwen/qwen3-coder:exacto"}},
+	{name: "strict keeps an invalid suffix in the id", text: "gpt-4o:random", expected: refExpect{status: "not-found"}},
+	{name: "lenient drops an invalid suffix with a warning", text: "gpt-4o:random", thinkingSuffix: "lenient", expected: refExpect{status: "resolved", model: "openai/gpt-4o", warning: `Invalid thinking level "random"`}},
+	{name: "lenient invalid outer suffix discards the inner thinking level", text: "qwen/qwen3-coder:exacto:high:random", thinkingSuffix: "lenient", expected: refExpect{status: "resolved", model: "openrouter/qwen/qwen3-coder:exacto", warning: `Invalid thinking level "random"`}},
+	{name: "none keeps the suffix in the id", text: "gpt-4o:high", thinkingSuffix: "none", expected: refExpect{status: "not-found"}},
+	{name: "exact-only skips fuzzy matches", text: "sonnet", fuzzy: boolPtr(false), expected: refExpect{status: "not-found"}},
+	{name: "empty text", text: "  ", expected: refExpect{status: "not-found"}},
+
+	// Exact matches across providers (#7327)
+	{name: "sole usable provider wins", text: "shared", usable: []string{"gw-b"}, expected: refExpect{status: "resolved", model: "gw-b/shared"}},
+	{name: "no usable provider is ambiguous instead of falling through to fuzzy", text: "shared", expected: refExpect{status: "ambiguous", ambiguous: []string{"gw-a/shared", "gw-b/shared"}}},
+	{name: "several usable providers are ambiguous", text: "shared", usable: []string{"gw-a", "gw-b"}, expected: refExpect{status: "ambiguous", ambiguous: []string{"gw-a/shared", "gw-b/shared"}, usableCount: 2}},
+	{name: "thinking suffix does not change provider selection", text: "shared:high", usable: []string{"gw-b"}, expected: refExpect{status: "resolved", model: "gw-b/shared", thinkingLevel: "high"}},
+	{name: "thinking suffix does not bypass ambiguity", text: "shared:high", usable: []string{"gw-a", "gw-b"}, expected: refExpect{status: "ambiguous", ambiguous: []string{"gw-a/shared", "gw-b/shared"}, usableCount: 2}},
+	{name: "provider prefix without a direct model selects the usable raw id", text: "anthropic/future", usable: []string{"gw-b"}, expected: refExpect{status: "resolved", model: "gw-b/anthropic/future"}},
+	{name: "usable qualified match beats a usable raw id", text: "anthropic/exact", usable: []string{"anthropic", "gw-a"}, expected: refExpect{status: "resolved", model: "anthropic/exact"}},
+	{name: "usable raw id beats an unusable qualified match", text: "anthropic/exact", usable: []string{"gw-a"}, expected: refExpect{status: "resolved", model: "gw-a/anthropic/exact"}},
+	{name: "unusable qualified match is kept when nothing is usable", text: "anthropic/exact", expected: refExpect{status: "resolved", model: "anthropic/exact"}},
+	{name: "named provider's usable fuzzy match beats a raw id elsewhere", text: "anthropic/claude-opus", usable: []string{"anthropic"}, expected: refExpect{status: "resolved", model: "anthropic/claude-opus-4-8"}},
+	{name: "usable raw id beats the named provider's unusable fuzzy match", text: "anthropic/claude-opus", usable: []string{"gw-a"}, expected: refExpect{status: "resolved", model: "gw-a/anthropic/claude-opus"}},
+	{name: "named provider's fuzzy match is kept when nothing is usable", text: "anthropic/claude-opus", expected: refExpect{status: "resolved", model: "anthropic/claude-opus-4-8"}},
+	{name: "named provider's literal id beats its fuzzy matches", text: "gw-b/free", expected: refExpect{status: "resolved", model: "gw-b/gw-b/free"}},
+
+	// Fuzzy matches across providers
+	{name: "fuzzy prefers usable providers", text: "opus", usable: []string{"gw-a"}, expected: refExpect{status: "resolved", model: "gw-a/anthropic/claude-opus-4.8"}},
+	{name: "fuzzy id tie across usable providers is ambiguous", text: "opus", usable: []string{"anthropic", "gw-a", "gw-b"}, expected: refExpect{status: "ambiguous", ambiguous: []string{"anthropic/claude-opus-4-8", "gw-b/claude-opus-4-8"}, usableCount: 2}},
+	{name: "fuzzy id tie resolves to the sole usable provider", text: "opus", usable: []string{"anthropic"}, expected: refExpect{status: "resolved", model: "anthropic/claude-opus-4-8"}},
+
+	// Explicit provider constraint
+	{name: "explicit provider ignores usable providers elsewhere", text: "shared", provider: "gw-a", usable: []string{"gw-b"}, expected: refExpect{status: "resolved", model: "gw-a/shared"}},
+	{name: "explicit provider accepts its own prefix", text: "GW-B/shared", provider: "gw-b", expected: refExpect{status: "resolved", model: "gw-b/shared"}},
+	{name: "explicit provider allows fuzzy matches", text: "4o", provider: "openai", expected: refExpect{status: "resolved", model: "openai/gpt-4o"}},
+	{name: "explicit provider never leaves the provider", text: "gpt-4o", provider: "gw-a", expected: refExpect{status: "not-found"}},
+}
+
+func modelRef(m ai.Model) string { return string(m.Provider) + "/" + m.ID }
+
+func TestResolveModelReference(t *testing.T) {
+	reversed := make([]ai.Model, len(referenceCatalog))
+	for i, m := range referenceCatalog {
+		reversed[len(referenceCatalog)-1-i] = m
+	}
+	for _, tc := range referenceCases {
+		t.Run(tc.name, func(t *testing.T) {
+			usable := map[string]bool{}
+			for _, p := range tc.usable {
+				usable[p] = true
 			}
-		}
-	})
-}
+			// Catalog order must never decide the result.
+			for _, models := range [][]ai.Model{referenceCatalog, reversed} {
+				thinkingSuffix := tc.thinkingSuffix
+				if thinkingSuffix == "" {
+					thinkingSuffix = "strict"
+				}
+				fuzzy := true
+				if tc.fuzzy != nil {
+					fuzzy = *tc.fuzzy
+				}
+				result := ResolveModelReference(ModelReferenceRequest{
+					Text:           tc.text,
+					Provider:       tc.provider,
+					ThinkingSuffix: thinkingSuffix,
+					Fuzzy:          fuzzy,
+				}, models, func(provider string) bool { return usable[provider] })
 
-func TestParseModelPatternsWithInvalidThinkingLevels(t *testing.T) {
-	t.Run("sonnet:random returns sonnet with undefined thinking level and warning", func(t *testing.T) {
-		result := ParseModelPattern("sonnet:random", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "claude-sonnet-4-5" || result.ThinkingLevel != "" {
-			t.Fatalf("result = %+v", result)
-		}
-		if !strings.Contains(result.Warning, "Invalid thinking level") || !strings.Contains(result.Warning, "random") {
-			t.Fatalf("warning = %q", result.Warning)
-		}
-	})
-
-	t.Run("gpt-4o:invalid returns gpt-4o with undefined thinking level and warning", func(t *testing.T) {
-		result := ParseModelPattern("gpt-4o:invalid", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "gpt-4o" || result.ThinkingLevel != "" {
-			t.Fatalf("result = %+v", result)
-		}
-		if !strings.Contains(result.Warning, "Invalid thinking level") {
-			t.Fatalf("warning = %q", result.Warning)
-		}
-	})
-}
-
-func TestParseModelPatternsOpenRouterModelsWithColonsInIDs(t *testing.T) {
-	t.Run("qwen3-coder:exacto matches the model with undefined thinking level", func(t *testing.T) {
-		result := ParseModelPattern("qwen/qwen3-coder:exacto", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "qwen/qwen3-coder:exacto" || result.ThinkingLevel != "" || result.Warning != "" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
-
-	t.Run("openrouter/qwen/qwen3-coder:exacto matches with provider prefix", func(t *testing.T) {
-		result := ParseModelPattern("openrouter/qwen/qwen3-coder:exacto", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "qwen/qwen3-coder:exacto" || string(result.Model.Provider) != "openrouter" {
-			t.Fatalf("result = %+v", result)
-		}
-		if result.ThinkingLevel != "" || result.Warning != "" {
-			t.Fatalf("thinkingLevel = %q, warning = %q", result.ThinkingLevel, result.Warning)
-		}
-	})
-
-	t.Run("qwen3-coder:exacto:high matches model with high thinking level", func(t *testing.T) {
-		result := ParseModelPattern("qwen/qwen3-coder:exacto:high", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "qwen/qwen3-coder:exacto" || result.ThinkingLevel != "high" || result.Warning != "" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
-
-	t.Run("openrouter/qwen/qwen3-coder:exacto:high matches with provider and thinking level", func(t *testing.T) {
-		result := ParseModelPattern("openrouter/qwen/qwen3-coder:exacto:high", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "qwen/qwen3-coder:exacto" || string(result.Model.Provider) != "openrouter" || result.ThinkingLevel != "high" || result.Warning != "" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
-
-	t.Run("gpt-4o:extended matches the extended model with undefined thinking level", func(t *testing.T) {
-		result := ParseModelPattern("openai/gpt-4o:extended", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "openai/gpt-4o:extended" || result.ThinkingLevel != "" || result.Warning != "" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
-}
-
-func TestParseModelPatternsInvalidThinkingLevelsWithOpenRouterModels(t *testing.T) {
-	t.Run("qwen3-coder:exacto:random returns model with undefined thinking level and warning", func(t *testing.T) {
-		result := ParseModelPattern("qwen/qwen3-coder:exacto:random", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "qwen/qwen3-coder:exacto" || result.ThinkingLevel != "" {
-			t.Fatalf("result = %+v", result)
-		}
-		if !strings.Contains(result.Warning, "Invalid thinking level") || !strings.Contains(result.Warning, "random") {
-			t.Fatalf("warning = %q", result.Warning)
-		}
-	})
-
-	t.Run("qwen3-coder:exacto:high:random returns model with undefined thinking level and warning", func(t *testing.T) {
-		result := ParseModelPattern("qwen/qwen3-coder:exacto:high:random", resolverAllModels, nil)
-		if result.Model == nil || result.Model.ID != "qwen/qwen3-coder:exacto" || result.ThinkingLevel != "" {
-			t.Fatalf("result = %+v", result)
-		}
-		if !strings.Contains(result.Warning, "Invalid thinking level") || !strings.Contains(result.Warning, "random") {
-			t.Fatalf("warning = %q", result.Warning)
-		}
-	})
-}
-
-func TestParseModelPatternsEdgeCases(t *testing.T) {
-	t.Run("empty pattern matches via partial matching", func(t *testing.T) {
-		// Empty string is included in all model ids, so partial matching finds a match.
-		result := ParseModelPattern("", resolverAllModels, nil)
-		if result.Model == nil {
-			t.Fatal("model = nil, want a match")
-		}
-		if result.ThinkingLevel != "" {
-			t.Fatalf("thinkingLevel = %q", result.ThinkingLevel)
-		}
-	})
-
-	t.Run("pattern ending with colon treats empty suffix as invalid", func(t *testing.T) {
-		result := ParseModelPattern("sonnet:", resolverAllModels, nil)
-		// Empty string after colon is not a valid thinking level, so it tries
-		// "sonnet:" which won't match, then tries "sonnet".
-		if result.Model == nil || result.Model.ID != "claude-sonnet-4-5" {
-			t.Fatalf("result = %+v", result)
-		}
-		if !strings.Contains(result.Warning, "Invalid thinking level") {
-			t.Fatalf("warning = %q", result.Warning)
-		}
-	})
+				switch tc.expected.status {
+				case "not-found":
+					if result.Status != "not-found" {
+						t.Fatalf("status = %q, want not-found (%+v)", result.Status, result)
+					}
+				case "ambiguous":
+					if result.Status != "ambiguous" {
+						t.Fatalf("status = %q, want ambiguous (%+v)", result.Status, result)
+					}
+					got := make([]string, 0, len(result.Candidates))
+					for _, m := range result.Candidates {
+						got = append(got, modelRef(m))
+					}
+					sort.Strings(got)
+					if strings.Join(got, ",") != strings.Join(tc.expected.ambiguous, ",") {
+						t.Fatalf("candidates = %v, want %v", got, tc.expected.ambiguous)
+					}
+					if result.UsableCount != tc.expected.usableCount {
+						t.Fatalf("usableCount = %d, want %d", result.UsableCount, tc.expected.usableCount)
+					}
+				default:
+					if result.Status != "resolved" {
+						t.Fatalf("status = %q, want resolved (%+v)", result.Status, result)
+					}
+					if got := modelRef(*result.Model); got != tc.expected.model {
+						t.Fatalf("model = %q, want %q", got, tc.expected.model)
+					}
+					if result.ThinkingLevel != tc.expected.thinkingLevel {
+						t.Fatalf("thinkingLevel = %q, want %q", result.ThinkingLevel, tc.expected.thinkingLevel)
+					}
+					if tc.expected.warning != "" {
+						if !strings.Contains(result.Warning, tc.expected.warning) {
+							t.Fatalf("warning = %q, want to contain %q", result.Warning, tc.expected.warning)
+						}
+					} else if result.Warning != "" {
+						t.Fatalf("warning = %q, want none", result.Warning)
+					}
+				}
+			}
+		})
+	}
 }
 
 func TestResolveModelScopeWithDiagnosticsNoConsoleWarnings(t *testing.T) {
@@ -290,6 +303,50 @@ func TestResolveModelScopePreservesCLIWarningOutput(t *testing.T) {
 	}
 }
 
+func TestResolveModelScopeAddsEveryProviderForAmbiguousPattern(t *testing.T) {
+	gpt4o := resolverMockModels[1]
+	azure := gpt4o
+	azure.Provider = "azure"
+	codex := gpt4o
+	codex.Provider = "openai-codex"
+	codex.ID = "gpt-4o-mini"
+	available := append(append([]ai.Model(nil), resolverAllModels...), azure, codex)
+	registry := &stubResolverRuntime{available: available}
+
+	for _, tc := range []struct {
+		pattern       string
+		thinkingLevel agent.ThinkingLevel
+	}{
+		{"gpt-4o:high", "high"},
+		{"GPT-4o", ""},
+	} {
+		result, err := ResolveModelScopeWithDiagnostics(context.Background(), []string{tc.pattern}, registry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(result.ScopedModels) != 2 {
+			t.Fatalf("pattern %q: scopedModels = %+v, want 2", tc.pattern, result.ScopedModels)
+		}
+		seen := map[string]agent.ThinkingLevel{}
+		for _, scoped := range result.ScopedModels {
+			seen[string(scoped.Model.Provider)+"/"+scoped.Model.ID] = scoped.ThinkingLevel
+		}
+		for _, key := range []string{"azure/gpt-4o", "openai/gpt-4o"} {
+			if level, ok := seen[key]; !ok || level != tc.thinkingLevel {
+				t.Fatalf("pattern %q: scoped %q = %q (present %v), want %q", tc.pattern, key, level, ok, tc.thinkingLevel)
+			}
+		}
+		if len(result.Diagnostics) != 1 {
+			t.Fatalf("pattern %q: diagnostics = %+v", tc.pattern, result.Diagnostics)
+		}
+		diagnostic := result.Diagnostics[0]
+		if diagnostic.Code != "ambiguous" ||
+			diagnostic.Message != `Pattern "`+tc.pattern+`" matches several providers: azure, openai. Use provider/id to choose one.` {
+			t.Fatalf("pattern %q: diagnostic = %+v", tc.pattern, diagnostic)
+		}
+	}
+}
+
 // TestResolveModelScopeMatchesGlobPatternsAgainstProviderQualifiedIDs locks
 // the Minimatch argument order (glob, value): a swapped call would match
 // nothing and emit a "No models match pattern" diagnostic.
@@ -345,50 +402,6 @@ func TestResolveModelScopeResolvesBracketedModelIDsWithThinkingLevelsAsExactRefe
 }
 
 func TestResolveCliModel(t *testing.T) {
-	t.Run("resolves --model provider/id without --provider", func(t *testing.T) {
-		registry := &stubResolverRuntime{models: resolverAllModels}
-		result := ResolveCliModel(ResolveCliModelOptions{CliModel: "openai/gpt-4o", ModelRuntime: registry})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "openai" || result.Model.ID != "gpt-4o" {
-			t.Fatalf("model = %+v", result.Model)
-		}
-	})
-
-	t.Run("resolves fuzzy patterns within an explicit provider", func(t *testing.T) {
-		registry := &stubResolverRuntime{models: resolverAllModels}
-		result := ResolveCliModel(ResolveCliModelOptions{CliProvider: "openai", CliModel: "4o", ModelRuntime: registry})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "openai" || result.Model.ID != "gpt-4o" {
-			t.Fatalf("model = %+v", result.Model)
-		}
-	})
-
-	t.Run("supports --model <pattern>:<thinking> (without explicit --thinking)", func(t *testing.T) {
-		registry := &stubResolverRuntime{models: resolverAllModels}
-		result := ResolveCliModel(ResolveCliModelOptions{CliModel: "sonnet:high", ModelRuntime: registry})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if result.Model == nil || result.Model.ID != "claude-sonnet-4-5" || result.ThinkingLevel != "high" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
-
-	t.Run("prefers exact model id match over provider inference (OpenRouter-style ids)", func(t *testing.T) {
-		registry := &stubResolverRuntime{models: resolverAllModels}
-		result := ResolveCliModel(ResolveCliModelOptions{CliModel: "openai/gpt-4o:extended", ModelRuntime: registry})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "openrouter" || result.Model.ID != "openai/gpt-4o:extended" {
-			t.Fatalf("model = %+v", result.Model)
-		}
-	})
-
 	t.Run("does not strip invalid :suffix as thinking level in --model (treat as raw id)", func(t *testing.T) {
 		registry := &stubResolverRuntime{models: resolverAllModels}
 		result := ResolveCliModel(ResolveCliModelOptions{CliProvider: "openai", CliModel: "gpt-4o:extended", ModelRuntime: registry})
@@ -424,193 +437,148 @@ func TestResolveCliModel(t *testing.T) {
 		}
 	})
 
-	t.Run("prefers the sole authenticated provider for an ambiguous bare exact model id", func(t *testing.T) {
-		azureModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "azure", "https://api.openai.com", false)
-		codexModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "openai-codex", "https://api.openai.com", false)
-		registry := &stubResolverRuntime{
-			models:  []ai.Model{azureModel, codexModel},
-			authByP: map[string]bool{"openai-codex": true},
-		}
-		result := ResolveCliModel(ResolveCliModelOptions{CliModel: "gpt-5.6-sol", ModelRuntime: registry})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "openai-codex" || result.Model.ID != "gpt-5.6-sol" {
-			t.Fatalf("model = %+v", result.Model)
-		}
-	})
-
-	t.Run("requires an explicit provider for an ambiguous bare exact model id without a unique authenticated provider", func(t *testing.T) {
-		azureModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "azure", "https://api.openai.com", false)
-		codexModel := resolverModel("gpt-5.6-sol", "GPT 5.6 Sol", "openai-codex", "https://api.openai.com", false)
-		registry := &stubResolverRuntime{models: []ai.Model{azureModel, codexModel}, authByP: map[string]bool{}}
-		result := ResolveCliModel(ResolveCliModelOptions{CliModel: "gpt-5.6-sol", ModelRuntime: registry})
-		if result.Model != nil {
-			t.Fatalf("model = %+v", result.Model)
-		}
-		for _, want := range []string{
-			`Model "gpt-5.6-sol" is ambiguous across providers`,
-			"azure/gpt-5.6-sol",
-			"openai-codex/gpt-5.6-sol",
-			"Use --provider or provider/model",
-		} {
-			if !strings.Contains(result.Error, want) {
-				t.Fatalf("error %q missing %q", result.Error, want)
+	t.Run("duplicate raw ids behind a known provider prefix (#10160)", func(t *testing.T) {
+		direct := resolverMockModels[0]
+		direct.Provider, direct.ID = "anthropic", "claude-sonnet-4-5"
+		openrouter := resolverMockModels[0]
+		openrouter.Provider, openrouter.ID = "openrouter", "anthropic/claude-opus-5.5"
+		vercel := resolverMockModels[0]
+		vercel.Provider, vercel.ID = "vercel-ai-gateway", "anthropic/claude-opus-5.5"
+		registry := func(configured ...string) *stubResolverRuntime {
+			authByP := map[string]bool{}
+			for _, p := range configured {
+				authByP[p] = true
 			}
+			return &stubResolverRuntime{models: []ai.Model{direct, openrouter, vercel}, authByP: authByP}
 		}
-	})
 
-	t.Run("prefers provider/model split over gateway model with matching id", func(t *testing.T) {
-		zaiModel := resolverModel("glm-5", "GLM-5", "zai", "https://open.bigmodel.cn/api/paas/v4", true)
-		gatewayModel := resolverModel("zai/glm-5", "GLM-5", "vercel-ai-gateway", "https://ai-gateway.vercel.sh", true)
-		registry := &stubResolverRuntime{
-			models:  append(append([]ai.Model(nil), resolverAllModels...), zaiModel, gatewayModel),
-			authByP: map[string]bool{"zai": true, "vercel-ai-gateway": true, "anthropic": true, "openai": true, "openrouter": true},
-		}
-		result := ResolveCliModel(ResolveCliModelOptions{CliModel: "zai/glm-5", ModelRuntime: registry})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "zai" || result.Model.ID != "glm-5" {
-			t.Fatalf("model = %+v", result.Model)
-		}
-	})
-
-	t.Run("prefers an authenticated exact raw model id over an unauthenticated inferred provider", func(t *testing.T) {
-		commandcodeModel := resolverModel("xiaomi/mimo-v2.5-pro", "Xiaomi MiMo via Commandcode", "commandcode", "https://example.invalid", false)
-		xiaomiModel := resolverModel("mimo-v2.5-pro", "Xiaomi MiMo", "xiaomi", "https://api.xiaomimimo.com", false)
-		registry := &stubResolverRuntime{
-			models:  append(append([]ai.Model(nil), resolverAllModels...), commandcodeModel, xiaomiModel),
-			authByP: map[string]bool{"commandcode": true},
-		}
-		result := ResolveCliModel(ResolveCliModelOptions{CliModel: "xiaomi/mimo-v2.5-pro", ModelRuntime: registry})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "commandcode" || result.Model.ID != "xiaomi/mimo-v2.5-pro" {
-			t.Fatalf("model = %+v", result.Model)
-		}
-	})
-
-	t.Run("resolves provider-prefixed fuzzy patterns (openrouter/qwen -> openrouter model)", func(t *testing.T) {
-		registry := &stubResolverRuntime{models: resolverAllModels}
-		result := ResolveCliModel(ResolveCliModelOptions{CliModel: "openrouter/qwen", ModelRuntime: registry})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "openrouter" || result.Model.ID != "qwen/qwen3-coder:exacto" {
-			t.Fatalf("model = %+v", result.Model)
-		}
-	})
-
-	t.Run("strips :thinking suffix from custom model id in fallback path", func(t *testing.T) {
-		neuralwattModel := resolverModel("some-base-model", "Some Base Model", "neuralwatt", "https://api.neuralwatt.com", false)
-		registry := &stubResolverRuntime{
-			models: append(append([]ai.Model(nil), resolverAllModels...), neuralwattModel),
-		}
-		result := ResolveCliModel(ResolveCliModelOptions{
-			CliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high", ModelRuntime: registry,
+		t.Run("selects the authenticated gateway, with or without a thinking suffix", func(t *testing.T) {
+			for _, tc := range []struct {
+				cliModel      string
+				thinkingLevel agent.ThinkingLevel
+			}{
+				{"anthropic/claude-opus-5.5", ""},
+				{"anthropic/claude-opus-5.5:high", "high"},
+			} {
+				result := ResolveCliModel(ResolveCliModelOptions{CliModel: tc.cliModel, ModelRuntime: registry("vercel-ai-gateway")})
+				if result.Error != "" {
+					t.Fatalf("cliModel %q: error = %q", tc.cliModel, result.Error)
+				}
+				if string(result.Model.Provider) != "vercel-ai-gateway" || result.ThinkingLevel != tc.thinkingLevel {
+					t.Fatalf("cliModel %q: model = %+v, thinking = %q", tc.cliModel, result.Model, result.ThinkingLevel)
+				}
+			}
 		})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "neuralwatt" {
-			t.Fatalf("provider = %q", result.Model.Provider)
-		}
-		// The :high suffix must NOT leak into the model id sent to the API.
-		if result.Model.ID != "zai-org/GLM-5.1-FP8" || !result.Model.Reasoning || result.ThinkingLevel != "high" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
 
-	t.Run("custom model without thinking suffix works normally in fallback path", func(t *testing.T) {
-		neuralwattModel := resolverModel("some-base-model", "Some Base Model", "neuralwatt", "https://api.neuralwatt.com", false)
-		registry := &stubResolverRuntime{
-			models: append(append([]ai.Model(nil), resolverAllModels...), neuralwattModel),
-		}
-		result := ResolveCliModel(ResolveCliModelOptions{
-			CliModel: "neuralwatt/zai-org/GLM-5.1-FP8", ModelRuntime: registry,
+		t.Run("reports ambiguity instead of choosing by catalog order", func(t *testing.T) {
+			result := ResolveCliModel(ResolveCliModelOptions{CliModel: "anthropic/claude-opus-5.5", ModelRuntime: registry()})
+			if result.Model != nil {
+				t.Fatalf("model = %+v", result.Model)
+			}
+			for _, want := range []string{
+				"openrouter/anthropic/claude-opus-5.5, vercel-ai-gateway/anthropic/claude-opus-5.5",
+				"No matching provider is authenticated. Use --provider or provider/model.",
+			} {
+				if !strings.Contains(result.Error, want) {
+					t.Fatalf("error %q missing %q", result.Error, want)
+				}
+			}
 		})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "neuralwatt" || result.Model.ID != "zai-org/GLM-5.1-FP8" || result.ThinkingLevel != "" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
 
-	t.Run("all valid thinking levels work in fallback path", func(t *testing.T) {
-		neuralwattModel := resolverModel("some-base-model", "Some Base Model", "neuralwatt", "https://api.neuralwatt.com", false)
-		registry := &stubResolverRuntime{
-			models: append(append([]ai.Model(nil), resolverAllModels...), neuralwattModel),
-		}
-		for _, level := range []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"} {
+		t.Run("does not let stored credentials choose the provider for --api-key", func(t *testing.T) {
 			result := ResolveCliModel(ResolveCliModelOptions{
-				CliModel: "neuralwatt/zai-org/GLM-5.1-FP8:" + level, ModelRuntime: registry,
+				CliModel: "anthropic/claude-opus-5.5", InlineApiKey: true, ModelRuntime: registry("vercel-ai-gateway"),
+			})
+			if result.Model != nil {
+				t.Fatalf("model = %+v", result.Model)
+			}
+			if !strings.Contains(result.Error, "--api-key does not choose a provider.") {
+				t.Fatalf("error = %q", result.Error)
+			}
+		})
+	})
+
+	t.Run("custom model fallback with :thinking suffix (#5552)", func(t *testing.T) {
+		neuralwattModel := resolverModel("some-base-model", "Some Base Model", "neuralwatt", "https://api.neuralwatt.com", false)
+		modelsWithNeuralwatt := append(append([]ai.Model(nil), resolverAllModels...), neuralwattModel)
+		registry := &stubResolverRuntime{models: modelsWithNeuralwatt}
+
+		t.Run("strips :thinking suffix from custom model id in fallback path", func(t *testing.T) {
+			result := ResolveCliModel(ResolveCliModelOptions{CliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high", ModelRuntime: registry})
+			if result.Error != "" {
+				t.Fatalf("error = %q", result.Error)
+			}
+			if string(result.Model.Provider) != "neuralwatt" {
+				t.Fatalf("provider = %q", result.Model.Provider)
+			}
+			if result.Model.ID != "zai-org/GLM-5.1-FP8" || !result.Model.Reasoning || result.ThinkingLevel != "high" {
+				t.Fatalf("result = %+v", result)
+			}
+		})
+
+		t.Run("custom model without thinking suffix works normally in fallback path", func(t *testing.T) {
+			result := ResolveCliModel(ResolveCliModelOptions{CliModel: "neuralwatt/zai-org/GLM-5.1-FP8", ModelRuntime: registry})
+			if result.Error != "" {
+				t.Fatalf("error = %q", result.Error)
+			}
+			if string(result.Model.Provider) != "neuralwatt" || result.Model.ID != "zai-org/GLM-5.1-FP8" || result.ThinkingLevel != "" {
+				t.Fatalf("result = %+v", result)
+			}
+		})
+
+		t.Run("all valid thinking levels work in fallback path", func(t *testing.T) {
+			for _, level := range []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"} {
+				result := ResolveCliModel(ResolveCliModelOptions{
+					CliModel: "neuralwatt/zai-org/GLM-5.1-FP8:" + level, ModelRuntime: registry,
+				})
+				if result.Error != "" {
+					t.Fatalf("level %s: error = %q", level, result.Error)
+				}
+				if result.Model == nil || result.Model.ID != "zai-org/GLM-5.1-FP8" || string(result.ThinkingLevel) != level {
+					t.Fatalf("level %s: result = %+v", level, result)
+				}
+			}
+		})
+
+		t.Run("invalid thinking suffix on custom model is treated as part of model id", func(t *testing.T) {
+			result := ResolveCliModel(ResolveCliModelOptions{CliModel: "neuralwatt/zai-org/GLM-5.1-FP8:banana", ModelRuntime: registry})
+			if result.Error != "" {
+				t.Fatalf("error = %q", result.Error)
+			}
+			if string(result.Model.Provider) != "neuralwatt" {
+				t.Fatalf("provider = %q", result.Model.Provider)
+			}
+			if result.Model.ID != "zai-org/GLM-5.1-FP8:banana" || result.ThinkingLevel != "" {
+				t.Fatalf("result = %+v", result)
+			}
+		})
+
+		t.Run("explicit --provider with custom model:thinking strips suffix correctly", func(t *testing.T) {
+			result := ResolveCliModel(ResolveCliModelOptions{
+				CliProvider: "neuralwatt", CliModel: "zai-org/GLM-5.1-FP8:high", ModelRuntime: registry,
 			})
 			if result.Error != "" {
-				t.Fatalf("level %s: error = %q", level, result.Error)
+				t.Fatalf("error = %q", result.Error)
 			}
-			if result.Model == nil || result.Model.ID != "zai-org/GLM-5.1-FP8" || string(result.ThinkingLevel) != level {
-				t.Fatalf("level %s: result = %+v", level, result)
+			if string(result.Model.Provider) != "neuralwatt" || result.Model.ID != "zai-org/GLM-5.1-FP8" || result.ThinkingLevel != "high" {
+				t.Fatalf("result = %+v", result)
 			}
-		}
-	})
-
-	t.Run("invalid thinking suffix on custom model is treated as part of model id", func(t *testing.T) {
-		neuralwattModel := resolverModel("some-base-model", "Some Base Model", "neuralwatt", "https://api.neuralwatt.com", false)
-		registry := &stubResolverRuntime{
-			models: append(append([]ai.Model(nil), resolverAllModels...), neuralwattModel),
-		}
-		result := ResolveCliModel(ResolveCliModelOptions{
-			CliModel: "neuralwatt/zai-org/GLM-5.1-FP8:banana", ModelRuntime: registry,
 		})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "neuralwatt" {
-			t.Fatalf("provider = %q", result.Model.Provider)
-		}
-		// Invalid suffix stays in the id (it's not a thinking level).
-		if result.Model.ID != "zai-org/GLM-5.1-FP8:banana" || result.ThinkingLevel != "" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
 
-	t.Run("explicit --provider with custom model:thinking strips suffix correctly", func(t *testing.T) {
-		neuralwattModel := resolverModel("some-base-model", "Some Base Model", "neuralwatt", "https://api.neuralwatt.com", false)
-		registry := &stubResolverRuntime{
-			models: append(append([]ai.Model(nil), resolverAllModels...), neuralwattModel),
-		}
-		result := ResolveCliModel(ResolveCliModelOptions{
-			CliProvider: "neuralwatt", CliModel: "zai-org/GLM-5.1-FP8:high", ModelRuntime: registry,
+		t.Run("with explicit --thinking, :suffix is kept as part of model id", func(t *testing.T) {
+			result := ResolveCliModel(ResolveCliModelOptions{
+				CliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high", CliThinking: "medium", ModelRuntime: registry,
+			})
+			if result.Error != "" {
+				t.Fatalf("error = %q", result.Error)
+			}
+			if string(result.Model.Provider) != "neuralwatt" {
+				t.Fatalf("provider = %q", result.Model.Provider)
+			}
+			if result.Model.ID != "zai-org/GLM-5.1-FP8:high" || result.ThinkingLevel != "" {
+				t.Fatalf("result = %+v", result)
+			}
 		})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "neuralwatt" || result.Model.ID != "zai-org/GLM-5.1-FP8" || result.ThinkingLevel != "high" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
-
-	t.Run("with explicit --thinking, :suffix is kept as part of model id", func(t *testing.T) {
-		neuralwattModel := resolverModel("some-base-model", "Some Base Model", "neuralwatt", "https://api.neuralwatt.com", false)
-		registry := &stubResolverRuntime{
-			models: append(append([]ai.Model(nil), resolverAllModels...), neuralwattModel),
-		}
-		result := ResolveCliModel(ResolveCliModelOptions{
-			CliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high", CliThinking: "medium", ModelRuntime: registry,
-		})
-		if result.Error != "" {
-			t.Fatalf("error = %q", result.Error)
-		}
-		if string(result.Model.Provider) != "neuralwatt" {
-			t.Fatalf("provider = %q", result.Model.Provider)
-		}
-		// :high is kept as part of the model id since --thinking was explicit.
-		if result.Model.ID != "zai-org/GLM-5.1-FP8:high" || result.ThinkingLevel != "" {
-			t.Fatalf("result = %+v", result)
-		}
 	})
 }
 
@@ -672,18 +640,6 @@ func TestDefaultModelSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("findInitialModel accepts explicit provider custom model ids", func(t *testing.T) {
-		registry := &stubResolverRuntime{models: resolverAllModels}
-		result := FindInitialModel(FindInitialModelOptions{
-			CliProvider:  "openrouter",
-			CliModel:     "openrouter/openai/ghost-model",
-			ModelRuntime: registry,
-		})
-		if result.Model == nil || string(result.Model.Provider) != "openrouter" || result.Model.ID != "openai/ghost-model" {
-			t.Fatalf("result = %+v", result)
-		}
-	})
-
 	t.Run("findInitialModel selects ai-gateway default when available", func(t *testing.T) {
 		aiGatewayModel := resolverModel("anthropic/claude-opus-4-6", "Claude Opus 4.6", "vercel-ai-gateway", "https://ai-gateway.vercel.sh", true)
 		registry := &stubResolverRuntime{available: []ai.Model{aiGatewayModel}}
@@ -711,10 +667,6 @@ func TestDefaultModelSelection(t *testing.T) {
 		}
 	})
 }
-
-// agent.ThinkingLevel appears in the resolver signatures; keep the import
-// honest for the fixture typed constants.
-var _ agent.ThinkingLevel = agent.ThinkingLevel("medium")
 
 func TestPersistedDefaultModelScoping(t *testing.T) {
 	// pi (v0.85.1): persisting a default model adds it to a non-empty scope

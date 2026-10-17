@@ -531,6 +531,7 @@ func buildSessionOptions(parsed *cli.Args, scopedModels []core.ScopedModel, hasE
 			CliProvider:  lo.FromPtr(parsed.Provider),
 			CliModel:     *parsed.Model,
 			CliThinking:  lo.FromPtr(parsed.Thinking),
+			InlineApiKey: parsed.APIKey != nil,
 			ModelRuntime: core.NewModelRuntimeResolver(modelRuntime),
 		})
 		if resolved.Warning != "" {

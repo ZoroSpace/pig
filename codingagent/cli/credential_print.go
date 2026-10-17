@@ -69,16 +69,19 @@ func ResolveCredentialForPrint(ctx context.Context, args *Args, modelRuntime *co
 			providers = append(providers, providerCandidate{id: provider.ID()})
 		}
 	} else {
+		resolver := core.NewModelRuntimeResolver(modelRuntime)
+		models := resolver.GetModels()
 		for _, provider := range modelRuntime.GetProviders() {
 			if _, has := credentialTypes[provider.ID()]; !has {
 				continue
 			}
-			resolved := core.ResolveCliModel(core.ResolveCliModelOptions{
-				CliProvider:  provider.ID(),
-				CliModel:     target.Model,
-				ModelRuntime: core.NewModelRuntimeResolver(modelRuntime),
-			})
-			if resolved.Model != nil && resolved.Error == "" && !containsCustomModelIdNote(resolved.Warning) {
+			resolved := core.ResolveModelReference(core.ModelReferenceRequest{
+				Text:           target.Model,
+				Provider:       provider.ID(),
+				ThinkingSuffix: "strict",
+				Fuzzy:          true,
+			}, models, func(string) bool { return true })
+			if resolved.Status == "resolved" {
 				providers = append(providers, providerCandidate{id: provider.ID(), model: resolved.Model})
 			}
 		}
@@ -152,11 +155,4 @@ func ResolveCredentialForPrint(ctx context.Context, args *Args, modelRuntime *co
 	}
 	return "", &AuthCommandError{Message: fmt.Sprintf(
 		"Multiple configured providers matched (%s). Specify --provider.", strings.Join(ids, ", "))}
-}
-
-// containsCustomModelIdNote reports whether a resolver warning mentions the
-// custom-model-id fallback (pi: resolved.warning?.includes("Using custom
-// model id")).
-func containsCustomModelIdNote(warning string) bool {
-	return warning != "" && strings.Contains(warning, "Using custom model id")
 }
