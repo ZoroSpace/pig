@@ -163,7 +163,9 @@ func TestParseCommandArgs(t *testing.T) {
 		{"empty string", "", []string{}},
 		{"extra spaces", "a  b   c", []string{"a", "b", "c"}},
 		{"tabs as separators", "a\tb\tc", []string{"a", "b", "c"}},
-		{"quoted empty string", `"" " "`, []string{" "}},
+		{"quoted empty string", `"" " "`, []string{"", " "}},
+		{"empty single-quoted argument keeps position", "a '' c", []string{"a", "", "c"}},
+		{"trailing empty quoted argument", `a ""`, []string{"a", ""}},
 		{"arguments with special characters", "$100 @user #tag", []string{"$100", "@user", "#tag"}},
 		{"unicode characters", "日本語 🎉 café", []string{"日本語", "🎉", "café"}},
 		{"newlines in quoted arguments", "\"line1\nline2\" second", []string{"line1\nline2", "second"}},
@@ -190,6 +192,25 @@ func TestParseCommandArgs(t *testing.T) {
 }
 
 func TestExpandPromptTemplate(t *testing.T) {
+	// pi #10867: empty quoted argument uses the positional default without
+	// shifting later args.
+	t.Run("should use positional default for empty quoted argument without shifting later args", func(t *testing.T) {
+		template := PromptTemplate{
+			Name:        "review",
+			Description: "test",
+			Content:     `Review $2. Focus: ${1:-correctness}.`,
+			SourceInfo:  SourceInfo{Path: "/tmp/review.md", Source: "local", Scope: SourceScopeTemporary, Origin: SourceOriginTopLevel},
+			FilePath:    "/tmp/review.md",
+		}
+
+		if got := ExpandPromptTemplate(`/review "" src/index.ts`, []PromptTemplate{template}); got != "Review src/index.ts. Focus: correctness." {
+			t.Fatalf("double-quoted empty arg = %q", got)
+		}
+		if got := ExpandPromptTemplate("/review '' src/index.ts", []PromptTemplate{template}); got != "Review src/index.ts. Focus: correctness." {
+			t.Fatalf("single-quoted empty arg = %q", got)
+		}
+	})
+
 	t.Run("should split template arguments on unquoted newlines", func(t *testing.T) {
 		result := ExpandPromptTemplate("/arg-test label-2\n\nHere is some description #2.", []PromptTemplate{
 			{

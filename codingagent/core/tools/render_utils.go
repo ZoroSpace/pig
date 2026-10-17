@@ -5,9 +5,11 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ZoroSpace/pig/ai/types"
@@ -80,6 +82,76 @@ func Str(value any) (string, bool) {
 // replaceTabs).
 func ReplaceTabs(text string) string {
 	return strings.ReplaceAll(text, "\t", "   ")
+}
+
+// parseLineNumber mirrors pi's parseLineNumber: numeric strings (and numbers)
+// become floats, everything else is undefined.
+func parseLineNumber(value any) (float64, bool) {
+	var n float64
+	switch v := value.(type) {
+	case string:
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" {
+			return 0, false
+		}
+		parsed, err := strconv.ParseFloat(trimmed, 64)
+		if err != nil {
+			return 0, false
+		}
+		n = parsed
+	case float64:
+		n = v
+	case int:
+		n = float64(v)
+	case int64:
+		n = float64(v)
+	default:
+		return 0, false
+	}
+	if math.IsNaN(n) || math.IsInf(n, 0) {
+		return 0, false
+	}
+	return n, true
+}
+
+// formatLineNumber renders a parsed line number without a trailing ".0".
+func formatLineNumber(n float64) string {
+	if n == math.Trunc(n) {
+		return strconv.FormatInt(int64(n), 10)
+	}
+	return strconv.FormatFloat(n, 'f', -1, 64)
+}
+
+// FormatReadLineRange formats finite numbers or numeric strings as a read line
+// range, omitting malformed ranges (pi: formatReadLineRange).
+func FormatReadLineRange(offset, limit any) string {
+	// Strict schemas represent omitted optional arguments as null.
+	if offset == nil && limit == nil {
+		return ""
+	}
+	var start float64
+	if offset == nil {
+		start = 1
+	} else {
+		parsed, ok := parseLineNumber(offset)
+		if !ok {
+			return ""
+		}
+		start = parsed
+	}
+	if limit == nil {
+		return ":" + formatLineNumber(start)
+	}
+	count, ok := parseLineNumber(limit)
+	if !ok {
+		return ""
+	}
+	end := start + count - 1
+	out := ":" + formatLineNumber(start)
+	if end != 0 {
+		out += "-" + formatLineNumber(end)
+	}
+	return out
 }
 
 // collapsedArgsChars is the collapsed-format cut width (pi:

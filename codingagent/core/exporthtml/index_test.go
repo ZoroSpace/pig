@@ -232,3 +232,19 @@ func TestTemplateJsContextEdit(t *testing.T) {
 		}
 	}
 }
+
+// The exported viewer must use the shared read line-range formatter in both
+// the tool-call label and the entry renderer (pi: #9887/#10938).
+func TestTemplateJsReadLineRange(t *testing.T) {
+	for _, fragment := range []string{
+		"function parseLineNumber(value)",
+		"function formatReadLineRange(offset, limit)",
+		"return `[read: ${path}${formatReadLineRange(args.offset, args.limit)}]`;",
+		"const readLineRange = formatReadLineRange(args.offset, args.limit);",
+		"pathHtml += `<span class=\"line-numbers\">${escapeHtml(readLineRange)}</span>`;",
+	} {
+		if !strings.Contains(templateJS, fragment) {
+			t.Fatalf("template.js missing read line range fragment: %q", fragment)
+		}
+	}
+}

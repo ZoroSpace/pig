@@ -1271,21 +1271,7 @@ func (l *treeList) formatToolCall(name string, args map[string]any) string {
 	switch name {
 	case "read":
 		path := shortenPath(argsStringOr("path", "file_path"))
-		offset, hasOffset := argsInt(args, "offset")
-		limit, hasLimit := argsInt(args, "limit")
-		display := path
-		if hasOffset || hasLimit {
-			start := 1
-			if hasOffset {
-				start = offset
-			}
-			end := ""
-			if hasLimit {
-				end = fmt.Sprintf("-%d", start+limit-1)
-			}
-			display += fmt.Sprintf(":%d%s", start, end)
-		}
-		return fmt.Sprintf("[read: %s]", display)
+		return fmt.Sprintf("[read: %s%s]", path, coretools.FormatReadLineRange(args["offset"], args["limit"]))
 	case "write":
 		return fmt.Sprintf("[write: %s]", shortenPath(argsStringOr("path", "file_path")))
 	case "edit":
@@ -1328,19 +1314,6 @@ func (l *treeList) formatToolCall(name string, args map[string]any) string {
 		}
 		return fmt.Sprintf("[%s: %s%s]", name, argsStr, suffix)
 	}
-}
-
-// argsInt reads a JSON number argument.
-func argsInt(args map[string]any, key string) (int, bool) {
-	if v, ok := args[key]; ok {
-		if f, ok := v.(float64); ok {
-			return int(f), true
-		}
-		if i, ok := v.(int); ok {
-			return i, true
-		}
-	}
-	return 0, false
 }
 
 // HandleInput implements InputHandler (pi: handleInput).

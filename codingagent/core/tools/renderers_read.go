@@ -38,8 +38,8 @@ var compactResourceFileNames = map[string]bool{
 // readRenderArgs is pi's ReadRenderArgs over raw args.
 type readRenderArgs struct {
 	path   *string
-	offset *float64
-	limit  *float64
+	offset any
+	limit  any
 }
 
 // readRenderArgsFromArgs extracts the render args (pi: args as
@@ -51,39 +51,28 @@ func readRenderArgsFromArgs(args any) readRenderArgs {
 		return out
 	}
 	out.path = rawPathFromArgs(args)
-	if v, has := m["offset"]; has && v != nil {
-		if f, isNum := v.(float64); isNum {
-			out.offset = &f
-		}
+	if v, has := m["offset"]; has {
+		out.offset = v
 	}
-	if v, has := m["limit"]; has && v != nil {
-		if f, isNum := v.(float64); isNum {
-			out.limit = &f
-		}
+	if v, has := m["limit"]; has {
+		out.limit = v
 	}
 	return out
 }
 
-// formatReadLineRange renders the :start-end suffix (pi: formatReadLineRange).
-func formatReadLineRange(theme UITheme, args readRenderArgs) string {
-	if args.offset == nil && args.limit == nil {
+// styledReadLineRange renders the :start-end suffix (pi: styledReadLineRange).
+func styledReadLineRange(theme UITheme, args readRenderArgs) string {
+	lineRange := FormatReadLineRange(args.offset, args.limit)
+	if lineRange == "" {
 		return ""
 	}
-	startLine := 1.0
-	if args.offset != nil {
-		startLine = *args.offset
-	}
-	if args.limit == nil {
-		return theme.Fg("warning", fmt.Sprintf(":%d", int64(startLine)))
-	}
-	endLine := startLine + *args.limit - 1
-	return theme.Fg("warning", fmt.Sprintf(":%d-%d", int64(startLine), int64(endLine)))
+	return theme.Fg("warning", lineRange)
 }
 
 // formatReadCall renders the call row (pi: formatReadCall).
 func formatReadCall(theme UITheme, args readRenderArgs, cwd string) string {
 	pathDisplay := RenderToolPath(args.path, theme, cwd, "")
-	return theme.Fg("toolTitle", theme.Bold("read")) + " " + pathDisplay + formatReadLineRange(theme, args)
+	return theme.Fg("toolTitle", theme.Bold("read")) + " " + pathDisplay + styledReadLineRange(theme, args)
 }
 
 // trimTrailingEmptyLinesRead is read.ts's local trimTrailingEmptyLines
@@ -157,14 +146,14 @@ func formatCompactReadCall(theme UITheme, classification compactReadClassificati
 	if classification.kind == "skill" {
 		return theme.Fg("customMessageLabel", "\x1b[1m[skill]\x1b[22m ") +
 			theme.Fg("customMessageText", classification.label) +
-			formatReadLineRange(theme, args) +
+			styledReadLineRange(theme, args) +
 			expandHint
 	}
 
 	return theme.Fg("toolTitle", theme.Bold("read "+classification.kind)) +
 		" " +
 		theme.Fg("accent", classification.label) +
-		formatReadLineRange(theme, args) +
+		styledReadLineRange(theme, args) +
 		expandHint
 }
 

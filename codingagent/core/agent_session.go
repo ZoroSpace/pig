@@ -744,8 +744,8 @@ func NewAgentSession(config AgentSessionConfig) *AgentSession {
 		activeToolNames:          s.initialActiveToolNames,
 		includeAllExtensionTools: true,
 	})
-	if s.initialActiveToolNames == nil {
-		s.restoreToolsFromTranscript()
+	if s.usesDefaultTools {
+		s.restoreToolsFromTranscript(s.defaultToolModifiers)
 	}
 
 	s.runAutoCompactionFn = s.runAutoCompaction
@@ -3001,8 +3001,10 @@ func (s *AgentSession) installAgentForcedPromptProjection() {
 // restoreToolsFromTranscript restores the active tool loadout declared by
 // the session transcript, if it declares one (pi:
 // _restoreToolsFromTranscript; v0.86.0; v0.99.1 routes through
-// setActiveToolsByName, which filters unknown names the same way).
-func (s *AgentSession) restoreToolsFromTranscript() {
+// setActiveToolsByName, which filters unknown names the same way). modifiers
+// are the `+name`/`-name` entries applied to the restored loadout (S19-2,
+// pi 6f2f164ab).
+func (s *AgentSession) restoreToolsFromTranscript(modifiers []string) {
 	sessionContext := s.SessionManager.BuildSessionContext()
 	var transcript aiutils.TranscriptMessages
 	for _, message := range sessionContext.Messages {
@@ -3018,6 +3020,7 @@ func (s *AgentSession) restoreToolsFromTranscript() {
 	for _, tool := range current.ToolsAdded {
 		toolNames = append(toolNames, tool.Name)
 	}
+	toolNames = applyToolModifiers(toolNames, modifiers)
 	s.SetActiveToolsByName(toolNames)
 }
 
@@ -5639,7 +5642,7 @@ func (s *AgentSession) NavigateTree(ctx context.Context, targetID string, option
 	// (pi v0.87.0: _refreshFinalizedContext).
 	s.refreshFinalizedContext()
 	// pi v0.86.0: restore the tool loadout declared by the target branch.
-	s.restoreToolsFromTranscript()
+	s.restoreToolsFromTranscript(nil)
 
 	// Emit session_tree event
 	fromExtensionValue := fromExtension

@@ -817,5 +817,15 @@ func TestTreeSelectorBranchNavigationAndFolding(t *testing.T) {
 	})
 }
 
+// String offset/limit (raw JSON args) must render the read range in the
+// session tree label (pi: test/read-line-range-display.test.ts, #9887).
+func TestTreeSelectorReadLineRangeLabel(t *testing.T) {
+	l := &treeList{}
+	got := l.formatToolCall("read", map[string]any{"path": "notes.txt", "offset": "25", "limit": "13"})
+	if want := "[read: notes.txt:25-37]"; got != want {
+		t.Fatalf("formatToolCall = %q, want %q", got, want)
+	}
+}
+
 // keep json imported for future assertion helpers (render snapshotting).
 var _ = json.Marshal

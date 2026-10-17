@@ -55,6 +55,9 @@ type PromptTemplate struct {
 func ParseCommandArgs(argsString string) []string {
 	var args []string
 	var current strings.Builder
+	// hasToken tracks whether a token has started, so quoted empty strings
+	// ("" or '') are kept as arguments (S19-2, pi 9fe3f3716).
+	hasToken := false
 	inQuote := byte(0)
 
 	for i := 0; i < len(argsString); i++ {
@@ -68,17 +71,20 @@ func ParseCommandArgs(argsString string) []string {
 			}
 		} else if char == '"' || char == '\'' {
 			inQuote = char
+			hasToken = true
 		} else if char == ' ' || char == '\t' || char == '\n' || char == '\v' || char == '\f' || char == '\r' {
-			if current.Len() > 0 {
+			if hasToken {
 				args = append(args, current.String())
 				current.Reset()
+				hasToken = false
 			}
 		} else {
 			current.WriteByte(char)
+			hasToken = true
 		}
 	}
 
-	if current.Len() > 0 {
+	if hasToken {
 		args = append(args, current.String())
 	}
 

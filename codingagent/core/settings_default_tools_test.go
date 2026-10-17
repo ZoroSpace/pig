@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/ZoroSpace/pig/ai/types"
 )
 
 func TestDefaultToolsPlusMinusSyntax(t *testing.T) {
@@ -340,6 +342,125 @@ func TestDefaultToolsToolModifierOptions(t *testing.T) {
 		if _, err := createSession(t, []string{"-gr*"}, ""); err == nil ||
 			!strings.Contains(err.Error(), "+name and -name entries take exact tool names, not patterns: -gr*") {
 			t.Fatalf("pattern modifier error = %v", err)
+		}
+	})
+}
+
+// pi: test/default-tools-setting.test.ts resume describe (#10887). pig has no
+// extension tools, so the registered-but-inactive built-in find plays pi's
+// inactive_tool role.
+func TestDefaultToolsResumeRestoresRecordedLoadout(t *testing.T) {
+	tempDir := newTempDir(t)
+	agentDir := filepath.Join(tempDir, "agent")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sessionWithLoadout := func(t *testing.T, toolNames ...string) *SessionManager {
+		t.Helper()
+		sessionManager, err := InMemorySession(tempDir, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tools := make([]types.Tool, 0, len(toolNames))
+		for _, name := range toolNames {
+			tools = append(tools, types.Tool{
+				Name:        name,
+				Description: name,
+				Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
+			})
+		}
+		if _, err := sessionManager.AppendMessage(types.SystemMessage{
+			Role:       types.RoleSystem,
+			Content:    types.SystemContent{String: ""},
+			ToolsAdded: tools,
+			Timestamp:  1,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return sessionManager
+	}
+	resume := func(t *testing.T, sessionManager *SessionManager, options *CreateAgentSessionOptions) *AgentSession {
+		t.Helper()
+		opts := &CreateAgentSessionOptions{
+			Cwd:             tempDir,
+			AgentDir:        agentDir,
+			SessionManager:  sessionManager,
+			SettingsManager: CreateSettingsManager(tempDir, agentDir, nil),
+		}
+		if options != nil {
+			opts.Tools = options.Tools
+			opts.NoTools = options.NoTools
+			opts.ExcludeTools = options.ExcludeTools
+		}
+		result, err := CreateAgentSession(context.Background(), opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result.Session
+	}
+
+	t.Run("restores the loadout the transcript records", func(t *testing.T) {
+		session := resume(t, sessionWithLoadout(t, "read", "grep", "find"), nil)
+		defer session.Dispose()
+		got := session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"find", "grep", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("does not restore excluded tools", func(t *testing.T) {
+		session := resume(t, sessionWithLoadout(t, "read", "grep", "find"), &CreateAgentSessionOptions{ExcludeTools: []string{"find"}})
+		defer session.Dispose()
+		got := session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"grep", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("uses explicit tool options instead of the recorded loadout", func(t *testing.T) {
+		allowlisted := resume(t, sessionWithLoadout(t, "read", "grep", "find"), &CreateAgentSessionOptions{Tools: []string{"read", "write"}})
+		if got := allowlisted.GetActiveToolNames(); !slices.Equal(got, []string{"read", "write"}) {
+			t.Fatalf("allowlisted active tools = %v, want [read write]", got)
+		}
+		allowlisted.Dispose()
+
+		builtinless := resume(t, sessionWithLoadout(t, "read", "grep", "find"), &CreateAgentSessionOptions{NoTools: "builtin"})
+		if got := builtinless.GetActiveToolNames(); len(got) != 0 {
+			t.Fatalf("builtinless active tools = %v, want []", got)
+		}
+		builtinless.Dispose()
+	})
+
+	t.Run("applies +name and -name tool options to the recorded loadout", func(t *testing.T) {
+		session := resume(t, sessionWithLoadout(t, "read", "grep", "find"), &CreateAgentSessionOptions{Tools: []string{"-grep", "+write"}})
+		defer session.Dispose()
+		got := session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"find", "read", "write"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("uses the default tools when the transcript records no loadout", func(t *testing.T) {
+		sessionManager, err := InMemorySession(tempDir, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := sessionManager.AppendMessage(types.UserMessage{
+			Role:      types.RoleUser,
+			Content:   types.UserContent{String: "hi"},
+			Timestamp: 1,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		session := resume(t, sessionManager, nil)
+		defer session.Dispose()
+		got := session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"bash", "edit", "read", "write"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools = %v, want %v", got, want)
 		}
 	})
 }
