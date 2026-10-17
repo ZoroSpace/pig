@@ -19,7 +19,7 @@ import (
 // as every future pi baseline sync — a red here means the sync batch missed
 // the bump.
 func TestVersionTracksPiBaseline(t *testing.T) {
-	const wantPiBaseline = "1.2.0" // current tracked pi tag
+	const wantPiBaseline = "1.3.0" // current tracked pi tag
 	if Version != wantPiBaseline {
 		t.Errorf("codingagent.Version = %q, want %q (pi baseline moved? bump the constant in the sync batch)", Version, wantPiBaseline)
 	}
