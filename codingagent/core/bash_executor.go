@@ -42,17 +42,17 @@ type BashExecutorOptions struct {
 type BashResult struct {
 	// Output is the combined stdout+stderr output (sanitized, possibly
 	// truncated).
-	Output string
+	Output string `json:"output"`
 	// ExitCode is the process exit code; nil when killed/cancelled (pi:
-	// undefined).
-	ExitCode *int
+	// undefined — JSON.stringify omits the key).
+	ExitCode *int `json:"exitCode,omitempty"`
 	// Cancelled reports whether the command was cancelled via the context.
-	Cancelled bool
+	Cancelled bool `json:"cancelled"`
 	// Truncated reports whether the output was truncated.
-	Truncated bool
+	Truncated bool `json:"truncated"`
 	// FullOutputPath is the temp file containing the full output when the
-	// output exceeded the truncation threshold.
-	FullOutputPath string
+	// output exceeded the truncation threshold (pi: fullOutputPath?).
+	FullOutputPath string `json:"fullOutputPath,omitempty"`
 }
 
 // bashExecutorDecoder decodes streamed bytes the way node's

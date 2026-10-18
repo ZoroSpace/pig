@@ -12,7 +12,6 @@
 //   - handlePackageCommand / handleConfigCommand (Phase 7 package manager)
 //   - runMigrations (Phase 8 migrations batch)
 //   - exportFromFile (--export, Phase 8 export-html batch)
-//   - runRpcMode (Phase 5 RPC batch)
 //   - InteractiveMode: the T5b shell subset is wired (regular mode,
 //     transcript/footer/submit chain); selectors, showLoadedResources,
 //     fullscreen mode, extension UI, and the session picker (--resume)
@@ -47,6 +46,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/core/exporthtml"
 	"github.com/ZoroSpace/pig/codingagent/modes"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive"
+	"github.com/ZoroSpace/pig/codingagent/modes/rpc"
 	"github.com/ZoroSpace/pig/codingagent/utils"
 	pigutils "github.com/ZoroSpace/pig/utils"
 )
@@ -1112,14 +1112,20 @@ func Main(args []string) int {
 
 	// pi supports PI_STARTUP_BENCHMARK (interactive only); the TUI lands
 	// with Phase 6, so the flag is a no-op here.
-	// pi refreshes model catalogs in the background for RPC mode; runRpcMode
-	// arrives with the RPC batch (Phase 5).
 
 	switch appMode {
 	case "rpc":
-		// runRpcMode is the Phase 5 batch.
-		fmt.Fprintln(os.Stderr, "Error: RPC mode is not yet available (lands in a later phase).")
-		return 1
+		// RPC refreshes catalogs here in the background; interactive mode
+		// starts its refresh after TUI initialization (pi: main.ts).
+		if !offlineMode {
+			go func() {
+				refreshCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				defer cancel()
+				modelRuntime.Refresh(refreshCtx, nil)
+			}()
+		}
+		core.PrintTimings()
+		return rpc.RunRpcMode(ctx, runtime)
 	case "interactive":
 		interactiveMode := interactive.NewInteractiveMode(runtime, interactive.InteractiveModeOptions{
 			StartupDiagnostics:   runtime.Diagnostics(),

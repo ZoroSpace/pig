@@ -312,12 +312,12 @@ func (m *untypedMessage) MarshalJSON() ([]byte, error) { return m.Raw, nil }
 // SessionTreeNode is a getTree node: a defensive copy of the session
 // structure (pi: SessionTreeNode).
 type SessionTreeNode struct {
-	Entry    SessionEntry
-	Children []*SessionTreeNode
+	Entry    SessionEntry       `json:"entry"`
+	Children []*SessionTreeNode `json:"children"`
 	// Resolved label for this entry, if any.
-	Label *string
+	Label *string `json:"label,omitempty"`
 	// Timestamp of the latest label change for this entry, if any.
-	LabelTimestamp *string
+	LabelTimestamp *string `json:"labelTimestamp,omitempty"`
 }
 
 // ProjectedSessionEntry is one selected entry with its model-visible

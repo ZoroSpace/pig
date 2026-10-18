@@ -338,7 +338,8 @@ cp -a ~/.pi/agent ~/.pig/agent
 | TUI（编辑器、补全、主题、鼠标、搜索）与 Markdown / LaTeX / Mermaid | ✅ | ✅ pi-tui 全量移植 |
 | 中文分词与 CJK 渲染修复、macOS Ctrl+V 剪贴板贴图（粘贴显示 `[Image N]` 占位符） | — | ✅ pig 增强（pi 走 native addon，pig 用 osascript 零依赖实现） |
 | MCP 客户端（代理工具、`/mcp` 面板、配置链、启停持久化） | —（社区扩展 [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter)） | ✅ pig 内建，`.mcp.json` 生态格式直接复用 |
-| RPC 模式 / sqlite 会话后端 | ✅ | ⏳ 按需排期 |
+| RPC 模式（`--mode rpc`，JSON stdin/stdout 嵌入协议） | ✅ | ✅ 对齐（扩展 UI 通道仅声明，无消费方，见 [RPC-MODE](docs/handoffs/RPC-MODE.md)） |
+| sqlite 会话后端 / client-server 栈 | —（上游已删） | — 不适用 |
 | 扩展系统（Node sidecar、包管理器） | ✅ | ⏳ 装配位已留，见 [EXTENSION-PLAN](docs/handoffs/EXTENSION-PLAN.md) |
 | 图像转码与缩放（read/贴图/工具结果：BMP/WebP/TIFF→PNG、2000px 自动缩放，Go 原生） | ✅ | ✅ pig 偏差：Go 原生实现替代 photon/WASM，见 [fix 文档](docs/fix/2026-09-22-image-tool-413-oversize-and-history-bloat.md) |
 | `/bug` bug 上报（上传 Pi 的 Radius gateway / 导出 zip） | ✅ | ❌ 不移植：pig 用户直接提 [issue](https://github.com/ZoroSpace/pig/issues) |

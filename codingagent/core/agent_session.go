@@ -449,22 +449,22 @@ type ModelCycleResult struct {
 
 // SessionStats are the session statistics for /session (pi: SessionStats).
 type SessionStats struct {
-	SessionFile       string // "" = sessions disabled (pi: undefined)
-	SessionID         string
-	UserMessages      int
-	AssistantMessages int
-	ToolCalls         int
-	ToolResults       int
-	TotalMessages     int
+	SessionFile       string `json:"sessionFile,omitempty"` // "" = sessions disabled (pi: undefined)
+	SessionID         string `json:"sessionId"`
+	UserMessages      int    `json:"userMessages"`
+	AssistantMessages int    `json:"assistantMessages"`
+	ToolCalls         int    `json:"toolCalls"`
+	ToolResults       int    `json:"toolResults"`
+	TotalMessages     int    `json:"totalMessages"`
 	Tokens            struct {
-		Input      int64
-		Output     int64
-		CacheRead  int64
-		CacheWrite int64
-		Total      int64
-	}
-	Cost         float64
-	ContextUsage *ContextUsage
+		Input      int64 `json:"input"`
+		Output     int64 `json:"output"`
+		CacheRead  int64 `json:"cacheRead"`
+		CacheWrite int64 `json:"cacheWrite"`
+		Total      int64 `json:"total"`
+	} `json:"tokens"`
+	Cost         float64       `json:"cost"`
+	ContextUsage *ContextUsage `json:"contextUsage,omitempty"`
 }
 
 // toolDefinitionEntry is one registry entry (pi: ToolDefinitionEntry).

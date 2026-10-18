@@ -60,12 +60,14 @@ const (
 // ContextUsage). nil Tokens/Percent = pi's null (unknown, e.g. right after
 // compaction before the next LLM response).
 type ContextUsage struct {
-	// Tokens is the estimated context token count; nil = unknown.
-	Tokens *int64
+	// Tokens is the estimated context token count; nil = unknown (pi:
+	// tokens: number | null).
+	Tokens *int64 `json:"tokens"`
 	// ContextWindow is the model's context window.
-	ContextWindow int64
-	// Percent is the usage as percentage of the context window; nil = unknown.
-	Percent *float64
+	ContextWindow int64 `json:"contextWindow"`
+	// Percent is the usage as percentage of the context window; nil = unknown
+	// (pi: percent: number | null).
+	Percent *float64 `json:"percent"`
 }
 
 // CompactOptions are the options for triggering compaction from extensions
