@@ -20,7 +20,7 @@ func xiaomiSmokeModel(t *testing.T) (*types.Model, string) {
 	if apiKey == "" {
 		t.Skip("XIAOMI_TOKEN_PLAN_AMS_API_KEY not set")
 	}
-	model := anthropicTestModel("mimo-v2.5-pro", types.ProviderXiaomiTokenPlanAMS, &types.AnthropicMessagesCompat{AllowEmptySignature: lo.ToPtr(true)})
+	model := anthropicTestModel("mimo-v2.6-pro", types.ProviderXiaomiTokenPlanAMS, &types.AnthropicMessagesCompat{AllowEmptySignature: lo.ToPtr(true)})
 	model.Name = "MiMo-V2.5-Pro Anthropic smoke"
 	model.BaseURL = "https://token-plan-ams.xiaomimimo.com/anthropic"
 	model.Cost = types.ModelCost{ModelCostRates: types.ModelCostRates{Input: 1, Output: 3, CacheRead: 0.2}}

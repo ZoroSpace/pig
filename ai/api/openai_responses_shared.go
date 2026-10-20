@@ -81,7 +81,7 @@ func convertResponsesToolResultOutput(model *types.Model, content []types.Conten
 		}
 	}
 	textResult := strings.Join(texts, "\n")
-	hasText := textResult != ""
+	hasText := strings.TrimSpace(textResult) != ""
 
 	if len(images) == 0 || !modelSupportsImages(model) {
 		if hasText {

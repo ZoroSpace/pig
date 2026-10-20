@@ -112,3 +112,44 @@ func TestGoogleImageToolResultRoutingNestedForGemini3(t *testing.T) {
 		t.Error("nested part should carry the inline image")
 	}
 }
+
+// TestGoogleWhitespaceOnlyToolResultTextIsNoText ports pi #8720 for Google:
+// whitespace-only tool output counts as no text, so a result with an image
+// gets the image placeholder and one without images becomes an empty output.
+func TestGoogleWhitespaceOnlyToolResultTextIsNoText(t *testing.T) {
+	model := googleRoutingModel("gemini-3-pro-preview")
+	llmContext := googleRoutingContext(model)
+	for i, message := range llmContext.Messages {
+		toolResult, ok := message.(types.ToolResultMessage)
+		if !ok {
+			continue
+		}
+		switch toolResult.ToolCallID {
+		case "call_a":
+			toolResult.Content = []types.Content{types.NewTextContent("\r\n")}
+		case "call_img":
+			toolResult.Content = append([]types.Content{types.NewTextContent(" \n")}, toolResult.Content...)
+		}
+		llmContext.Messages[i] = toolResult
+	}
+
+	contents := ConvertGoogleMessages(model, llmContext)
+	responses := make([]any, 0, 3)
+	for _, part := range contents[2].Parts {
+		if part.FunctionResponse != nil {
+			responses = append(responses, part.FunctionResponse.Response["output"])
+		}
+	}
+	if len(responses) != 3 {
+		t.Fatalf("responses = %#v, want 3", responses)
+	}
+	if responses[0] != "" {
+		t.Errorf("whitespace-only text output = %v, want empty string", responses[0])
+	}
+	if responses[1] != "(see attached image)" {
+		t.Errorf("whitespace text with image output = %v, want (see attached image)", responses[1])
+	}
+	if responses[2] != "beta text" {
+		t.Errorf("text output = %v, want beta text", responses[2])
+	}
+}

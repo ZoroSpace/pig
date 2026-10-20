@@ -195,7 +195,7 @@ func TestIsContextOverflowDetectsXiaomiStyleOverflow(t *testing.T) {
 		cacheRead: 1048512,
 		output:    0,
 		provider:  "xiaomi",
-		model:     "mimo-v2.5-pro",
+		model:     "mimo-v2.6-pro",
 	})
 	if !IsContextOverflow(&message, 1048576) {
 		t.Fatal("want overflow")
@@ -267,16 +267,64 @@ func TestIsContextOverflowDetectsVolcengineArkExceedMaxMessageTokens(t *testing.
 	}
 }
 
+func TestIsContextOverflowDetectsProviderIndependentRequestSizeOverflow(t *testing.T) {
+	// pi 73f8de80b: the 413 pattern is provider-agnostic, so a single
+	// Copilot-prefixed string and a single non-Copilot string cover both
+	// branches of the regex; the bare forms cover raw SDK output.
+	for _, errorMessage := range []string{
+		`github-copilot API error (413): {"message":"failed to parse request","code":""}`,
+		"custom-provider API error (413): Payload Too Large",
+		`413 {"error":{"message":"failed to parse request","code":""}}`,
+		"413",
+	} {
+		message := createErrorMessage(errorMessage)
+		if !IsContextOverflow(&message, 1_000_000) {
+			t.Errorf("%q: want overflow with context window", errorMessage)
+		}
+		if !IsContextOverflow(&message, 0) {
+			t.Errorf("%q: want overflow without context window", errorMessage)
+		}
+	}
+}
+
+func TestIsContextOverflowDoesNotMistakeUnrelatedErrorsForRequestSizeOverflow(t *testing.T) {
+	for _, errorMessage := range []string{
+		`github-copilot API error (400): {"message":"failed to parse request","code":""}`,
+		"custom-provider API error (429): Too many requests",
+		`github-copilot API error (400): {"message":"failed to parse request: invalid value 413"}`,
+		"custom-provider API error (400): upstream mentioned OpenAI API error (413): invalid input",
+		"custom-provider API error (4130): invalid input",
+		"4130 failed to parse request",
+	} {
+		message := createErrorMessage(errorMessage)
+		if IsContextOverflow(&message, 1_000_000) {
+			t.Errorf("%q: want no overflow", errorMessage)
+		}
+	}
+}
+
+func TestIsContextOverflowLimitsHTTPStatusMatchingToFailedResponses(t *testing.T) {
+	message := createErrorMessage(`OpenAI API error (413): {"message":"failed to parse request"}`)
+	message.StopReason = types.StopReasonAborted
+	if IsContextOverflow(&message, 1_000_000) {
+		t.Error("aborted 413: want no overflow")
+	}
+	message.StopReason = types.StopReasonStop
+	if IsContextOverflow(&message, 1_000_000) {
+		t.Error("successful 413 text: want no overflow")
+	}
+}
+
 func TestIsContextOverflowScopesBodylessErrorsToCerebras(t *testing.T) {
-	// Regression for pi #9482: bodyless 400/413 are overflow errors only for
+	// Regression for pi #9482: a bodyless 400 is an overflow error only for
 	// Cerebras; other providers report a bodyless request failure that must
-	// not be treated as overflow.
-	for _, errorMessage := range []string{"400 status code (no body)", "413 status code (no body)"} {
-		if !IsContextOverflow(lo.ToPtr(createErrorMessageWithProvider(errorMessage, "cerebras")), 131072) {
-			t.Errorf("%s (cerebras): want overflow", errorMessage)
-		}
-		if IsContextOverflow(lo.ToPtr(createErrorMessageWithProvider(errorMessage, "opencode-go")), 1000000) {
-			t.Errorf("%s (opencode-go): want no overflow", errorMessage)
-		}
+	// not be treated as overflow. HTTP 413 is request-size overflow for every
+	// provider (pi 73f8de80b).
+	errorMessage := "400 status code (no body)"
+	if !IsContextOverflow(lo.ToPtr(createErrorMessageWithProvider(errorMessage, "cerebras")), 131072) {
+		t.Errorf("%s (cerebras): want overflow", errorMessage)
+	}
+	if IsContextOverflow(lo.ToPtr(createErrorMessageWithProvider(errorMessage, "opencode-go")), 1000000) {
+		t.Errorf("%s (opencode-go): want no overflow", errorMessage)
 	}
 }

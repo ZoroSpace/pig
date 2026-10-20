@@ -1,5 +1,5 @@
 // pi: test/xiaomi-models.test.ts — deprecated MiMo models are omitted and the
-// replacement v2.5 models are present across the four xiaomi providers.
+// replacement v2.6 models are present across the four xiaomi providers.
 package providers
 
 import (
@@ -20,7 +20,7 @@ func xiaomiProviders() []types.ProviderID {
 
 func TestXiaomiMiMoCatalogReplacement(t *testing.T) {
 	deprecatedModelIDs := []string{"mimo-v2-flash", "mimo-v2-omni", "mimo-v2-pro"}
-	replacementModelIDs := []string{"mimo-v2.5", "mimo-v2.5-pro"}
+	replacementModelIDs := []string{"mimo-v2.5", "mimo-v2.6-pro"}
 
 	for _, provider := range xiaomiProviders() {
 		models := GetBuiltinModels(provider)

@@ -12,7 +12,7 @@ import (
 )
 
 func emptySignatureTestModel(allowEmptySignature *bool) *types.Model {
-	model := anthropicTestModel("mimo-v2.5-pro", types.ProviderID("xiaomi-token-plan-ams"), nil)
+	model := anthropicTestModel("mimo-v2.6-pro", types.ProviderID("xiaomi-token-plan-ams"), nil)
 	model.BaseURL = unreachableAnthropicBaseURL
 	model.Reasoning = true
 	model.ContextWindow = 1048576
@@ -100,7 +100,7 @@ func findAssistantMessages(payload map[string]any) []any {
 
 func TestAnthropicEmptySignatureConvertsToTextByDefault(t *testing.T) {
 	model := emptySignatureTestModel(nil)
-	payload := captureSimplePayload(t, model, emptySignatureTestContext("", "internal reasoning", types.ProviderID("xiaomi-token-plan-ams"), "mimo-v2.5-pro"), nil)
+	payload := captureSimplePayload(t, model, emptySignatureTestContext("", "internal reasoning", types.ProviderID("xiaomi-token-plan-ams"), "mimo-v2.6-pro"), nil)
 	assistantMessages := findAssistantMessages(payload)
 	if len(assistantMessages) != 1 {
 		t.Fatalf("assistant messages = %#v, want one", assistantMessages)
@@ -117,7 +117,7 @@ func TestAnthropicEmptySignatureConvertsToTextByDefault(t *testing.T) {
 
 func TestAnthropicEmptySignaturePreservesEmptyThinkingWithSignature(t *testing.T) {
 	model := emptySignatureTestModel(nil)
-	payload := captureSimplePayload(t, model, emptySignatureTestContext("signed-thinking", "", types.ProviderID("xiaomi-token-plan-ams"), "mimo-v2.5-pro"), nil)
+	payload := captureSimplePayload(t, model, emptySignatureTestContext("signed-thinking", "", types.ProviderID("xiaomi-token-plan-ams"), "mimo-v2.6-pro"), nil)
 	assistantMessages := findAssistantMessages(payload)
 	if len(assistantMessages) != 1 {
 		t.Fatalf("assistant messages = %#v, want one", assistantMessages)
@@ -134,7 +134,7 @@ func TestAnthropicEmptySignaturePreservesEmptyThinkingWithSignature(t *testing.T
 
 func TestAnthropicEmptySignaturePreservedWhenAllowEmptySignatureEnabled(t *testing.T) {
 	model := emptySignatureTestModel(lo.ToPtr(true))
-	payload := captureSimplePayload(t, model, emptySignatureTestContext(" ", "internal reasoning", types.ProviderID("xiaomi-token-plan-ams"), "mimo-v2.5-pro"), nil)
+	payload := captureSimplePayload(t, model, emptySignatureTestContext(" ", "internal reasoning", types.ProviderID("xiaomi-token-plan-ams"), "mimo-v2.6-pro"), nil)
 	assistantMessages := findAssistantMessages(payload)
 	if len(assistantMessages) != 1 {
 		t.Fatalf("assistant messages = %#v, want one", assistantMessages)

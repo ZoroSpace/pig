@@ -43,6 +43,9 @@ func TestAnthropicAdaptiveThinkingModelMetadata(t *testing.T) {
 		"anthropic/claude-opus-4-8",
 		"anthropic/claude-opus-5",
 		"anthropic/claude-sonnet-5",
+		// #11121: MiniMax models with catalog effort levels require adaptive thinking.
+		"minimax-cn/MiniMax-M3.1-Flash",
+		"minimax/MiniMax-M3.1-Flash",
 	}
 	var flagged []string
 	for providerID, models := range catalogModelsSorted(t) {

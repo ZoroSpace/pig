@@ -246,18 +246,6 @@ func generateModels(ctx context.Context) error {
 		}
 	}
 
-	// Only MiniMax M2.7 / M3 direct models are served by pi (pi: minimaxDirectSupportedIds).
-	minimaxDirectSupportedIDs := stringSet("MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M3")
-	filtered := allModels[:0]
-	for _, candidate := range allModels {
-		if (candidate.Provider == ai.ProviderMinimax || candidate.Provider == ai.ProviderMinimaxCN) &&
-			!minimaxDirectSupportedIDs[candidate.ID] {
-			continue
-		}
-		filtered = append(filtered, candidate)
-	}
-	allModels = filtered
-
 	// pi's codexModels (openai-codex-responses) follow the minimax filter;
 	// Mistral Medium 3.5 (mistral-conversations) stays skipped (unported API).
 	allModels = append(allModels, codexModels()...)

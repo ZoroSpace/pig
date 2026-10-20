@@ -62,3 +62,52 @@ func TestOmitsEmptyTextPartsFromMultimodalUserMessages(t *testing.T) {
 		t.Fatalf("image_url = %#v", part["image_url"])
 	}
 }
+
+// TestWhitespaceOnlyToolResultUsesNoToolOutputPlaceholder ports the
+// openai-completions half of pi #8720 (a bare "\r\n" from bash must not be
+// sent verbatim; some providers reject it with a 400).
+func TestWhitespaceOnlyToolResultUsesNoToolOutputPlaceholder(t *testing.T) {
+	base, ok := ai.MODELS[ai.ProviderOpenAI]["gpt-4o-mini"]
+	if !ok {
+		t.Fatal("gpt-4o-mini not in catalog")
+	}
+	model := base
+	model.API = ai.ApiOpenAICompletions
+	model.Input = []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage}
+
+	for _, text := range []string{"", "\r\n", " \n\t"} {
+		llmContext := utils.NormalizeContext(&types.Context{
+			Messages: []types.Message{
+				types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Run the command"}, Timestamp: 1},
+				types.AssistantMessage{
+					Role: types.RoleAssistant,
+					Content: []types.Content{types.ToolCall{
+						Kind: types.KindToolCall, ID: "tool-1", Name: "bash",
+						Arguments: map[string]any{"command": "true"},
+					}},
+					API: model.API, Provider: model.Provider, Model: model.ID,
+					StopReason: types.StopReasonToolUse, Timestamp: 2,
+				},
+				types.ToolResultMessage{
+					Role: types.RoleToolResult, ToolCallID: "tool-1", ToolName: "bash",
+					Content: []types.Content{types.NewTextContent(text)}, Timestamp: 3,
+				},
+			},
+		})
+
+		params := convertMessages(&model, llmContext, getCompat(&model), &ConvertCompletionsMessagesOptions{})
+		var toolMessage map[string]any
+		for _, msg := range params {
+			if msg["role"] == "tool" {
+				toolMessage = msg
+				break
+			}
+		}
+		if toolMessage == nil {
+			t.Fatalf("text %q: expected a tool message", text)
+		}
+		if toolMessage["content"] != "(no tool output)" {
+			t.Fatalf("text %q: content = %v, want (no tool output)", text, toolMessage["content"])
+		}
+	}
+}

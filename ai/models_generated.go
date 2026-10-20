@@ -15332,6 +15332,41 @@ var MODELS = map[ProviderID]map[string]Model{
 			ContextWindow: 1000000,
 			MaxTokens:     512000,
 		},
+		"MiniMax-M3.1-Flash": {
+			ID:        "MiniMax-M3.1-Flash",
+			Name:      "MiniMax-M3.1-Flash",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderMinimax,
+			BaseURL:   "https://api.minimax.io/anthropic",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.15, Output: 0.6, CacheRead: 0.015, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     524288,
+			Compat: &AnthropicMessagesCompat{
+				ForceAdaptiveThinking: lo.ToPtr(true),
+			},
+		},
 	},
 	ProviderMinimaxCN: {
 		"MiniMax-M2.7": {
@@ -15382,6 +15417,41 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
 			ContextWindow: 1000000,
 			MaxTokens:     512000,
+		},
+		"MiniMax-M3.1-Flash": {
+			ID:        "MiniMax-M3.1-Flash",
+			Name:      "MiniMax-M3.1-Flash",
+			API:       ApiAnthropicMessages,
+			Provider:  ProviderMinimaxCN,
+			BaseURL:   "https://api.minimaxi.com/anthropic",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			ThinkingLevelMap: ThinkingLevelMap{
+				ModelThinkingOff:     nil,
+				ModelThinkingMinimal: nil,
+				ModelThinkingLow:     lo.ToPtr("low"),
+				ModelThinkingMedium:  lo.ToPtr("medium"),
+				ModelThinkingHigh:    lo.ToPtr("high"),
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
+				ModelThinkingMax:     lo.ToPtr("max"),
+			},
+			Input: []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.1494, Output: 0.5976, CacheRead: 0.0149, CacheWrite: 0}},
+			ContextWindow: 1000000,
+			MaxTokens:     524288,
+			Compat: &AnthropicMessagesCompat{
+				ForceAdaptiveThinking: lo.ToPtr(true),
+			},
 		},
 	},
 	ProviderMoonshotAI: {
@@ -16170,6 +16240,40 @@ var MODELS = map[ProviderID]map[string]Model{
 			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
 			ContextWindow: 262144,
 			MaxTokens:     262144,
+			Headers: map[string]string{
+				"NVCF-POLL-SECONDS": "3600",
+			},
+			Compat: &OpenAICompletionsCompat{
+				SupportsStore:              lo.ToPtr(false),
+				SupportsDeveloperRole:      lo.ToPtr(false),
+				SupportsReasoningEffort:    lo.ToPtr(false),
+				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
+				SupportsStrictMode:         lo.ToPtr(false),
+				SupportsLongCacheRetention: lo.ToPtr(false),
+			},
+		},
+		"nvidia/nemotron-3.5-super-vl-120b-a12b": {
+			ID:        "nvidia/nemotron-3.5-super-vl-120b-a12b",
+			Name:      "Nemotron 3.5 Super VL 120B A12B",
+			API:       ApiOpenAICompletions,
+			Provider:  ProviderNVIDIA,
+			BaseURL:   "https://integrate.api.nvidia.com/v1",
+			Type:      ModelTypeChat,
+			Reasoning: true,
+			Input:     []ModelInput{ModelInputText, ModelInputImage},
+			InputLimits: &ModelInputLimits{
+				Images: &ModelImageInputLimits{
+					Resize: &ModelImageResizeOptions{
+						MaxWidth:    2000,
+						MaxHeight:   2000,
+						MaxBytes:    4718592,
+						JpegQuality: 80,
+					},
+				},
+			},
+			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0, Output: 0, CacheRead: 0, CacheWrite: 0}},
+			ContextWindow: 1048576,
+			MaxTokens:     8192,
 			Headers: map[string]string{
 				"NVCF-POLL-SECONDS": "3600",
 			},

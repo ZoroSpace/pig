@@ -106,6 +106,34 @@ func TestIsRetryableAssistantErrorMatchesGatewayForwardAndServiceUnavailable(t *
 	}
 }
 
+func TestIsRetryableAssistantErrorMatchesGatewayUpstreamFailures(t *testing.T) {
+	// Regression for pi #10920: gateway upstream failures sent as `response.failed` error codes.
+	for _, errorMessage := range []string{
+		"unknown: Unable to forward upstream stream",
+		"upstream_error: Upstream request failed",
+		"upstream_stream_read_error: Upstream response stream was interrupted",
+		"Upstream HTTP/2 stream failed",
+	} {
+		message := retryTestMessage("", types.StopReasonError, errorMessage)
+		if !IsRetryableAssistantError(message) {
+			t.Fatalf("%q should be retryable", errorMessage)
+		}
+	}
+}
+
+func TestIsRetryableAssistantErrorMatchesNodeFetchRequestFailures(t *testing.T) {
+	// Regression for pi #10996: node-fetch errors from the google-vertex OAuth token refresh.
+	for _, errorMessage := range []string{
+		"request to https://oauth2.googleapis.com/token failed, reason:",
+		"request to https://oauth2.googleapis.com/token failed, reason: connect ECONNREFUSED 127.0.0.1:9",
+	} {
+		message := retryTestMessage("", types.StopReasonError, errorMessage)
+		if !IsRetryableAssistantError(message) {
+			t.Fatalf("%q should be retryable", errorMessage)
+		}
+	}
+}
+
 func TestRetryDelayMsCapsAgentRetryDelay(t *testing.T) {
 	// Regression for pi #8826.
 	if got := RetryDelayMs(&RetryPolicy{BaseDelayMs: 2000}, 6); got != 60000 {

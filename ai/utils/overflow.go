@@ -39,6 +39,9 @@ var overflowPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)context[_ ]length[_ ]exceeded`),                                                             // Generic fallback
 	regexp.MustCompile(`(?i)too many tokens`),                                                                           // Generic fallback
 	regexp.MustCompile(`(?i)token limit exceeded`),                                                                      // Generic fallback
+	// HTTP 413 means request-size overflow regardless of provider or body text.
+	// Match raw SDK errors and formatProviderError's prefix, not a status mentioned in the body.
+	regexp.MustCompile(`(?i)^(?:[\w -]+ API error \(413\):|413(?:\s|:|$))`), // HTTP 413 request byte-size overflow
 	// pig-only additions (not in pi's OVERFLOW_PATTERNS):
 	regexp.MustCompile(`(?i)OutofContextError`),         // Volcengine ark (Coding Plan) — pi-provider-volcengine-codingplan extension normalized these via a message_end hook; pig detects them here instead
 	regexp.MustCompile(`(?i)exceed max message tokens`), // Volcengine ark (Coding Plan)

@@ -719,6 +719,10 @@ var minimaxVariants = []minimaxVariant{
 	{key: "minimax-cn", provider: ai.ProviderMinimaxCN, baseURL: "https://api.minimaxi.com/anthropic"},
 }
 
+// minimaxHiddenIDs lists the older models MiniMax asked to hide from its
+// direct providers (pi: minimaxHiddenIds, #2596).
+var minimaxHiddenIDs = stringSet("MiniMax-M2", "MiniMax-M2.1", "MiniMax-M2.5", "MiniMax-M2.5-highspeed")
+
 func processMinimaxModels(data ModelsDevCatalog) []*ai.Model {
 	var models []*ai.Model
 	for _, variant := range minimaxVariants {
@@ -727,10 +731,14 @@ func processMinimaxModels(data ModelsDevCatalog) []*ai.Model {
 			continue
 		}
 		for modelID, m := range provider.Models {
-			if !boolVal(m.ToolCall) {
+			if !boolVal(m.ToolCall) || minimaxHiddenIDs[modelID] {
 				continue
 			}
-			models = append(models, &ai.Model{
+			// Models with effort levels (e.g. MiniMax-M3.1-Flash) take adaptive
+			// thinking with output_config.effort and reject thinking.type
+			// "disabled" (no "none" effort, so off is null).
+			thinkingLevelMap := getEffortThinkingLevelMap(m.ReasoningOptions)
+			model := &ai.Model{
 				ID:            modelID,
 				Name:          orString(m.Name, modelID),
 				API:           ai.ApiAnthropicMessages,
@@ -741,8 +749,12 @@ func processMinimaxModels(data ModelsDevCatalog) []*ai.Model {
 				Cost:          modelsDevCostOf(m.Cost),
 				ContextWindow: int64Or(limitContext(m), 4096),
 				MaxTokens:     int64Or(limitOutput(m), 4096),
-			})
-			recordModelsDevReasoningOptions(string(variant.provider), modelID, m)
+			}
+			if thinkingLevelMap != nil {
+				model.ThinkingLevelMap = *thinkingLevelMap
+				model.Compat = &ai.AnthropicMessagesCompat{ForceAdaptiveThinking: lo.ToPtr(true)}
+			}
+			models = append(models, model)
 		}
 	}
 	return models

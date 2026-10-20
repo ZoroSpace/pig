@@ -507,7 +507,7 @@ func ConvertGoogleMessages(model *types.Model, llmContext *types.TranscriptConte
 			}
 			textResult := strings.Join(textParts, "\n")
 
-			hasText := textResult != ""
+			hasText := strings.TrimSpace(textResult) != ""
 			hasImages := len(imageContent) > 0
 
 			// Gemini 3+ models support multimodal function responses with
@@ -517,12 +517,14 @@ func ConvertGoogleMessages(model *types.Model, llmContext *types.TranscriptConte
 			modelSupportsMultimodalFunctionResponse := supportsMultimodalFunctionResponse(model.ID)
 
 			// Use "output" key for success, "error" key for errors as per SDK
-			// documentation.
-			responseValue := textResult
-			if !hasText && hasImages {
+			// documentation. Whitespace-only text counts as no text, so it
+			// falls through to the image placeholder or an empty output.
+			responseValue := ""
+			if hasText {
+				responseValue = utils.SanitizeSurrogates(textResult)
+			} else if hasImages {
 				responseValue = "(see attached image)"
 			}
-			responseValue = utils.SanitizeSurrogates(responseValue)
 
 			response := map[string]any{"output": responseValue}
 			if message.IsError {

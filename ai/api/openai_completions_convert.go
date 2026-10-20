@@ -316,7 +316,7 @@ func convertMessages(model *types.Model, llmContext *types.TranscriptContext, co
 					}
 				}
 				textResult := strings.Join(textParts, "\n")
-				hasText := len(textResult) > 0
+				hasText := len(strings.TrimSpace(textResult)) > 0
 				toolResultText := "(no tool output)"
 				if hasText {
 					toolResultText = textResult
