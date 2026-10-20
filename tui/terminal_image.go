@@ -179,6 +179,13 @@ func detectTrueColorCapability() bool {
 		return hasTrueColorHint
 	}
 
+	// Rex supports OSC 8 hyperlinks but only partially implements the Kitty
+	// graphics protocol (no Unicode placeholders), so leave images off (pi
+	// 0ed1b0431 #11131). Check it before outer-terminal detection.
+	if termProgram == "rex" {
+		return true
+	}
+
 	if os.Getenv("KITTY_WINDOW_ID") != "" || termProgram == "kitty" {
 		return true
 	}
@@ -245,6 +252,13 @@ func detectHyperlinksCapability() bool {
 	// variables, such as KITTY_WINDOW_ID, may leak into its panes, so check
 	// it first and leave image protocols off (pi b2363841a #10573).
 	if termProgram == "herdr" {
+		return true
+	}
+
+	// Rex supports OSC 8 hyperlinks; check it before outer-terminal detection
+	// so leaked variables like KITTY_WINDOW_ID do not change the outcome (pi
+	// 0ed1b0431 #11131).
+	if termProgram == "rex" {
 		return true
 	}
 

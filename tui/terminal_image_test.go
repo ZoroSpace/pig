@@ -169,6 +169,31 @@ func TestGetCapabilitiesDetectsHerdrHyperlinks(t *testing.T) {
 	})
 }
 
+func TestGetCapabilitiesDetectsRexHyperlinks(t *testing.T) {
+	// #11131 (pi 0ed1b0431): Rex supports OSC 8 but only partially implements
+	// the Kitty graphics protocol, so hyperlinks/truecolor are on and images
+	// stay off even when KITTY_WINDOW_ID leaks in.
+	withCapabilityEnv(t, map[string]string{
+		"TERM_PROGRAM": "rex", "TERM": "xterm-256color", "KITTY_WINDOW_ID": "1",
+	}, func() {
+		caps := GetCapabilities()
+		if !caps.Hyperlinks {
+			t.Fatal("Hyperlinks = false, want true for Rex")
+		}
+		if caps.Images != nil {
+			t.Fatalf("Images = %v, want nil for Rex", caps.Images)
+		}
+		if !caps.TrueColor {
+			t.Fatal("TrueColor = false, want true for Rex")
+		}
+	})
+	withCapabilityEnv(t, map[string]string{"TERM_PROGRAM": "rex", "PI_HYPERLINKS": "0"}, func() {
+		if GetCapabilities().Hyperlinks {
+			t.Fatal("PI_HYPERLINKS=0 must force hyperlinks off for Rex")
+		}
+	})
+}
+
 func TestGetCapabilitiesTrueColorOverrides(t *testing.T) {
 	t.Run("PI_TRUE_COLOR forces both directions", func(t *testing.T) {
 		withCapabilityEnv(t, map[string]string{"TERM": "xterm-256color", "PI_TRUE_COLOR": "1"}, func() {
