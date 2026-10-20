@@ -87,38 +87,8 @@ func TestDoesNotOverrideToolChoiceForBranchSummaries(t *testing.T) {
 	if requestOptions.ToolChoice != "" {
 		t.Fatalf("expected toolChoice undefined, got %q", requestOptions.ToolChoice)
 	}
-	// pi (v0.85.1): the branch history output cap is 4096 (model.maxTokens 8192 here).
-	if requestOptions.MaxTokens == nil || *requestOptions.MaxTokens != 4096 {
-		t.Fatalf("expected maxTokens 4096, got %v", requestOptions.MaxTokens)
-	}
-}
-
-func TestClampsBranchSummaryOutputCapToModelLimit(t *testing.T) {
-	var requestOptions *ai.SimpleStreamOptions
-	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
-		requestOptions = options
-		stream := types.NewAssistantMessageEventStream()
-		return pushDone(stream, types.StopReasonStop, branchResponse([]types.Content{types.NewTextContent("summary")}))
-	}
-
-	clampedModel := *branchTestModel
-	clampedModel.MaxTokens = 1024
-	result, err := GenerateBranchSummary(t.Context(), branchTestEntries, &GenerateBranchSummaryOptions{
-		Model:    &clampedModel,
-		StreamFn: streamFn,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.Error != "" || result.Aborted {
-		t.Fatalf("unexpected failure: %+v", result)
-	}
-
-	if requestOptions == nil {
-		t.Fatal("expected captured request options")
-	}
-	if requestOptions.MaxTokens == nil || *requestOptions.MaxTokens != 1024 {
-		t.Fatalf("expected maxTokens 1024, got %v", requestOptions.MaxTokens)
+	if requestOptions.MaxTokens != nil {
+		t.Fatalf("branch summaries must not set maxTokens, got %v", *requestOptions.MaxTokens)
 	}
 }
 

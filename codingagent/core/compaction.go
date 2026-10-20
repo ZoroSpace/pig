@@ -47,7 +47,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/ZoroSpace/pig/agent"
@@ -654,7 +653,6 @@ func GetSummarizationFailure(response *types.AssistantMessage, label string) str
 // cancellation travels as ctx).
 func createSummarizationOptions(
 	model *ai.Model,
-	maxTokens int64,
 	apiKey string,
 	headers map[string]string,
 	env ai.ProviderEnv,
@@ -662,7 +660,6 @@ func createSummarizationOptions(
 	sessionID string,
 ) *ai.SimpleStreamOptions {
 	options := &ai.SimpleStreamOptions{}
-	options.MaxTokens = &maxTokens
 	options.APIKey = apiKey
 	options.Env = env
 	options.SessionID = sessionID
@@ -736,7 +733,8 @@ func GenerateSummary(
 	ctx context.Context,
 	currentMessages []agent.AgentMessage,
 	model *ai.Model,
-	reserveTokens int64,
+	// Unused. Kept for existing callers; summaries use the model's output limit (#9512).
+	_reserveTokens int64,
 	apiKey string,
 	headers map[string]string,
 	customInstructions string,
@@ -752,7 +750,7 @@ func GenerateSummary(
 		ctx,
 		currentMessages,
 		model,
-		reserveTokens,
+		_reserveTokens,
 		apiKey,
 		headers,
 		customInstructions,
@@ -799,7 +797,8 @@ func GenerateSummaryWithUsage(
 	ctx context.Context,
 	currentMessages []agent.AgentMessage,
 	model *ai.Model,
-	reserveTokens int64,
+	// Unused. Kept for existing callers; summaries use the model's output limit (#9512).
+	_reserveTokens int64,
 	apiKey string,
 	headers map[string]string,
 	customInstructions string,
@@ -811,11 +810,6 @@ func GenerateSummaryWithUsage(
 	callbacks *ai.RetryCallbacks,
 	sessionID string,
 ) (*SummaryWithUsage, error) {
-	maxTokens := int64(math.Floor(0.8 * float64(reserveTokens)))
-	if model.MaxTokens > 0 && model.MaxTokens < maxTokens {
-		maxTokens = model.MaxTokens
-	}
-
 	// Use update prompt if we have a previous summary, otherwise initial prompt
 	basePrompt := summarizationPrompt
 	if previousSummary != "" {
@@ -840,7 +834,6 @@ func GenerateSummaryWithUsage(
 
 	completionOptions := createSummarizationOptions(
 		model,
-		maxTokens,
 		apiKey,
 		headers,
 		env,
@@ -1224,7 +1217,7 @@ func Compact(
 				ctx,
 				preparation.MessagesToSummarize,
 				model,
-				preparation.Settings.ReserveTokens,
+				0,
 				apiKey,
 				headers,
 				customInstructions,
@@ -1246,7 +1239,6 @@ func Compact(
 			ctx,
 			preparation.TurnPrefixMessages,
 			model,
-			preparation.Settings.ReserveTokens,
 			apiKey,
 			headers,
 			env,
@@ -1272,7 +1264,7 @@ func Compact(
 			ctx,
 			preparation.MessagesToSummarize,
 			model,
-			preparation.Settings.ReserveTokens,
+			0,
 			apiKey,
 			headers,
 			customInstructions,
@@ -1317,7 +1309,6 @@ func generateTurnPrefixSummary(
 	ctx context.Context,
 	messages []agent.AgentMessage,
 	model *ai.Model,
-	reserveTokens int64,
 	apiKey string,
 	headers map[string]string,
 	env ai.ProviderEnv,
@@ -1327,10 +1318,6 @@ func generateTurnPrefixSummary(
 	callbacks *ai.RetryCallbacks,
 	sessionID string,
 ) (*SummaryWithUsage, error) {
-	maxTokens := int64(math.Floor(0.5 * float64(reserveTokens)))
-	if model.MaxTokens > 0 && model.MaxTokens < maxTokens {
-		maxTokens = model.MaxTokens
-	} // Smaller budget for turn prefix
 	llmMessages := harness.ConvertToLlm(messages)
 	conversationText := SerializeConversation(llmMessages)
 	promptText := fmt.Sprintf("# Conversation\n%s\n\n# Instructions\n%s", conversationText, turnPrefixSummarizationPrompt)
@@ -1339,7 +1326,7 @@ func generateTurnPrefixSummary(
 		ctx,
 		model,
 		buildSummarizationContext(promptText),
-		createSummarizationOptions(model, maxTokens, apiKey, headers, env, thinkingLevel, sessionID),
+		createSummarizationOptions(model, apiKey, headers, env, thinkingLevel, sessionID),
 		streamFn,
 		retry,
 		callbacks,

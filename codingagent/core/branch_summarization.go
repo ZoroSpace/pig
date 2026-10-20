@@ -408,14 +408,6 @@ func GenerateBranchSummary(
 	// retry policy. pi builds requestOptions inline (no reasoning setup —
 	// unlike compaction's createSummarizationOptions).
 	requestOptions := &ai.SimpleStreamOptions{}
-	// pi (v0.85.1): maxTokens = min(4096, model.maxTokens) — reserved tokens
-	// shrink with the model cap; 0/negative → unbounded (pi uses
-	// Number.POSITIVE_INFINITY for the min).
-	maxTokens := int64(4096)
-	if modelMaxTokens := options.Model.MaxTokens; modelMaxTokens > 0 && modelMaxTokens < maxTokens {
-		maxTokens = modelMaxTokens
-	}
-	requestOptions.MaxTokens = lo.ToPtr(maxTokens)
 	requestOptions.APIKey = options.APIKey
 	requestOptions.Env = options.Env
 	if options.Headers != nil {

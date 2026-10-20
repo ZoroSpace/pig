@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -45,10 +46,43 @@ type ShellConfig struct {
 }
 
 // isLegacyWslBashPath reports whether the path is a legacy WSL bash (pi:
-// isLegacyWslBashPath).
+// isLegacyWslBashPath). When SystemRoot is known, compare against the actual
+// Windows installation directories; otherwise fall back to the conventional
+// drive:\windows paths.
 func isLegacyWslBashPath(path string) bool {
-	normalized := strings.ToLower(strings.ReplaceAll(path, "/", "\\"))
+	normalized := normalizeWindowsPath(path)
+	systemRoot := os.Getenv("SystemRoot")
+	if systemRoot != "" {
+		if !windowsDriveRootRe.MatchString(systemRoot) {
+			return false
+		}
+		return normalized == normalizeWindowsPath(joinWindowsPath(systemRoot, "System32", "bash.exe")) ||
+			normalized == normalizeWindowsPath(joinWindowsPath(systemRoot, "Sysnative", "bash.exe"))
+	}
 	return legacyWslBashPathRe.MatchString(normalized)
+}
+
+// windowsDriveRootRe matches an absolute Windows drive path (pi:
+// /^[a-z]:[\\/]/i in isLegacyWslBashPath).
+var windowsDriveRootRe = regexp.MustCompile(`^[a-zA-Z]:[\\/]`)
+
+// joinWindowsPath joins Windows path segments independent of the host OS (pi:
+// win32.join; filepath.Join uses the host separator, and its Clean treats
+// backslashes as ordinary characters on Unix).
+func joinWindowsPath(parts ...string) string {
+	converted := make([]string, len(parts))
+	for i, part := range parts {
+		converted[i] = strings.ReplaceAll(part, "\\", "/")
+	}
+	return strings.ReplaceAll(path.Join(converted...), "/", "\\")
+}
+
+// normalizeWindowsPath normalizes a Windows path for case-insensitive
+// comparison (pi: win32.normalize(...).toLowerCase()).
+func normalizeWindowsPath(value string) string {
+	slashForm := strings.ReplaceAll(value, "\\", "/")
+	cleaned := path.Clean(slashForm)
+	return strings.ToLower(strings.ReplaceAll(cleaned, "/", "\\"))
 }
 
 // getBashShellConfig picks the command transport for a bash path (pi:
@@ -68,10 +102,8 @@ func findExecutableOnPath(executable string) string {
 		// non-existent paths).
 		if stdout, err := runSyncCapture("where", []string{executable}, 5*time.Second); err == nil && stdout != "" {
 			firstMatch := strings.TrimSpace(strings.SplitN(strings.ReplaceAll(stdout, "\r\n", "\n"), "\n", 2)[0])
-			if firstMatch != "" {
-				if _, err := os.Stat(firstMatch); err == nil {
-					return firstMatch
-				}
+			if firstMatch != "" && shellPathExists(firstMatch) {
+				return firstMatch
 			}
 		}
 		return ""
@@ -107,7 +139,7 @@ func GetShellConfig(cwd string, customShellPath string) (ShellConfig, error) {
 		if !filepath.IsAbs(resolved) {
 			resolved = filepath.Join(cwd, resolved)
 		}
-		if _, err := os.Stat(resolved); err == nil {
+		if shellPathExists(resolved) {
 			// The transport decision is made on the raw path (pi:
 			// getBashShellConfig(customShellPath)); pig spawns the resolved
 			// path (os/exec resolves relative command paths against the
@@ -129,7 +161,7 @@ func GetShellConfig(cwd string, customShellPath string) (ShellConfig, error) {
 			paths = append(paths, filepath.Join(programFilesX86, "Git", "bin", "bash.exe"))
 		}
 		for _, path := range paths {
-			if _, err := os.Stat(path); err == nil {
+			if shellPathExists(path) {
 				return getBashShellConfig(path), nil
 			}
 		}
@@ -151,7 +183,7 @@ func GetShellConfig(cwd string, customShellPath string) (ShellConfig, error) {
 	}
 
 	// Unix: try /bin/bash, then bash on PATH, then fallback to sh
-	if _, err := os.Stat("/bin/bash"); err == nil {
+	if shellPathExists("/bin/bash") {
 		return getBashShellConfig("/bin/bash"), nil
 	}
 	if bashOnPath := findExecutableOnPath("bash"); bashOnPath != "" {
@@ -164,15 +196,54 @@ func GetShellConfig(cwd string, customShellPath string) (ShellConfig, error) {
 // POWERSHELL_ARGS).
 var PowerShellArgs = []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"}
 
+// shellLookup is the platform/environment seam for GetPowerShellConfig (pi
+// tests stub process.platform, env, fs.accessSync, and spawnSync).
+type shellLookup struct {
+	goos       string
+	getenv     func(string) string
+	pathExists func(string) bool
+	findOnPath func(string) string
+}
+
+func defaultShellLookup() shellLookup {
+	return shellLookup{
+		goos:       runtime.GOOS,
+		getenv:     os.Getenv,
+		pathExists: shellPathExists,
+		findOnPath: findExecutableOnPath,
+	}
+}
+
 // GetPowerShellConfig resolves PowerShell on Windows, preferring PowerShell 7
 // when available (pi: getPowerShellConfig).
 func GetPowerShellConfig() (ShellConfig, error) {
-	if runtime.GOOS != "windows" {
+	return getPowerShellConfig(defaultShellLookup())
+}
+
+func getPowerShellConfig(lookup shellLookup) (ShellConfig, error) {
+	if lookup.goos != "windows" {
 		return ShellConfig{}, fmt.Errorf("The powershell tool is only available on Windows.")
 	}
-	shell := findExecutableOnPath("pwsh.exe")
+	shell := lookup.findOnPath("pwsh.exe")
+	// Installation directories may be on any drive and need not be on PATH.
 	if shell == "" {
-		shell = findExecutableOnPath("powershell.exe")
+		if programFiles := lookup.getenv("ProgramFiles"); programFiles != "" {
+			pwsh7 := joinWindowsPath(programFiles, "PowerShell", "7", "pwsh.exe")
+			if lookup.pathExists(pwsh7) {
+				shell = pwsh7
+			}
+		}
+	}
+	if shell == "" {
+		shell = lookup.findOnPath("powershell.exe")
+	}
+	if shell == "" {
+		if systemRoot := lookup.getenv("SystemRoot"); systemRoot != "" {
+			windowsPowerShell := joinWindowsPath(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+			if lookup.pathExists(windowsPowerShell) {
+				shell = windowsPowerShell
+			}
+		}
 	}
 	if shell == "" {
 		return ShellConfig{}, fmt.Errorf("No PowerShell executable found. Install PowerShell or add powershell.exe/pwsh.exe to PATH.")

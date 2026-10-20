@@ -101,7 +101,7 @@ func TestUsesTheProvidedThinkingLevelForReasoningCapableModels(t *testing.T) {
 		t.Context(),
 		summarizationMessages,
 		createTestModel(true, 8192),
-		2000,
+		0,
 		"test-key",
 		nil,
 		"", // customInstructions
@@ -143,7 +143,7 @@ func TestPreservesTheStringResultFromGenerateSummary(t *testing.T) {
 		t.Context(),
 		summarizationMessages,
 		createTestModel(false, 8192),
-		2000,
+		0,
 		"test-key",
 		nil, "", "", "", nil, nil, nil, nil, "",
 	)
@@ -163,7 +163,7 @@ func TestUsesFreshRoutingSessionsWithoutPromptCaching(t *testing.T) {
 			t.Context(),
 			summarizationMessages,
 			createTestModel(false, 8192),
-			2000,
+			0,
 			"test-key",
 			nil, "", "", "", nil, nil, nil, nil, "",
 		); err != nil {
@@ -271,7 +271,7 @@ func TestRejectsToolCallsFromConversationSummaries(t *testing.T) {
 		t.Context(),
 		summarizationMessages,
 		createTestModel(false, 8192),
-		2000,
+		0,
 		"test-key",
 		nil, "", "", "", nil, nil, nil, nil, "",
 	)
@@ -309,7 +309,7 @@ func TestRejectsALengthLimitedHistorySummary(t *testing.T) {
 		t.Context(),
 		summarizationMessages,
 		createTestModel(false, 8192),
-		2000,
+		0,
 		"test-key",
 		nil, "", "", "", nil, nil, nil, nil, "",
 	)
@@ -347,7 +347,7 @@ func TestDoesNotSetReasoningWhenThinkingIsOff(t *testing.T) {
 		t.Context(),
 		summarizationMessages,
 		createTestModel(true, 8192),
-		2000,
+		0,
 		"test-key",
 		nil, "", "", "off", nil, nil, nil, nil, "",
 	)
@@ -374,7 +374,7 @@ func TestDoesNotSetReasoningForNonReasoningModels(t *testing.T) {
 		t.Context(),
 		summarizationMessages,
 		createTestModel(false, 8192),
-		2000,
+		0,
 		"test-key",
 		nil, "", "", "medium", nil, nil, nil, nil, "",
 	)
@@ -404,7 +404,7 @@ func TestLeavesAnthropicRefusalFallbackHandlingToPiAiModelMetadata(t *testing.T)
 		t.Context(),
 		summarizationMessages,
 		createTestModel(true, 8192),
-		2000,
+		0,
 		"test-key",
 		nil, "", "", "", nil, nil, nil, nil, "",
 	)
@@ -426,7 +426,7 @@ func TestDoesNotSetAnthropicRefusalFallbackForModelsWithoutAllowedFallbackTarget
 		t.Context(),
 		summarizationMessages,
 		createTestModel(true, 8192),
-		2000,
+		0,
 		"test-key",
 		nil, "", "", "", nil, nil, nil, nil, "",
 	)
@@ -439,7 +439,7 @@ func TestDoesNotSetAnthropicRefusalFallbackForModelsWithoutAllowedFallbackTarget
 	}
 }
 
-func TestClampsCompactionSummaryMaxTokensToTheModelOutputCap(t *testing.T) {
+func TestCombinesUsageFromSplitTurnSummaries(t *testing.T) {
 	mock := newSummaryMock(t, &mockSummaryResponse, &mockSummaryResponse)
 
 	preparation := &CompactionPreparation{
@@ -449,7 +449,7 @@ func TestClampsCompactionSummaryMaxTokensToTheModelOutputCap(t *testing.T) {
 		IsSplitTurn:         true,
 		TokensBefore:        600000,
 		FileOps:             CreateFileOps(),
-		Settings:            CompactionSettingsValues{Enabled: true, ReserveTokens: 500000, KeepRecentTokens: 20000},
+		Settings:            CompactionSettingsValues{Enabled: true, ReserveTokens: 16384, KeepRecentTokens: 20000},
 	}
 
 	result, err := Compact(t.Context(), preparation, createTestModel(false, 128000), "test-key", nil, "", "", nil, nil, nil, nil, "")
@@ -464,9 +464,9 @@ func TestClampsCompactionSummaryMaxTokensToTheModelOutputCap(t *testing.T) {
 	if len(mock.calls) != 2 {
 		t.Fatalf("expected 2 calls, got %d", len(mock.calls))
 	}
-	for i, options := range mock.calls {
-		if options.MaxTokens == nil || *options.MaxTokens != 128000 {
-			t.Fatalf("call %d: expected maxTokens 128000, got %v", i, options.MaxTokens)
+	for _, options := range mock.calls {
+		if options.MaxTokens != nil {
+			t.Fatalf("summary requests must not set maxTokens, got %v", *options.MaxTokens)
 		}
 	}
 }

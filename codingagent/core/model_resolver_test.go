@@ -622,6 +622,19 @@ func TestDefaultModelSelection(t *testing.T) {
 		}
 	})
 
+	t.Run("xiaomi and nvidia defaults track current models", func(t *testing.T) {
+		want := map[string]string{
+			"xiaomi": "mimo-v2.6-pro", "xiaomi-token-plan-cn": "mimo-v2.6-pro",
+			"xiaomi-token-plan-ams": "mimo-v2.6-pro", "xiaomi-token-plan-sgp": "mimo-v2.6-pro",
+			"nvidia": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+		}
+		for provider, defaultID := range want {
+			if DefaultModelPerProvider[provider] != defaultID {
+				t.Fatalf("%s default = %q, want %q", provider, DefaultModelPerProvider[provider], defaultID)
+			}
+		}
+	})
+
 	t.Run("ai-gateway default tracks current model", func(t *testing.T) {
 		if DefaultModelPerProvider["vercel-ai-gateway"] != "zai/glm-5.1" {
 			t.Fatalf("vercel-ai-gateway default = %q", DefaultModelPerProvider["vercel-ai-gateway"])

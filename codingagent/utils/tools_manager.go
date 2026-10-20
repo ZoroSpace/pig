@@ -286,12 +286,10 @@ func extractTarGzArchive(archivePath string, extractDir string, assetName string
 
 // getWindowsTarCommand prefers the System32 bsdtar (pi: getWindowsTarCommand).
 func getWindowsTarCommand() string {
-	for _, envKey := range []string{"SystemRoot", "WINDIR"} {
-		if systemRoot := os.Getenv(envKey); systemRoot != "" {
-			systemTar := filepath.Join(systemRoot, "System32", "tar.exe")
-			if _, err := os.Stat(systemTar); err == nil {
-				return systemTar
-			}
+	if systemRoot := os.Getenv("SystemRoot"); systemRoot != "" {
+		systemTar := filepath.Join(systemRoot, "System32", "tar.exe")
+		if _, err := os.Stat(systemTar); err == nil {
+			return systemTar
 		}
 	}
 	return "tar.exe"
