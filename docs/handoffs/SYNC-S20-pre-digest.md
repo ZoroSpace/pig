@@ -1,7 +1,7 @@
 # S20 — pi v1.3.0 → main@73f8de80b（pre-v1.4.0）同步（开工稿 / pre-digest）
 
 - **日期**：2026-10-20
-- **状态**：🚧 执行中（用户拍板「迁移到最新 commit，定完计划后分批做到对齐」）
+- **状态**：✅ 完成（2026-10-20；收口稿 `docs/handoffs/SYNC-S20-pre-v1.4.0.md`）
 - **基线**：pig 当前 = pi v1.3.0（S19 收口）。目标 = **pi main `73f8de80b`**（2026-10-19，`fix(ai): recover from Copilot request-size overflow`），最新正式 tag 仍为 `v1.3.0`。
 - **范围**：`git -C ~/Projects/pi log --oneline v1.3.0..73f8de80b`（43 commit）。其中 30 个落不做清单（durable/chord/env 整族、telemetry 新族、`scripts/*.mjs` 发布管线、changelog/ignore/docs 生成），实移 13 个，落 **ai / coding-agent / tui** 三区。
 - **版本**：不 bump。pi 未发新 tag，`codingagent.Version` 保持 `1.3.0`（与 `TestVersionTracksPiBaseline` 一致）。
