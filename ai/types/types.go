@@ -331,6 +331,10 @@ type ProviderRequestOptions struct {
 	// Headers merge over provider defaults; caller values win. A nil entry
 	// suppresses a provider/API default header with the same name.
 	Headers ProviderHeaders
+	// Identity is how the request identifies the calling app: User-Agent and
+	// provider attribution headers. Absent fields use pi-ai's defaults: a
+	// detailed User-Agent and no attribution.
+	Identity *ClientIdentity
 	// TimeoutMs is the HTTP request timeout in milliseconds for providers
 	// that support it (OpenAI and Anthropic SDK clients default to 10
 	// minutes); 0 means that default.

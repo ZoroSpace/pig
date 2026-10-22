@@ -46,6 +46,14 @@ var nonRetryableProviderLimitErrorPattern = buildProviderErrorPattern([]string{
 	"out of budget",
 	"quota exceeded",
 	"billing",
+
+	// Sign in with ChatGPT: the subscription's shared usage limit, which resets
+	// after hours rather than seconds.
+	"subscription_sharing_usage_limit_exceeded",
+
+	// Sign in with ChatGPT on a ChatGPT Business plan: a usage limit set by the
+	// workspace admin. Only the admin can raise it.
+	"subscription_sharing_workplace_individual_usage_limit_exceeded",
 })
 
 var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
@@ -57,13 +65,10 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	"model is at capacity",
 	"rate.?limit",
 	"too many requests",
-	"429",
-	"500",
-	"502",
-	"503",
-	"504",
-	"520",
-	"524",
+	// Status codes must not be part of a longer word or number, e.g. a request
+	// id or byte count (#11057). RE2 has no look-around, so the boundaries are
+	// consumed; the pattern is only used for a boolean match.
+	"(?:^|[^a-z0-9])(?:429|500|502|503|504|520|524)(?:$|[^a-z0-9])",
 	// Also matches "The service is temporarily unavailable" (#10965).
 	"service.?(?:is.?)?(?:temporarily.?)?unavailable",
 	"server.?error",
@@ -117,6 +122,9 @@ var retryableProviderErrorPattern = buildProviderErrorPattern([]string{
 	"stream ended before message_stop",
 	"stream ended before a terminal response event",
 	"http2 request did not get a response",
+	// Codex CLI mid-stream disconnect, relayed by proxies that wrap the Codex
+	// CLI (#11057).
+	"stream disconnected before completion",
 
 	// Node ERR_HTTP2_STREAM_CANCEL: the HTTP/2 session died before the request was
 	// sent, e.g. after the Bedrock SDK's 5-minute session timeout (#10379).

@@ -560,6 +560,9 @@ func buildSdkAgentOptions(input buildSdkAgentOptionsInput) (*agent.AgentOptions,
 		if options != nil {
 			streamOptions = *options
 		}
+		// Replaces the agent loop's default identity; read per request so
+		// telemetry changes apply at once (pi: getClientIdentity).
+		streamOptions.Identity = getClientIdentity(settingsManager)
 		// pi: options?.timeoutMs ?? settings ?? effective — the request
 		// value wins whenever request options were supplied. pig's int64
 		// TimeoutMs cannot distinguish explicit 0 from unset (declared
@@ -585,12 +588,10 @@ func buildSdkAgentOptions(input buildSdkAgentOptionsInput) (*agent.AgentOptions,
 		}
 		headerRunner := extensionRunnerRef.Current
 		transformHeaders := func(requestHeaders types.ProviderHeaders) (types.ProviderHeaders, error) {
-			headers := MergeProviderAttributionHeaders(model, settingsManager, streamOptions.SessionID, requestHeaders)
 			if headerRunner != nil && headerRunner.HasHandlers("before_provider_headers") {
-				mutated := headerRunner.EmitBeforeProviderHeaders(context.Background(), orEmptyHeaders(headers))
-				return mutated, nil
+				return headerRunner.EmitBeforeProviderHeaders(context.Background(), orEmptyHeaders(requestHeaders)), nil
 			}
-			return headers, nil
+			return requestHeaders, nil
 		}
 		return &ai.ModelsSimpleStreamOptions{
 			SimpleStreamOptions: streamOptions,

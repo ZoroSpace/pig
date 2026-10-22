@@ -483,7 +483,7 @@ func runGoogleVertexStream(ctx context.Context, model *types.Model, normalizedCo
 	var client *googleVertexClient
 	if apiKey := resolveGoogleVertexAPIKey(options); apiKey != "" {
 		// Vertex API key (express mode) client.
-		client = createGoogleVertexAPIKeyClient(model, apiKey, options.Headers)
+		client = createGoogleVertexAPIKeyClient(model, apiKey, options.Headers, options.Identity)
 	} else {
 		project, err := resolveGoogleVertexProject(options)
 		if err != nil {
@@ -493,7 +493,7 @@ func runGoogleVertexStream(ctx context.Context, model *types.Model, normalizedCo
 		if err != nil {
 			return err
 		}
-		client = createGoogleVertexClient(model, project, location, options.Headers, options.Env)
+		client = createGoogleVertexClient(model, project, location, options.Headers, options.Identity, options.Env)
 	}
 	params, err := buildGoogleVertexParams(ctx, model, normalizedContext, options)
 	if err != nil {
@@ -715,7 +715,7 @@ func runGoogleVertexStream(ctx context.Context, model *types.Model, normalizedCo
 }
 
 // createGoogleVertexClient assembles the ADC client (pi: createClient).
-func createGoogleVertexClient(model *types.Model, project, location string, optionsHeaders types.ProviderHeaders, env types.ProviderEnv) *googleVertexClient {
+func createGoogleVertexClient(model *types.Model, project, location string, optionsHeaders types.ProviderHeaders, identity *types.ClientIdentity, env types.ProviderEnv) *googleVertexClient {
 	client := &googleVertexClient{
 		vertexAI:   true,
 		project:    project,
@@ -725,24 +725,24 @@ func createGoogleVertexClient(model *types.Model, project, location string, opti
 	if authOptions := buildGoogleVertexAuthOptions(env); authOptions != nil {
 		client.googleAuthOptions = authOptions
 	}
-	client.httpOptions = buildGoogleVertexHTTPOptions(model, optionsHeaders)
+	client.httpOptions = buildGoogleVertexHTTPOptions(model, optionsHeaders, identity)
 	return client
 }
 
 // createGoogleVertexAPIKeyClient assembles the Vertex express API key client
 // (pi: createClientWithApiKey).
-func createGoogleVertexAPIKeyClient(model *types.Model, apiKey string, optionsHeaders types.ProviderHeaders) *googleVertexClient {
+func createGoogleVertexAPIKeyClient(model *types.Model, apiKey string, optionsHeaders types.ProviderHeaders, identity *types.ClientIdentity) *googleVertexClient {
 	return &googleVertexClient{
 		vertexAI:    true,
 		apiKey:      apiKey,
 		apiVersion:  vertexAPIVersion,
-		httpOptions: buildGoogleVertexHTTPOptions(model, optionsHeaders),
+		httpOptions: buildGoogleVertexHTTPOptions(model, optionsHeaders, identity),
 	}
 }
 
 // buildGoogleVertexHTTPOptions assembles the SDK httpOptions patch (pi:
 // buildHttpOptions).
-func buildGoogleVertexHTTPOptions(model *types.Model, optionsHeaders types.ProviderHeaders) googleVertexHTTPOptions {
+func buildGoogleVertexHTTPOptions(model *types.Model, optionsHeaders types.ProviderHeaders, identity *types.ClientIdentity) googleVertexHTTPOptions {
 	options := googleVertexHTTPOptions{}
 	if baseURL := resolveGoogleVertexCustomBaseURL(model.BaseURL); baseURL != "" {
 		options.baseURL = baseURL
@@ -751,7 +751,7 @@ func buildGoogleVertexHTTPOptions(model *types.Model, optionsHeaders types.Provi
 			options.apiVersion = ""
 		}
 	}
-	headers := map[string]string{"User-Agent": utils.GetPiUserAgent()}
+	headers := utils.ProviderHeadersToRecord(utils.GetIdentityHeaders(types.ClientIdentityTarget{Provider: string(model.Provider), BaseURL: model.BaseURL}, identity))
 	for key, value := range model.Headers {
 		headers[key] = value
 	}

@@ -358,7 +358,7 @@ func runGoogleGenerativeAIStream(ctx context.Context, model *types.Model, normal
 	if apiKey == "" {
 		return fmt.Errorf("No API key for provider: %s", model.Provider)
 	}
-	client := createGoogleClient(model, apiKey, options.Headers)
+	client := createGoogleClient(model, apiKey, options.Headers, options.Identity)
 	params := buildGoogleParams(model, normalizedContext, options)
 	if options.OnPayload != nil {
 		if next := options.OnPayload(params, model); next != nil {
@@ -596,13 +596,13 @@ func (b *googleStreamBlock) backingBlock(content []types.Content, index int) typ
 // createGoogleClient assembles the native client (pi: createClient). A
 // model.baseUrl already includes the version path, so the apiVersion segment
 // stays empty.
-func createGoogleClient(model *types.Model, apiKey string, optionsHeaders types.ProviderHeaders) *googleGenAIClient {
+func createGoogleClient(model *types.Model, apiKey string, optionsHeaders types.ProviderHeaders, identity *types.ClientIdentity) *googleGenAIClient {
 	client := &googleGenAIClient{apiKey: apiKey, apiVersion: googleDefaultAPIVersion}
 	if model.BaseURL != "" {
 		client.baseURL = model.BaseURL
 		client.apiVersion = ""
 	}
-	headers := map[string]string{"User-Agent": utils.GetPiUserAgent()}
+	headers := utils.ProviderHeadersToRecord(utils.GetIdentityHeaders(types.ClientIdentityTarget{Provider: string(model.Provider), BaseURL: model.BaseURL}, identity))
 	for key, value := range model.Headers {
 		headers[key] = value
 	}

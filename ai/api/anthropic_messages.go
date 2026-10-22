@@ -408,12 +408,11 @@ func mergeHeaders(headerSources ...types.ProviderHeaders) types.ProviderHeaders 
 	return merged
 }
 
-// mergeClientHeaders prepends the pi user agent to the merge (pi:
-// mergeClientHeaders).
-func mergeClientHeaders(headerSources ...types.ProviderHeaders) types.ProviderHeaders {
-	ua := utils.GetPiUserAgent()
+// mergeClientHeaders prepends the request identity's headers to the merge
+// (pi: mergeHeaders(getIdentityHeaders(model, identity), ...)).
+func mergeClientHeaders(model *types.Model, identity *types.ClientIdentity, headerSources ...types.ProviderHeaders) types.ProviderHeaders {
 	all := make([]types.ProviderHeaders, 0, len(headerSources)+1)
-	all = append(all, types.ProviderHeaders{"User-Agent": &ua})
+	all = append(all, utils.GetIdentityHeaders(types.ClientIdentityTarget{Provider: string(model.Provider), BaseURL: model.BaseURL}, identity))
 	all = append(all, headerSources...)
 	return mergeHeaders(all...)
 }
@@ -771,7 +770,7 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 				cacheSessionID = options.SessionID
 			}
 
-			created := createAnthropicClient(model, apiKey, options.Headers, options.Fetch, copilotDynamicHeaders, cacheSessionID, federation)
+			created := createAnthropicClient(model, apiKey, options.Headers, options.Identity, options.Fetch, copilotDynamicHeaders, cacheSessionID, federation)
 
 			timeout := 10 * time.Minute
 			if options.TimeoutMs != 0 {
@@ -1184,7 +1183,7 @@ type anthropicCreatedClient struct {
 }
 
 // createAnthropicClient builds the client (pi: createClient).
-func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders types.ProviderHeaders, fetch types.FetchFunction, dynamicHeaders map[string]string, sessionId string, federation *anthropicFederationConfig) anthropicCreatedClient {
+func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders types.ProviderHeaders, identity *types.ClientIdentity, fetch types.FetchFunction, dynamicHeaders map[string]string, sessionId string, federation *anthropicFederationConfig) anthropicCreatedClient {
 	// Copilot: Bearer auth.
 	if model.Provider == types.ProviderID("github-copilot") {
 		defaults := types.ProviderHeaders{
@@ -1192,6 +1191,8 @@ func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders typ
 			"anthropic-dangerous-direct-browser-access": lo.ToPtr("true"),
 		}
 		merged := mergeClientHeaders(
+			model,
+			identity,
 			defaults,
 			modelHeadersAsProviderHeaders(model),
 			dynamicHeadersAsProviderHeaders(dynamicHeaders),
@@ -1217,6 +1218,8 @@ func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders typ
 			"x-app":      lo.ToPtr("cli"),
 		}
 		merged := mergeClientHeaders(
+			model,
+			identity,
 			defaults,
 			modelHeadersAsProviderHeaders(model),
 			optionsHeaders,
@@ -1247,6 +1250,8 @@ func createAnthropicClient(model *types.Model, apiKey string, optionsHeaders typ
 		"anthropic-dangerous-direct-browser-access": lo.ToPtr("true"),
 	}
 	merged := mergeClientHeaders(
+		model,
+		identity,
 		defaults,
 		sessionAffinityHeaders,
 		modelHeadersAsProviderHeaders(model),

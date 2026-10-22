@@ -244,7 +244,7 @@ type azureResponsesClient struct {
 
 // createAzureResponsesClient builds the client (pi: createClient).
 func createAzureResponsesClient(model *types.Model, apiKey string, options *AzureOpenAIResponsesOptions) (*azureResponsesClient, error) {
-	headers := map[string]string{"User-Agent": utils.GetPiUserAgent()}
+	headers := utils.ProviderHeadersToRecord(utils.GetIdentityHeaders(types.ClientIdentityTarget{Provider: string(model.Provider), BaseURL: model.BaseURL}, options.Identity))
 	for name, value := range model.Headers {
 		headers[name] = value
 	}

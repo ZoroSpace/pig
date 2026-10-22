@@ -40,6 +40,12 @@ var openAIResponsesToolCallProviders = map[string]struct{}{
 // https://github.com/earendil-works/pi/issues/6265
 const openAIResponsesMinOutputTokens = int64(16)
 
+const chatGPTUsageURL = "https://chatgpt.com/settings/usage"
+
+// chatGPTWorkspaceLimitHint explains the Business-plan per-user limit (pi:
+// CHATGPT_WORKSPACE_LIMIT_HINT).
+const chatGPTWorkspaceLimitHint = "You've reached your ChatGPT workspace's usage limit. Ask your workspace admin to increase it at admin.openai.com → Workspace → Usage limits."
+
 // Fixed reasoning.effort while configuration_update items carry the thinking
 // level (pi: CONFIGURATION_UPDATE_REQUEST_EFFORT).
 const configurationUpdateRequestEffort = "medium"
@@ -250,7 +256,17 @@ func formatOpenAIResponsesError(err error, model *types.Model) string {
 	if model.Provider == "openai" {
 		providerLabel = "OpenAI"
 	}
-	return utils.FormatProviderError(utils.NormalizeProviderError(err), providerLabel+" API error")
+	message := utils.FormatProviderError(utils.NormalizeProviderError(err), providerLabel+" API error")
+	// Sign in with ChatGPT shares the subscription's usage limit with other
+	// apps. On ChatGPT Business plans, the workspace admin also sets a
+	// per-user limit.
+	if strings.Contains(message, "subscription_sharing_usage_limit_exceeded") {
+		return message + "\nCheck your ChatGPT usage: " + chatGPTUsageURL
+	}
+	if strings.Contains(message, "subscription_sharing_workplace_individual_usage_limit_exceeded") {
+		return message + "\n" + chatGPTWorkspaceLimitHint
+	}
+	return message
 }
 
 // streamOpenAIResponses is the adapter's core stream implementation (pi: the
@@ -329,7 +345,7 @@ func streamOpenAIResponses(ctx context.Context, model *types.Model, llmContext *
 				cacheSessionID = options.SessionID
 			}
 			grammarToolInputProperties := CreateGrammarToolInputProperties(utils.GetDeclaredTools(normalizedContext.Messages), compat.supportsOpenAIGrammarTools)
-			client := createResponsesClient(model, normalizedContext, apiKey, options.Headers, options.Fetch, cacheSessionID, compat)
+			client := createResponsesClient(model, normalizedContext, apiKey, options.Headers, options.Identity, options.Fetch, cacheSessionID, compat)
 			params := buildResponsesParams(model, normalizedContext, options, compat, grammarToolInputProperties, configurationUpdateEffort)
 			if options.OnPayload != nil {
 				if next := options.OnPayload(params, model); next != nil {
@@ -452,8 +468,8 @@ type openAIResponsesClient struct {
 }
 
 // createResponsesClient builds the client (pi: createClient).
-func createResponsesClient(model *types.Model, llmContext *types.TranscriptContext, apiKey string, optionsHeaders types.ProviderHeaders, fetch types.FetchFunction, sessionID string, compat resolvedOpenAIResponsesCompat) *openAIResponsesClient {
-	headers := map[string]string{"User-Agent": utils.GetPiUserAgent()}
+func createResponsesClient(model *types.Model, llmContext *types.TranscriptContext, apiKey string, optionsHeaders types.ProviderHeaders, identity *types.ClientIdentity, fetch types.FetchFunction, sessionID string, compat resolvedOpenAIResponsesCompat) *openAIResponsesClient {
+	headers := utils.ProviderHeadersToRecord(utils.GetIdentityHeaders(types.ClientIdentityTarget{Provider: string(model.Provider), BaseURL: model.BaseURL}, identity))
 	for name, value := range model.Headers {
 		headers[name] = value
 	}
@@ -478,6 +494,7 @@ func createResponsesClient(model *types.Model, llmContext *types.TranscriptConte
 	// Merge options headers last so they can override defaults
 	for name, value := range optionsHeaders {
 		if value == nil {
+			delete(headers, name)
 			continue
 		}
 		headers[name] = *value

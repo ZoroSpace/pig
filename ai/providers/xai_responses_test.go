@@ -199,7 +199,7 @@ func TestXaiResponsesRequestShape(t *testing.T) {
 		if got := headerOf(captured.headers, "authorization"); got != "Bearer xai-test-token" {
 			t.Fatalf("authorization = %q", got)
 		}
-		if got := headerOf(captured.headers, "user-agent"); got != utils.GetPiUserAgent() {
+		if got := headerOf(captured.headers, "user-agent"); got != utils.FormatUserAgent(nil) {
 			t.Fatalf("user-agent = %q", got)
 		}
 		if got := headerOf(captured.headers, "session_id"); got != "pi-session-123" {
@@ -362,8 +362,8 @@ func TestXaiResponsesUserAgent(t *testing.T) {
 		if result.StopReason != types.StopReasonStop {
 			t.Fatalf("stopReason = %v (%s)", result.StopReason, result.ErrorMessage)
 		}
-		if userAgent != utils.GetPiUserAgent() {
-			t.Fatalf("user-agent = %q, want %q", userAgent, utils.GetPiUserAgent())
+		if userAgent != utils.FormatUserAgent(nil) {
+			t.Fatalf("user-agent = %q, want %q", userAgent, utils.FormatUserAgent(nil))
 		}
 	})
 
@@ -416,8 +416,8 @@ func TestXaiCompletionsUserAgent(t *testing.T) {
 		return userAgent
 	}
 
-	if got := capture(nil); got != utils.GetPiUserAgent() {
-		t.Fatalf("default user-agent = %q, want %q", got, utils.GetPiUserAgent())
+	if got := capture(nil); got != utils.FormatUserAgent(nil) {
+		t.Fatalf("default user-agent = %q, want %q", got, utils.FormatUserAgent(nil))
 	}
 	custom := "custom-agent"
 	if got := capture(types.ProviderHeaders{"User-Agent": &custom}); got != "custom-agent" {

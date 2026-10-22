@@ -347,7 +347,8 @@ func runBedrockConverseStream(ctx context.Context, model *types.Model, normalize
 		optionsProfile = options.Env["AWS_PROFILE"]
 	}
 	cfg := bedrockClientConfig{
-		Profile: firstNonEmpty(optionsProfile, utils.GetProviderEnvValue("AWS_PROFILE", options.Env)),
+		Profile:   firstNonEmpty(optionsProfile, utils.GetProviderEnvValue("AWS_PROFILE", options.Env)),
+		UserAgent: bedrockUserAgent(options.Identity),
 	}
 	configuredRegion := getConfiguredBedrockRegion(options)
 	hasAmbientConfiguredProfile := utils.GetProviderEnvValue("AWS_PROFILE", nil) != ""
@@ -1804,6 +1805,24 @@ type bedrockNamedToolChoice struct {
 	Name string
 }
 
+// bedrockUserAgent renders the client identity as an AWS SDK application
+// identifier (pi: bedrockUserAgent). The SDK escapes characters that are not
+// valid in a user-agent token, so pi's detailed form is reduced to name and
+// version; pig hands the SDK the same reduced form through AppID.
+func bedrockUserAgent(identity *types.ClientIdentity) string {
+	mode := types.UserAgentDetailed()
+	if identity != nil && identity.UserAgent != nil {
+		mode = identity.UserAgent
+	}
+	if mode.Custom != "" {
+		return mode.Custom
+	}
+	if mode.Short {
+		return "pi"
+	}
+	return "pi/" + utils.GetClientVersion(identity)
+}
+
 // --- transport seam (pi: BedrockRuntimeClient + ConverseStreamCommand) ---
 
 // bedrockClientConfig mirrors the BedrockRuntimeClientConfig fields pi sets on
@@ -1830,6 +1849,9 @@ type bedrockClientConfig struct {
 	// ForceHTTP1 is the AWS_BEDROCK_FORCE_HTTP1=1 flag (pi: requestHandler =
 	// new NodeHttpHandler()).
 	ForceHTTP1 bool
+	// UserAgent is the client identity as an AWS SDK application identifier
+	// (pi: customUserAgent); empty leaves the SDK default.
+	UserAgent string
 }
 
 // bedrockClientParams carries everything the client factory needs beyond the
@@ -1931,6 +1953,9 @@ func newBedrockSDKClient(ctx context.Context, params bedrockClientParams) (bedro
 	// per-request, so one metadata instance is race-free.
 	metadata := &bedrockResponseMetadata{}
 	client := bedrockruntime.NewFromConfig(awsCfg, func(o *bedrockruntime.Options) {
+		if cfg.UserAgent != "" {
+			o.AppID = cfg.UserAgent
+		}
 		if cfg.Token != "" {
 			o.BearerAuthTokenProvider = bedrockBearerTokenProvider(cfg.Token)
 			o.AuthSchemePreference = cfg.AuthSchemePreference

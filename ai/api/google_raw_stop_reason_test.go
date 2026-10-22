@@ -275,8 +275,8 @@ func captureGoogleHeaders(t *testing.T, headers types.ProviderHeaders) map[strin
 
 func TestGoogleGenerativeAIUserAgentDefault(t *testing.T) {
 	headers := captureGoogleHeaders(t, nil)
-	if headers["User-Agent"] != utils.GetPiUserAgent() {
-		t.Errorf("User-Agent = %q, want %q", headers["User-Agent"], utils.GetPiUserAgent())
+	if headers["User-Agent"] != utils.FormatUserAgent(nil) {
+		t.Errorf("User-Agent = %q, want %q", headers["User-Agent"], utils.FormatUserAgent(nil))
 	}
 }
 

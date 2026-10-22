@@ -1107,11 +1107,23 @@ func (r *ModelRuntime) prepareRequest(ctx context.Context, model *ai.Model, opti
 		return nil, auth.NewModelsError(auth.ModelsErrorAuth, fmt.Sprintf("Provider is not configured: %s", model.Provider), nil)
 	}
 
+	effectiveModel := model
+	if resolution.Auth.BaseURL != "" {
+		withBase := *model
+		withBase.BaseURL = resolution.Auth.BaseURL
+		effectiveModel = &withBase
+	}
+	target := types.ClientIdentityTarget{Provider: string(effectiveModel.Provider), BaseURL: effectiveModel.BaseURL}
+	sessionID := ""
+	if options != nil {
+		sessionID = options.SessionID
+	}
 	var headers types.ProviderHeaders
 	if options != nil {
 		headers = options.Headers
 	}
-	mergedHeaders := mergeHeaders(resolution.Auth.Headers, headers)
+	mergedHeaders := mergeHeaders(aiutils.GetOpenCodeSessionHeaders(target, sessionID), resolution.Auth.Headers)
+	mergedHeaders = mergeHeaders(mergedHeaders, headers)
 	if options != nil && options.TransformHeaders != nil {
 		transformed, err := options.TransformHeaders(mergedHeaders)
 		if err != nil {
@@ -1130,12 +1142,6 @@ func (r *ModelRuntime) prepareRequest(ctx context.Context, model *ai.Model, opti
 				env[key] = value
 			}
 		}
-	}
-	effectiveModel := model
-	if resolution.Auth.BaseURL != "" {
-		withBase := *model
-		withBase.BaseURL = resolution.Auth.BaseURL
-		effectiveModel = &withBase
 	}
 	prepared := &preparedRequest{
 		provider: provider,
@@ -1158,6 +1164,7 @@ type ModelRuntimeRequestOptions struct {
 	APIKey           string
 	Headers          types.ProviderHeaders
 	Env              types.ProviderEnv
+	SessionID        string
 	TransformHeaders func(headers types.ProviderHeaders) (types.ProviderHeaders, error)
 }
 
@@ -1199,6 +1206,7 @@ func (r *ModelRuntime) Stream(ctx context.Context, model *ai.Model, llmContext *
 				APIKey:           options.APIKey,
 				Headers:          options.Headers,
 				Env:              options.Env,
+				SessionID:        options.SessionID,
 				TransformHeaders: options.TransformHeaders,
 			}
 			providerOptions = &options.ProviderRequestOptions
@@ -1235,6 +1243,7 @@ func (r *ModelRuntime) StreamSimple(ctx context.Context, model *ai.Model, llmCon
 				APIKey:           options.APIKey,
 				Headers:          options.Headers,
 				Env:              options.Env,
+				SessionID:        options.SessionID,
 				TransformHeaders: options.TransformHeaders,
 			}
 			providerOptions = &options.ProviderRequestOptions

@@ -255,8 +255,8 @@ func TestAnthropicCompatibleUserAgents(t *testing.T) {
 
 	t.Run("uses pi's User-Agent by default", func(t *testing.T) {
 		captured := runAuthTokenStream(t, model, llmContext, nil)
-		if got := captured.headers.Get("User-Agent"); got != utils.GetPiUserAgent() {
-			t.Errorf("User-Agent = %q, want %q", got, utils.GetPiUserAgent())
+		if got := captured.headers.Get("User-Agent"); got != utils.FormatUserAgent(nil) {
+			t.Errorf("User-Agent = %q, want %q", got, utils.FormatUserAgent(nil))
 		}
 	})
 

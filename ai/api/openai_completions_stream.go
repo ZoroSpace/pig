@@ -451,7 +451,7 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 		if cacheRetention != types.CacheRetentionNone {
 			cacheSessionID = options.SessionID
 		}
-		client := createClient(model, normalizedContext, apiKey, options.Headers, options.Fetch, cacheSessionID, compat)
+		client := createClient(model, normalizedContext, apiKey, options.Headers, options.Identity, options.Fetch, cacheSessionID, compat)
 		params := buildParams(model, normalizedContext, options, compat, cacheRetention, grammarToolInputProperties)
 		if options.OnPayload != nil {
 			if next := options.OnPayload(params, model); next != nil {

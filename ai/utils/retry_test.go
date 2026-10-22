@@ -190,3 +190,39 @@ func TestIsRetryableAssistantErrorMatchesModelAtCapacity(t *testing.T) {
 		t.Fatal("model-at-capacity error should be retryable")
 	}
 }
+
+func TestIsRetryableAssistantErrorStatusCodesAreStandalone(t *testing.T) {
+	// Regression for pi #11057: status codes inside ids or other numbers are
+	// not status codes.
+	for _, errorMessage := range []string{
+		`401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011CU503xyz"}`,
+		"400 image exceeds 5 MB maximum: 5316784 bytes > 5242880 bytes",
+	} {
+		if IsRetryableAssistantError(retryTestMessage("", types.StopReasonError, errorMessage)) {
+			t.Fatalf("%q should not be retryable", errorMessage)
+		}
+	}
+	for _, errorMessage := range []string{
+		"429 Too Many Requests",
+		"upstream returned HTTP 503",
+		"error code: 524",
+	} {
+		if !IsRetryableAssistantError(retryTestMessage("", types.StopReasonError, errorMessage)) {
+			t.Fatalf("%q should be retryable", errorMessage)
+		}
+	}
+}
+
+func TestIsRetryableAssistantErrorMatchesCodexDisconnect(t *testing.T) {
+	message := retryTestMessage("", types.StopReasonError, "stream disconnected before completion: stream closed before response.completed")
+	if !IsRetryableAssistantError(message) {
+		t.Fatal("Codex CLI stream disconnect should be retryable")
+	}
+}
+
+func TestIsRetryableAssistantErrorRejectsWorkspaceLimit(t *testing.T) {
+	message := retryTestMessage("", types.StopReasonError, "subscription_sharing_workplace_individual_usage_limit_exceeded")
+	if IsRetryableAssistantError(message) {
+		t.Fatal("ChatGPT Business workspace usage limit should not be retryable")
+	}
+}

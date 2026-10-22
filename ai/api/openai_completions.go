@@ -456,8 +456,8 @@ type openaiCompletionsClient struct {
 }
 
 // createClient builds the client (pi: createClient).
-func createClient(model *types.Model, llmContext *types.TranscriptContext, apiKey string, optionsHeaders types.ProviderHeaders, fetch types.FetchFunction, sessionID string, compat *resolvedOpenAICompletionsCompat) *openaiCompletionsClient {
-	headers := map[string]string{"User-Agent": utils.GetPiUserAgent()}
+func createClient(model *types.Model, llmContext *types.TranscriptContext, apiKey string, optionsHeaders types.ProviderHeaders, identity *types.ClientIdentity, fetch types.FetchFunction, sessionID string, compat *resolvedOpenAICompletionsCompat) *openaiCompletionsClient {
+	headers := utils.ProviderHeadersToRecord(utils.GetIdentityHeaders(types.ClientIdentityTarget{Provider: string(model.Provider), BaseURL: model.BaseURL}, identity))
 	for name, value := range model.Headers {
 		headers[name] = value
 	}
@@ -484,6 +484,7 @@ func createClient(model *types.Model, llmContext *types.TranscriptContext, apiKe
 	// Merge options headers last so they can override defaults.
 	for name, value := range optionsHeaders {
 		if value == nil {
+			delete(headers, name)
 			continue
 		}
 		headers[name] = *value

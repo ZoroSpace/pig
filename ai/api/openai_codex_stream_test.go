@@ -439,7 +439,7 @@ func TestOpenAICodexStreamStreamsSSEResponses(t *testing.T) {
 	if got := codexReqHeader(reqFromHeader(gotHeaders), "originator"); got != "pi" {
 		t.Fatalf("originator = %q", got)
 	}
-	if got := codexReqHeader(reqFromHeader(gotHeaders), "User-Agent"); got != utils.GetPiUserAgent() {
+	if got := codexReqHeader(reqFromHeader(gotHeaders), "User-Agent"); got != utils.FormatUserAgent(nil) {
 		t.Fatalf("User-Agent = %q", got)
 	}
 	if got := codexReqHeader(reqFromHeader(gotHeaders), "accept"); got != "text/event-stream" {

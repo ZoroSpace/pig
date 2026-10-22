@@ -271,6 +271,9 @@ type CreateModelsOptions struct {
 	Credentials auth.CredentialStore
 	ModelsStore ModelsStore
 	AuthContext auth.AuthContext
+	// Identity is the default identity of every request; a request's identity
+	// overrides it field by field.
+	Identity *ClientIdentity
 }
 
 // refreshController is the AbortController counterpart (pi:
@@ -291,6 +294,7 @@ type modelsImpl struct {
 	credentials auth.CredentialStore
 	modelsStore ModelsStore
 	authContext auth.AuthContext
+	identity    *ClientIdentity
 
 	refreshMu          sync.Mutex
 	refreshGenerations map[string]int
@@ -309,6 +313,7 @@ func NewModels(options *CreateModelsOptions) MutableModels {
 		publicationLocks:   map[string]*sync.Mutex{},
 	}
 	if options != nil {
+		m.identity = options.Identity
 		m.credentials = options.Credentials
 		m.modelsStore = options.ModelsStore
 		m.authContext = options.AuthContext
@@ -1044,6 +1049,7 @@ type resolvedRequest struct {
 	requestModel *Model
 	apiKey       string
 	headers      ProviderHeaders
+	identity     *ClientIdentity
 	env          ProviderEnv
 }
 
@@ -1064,7 +1070,7 @@ func stringHeaders(headers map[string]string) ProviderHeaders {
 
 // resolveRequestAuth is the core of pi's applyAuth: explicit request options
 // win per-field; the Models-only transform runs last.
-func (m *modelsImpl) resolveRequestAuth(ctx context.Context, model *Model, options ProviderRequestOptions, transforms *ModelsRequestTransforms) (*resolvedRequest, error) {
+func (m *modelsImpl) resolveRequestAuth(ctx context.Context, model *Model, options ProviderRequestOptions, sessionID string, transforms *ModelsRequestTransforms) (*resolvedRequest, error) {
 	if _, err := m.requireProvider(model); err != nil {
 		return nil, err
 	}
@@ -1081,7 +1087,15 @@ func (m *modelsImpl) resolveRequestAuth(ctx context.Context, model *Model, optio
 	if apiKey == "" {
 		apiKey = auth.APIKey
 	}
-	headers := mergeHeaders(auth.Headers, options.Headers)
+	requestModel := model
+	if auth.BaseURL != "" {
+		copied := *model
+		copied.BaseURL = auth.BaseURL
+		requestModel = &copied
+	}
+	target := ClientIdentityTarget{Provider: string(requestModel.Provider), BaseURL: requestModel.BaseURL}
+	headers := mergeHeaders(aiutils.GetOpenCodeSessionHeaders(target, sessionID), auth.Headers)
+	headers = mergeHeaders(headers, options.Headers)
 	if transforms != nil && transforms.TransformHeaders != nil {
 		headers, err = transforms.TransformHeaders(headers)
 		if err != nil {
@@ -1098,18 +1112,14 @@ func (m *modelsImpl) resolveRequestAuth(ctx context.Context, model *Model, optio
 			env[k] = v
 		}
 	}
-	requestModel := model
-	if auth.BaseURL != "" {
-		copied := *model
-		copied.BaseURL = auth.BaseURL
-		requestModel = &copied
-	}
-	return &resolvedRequest{requestModel: requestModel, apiKey: apiKey, headers: headers, env: env}, nil
+	identity := aiutils.MergeClientIdentity(m.identity, options.Identity)
+	return &resolvedRequest{requestModel: requestModel, apiKey: apiKey, headers: headers, identity: identity, env: env}, nil
 }
 
 func applyResolvedToRequestOptions(options *ProviderRequestOptions, resolved *resolvedRequest) {
 	options.APIKey = resolved.apiKey
 	options.Headers = resolved.headers
+	options.Identity = resolved.identity
 	options.Env = resolved.env
 }
 
@@ -1129,7 +1139,7 @@ func (m *modelsImpl) Stream(ctx context.Context, model *Model, llmContext *Conte
 			base = options.StreamOptions
 			transforms = &options.ModelsRequestTransforms
 		}
-		resolved, err := m.resolveRequestAuth(ctx, model, base.ProviderRequestOptions, transforms)
+		resolved, err := m.resolveRequestAuth(ctx, model, base.ProviderRequestOptions, base.SessionID, transforms)
 		if err != nil {
 			return nil, err
 		}
@@ -1161,7 +1171,7 @@ func (m *modelsImpl) StreamSimple(ctx context.Context, model *Model, llmContext 
 			base = options.SimpleStreamOptions
 			transforms = &options.ModelsRequestTransforms
 		}
-		resolved, err := m.resolveRequestAuth(ctx, model, base.ProviderRequestOptions, transforms)
+		resolved, err := m.resolveRequestAuth(ctx, model, base.ProviderRequestOptions, base.SessionID, transforms)
 		if err != nil {
 			return nil, err
 		}
@@ -1197,7 +1207,7 @@ func (m *modelsImpl) StreamDeferred(ctx context.Context, model *Model, handle *D
 			base = options.DeferredFetchOptions
 			transforms = &options.ModelsRequestTransforms
 		}
-		resolved, err := m.resolveRequestAuth(ctx, model, base.ProviderRequestOptions, transforms)
+		resolved, err := m.resolveRequestAuth(ctx, model, base.ProviderRequestOptions, "", transforms)
 		if err != nil {
 			return nil, err
 		}
@@ -1229,7 +1239,7 @@ func (m *modelsImpl) CancelDeferred(ctx context.Context, model *Model, handle *D
 		base = options.ProviderRequestOptions
 		transforms = &options.ModelsRequestTransforms
 	}
-	resolved, err := m.resolveRequestAuth(ctx, model, base, transforms)
+	resolved, err := m.resolveRequestAuth(ctx, model, base, "", transforms)
 	if err != nil {
 		return err
 	}

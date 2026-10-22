@@ -26,6 +26,12 @@ import (
 	"github.com/ZoroSpace/pig/ai/utils"
 )
 
+// DefaultAgentIdentity is the request identity of agent loops: pi-ai's
+// defaults with provider attribution to pi (pi: DEFAULT_AGENT_IDENTITY).
+var DefaultAgentIdentity = &types.ClientIdentity{
+	Attribution: &types.AttributionSetting{Attribution: &types.PIAttribution},
+}
+
 // AgentEventSink consumes agent events. pi's Promise<void> | void collapses
 // to a synchronous callback; emit points are all sequential in the loop.
 type AgentEventSink func(event AgentEvent)
@@ -396,6 +402,7 @@ func streamAssistantResponse(ctx context.Context, agentContext *AgentContext, co
 	// and signal; pig copies the embedded options struct and passes ctx.
 	options := config.SimpleStreamOptions
 	options.APIKey = resolvedApiKey
+	options.Identity = utils.MergeClientIdentity(DefaultAgentIdentity, config.Identity)
 
 	response := streamFunction(ctx, config.Model, llmContext, &options)
 

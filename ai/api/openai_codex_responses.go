@@ -471,8 +471,8 @@ func streamOpenAICodexResponses(ctx context.Context, model *types.Model, llmCont
 			if websocketRequestID == "" {
 				websocketRequestID = utils.UUIDv7()
 			}
-			sseHeaders := buildCodexSSEHeaders(model.Headers, options.Headers, accountID, apiKey, codexSessionID)
-			websocketHeaders := buildCodexWebsocketHeaders(model.Headers, options.Headers, accountID, apiKey, websocketRequestID)
+			sseHeaders := buildCodexSSEHeaders(model, model.Headers, options.Headers, options.Identity, accountID, apiKey, codexSessionID)
+			websocketHeaders := buildCodexWebsocketHeaders(model, model.Headers, options.Headers, options.Identity, accountID, apiKey, websocketRequestID)
 			bodyJSON, err := json.Marshal(body)
 			if err != nil {
 				return err
@@ -2017,8 +2017,10 @@ func decodeCodexJWTPayload(segment string) ([]byte, error) {
 
 // buildCodexBaseHeaders assembles the shared Codex header set (pi:
 // buildBaseCodexHeaders).
-func buildCodexBaseHeaders(initHeaders map[string]string, additionalHeaders types.ProviderHeaders, accountID, token string) map[string]string {
-	headers := make(map[string]string, len(initHeaders)+6)
+func buildCodexBaseHeaders(model *types.Model, initHeaders map[string]string, additionalHeaders types.ProviderHeaders, identity *types.ClientIdentity, accountID, token string) map[string]string {
+	headers := utils.ProviderHeadersToRecord(utils.GetIdentityHeaders(types.ClientIdentityTarget{Provider: string(model.Provider), BaseURL: model.BaseURL}, identity))
+	// Codex expects an originator on every request; it is not attribution.
+	headers["originator"] = "pi"
 	for name, value := range initHeaders {
 		headers[name] = value
 	}
@@ -2031,13 +2033,11 @@ func buildCodexBaseHeaders(initHeaders map[string]string, additionalHeaders type
 	}
 	headers["Authorization"] = "Bearer " + token
 	headers["chatgpt-account-id"] = accountID
-	headers["originator"] = "pi"
-	headers["User-Agent"] = utils.GetPiUserAgent()
 	return headers
 }
 
-func buildCodexSSEHeaders(initHeaders map[string]string, additionalHeaders types.ProviderHeaders, accountID, token, sessionID string) map[string]string {
-	headers := buildCodexBaseHeaders(initHeaders, additionalHeaders, accountID, token)
+func buildCodexSSEHeaders(model *types.Model, initHeaders map[string]string, additionalHeaders types.ProviderHeaders, identity *types.ClientIdentity, accountID, token, sessionID string) map[string]string {
+	headers := buildCodexBaseHeaders(model, initHeaders, additionalHeaders, identity, accountID, token)
 	headers["OpenAI-Beta"] = "responses=experimental"
 	headers["accept"] = "text/event-stream"
 	headers["content-type"] = "application/json"
@@ -2050,8 +2050,8 @@ func buildCodexSSEHeaders(initHeaders map[string]string, additionalHeaders types
 	return headers
 }
 
-func buildCodexWebsocketHeaders(initHeaders map[string]string, additionalHeaders types.ProviderHeaders, accountID, token, requestID string) map[string]string {
-	headers := buildCodexBaseHeaders(initHeaders, additionalHeaders, accountID, token)
+func buildCodexWebsocketHeaders(model *types.Model, initHeaders map[string]string, additionalHeaders types.ProviderHeaders, identity *types.ClientIdentity, accountID, token, requestID string) map[string]string {
+	headers := buildCodexBaseHeaders(model, initHeaders, additionalHeaders, identity, accountID, token)
 	// pi deletes accept/content-type/OpenAI-Beta here defensively; the base
 	// builder never sets them, so the deletes are no-ops on both runtimes.
 	delete(headers, "accept")

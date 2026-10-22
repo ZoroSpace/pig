@@ -147,6 +147,11 @@ type (
 	FetchFunction          = types.FetchFunction
 	ProviderResponse       = types.ProviderResponse
 	ProviderRequestOptions = types.ProviderRequestOptions
+	ClientIdentity         = types.ClientIdentity
+	ClientAttribution      = types.ClientAttribution
+	UserAgentMode          = types.UserAgentMode
+	AttributionSetting     = types.AttributionSetting
+	ClientIdentityTarget   = types.ClientIdentityTarget
 	StreamOptions          = types.StreamOptions
 	ProviderStreamOptions  = types.ProviderStreamOptions
 	DeferredFetchOptions   = types.DeferredFetchOptions
@@ -419,3 +424,6 @@ const (
 	ModelInputText  = types.ModelInputText
 	ModelInputImage = types.ModelInputImage
 )
+
+// PIAttribution is pi's provider attribution (pi: PI_ATTRIBUTION).
+var PIAttribution = types.PIAttribution

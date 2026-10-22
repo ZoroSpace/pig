@@ -180,7 +180,7 @@ func TestVertexDoesNotForwardGeneratedBaseURLPlaceholders(t *testing.T) {
 		t.Fatalf("httpOptions.baseUrl/resourceScope = %q/%q, want absent",
 			client.httpOptions.baseURL, client.httpOptions.baseURLResourceScope)
 	}
-	if ua := client.httpOptions.headers["User-Agent"]; ua != utils.GetPiUserAgent() || len(client.httpOptions.headers) != 1 {
+	if ua := client.httpOptions.headers["User-Agent"]; ua != utils.FormatUserAgent(nil) || len(client.httpOptions.headers) != 1 {
 		t.Fatalf("httpOptions.headers = %v, want only the pi User-Agent", client.httpOptions.headers)
 	}
 }
