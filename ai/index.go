@@ -318,8 +318,9 @@ var (
 
 // Transcript helper result types (pi: ToolStateChanges / TranscriptTools).
 type (
-	ToolStateChanges = utils.ToolStateChanges
-	TranscriptTools  = utils.TranscriptTools
+	ToolStateChanges      = utils.ToolStateChanges
+	TranscriptTools       = utils.TranscriptTools
+	TranscriptToolSupport = utils.TranscriptToolSupport
 )
 
 // Assistant-call retry (pi: utils/retry.ts, star-exported by index.ts).

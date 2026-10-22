@@ -584,8 +584,8 @@ func TestResolveCliModel(t *testing.T) {
 
 func TestDefaultModelSelection(t *testing.T) {
 	t.Run("openai defaults track current models", func(t *testing.T) {
-		if DefaultModelPerProvider["openai"] != "gpt-5.5" || DefaultModelPerProvider["openai-codex"] != "gpt-6.1-sol" {
-			t.Fatalf("openai defaults drifted: %v %v", DefaultModelPerProvider["openai"], DefaultModelPerProvider["openai-codex"])
+		if DefaultModelPerProvider["openai"] != "gpt-5.5" || DefaultModelPerProvider["openai-codex"] != "gpt-6.1-sol" || DefaultModelPerProvider["github-copilot"] != "gpt-6.1-sol" {
+			t.Fatalf("openai defaults drifted: %v %v %v", DefaultModelPerProvider["openai"], DefaultModelPerProvider["openai-codex"], DefaultModelPerProvider["github-copilot"])
 		}
 	})
 

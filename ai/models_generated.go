@@ -6809,56 +6809,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsLongCacheRetention: lo.ToPtr(false),
 			},
 		},
-		"moonshotai/Kimi-K2.6": {
-			ID:        "moonshotai/Kimi-K2.6",
-			Name:      "Kimi K2.6",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderBaseten,
-			BaseURL:   "https://inference.baseten.co/v1",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     lo.ToPtr("off"),
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
-				ModelThinkingMax:     nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.95, Output: 4, CacheRead: 0.16, CacheWrite: 0}},
-			ContextWindow: 262000,
-			MaxTokens:     262000,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:            lo.ToPtr(false),
-				SupportsDeveloperRole:    lo.ToPtr(false),
-				SupportsReasoningEffort:  lo.ToPtr(false),
-				SupportsUsageInStreaming: lo.ToPtr(true),
-				MaxTokensField:           lo.ToPtr(MaxTokensPlain),
-				ThinkingFormat:           lo.ToPtr(ThinkingFormatBaseten),
-				ChatTemplateArgs: map[string]ChatTemplateKwargValue{
-					string("enable_thinking"): ChatTemplateKwargValue{
-						Value: ChatTemplateKwargVar{
-							Var: ChatTemplateVarThinkingEnabled,
-						},
-					},
-				},
-				SupportsStrictMode:         lo.ToPtr(true),
-				SendSessionAffinityHeaders: lo.ToPtr(true),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
 		"moonshotai/Kimi-K2.7-Code": {
 			ID:        "moonshotai/Kimi-K2.7-Code",
 			Name:      "Kimi K2.7 Code",
@@ -10636,44 +10586,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsEagerToolInputStreaming: lo.ToPtr(false),
 			},
 		},
-		"claude-opus-4.7": {
-			ID:        "claude-opus-4.7",
-			Name:      "Claude Opus 4.7",
-			API:       ApiAnthropicMessages,
-			Provider:  ProviderID("github-copilot"),
-			BaseURL:   "https://api.individual.githubcopilot.com",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: lo.ToPtr("low"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-				ModelThinkingMax:     lo.ToPtr("max"),
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
-			ContextWindow: 1000000,
-			MaxTokens:     32000,
-			Headers: map[string]string{
-				"Copilot-Integration-Id": "vscode-chat",
-				"Editor-Plugin-Version":  "copilot-chat/0.35.0",
-				"Editor-Version":         "vscode/1.107.0",
-				"User-Agent":             "GitHubCopilotChat/0.35.0",
-			},
-			Compat: &AnthropicMessagesCompat{
-				SupportsTemperature:   lo.ToPtr(false),
-				ForceAdaptiveThinking: lo.ToPtr(true),
-			},
-		},
 		"claude-opus-4.8": {
 			ID:        "claude-opus-4.8",
 			Name:      "Claude Opus 4.8",
@@ -11127,54 +11039,6 @@ var MODELS = map[ProviderID]map[string]Model{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
 			},
 		},
-		"gpt-5.4": {
-			ID:        "gpt-5.4",
-			Name:      "GPT-5.4",
-			API:       Api("openai-responses"),
-			Provider:  ProviderID("github-copilot"),
-			BaseURL:   "https://api.individual.githubcopilot.com",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     nil,
-				ModelThinkingMinimal: lo.ToPtr("low"),
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-				ModelThinkingMax:     nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 2.5, Output: 15, CacheRead: 0.25, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 5, Output: 22.5, CacheRead: 0.5, CacheWrite: 0}, InputTokensAbove: 272000},
-				},
-			},
-			ContextWindow: 1000000,
-			MaxTokens:     128000,
-			Headers: map[string]string{
-				"Copilot-Integration-Id": "vscode-chat",
-				"Editor-Plugin-Version":  "copilot-chat/0.35.0",
-				"Editor-Version":         "vscode/1.107.0",
-				"User-Agent":             "GitHubCopilotChat/0.35.0",
-			},
-			Compat: &OpenAIResponsesCompat{
-				SupportsMidConvoSystemMessages: lo.ToPtr(true),
-				SupportsOpenAIGrammarTools:     lo.ToPtr(true),
-				SupportsAdditionalTools:        lo.ToPtr(true),
-			},
-		},
 		"gpt-5.4-mini": {
 			ID:        "gpt-5.4-mini",
 			Name:      "GPT-5.4 mini",
@@ -11253,54 +11117,6 @@ var MODELS = map[ProviderID]map[string]Model{
 			},
 			Compat: &OpenAIResponsesCompat{
 				SupportsOpenAIGrammarTools: lo.ToPtr(true),
-			},
-		},
-		"gpt-5.5": {
-			ID:        "gpt-5.5",
-			Name:      "GPT-5.5",
-			API:       Api("openai-responses"),
-			Provider:  ProviderID("github-copilot"),
-			BaseURL:   "https://api.individual.githubcopilot.com",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     nil,
-				ModelThinkingMinimal: lo.ToPtr("low"),
-				ModelThinkingLow:     lo.ToPtr("low"),
-				ModelThinkingMedium:  lo.ToPtr("medium"),
-				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-				ModelThinkingMax:     nil,
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 10, Output: 45, CacheRead: 1, CacheWrite: 0}, InputTokensAbove: 272000},
-				},
-			},
-			ContextWindow: 1000000,
-			MaxTokens:     128000,
-			Headers: map[string]string{
-				"Copilot-Integration-Id": "vscode-chat",
-				"Editor-Plugin-Version":  "copilot-chat/0.35.0",
-				"Editor-Version":         "vscode/1.107.0",
-				"User-Agent":             "GitHubCopilotChat/0.35.0",
-			},
-			Compat: &OpenAIResponsesCompat{
-				SupportsMidConvoSystemMessages: lo.ToPtr(true),
-				SupportsOpenAIGrammarTools:     lo.ToPtr(true),
-				SupportsAdditionalTools:        lo.ToPtr(true),
 			},
 		},
 		"gpt-5.6-luna": {
@@ -18025,63 +17841,6 @@ var MODELS = map[ProviderID]map[string]Model{
 		},
 	},
 	ProviderID("openai-codex"): {
-		"gpt-5.3-codex-spark": {
-			ID:        "gpt-5.3-codex-spark",
-			Name:      "GPT-5.3 Codex Spark",
-			API:       Api("openai-codex-responses"),
-			Provider:  ProviderID("openai-codex"),
-			BaseURL:   "https://chatgpt.com/backend-api",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: lo.ToPtr("low"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 1.75, Output: 14, CacheRead: 0.175, CacheWrite: 0}},
-			ContextWindow: 128000,
-			MaxTokens:     128000,
-			Compat: &OpenAIResponsesCompat{
-				SupportsOpenAIGrammarTools: lo.ToPtr(true),
-			},
-		},
-		"gpt-5.5": {
-			ID:        "gpt-5.5",
-			Name:      "GPT-5.5",
-			API:       Api("openai-codex-responses"),
-			Provider:  ProviderID("openai-codex"),
-			BaseURL:   "https://chatgpt.com/backend-api",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingMinimal: lo.ToPtr("low"),
-				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
-			},
-			Input: []ModelInput{ModelInputText, ModelInputImage},
-			InputLimits: &ModelInputLimits{
-				Images: &ModelImageInputLimits{
-					Resize: &ModelImageResizeOptions{
-						MaxWidth:    2000,
-						MaxHeight:   2000,
-						MaxBytes:    4718592,
-						JpegQuality: 80,
-					},
-				},
-			},
-			Cost: ModelCost{
-				ModelCostRates: ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0},
-				Tiers: []ModelCostTier{
-					{ModelCostRates: ModelCostRates{Input: 10, Output: 45, CacheRead: 1, CacheWrite: 0}, InputTokensAbove: 272000},
-				},
-			},
-			ContextWindow: 272000,
-			MaxTokens:     128000,
-			Compat: &OpenAIResponsesCompat{
-				SupportsMidConvoSystemMessages: lo.ToPtr(true),
-				SupportsOpenAIGrammarTools:     lo.ToPtr(true),
-				SupportsToolSearch:             lo.ToPtr(true),
-			},
-		},
 		"gpt-5.6-luna": {
 			ID:        "gpt-5.6-luna",
 			Name:      "GPT-5.6 Luna",
@@ -35141,33 +34900,6 @@ var MODELS = map[ProviderID]map[string]Model{
 		},
 	},
 	ProviderTogether: {
-		"MiniMaxAI/MiniMax-M2.7": {
-			ID:        "MiniMaxAI/MiniMax-M2.7",
-			Name:      "MiniMax-M2.7",
-			API:       ApiOpenAICompletions,
-			Provider:  ProviderTogether,
-			BaseURL:   "https://api.together.ai/v1",
-			Type:      ModelTypeChat,
-			Reasoning: true,
-			ThinkingLevelMap: ThinkingLevelMap{
-				ModelThinkingOff:     nil,
-				ModelThinkingMinimal: nil,
-				ModelThinkingLow:     nil,
-				ModelThinkingMedium:  nil,
-			},
-			Input:         []ModelInput{ModelInputText},
-			Cost:          ModelCost{ModelCostRates: ModelCostRates{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0}},
-			ContextWindow: 196608,
-			MaxTokens:     131072,
-			Compat: &OpenAICompletionsCompat{
-				SupportsStore:              lo.ToPtr(false),
-				SupportsDeveloperRole:      lo.ToPtr(false),
-				SupportsReasoningEffort:    lo.ToPtr(false),
-				MaxTokensField:             lo.ToPtr(MaxTokensPlain),
-				SupportsStrictMode:         lo.ToPtr(false),
-				SupportsLongCacheRetention: lo.ToPtr(false),
-			},
-		},
 		"MiniMaxAI/MiniMax-M3": {
 			ID:        "MiniMaxAI/MiniMax-M3",
 			Name:      "MiniMax-M3",
@@ -41610,7 +41342,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingLow:     lo.ToPtr("low"),
 				ModelThinkingMedium:  lo.ToPtr("medium"),
 				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     nil,
 			},
 			Input: []ModelInput{ModelInputText, ModelInputImage},
@@ -41650,7 +41382,7 @@ var MODELS = map[ProviderID]map[string]Model{
 				ModelThinkingLow:     lo.ToPtr("low"),
 				ModelThinkingMedium:  lo.ToPtr("medium"),
 				ModelThinkingHigh:    lo.ToPtr("high"),
-				ModelThinkingXHigh:   nil,
+				ModelThinkingXHigh:   lo.ToPtr("xhigh"),
 				ModelThinkingMax:     nil,
 			},
 			Input: []ModelInput{ModelInputText, ModelInputImage},

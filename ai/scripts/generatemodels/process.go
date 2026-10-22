@@ -44,16 +44,9 @@ var togetherToggleReasoningEffortCompat = withCompat(togetherToggleReasoningComp
 	c.SupportsReasoningEffort = lo.ToPtr(true)
 })
 
-var togetherReasoningOnlyModels = stringSet("deepseek-ai/DeepSeek-R1", "MiniMaxAI/MiniMax-M2.7")
 var togetherReasoningEffortModels = stringSet("openai/gpt-oss-20b", "openai/gpt-oss-120b")
 var togetherToggleReasoningEffortModels = stringSet("deepseek-ai/DeepSeek-V4-Pro-0813")
 
-var togetherFixedReasoningLevelMap = ai.ThinkingLevelMap{
-	ai.ModelThinkingOff:     nil,
-	ai.ModelThinkingMinimal: nil,
-	ai.ModelThinkingLow:     nil,
-	ai.ModelThinkingMedium:  nil,
-}
 var togetherReasoningEffortLevelMap = ai.ThinkingLevelMap{
 	ai.ModelThinkingOff:     nil,
 	ai.ModelThinkingMinimal: nil,
@@ -128,9 +121,6 @@ func getTogetherCompat(modelID string, reasoning bool) *ai.OpenAICompletionsComp
 	if togetherToggleReasoningEffortModels[modelID] {
 		return copyOpenAICompat(togetherToggleReasoningEffortCompat)
 	}
-	if togetherReasoningOnlyModels[modelID] {
-		return copyOpenAICompat(togetherBaseCompat)
-	}
 	return copyOpenAICompat(togetherToggleReasoningCompat)
 }
 
@@ -145,8 +135,6 @@ func getTogetherThinkingLevelMap(modelID string, reasoning bool) *ai.ThinkingLev
 		m = cloneThinkingLevelMap(togetherReasoningEffortLevelMap)
 	case togetherToggleReasoningEffortModels[modelID]:
 		m = cloneThinkingLevelMap(togetherDeepseekV4ThinkingLevelMap)
-	case togetherReasoningOnlyModels[modelID]:
-		m = cloneThinkingLevelMap(togetherFixedReasoningLevelMap)
 	default:
 		m = cloneThinkingLevelMap(togetherToggleReasoningLevelMap)
 	}
@@ -1064,16 +1052,12 @@ var openCodeOpenAICompletionsLongCacheRetentionUnsupportedModels = stringSet(
 // context window (pi: GITHUB_COPILOT_EXTENDED_CONTEXT_MODELS).
 var githubCopilotExtendedContextModels = stringSet(
 	"claude-fable-5",
-	"claude-opus-4.6",
-	"claude-opus-4.7",
 	"claude-opus-4.8",
 	"claude-opus-5",
 	"claude-opus-5.5",
 	"claude-sonnet-4.6",
 	"claude-sonnet-5",
 	"gpt-5.3-codex",
-	"gpt-5.4",
-	"gpt-5.5",
 	"gpt-6-astra",
 	"gpt-6-luna",
 	"gpt-6-sol",
@@ -1083,7 +1067,6 @@ var githubCopilotExtendedContextModels = stringSet(
 // authenticated GitHub Copilot /models endpoint (checked 2026-06-15; pi:
 // GITHUB_COPILOT_THINKING_LEVEL_OVERRIDES).
 var githubCopilotThinkingLevelOverrides = map[string]ai.ThinkingLevelMap{
-	"claude-opus-4.7":   {ai.ModelThinkingMinimal: lo.ToPtr("low")},
 	"claude-opus-4.8":   {ai.ModelThinkingMinimal: lo.ToPtr("low")},
 	"claude-opus-5":     {ai.ModelThinkingMinimal: lo.ToPtr("low")},
 	"claude-sonnet-4.6": {ai.ModelThinkingMinimal: lo.ToPtr("low"), ai.ModelThinkingMax: lo.ToPtr("max")},

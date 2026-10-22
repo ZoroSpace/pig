@@ -89,13 +89,6 @@ func TestGitHubCopilotCatalogAnthropicMapping(t *testing.T) {
 		catalogByID[model.ID] = model
 	}
 
-	opus47 := catalogByID["claude-opus-4.7"]
-	if opus47.ThinkingLevelMap[types.ModelThinkingMinimal] == nil || *opus47.ThinkingLevelMap[types.ModelThinkingMinimal] != "low" {
-		t.Errorf("opus-4.7 minimal = %v, want low", opus47.ThinkingLevelMap[types.ModelThinkingMinimal])
-	}
-	assertCopilotLevel(t, opus47, "xhigh", true)
-	assertCopilotLevel(t, opus47, "max", true)
-
 	opus5 := catalogByID["claude-opus-5"]
 	if opus5.API != types.ApiAnthropicMessages {
 		t.Errorf("opus-5 api = %s, want anthropic-messages", opus5.API)

@@ -47,20 +47,7 @@ func codexModels() []*ai.Model {
 			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6-luna")),
 			ContextWindow: codexContext, MaxTokens: codexMaxTokens,
 		},
-		{
-			ID: "gpt-5.3-codex-spark", Name: "GPT-5.3 Codex Spark",
-			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
-			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText},
-			Cost:          ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 1.75, Output: 14, CacheRead: 0.175, CacheWrite: 0}},
-			ContextWindow: codexSparkContext, MaxTokens: codexMaxTokens,
-		},
-		{
-			ID: "gpt-5.5", Name: "GPT-5.5",
-			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
-			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
-			Cost:          withOpenAiLongContextPricing(ai.ModelCost{ModelCostRates: ai.ModelCostRates{Input: 5, Output: 30, CacheRead: 0.5, CacheWrite: 0}}),
-			ContextWindow: codexContext, MaxTokens: codexMaxTokens,
-		},
+
 		{
 			ID: "gpt-5.6-luna", Name: "GPT-5.6 Luna",
 			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,

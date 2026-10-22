@@ -204,3 +204,20 @@ func TestBuiltinCatalogCopilotGPTModelsUseResponsesAPI(t *testing.T) {
 		t.Fatal("no gpt-* models in the github-copilot catalog")
 	}
 }
+
+func TestBuiltinCatalogDropsUpstreamRetiredModels(t *testing.T) {
+	retired := map[ProviderID][]string{
+		ProviderGithubCopilot: {"claude-opus-4.7", "gpt-5.4", "gpt-5.5"},
+		ProviderOpenAICodex:   {"gpt-5.3-codex-spark", "gpt-5.5"},
+		ProviderBaseten:       {"moonshotai/Kimi-K2.6"},
+		ProviderTogether:      {"MiniMaxAI/MiniMax-M2.7"},
+	}
+	for provider, ids := range retired {
+		models := MODELS[provider]
+		for _, id := range ids {
+			if _, ok := models[id]; ok {
+				t.Errorf("%s/%s should have been dropped from the catalog", provider, id)
+			}
+		}
+	}
+}

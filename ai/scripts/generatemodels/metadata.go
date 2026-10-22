@@ -226,7 +226,6 @@ func detectOpenAICompletionsCompat(model *ai.Model) openAICompletionsResolvedCom
 	isNvidia := provider == "nvidia" || strings.Contains(baseURL, "integrate.api.nvidia.com")
 	isCerebras := provider == "cerebras" || strings.Contains(baseURL, "cerebras.ai")
 	isAntLing := provider == "ant-ling" || strings.Contains(baseURL, "api.ant-ling.com")
-	isTogetherReasoningOnly := isTogether && togetherReasoningOnlyModels[model.ID]
 	isDeepSeek := provider == "deepseek" || strings.Contains(lowerBaseURL, "deepseek.com")
 
 	isNonStandard := isNvidia ||
@@ -274,7 +273,7 @@ func detectOpenAICompletionsCompat(model *ai.Model) openAICompletionsResolvedCom
 		compat.thinkingFormat = ai.ThinkingFormatDeepSeek
 	case isZai:
 		compat.thinkingFormat = ai.ThinkingFormatZai
-	case isTogether && !isTogetherReasoningOnly:
+	case isTogether:
 		compat.thinkingFormat = ai.ThinkingFormatTogether
 	case isAntLing:
 		compat.thinkingFormat = ai.ThinkingFormatAntLing

@@ -165,6 +165,60 @@ type ConvertResponsesToolsOptions struct {
 // Message conversion
 // =============================================================================
 
+func optionBool(value *bool) bool {
+	return value != nil && *value
+}
+
+// getResponsesToolSupport reports how a Responses transport expresses tool
+// changes (pi: getResponsesToolSupport).
+//
+// additional_tools items accumulate: a later item adds tools and replaces
+// same-name definitions from earlier items, but it cannot replace a top-level
+// tool and cannot remove any tool (verified with strict schemas on the
+// OpenAI, Codex, and Copilot backends, October 2026). Like Codex, every tool
+// is therefore declared in additional_tools items, starting with one at the
+// head of the input, and removals are announced as text. Synthetic tool
+// search can only add tools. Without mid-conversation system messages there
+// is nothing to anchor.
+func getResponsesToolSupport(options *ConvertResponsesMessagesOptions) utils.TranscriptToolSupport {
+	if options == nil {
+		return utils.TranscriptToolSupportNone
+	}
+	return resolveResponsesToolSupport(optionBool(options.SupportsMidConvoSystemMessages), optionBool(options.SupportsAdditionalTools), optionBool(options.SupportsToolSearch))
+}
+
+func resolveResponsesToolSupport(supportsMidConvoSystemMessages, supportsAdditionalTools, supportsToolSearch bool) utils.TranscriptToolSupport {
+	if supportsMidConvoSystemMessages && supportsAdditionalTools {
+		return utils.TranscriptToolSupportChanges
+	}
+	if supportsToolSearch {
+		return utils.TranscriptToolSupportAdditions
+	}
+	return utils.TranscriptToolSupportNone
+}
+
+// renderIncrementalToolsNotice precedes every additional_tools item after the
+// first. Without it, models read the latest item as the complete tool set once
+// a removal was announced; Codex precedes its incremental tool batches with
+// the same guidance. Restating the tools that are still unavailable keeps
+// smaller models (gpt-5.6-luna, gpt-6-luna) from calling them again after
+// later loads (verified October 2026).
+func renderIncrementalToolsNotice(unavailable []string) string {
+	const notice = "This is an incremental tools update. Previously declared tools remain available unless explicitly marked unavailable. A tool declared again here is available again, and its latest definition replaces the earlier one."
+	if len(unavailable) == 0 {
+		return notice
+	}
+	return notice + "\nStill unavailable: " + strings.Join(unavailable, ", ") + "."
+}
+
+func renderToolRemovalNotice(names []string) string {
+	lines := make([]string, 0, len(names))
+	for _, name := range names {
+		lines = append(lines, "- "+name)
+	}
+	return "The following tools are no longer available. Do not call them:\n" + strings.Join(lines, "\n")
+}
+
 // ConvertResponsesMessages converts the LLM context into Responses API input
 // items (pi: convertResponsesMessages). AllowedToolCallProviders carries the
 // provider ids whose tool-call ids keep their call_id|item_id pair shape.
@@ -228,27 +282,57 @@ func ConvertResponsesMessages(model *types.Model, llmContext *types.TranscriptCo
 	}
 	normalizedContext = utils.ResolveTranscript(llmContext, supportsMidConvo)
 	transformedMessages := TransformMessages(normalizedContext.Messages, model, normalizeToolCallID)
-	transcriptTools := utils.ResolveTranscriptTools(
-		normalizedContext.Messages,
-		(options != nil && ((options.SupportsAdditionalTools != nil && *options.SupportsAdditionalTools) || (options.SupportsToolSearch != nil && *options.SupportsToolSearch))),
-	)
+	instructionRole := "system"
+	toolSupport := getResponsesToolSupport(options)
+	transcriptTools := utils.ResolveTranscriptTools(normalizedContext.Messages, toolSupport)
+	declaredAdditionalTools := false
+	// Tools announced as removed and not declared again since. pi uses a Set
+	// and preserves insertion order for the notice.
+	unavailableTools := []string{}
+	hasUnavailable := func(name string) bool {
+		for _, existing := range unavailableTools {
+			if existing == name {
+				return true
+			}
+		}
+		return false
+	}
+	removeUnavailable := func(name string) {
+		for index, existing := range unavailableTools {
+			if existing == name {
+				unavailableTools = append(unavailableTools[:index], unavailableTools[index+1:]...)
+				return
+			}
+		}
+	}
 	appendSystemToolAdditions := func(message *types.SystemMessage, seed string) {
-		tools := []types.Tool{}
-		if transcriptTools.AnchorsAdditions {
-			tools = message.ToolsAdded
+		tools := message.ToolsAdded
+		for _, tool := range tools {
+			removeUnavailable(tool.Name)
 		}
 		if len(tools) == 0 {
 			return
 		}
-		if options != nil && options.SupportsAdditionalTools != nil && *options.SupportsAdditionalTools {
+		if toolSupport == utils.TranscriptToolSupportChanges {
+			if declaredAdditionalTools {
+				messages = append(messages, map[string]any{
+					"role":    instructionRole,
+					"content": renderIncrementalToolsNotice(unavailableTools),
+				})
+			}
+			declaredAdditionalTools = true
+			var toolOptions *ConvertResponsesToolsOptions
+			if options != nil {
+				toolOptions = options.ToolOptions
+			}
 			messages = append(messages, map[string]any{
 				"type":  "additional_tools",
 				"role":  "developer",
-				"tools": ConvertResponsesTools(tools, options.ToolOptions),
+				"tools": ConvertResponsesTools(tools, toolOptions),
 			})
 			return
 		}
-		if options == nil || options.SupportsToolSearch == nil || !*options.SupportsToolSearch {
+		if toolSupport != utils.TranscriptToolSupportAdditions {
 			return
 		}
 		names := make([]string, 0, len(tools))
@@ -286,7 +370,7 @@ func ConvertResponsesMessages(model *types.Model, llmContext *types.TranscriptCo
 			"reasoning": map[string]any{"effort": effort},
 		})
 	}
-	instructionRole := "system"
+	instructionRole = "system"
 	supportsDeveloperRole := true
 	if compat, ok := model.Compat.(*types.OpenAIResponsesCompat); ok && compat != nil &&
 		compat.SupportsDeveloperRole != nil {
@@ -298,19 +382,58 @@ func ConvertResponsesMessages(model *types.Model, llmContext *types.TranscriptCo
 
 	msgIndex := 0
 	sourceIndex := 0
+	systemIndex := 0
 	for _, msg := range transformedMessages {
 		isLeadingSystemMessage := sourceIndex == 0 && msg.MessageRole() == types.RoleSystem
 		sourceIndex++
 		if system, ok := msg.(types.SystemMessage); ok {
-			if !isLeadingSystemMessage {
+			// TransformMessages keeps system messages in order, so their
+			// position matches the transcript.
+			anchorsToolChanges := systemIndex >= transcriptTools.FoldedSystemMessages
+			systemIndex++
+			if anchorsToolChanges {
 				appendSystemToolAdditions(&system, fmt.Sprintf("system:%d", msgIndex))
 			}
 			if !isLeadingSystemMessage || includeInitialSystemMessage {
-				text := ""
+				parts := []string{}
 				if isLeadingSystemMessage {
-					text = utils.GetSystemMessageText(&system)
+					parts = append(parts, utils.GetSystemMessageText(&system))
 				} else {
-					text = utils.RenderSystemMessageUpdate(&system)
+					parts = append(parts, utils.RenderSystemMessageUpdate(&system))
+				}
+				if anchorsToolChanges {
+					// A redefinition is a removal plus an addition of the same
+					// name; only true removals are announced.
+					added := make(map[string]bool)
+					for _, tool := range system.ToolsAdded {
+						added[tool.Name] = true
+					}
+					removed := []string{}
+					for _, ref := range system.ToolsRemoved {
+						if !added[ref.Name] {
+							removed = append(removed, ref.Name)
+						}
+					}
+					if len(removed) > 0 {
+						parts = append(parts, renderToolRemovalNotice(removed))
+					}
+					// Recorded after this message's additions, whose notice
+					// precedes this removal notice.
+					for _, name := range removed {
+						if !hasUnavailable(name) {
+							unavailableTools = append(unavailableTools, name)
+						}
+					}
+				}
+				text := ""
+				for _, part := range parts {
+					if part == "" {
+						continue
+					}
+					if text != "" {
+						text += "\n\n"
+					}
+					text += part
 				}
 				if len(text) > 0 {
 					messages = append(messages, map[string]any{

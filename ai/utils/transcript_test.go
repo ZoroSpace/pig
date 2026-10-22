@@ -316,3 +316,58 @@ func TestGetCurrentToolsPreservesFirstDeclarationOrder(t *testing.T) {
 		t.Fatalf("names = %v, want [b c a]", names)
 	}
 }
+
+func TestResolveTranscriptToolsTopLevelBoundaryPerTransport(t *testing.T) {
+	messages := []types.Message{
+		&types.SystemMessage{Role: types.RoleSystem, ToolsAdded: []types.Tool{replayTool("base_tool"), replayTool("drop_tool")}, Timestamp: 0},
+		&types.SystemMessage{Role: types.RoleSystem, ToolsRemoved: []types.ToolReference{{Name: "drop_tool"}}, Timestamp: 1},
+		&types.SystemMessage{Role: types.RoleSystem, ToolsAdded: []types.Tool{replayTool("drop_tool")}, Timestamp: 2},
+		&types.SystemMessage{Role: types.RoleSystem, ToolsAdded: []types.Tool{replayTool("late_tool", "x")}, Timestamp: 3},
+		&types.SystemMessage{Role: types.RoleSystem, ToolsAdded: []types.Tool{replayTool("late_tool", "y")}, Timestamp: 4},
+	}
+	names := func(tools []types.Tool) []string {
+		out := make([]string, 0, len(tools))
+		for _, tool := range tools {
+			out = append(out, tool.Name)
+		}
+		return out
+	}
+
+	first := ResolveTranscriptTools(messages[:2], TranscriptToolSupportAdditions)
+	if !equalStringSlices(names(first.RequestTools), []string{"base_tool"}) || first.FoldedSystemMessages != 2 {
+		t.Fatalf("first additions = %+v", first)
+	}
+	// Kimi K3 ignores a removed tool that a later tool message declares again,
+	// so the re-added drop_tool moves the boundary; late_tool stays anchored.
+	second := ResolveTranscriptTools(messages[:4], TranscriptToolSupportAdditions)
+	if !equalStringSlices(names(second.RequestTools), []string{"base_tool", "drop_tool"}) || second.FoldedSystemMessages != 3 {
+		t.Fatalf("second additions = %+v", second)
+	}
+	// The redefinition of late_tool moves the boundary to its message.
+	third := ResolveTranscriptTools(messages, TranscriptToolSupportAdditions)
+	if !equalStringSlices(names(third.RequestTools), []string{"base_tool", "drop_tool", "late_tool"}) ||
+		third.RequestTools[2].Description != "y" || third.FoldedSystemMessages != 5 {
+		t.Fatalf("third additions = %+v", third)
+	}
+	changes := ResolveTranscriptTools(messages, TranscriptToolSupportChanges)
+	if len(changes.RequestTools) != 0 || changes.FoldedSystemMessages != 0 {
+		t.Fatalf("changes = %+v", changes)
+	}
+	none := ResolveTranscriptTools(messages, TranscriptToolSupportNone)
+	if !equalStringSlices(names(none.RequestTools), []string{"base_tool", "drop_tool", "late_tool"}) ||
+		none.RequestTools[2].Description != "y" || none.FoldedSystemMessages != 5 {
+		t.Fatalf("none = %+v", none)
+	}
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

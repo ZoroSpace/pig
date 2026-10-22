@@ -78,16 +78,18 @@ func convertMessages(model *types.Model, llmContext *types.TranscriptContext, co
 	normalizedMessages := TransformMessages(normalizedContext.Messages, model, func(id string, m *types.Model, source *types.AssistantMessage) string {
 		return normalizeToolCallID(id, m)
 	})
-	transcriptTools := utils.ResolveTranscriptTools(
-		normalizedContext.Messages,
-		compat.supportsMidConvoSystemMessages && compat.supportsMidConvoToolAdditions,
-	)
+	toolSupport := utils.TranscriptToolSupportNone
+	if compat.supportsMidConvoSystemMessages && compat.supportsMidConvoToolAdditions {
+		toolSupport = utils.TranscriptToolSupportAdditions
+	}
+	transcriptTools := utils.ResolveTranscriptTools(normalizedContext.Messages, toolSupport)
 	instructionRole := "system"
 	if model.Reasoning && compat.supportsDeveloperRole {
 		instructionRole = "developer"
 	}
 
 	lastRole := ""
+	systemIndex := 0
 
 	for i := 0; i < len(normalizedMessages); i++ {
 		msg := normalizedMessages[i]
@@ -99,8 +101,12 @@ func convertMessages(model *types.Model, llmContext *types.TranscriptContext, co
 
 		switch m := msg.(type) {
 		case types.SystemMessage:
+			// TransformMessages keeps system messages in order, so their
+			// position matches the transcript.
+			anchorsToolChanges := systemIndex >= transcriptTools.FoldedSystemMessages
+			systemIndex++
 			var addedTools []types.Tool
-			if i > 0 && transcriptTools.AnchorsAdditions {
+			if anchorsToolChanges {
 				addedTools = m.ToolsAdded
 			}
 			if len(addedTools) > 0 {

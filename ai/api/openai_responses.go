@@ -568,7 +568,7 @@ func (c *openAIResponsesClient) createResponse(ctx context.Context, params map[s
 func buildResponsesParams(model *types.Model, llmContext *types.TranscriptContext, options *OpenAIResponsesOptions, compat resolvedOpenAIResponsesCompat, grammarToolInputProperties map[string]string, configurationUpdateEffort *string) map[string]any {
 	transcriptTools := utils.ResolveTranscriptTools(
 		llmContext.Messages,
-		compat.supportsAdditionalTools || compat.supportsToolSearch,
+		resolveResponsesToolSupport(compat.supportsMidConvoSystemMessages, compat.supportsAdditionalTools, compat.supportsToolSearch),
 	)
 	messages := ConvertResponsesMessages(model, llmContext, openAIResponsesToolCallProviders, &ConvertResponsesMessagesOptions{
 		GrammarToolInputProperties:     grammarToolInputProperties,

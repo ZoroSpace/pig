@@ -86,7 +86,7 @@ func TestXaiRoutesEveryBuiltInModelThroughResponses(t *testing.T) {
 	// pi: getSupportedThinkingLevels over the catalog entries.
 	grok45 := models["grok-4.5"]
 	levels := ai.GetSupportedThinkingLevels(&grok45)
-	if want := []string{"low", "medium", "high"}; !equalLevels(levels, want) {
+	if want := []string{"low", "medium", "high", "xhigh"}; !equalLevels(levels, want) {
 		t.Fatalf("grok-4.5 levels = %v, want %v", levels, want)
 	}
 	grok46 := models["grok-4.6"]
@@ -101,7 +101,7 @@ func TestXaiRoutesEveryBuiltInModelThroughResponses(t *testing.T) {
 	}
 	grok43 := models["grok-4.3"]
 	levels = ai.GetSupportedThinkingLevels(&grok43)
-	if want := []string{"off", "low", "medium", "high"}; !equalLevels(levels, want) {
+	if want := []string{"off", "low", "medium", "high", "xhigh"}; !equalLevels(levels, want) {
 		t.Fatalf("grok-4.3 levels = %v, want %v", levels, want)
 	}
 }

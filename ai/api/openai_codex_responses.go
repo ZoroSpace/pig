@@ -782,7 +782,7 @@ func buildCodexRequestBody(model *types.Model, llmContext *types.TranscriptConte
 		}
 		supportsMidConvoSystemMessages = compat.SupportsMidConvoSystemMessages != nil && *compat.SupportsMidConvoSystemMessages
 	}
-	transcriptTools := utils.ResolveTranscriptTools(llmContext.Messages, supportsAdditionalTools || supportsToolSearch)
+	transcriptTools := utils.ResolveTranscriptTools(llmContext.Messages, resolveResponsesToolSupport(supportsMidConvoSystemMessages, supportsAdditionalTools, supportsToolSearch))
 	messages := ConvertResponsesMessages(model, llmContext, codexToolCallProviders, &ConvertResponsesMessagesOptions{
 		IncludeSystemPrompt:            lo.ToPtr(false),
 		GrammarToolInputProperties:     grammarToolInputProperties,

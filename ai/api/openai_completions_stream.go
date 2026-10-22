@@ -68,10 +68,11 @@ func thinkingLevelOffValue(model *types.Model) string {
 
 // buildParams builds the chat completion request body (pi: buildParams).
 func buildParams(model *types.Model, llmContext *types.TranscriptContext, options *OpenAICompletionsOptions, compat *resolvedOpenAICompletionsCompat, cacheRetention types.CacheRetention, grammarToolInputProperties map[string]string) map[string]any {
-	transcriptTools := utils.ResolveTranscriptTools(
-		llmContext.Messages,
-		compat.supportsMidConvoSystemMessages && compat.supportsMidConvoToolAdditions,
-	)
+	toolSupport := utils.TranscriptToolSupportNone
+	if compat.supportsMidConvoSystemMessages && compat.supportsMidConvoToolAdditions {
+		toolSupport = utils.TranscriptToolSupportAdditions
+	}
+	transcriptTools := utils.ResolveTranscriptTools(llmContext.Messages, toolSupport)
 	messages := convertMessages(model, llmContext, compat, &ConvertCompletionsMessagesOptions{GrammarToolInputProperties: grammarToolInputProperties})
 	cacheControl := getCompatCacheControl(compat, cacheRetention)
 

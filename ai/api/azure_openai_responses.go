@@ -351,7 +351,7 @@ func buildAzureResponsesParams(model *types.Model, llmContext *types.TranscriptC
 		}
 		supportsMidConvoSystemMessages = compat.SupportsMidConvoSystemMessages != nil && *compat.SupportsMidConvoSystemMessages
 	}
-	transcriptTools := utils.ResolveTranscriptTools(llmContext.Messages, supportsAdditionalTools || supportsToolSearch)
+	transcriptTools := utils.ResolveTranscriptTools(llmContext.Messages, resolveResponsesToolSupport(supportsMidConvoSystemMessages, supportsAdditionalTools, supportsToolSearch))
 	messages := ConvertResponsesMessages(model, llmContext, azureToolCallProviders, &ConvertResponsesMessagesOptions{
 		GrammarToolInputProperties:     grammarToolInputProperties,
 		SupportsMidConvoSystemMessages: lo.ToPtr(supportsMidConvoSystemMessages),

@@ -446,27 +446,22 @@ func TestTranscriptOpenAIAdditionsAnchoredAtDeveloperMessage(t *testing.T) {
 
 	payload := captureTranscriptPayload(t, model, transcriptAdditionContext())
 
-	tools := payloadMaps(t, payload, "tools")
-	toolNames := make([]string, 0, len(tools))
-	for _, tool := range tools {
-		name, _ := tool["name"].(string)
-		toolNames = append(toolNames, name)
-	}
-	if !equalStrings(toolNames, []string{"base_tool"}) {
-		t.Fatalf("tools = %v", toolNames)
+	// A later additional_tools item cannot replace a top-level tool, so no
+	// tool is declared there.
+	if _, hasTools := payload["tools"]; hasTools {
+		t.Fatalf("tools = %#v", payload["tools"])
 	}
 	input := payloadMaps(t, payload, "input")
 	var additionTools []string
 	for _, item := range input {
 		if item["type"] == "additional_tools" {
-			nested := payloadMaps(t, item, "tools")
-			for _, tool := range nested {
+			for _, tool := range payloadMaps(t, item, "tools") {
 				name, _ := tool["name"].(string)
 				additionTools = append(additionTools, name)
 			}
 		}
 	}
-	if !equalStrings(additionTools, []string{"late_tool"}) {
+	if !equalStrings(additionTools, []string{"base_tool", "late_tool"}) {
 		t.Fatalf("additional_tools = %v", additionTools)
 	}
 	var developerContents []string
@@ -480,7 +475,9 @@ func TestTranscriptOpenAIAdditionsAnchoredAtDeveloperMessage(t *testing.T) {
 			developerContents = append(developerContents, content)
 		}
 	}
-	if !equalStrings(developerContents, []string{"base prompt", "updated guidance"}) {
+	if len(developerContents) != 3 || developerContents[0] != "base prompt" ||
+		!strings.Contains(developerContents[1], "incremental tools update") ||
+		developerContents[2] != "updated guidance" {
 		t.Fatalf("developer contents = %v", developerContents)
 	}
 }
@@ -563,7 +560,7 @@ func TestTranscriptOpenAIFoldsWithoutNativeSupport(t *testing.T) {
 	}
 }
 
-func TestTranscriptOpenAIFallsBackToCurrentToolState(t *testing.T) {
+func TestTranscriptOpenAIAnnouncesRemovalsAsText(t *testing.T) {
 	model := transcriptModelBase(t)
 	model.ID = "gpt-5.4"
 	model.Name = "GPT-5.4"
@@ -576,29 +573,28 @@ func TestTranscriptOpenAIFallsBackToCurrentToolState(t *testing.T) {
 
 	payload := captureTranscriptPayload(t, model, transcriptContext())
 
-	tools := payloadMaps(t, payload, "tools")
-	toolNames := make([]string, 0, len(tools))
-	for _, tool := range tools {
-		name, _ := tool["name"].(string)
-		toolNames = append(toolNames, name)
-	}
-	if !equalStrings(toolNames, []string{"late_tool"}) {
-		t.Fatalf("tools = %v", toolNames)
+	if _, hasTools := payload["tools"]; hasTools {
+		t.Fatalf("tools = %#v", payload["tools"])
 	}
 	input := payloadMaps(t, payload, "input")
+	var additionTools []string
 	for _, item := range input {
 		if item["type"] == "additional_tools" {
-			t.Fatalf("unexpected additional_tools: %#v", item)
+			for _, tool := range payloadMaps(t, item, "tools") {
+				name, _ := tool["name"].(string)
+				additionTools = append(additionTools, name)
+			}
 		}
 	}
-	developerCount := 0
-	for _, item := range input {
-		if role, _ := item["role"].(string); role == "developer" {
-			developerCount++
-		}
+	if !equalStrings(additionTools, []string{"base_tool", "late_tool"}) {
+		t.Fatalf("additional_tools = %v", additionTools)
 	}
-	if developerCount != 2 {
-		t.Fatalf("developer messages = %d (%#v)", developerCount, payload["input"])
+	update, _ := input[len(input)-1]["content"].(string)
+	if !strings.Contains(update, "updated guidance") {
+		t.Fatalf("update = %q", update)
+	}
+	if !strings.Contains(update, "The following tools are no longer available. Do not call them:\n- base_tool") {
+		t.Fatalf("update = %q", update)
 	}
 }
 
@@ -794,5 +790,290 @@ func TestTranscriptCompletionsFoldsWithoutNativeSupport(t *testing.T) {
 	content, _ := messages[0]["content"].(string)
 	if content != "base prompt\n\nupdated guidance\n\n<rules>\nnew rules\n</rules>" {
 		t.Fatalf("messages[0].content = %q", content)
+	}
+}
+
+// captureTranscriptToolHistory mirrors pi's captureToolHistory: capture one
+// request after the initial tools, a removal, and two later loads.
+func captureTranscriptToolHistory(t *testing.T, model *types.Model) []map[string]any {
+	t.Helper()
+	steps := [][]types.Message{
+		{types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "first"}, Timestamp: 1}},
+		{
+			types.SystemMessage{Role: types.RoleSystem, ToolsRemoved: []types.ToolReference{{Name: "drop_tool"}}, Timestamp: 2},
+			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "after removal"}, Timestamp: 3},
+		},
+		{
+			types.SystemMessage{Role: types.RoleSystem, ToolsAdded: []types.Tool{transcriptTool("late_tool")}, Timestamp: 4},
+			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "after first load"}, Timestamp: 5},
+		},
+		{
+			types.SystemMessage{Role: types.RoleSystem, ToolsAdded: []types.Tool{transcriptTool("later_tool")}, Timestamp: 6},
+			types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "after second load"}, Timestamp: 7},
+		},
+	}
+	messages := []types.Message{
+		types.SystemMessage{
+			Role:       types.RoleSystem,
+			Content:    types.SystemContent{String: "base prompt"},
+			ToolsAdded: []types.Tool{transcriptTool("base_tool"), transcriptTool("drop_tool")},
+			Timestamp:  0,
+		},
+	}
+	var payloads []map[string]any
+	for _, step := range steps {
+		messages = append(messages, step...)
+		payloads = append(payloads, captureTranscriptPayload(t, model, &types.Context{Messages: append([]types.Message{}, messages...)}))
+	}
+	return payloads
+}
+
+func expectGrowingInputPrefix(t *testing.T, payloads []map[string]any, key string) {
+	t.Helper()
+	for index := 1; index < len(payloads); index++ {
+		previous := payloadMaps(t, payloads[index-1], key)
+		current := payloadMaps(t, payloads[index], key)
+		if len(current) < len(previous) {
+			t.Fatalf("payload %d input shrank from %d to %d", index, len(previous), len(current))
+		}
+		for i := range previous {
+			a, _ := json.Marshal(previous[i])
+			b, _ := json.Marshal(current[i])
+			if string(a) != string(b) {
+				t.Fatalf("payload %d input[%d] changed:\n%s\n%s", index, i, a, b)
+			}
+		}
+	}
+}
+
+func additionalToolNames(t *testing.T, payload map[string]any) [][]string {
+	t.Helper()
+	var out [][]string
+	for _, item := range payloadMaps(t, payload, "input") {
+		if item["type"] != "additional_tools" {
+			continue
+		}
+		var names []string
+		for _, tool := range payloadMaps(t, item, "tools") {
+			name, _ := tool["name"].(string)
+			names = append(names, name)
+		}
+		out = append(out, names)
+	}
+	return out
+}
+
+func TestTranscriptOpenAIKeepsPrefixAcrossToolChanges(t *testing.T) {
+	model := transcriptModelBase(t)
+	model.ID = "gpt-5.4"
+	model.Name = "GPT-5.4"
+	model.API = types.ApiOpenAIResponses
+	model.Provider = "openai"
+	model.Compat = &types.OpenAIResponsesCompat{
+		SupportsMidConvoSystemMessages: lo.ToPtr(true),
+		SupportsAdditionalTools:        lo.ToPtr(true),
+	}
+
+	payloads := captureTranscriptToolHistory(t, model)
+
+	for _, payload := range payloads {
+		if _, hasTools := payload["tools"]; hasTools {
+			t.Fatalf("unexpected top-level tools: %#v", payload["tools"])
+		}
+	}
+	expectGrowingInputPrefix(t, payloads, "input")
+	last := payloads[len(payloads)-1]
+	additions := additionalToolNames(t, last)
+	want := [][]string{{"base_tool", "drop_tool"}, {"late_tool"}, {"later_tool"}}
+	if len(additions) != len(want) {
+		t.Fatalf("additional_tools = %v", additions)
+	}
+	for i := range want {
+		if !equalStrings(additions[i], want[i]) {
+			t.Fatalf("additional_tools = %v", additions)
+		}
+	}
+	removal := false
+	var notices []string
+	for _, item := range payloadMaps(t, last, "input") {
+		content, _ := item["content"].(string)
+		if strings.Contains(content, "no longer available. Do not call them:\n- drop_tool") {
+			removal = true
+		}
+		if strings.Contains(content, "incremental tools update") {
+			notices = append(notices, content)
+		}
+	}
+	if !removal {
+		t.Fatal("missing removal notice")
+	}
+	if len(notices) != 2 || !strings.Contains(notices[0], "\nStill unavailable: drop_tool.") ||
+		!strings.Contains(notices[1], "\nStill unavailable: drop_tool.") {
+		t.Fatalf("notices = %#v", notices)
+	}
+}
+
+func TestTranscriptOpenAIRedefinitionDoesNotAnnounceRemoval(t *testing.T) {
+	model := transcriptModelBase(t)
+	model.ID = "gpt-5.4"
+	model.Name = "GPT-5.4"
+	model.API = types.ApiOpenAIResponses
+	model.Provider = "openai"
+	model.Compat = &types.OpenAIResponsesCompat{
+		SupportsMidConvoSystemMessages: lo.ToPtr(true),
+		SupportsAdditionalTools:        lo.ToPtr(true),
+	}
+	payload := captureTranscriptPayload(t, model, &types.Context{Messages: []types.Message{
+		types.SystemMessage{Role: types.RoleSystem, Content: types.SystemContent{String: "base prompt"}, ToolsAdded: []types.Tool{transcriptTool("base_tool")}, Timestamp: 0},
+		types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "before"}, Timestamp: 1},
+		types.SystemMessage{
+			Role:         types.RoleSystem,
+			ToolsRemoved: []types.ToolReference{{Name: "base_tool"}},
+			ToolsAdded:   []types.Tool{transcriptTool("base_tool", "changed")},
+			Timestamp:    2,
+		},
+	}})
+
+	if _, hasTools := payload["tools"]; hasTools {
+		t.Fatalf("tools = %#v", payload["tools"])
+	}
+	input := payloadMaps(t, payload, "input")
+	if len(input) != 5 {
+		t.Fatalf("input length = %d (%#v)", len(input), payload["input"])
+	}
+	if input[0]["type"] != "additional_tools" || input[4]["type"] != "additional_tools" {
+		t.Fatalf("input = %#v", payload["input"])
+	}
+	firstTools := payloadMaps(t, input[0], "tools")
+	lastTools := payloadMaps(t, input[4], "tools")
+	if firstTools[0]["description"] != "base_tool tool" || lastTools[0]["description"] != "changed" {
+		t.Fatalf("definitions = %#v / %#v", firstTools, lastTools)
+	}
+	notice, _ := input[3]["content"].(string)
+	if !strings.Contains(notice, "latest definition replaces the earlier one") {
+		t.Fatalf("notice = %q", notice)
+	}
+	if strings.Contains(notice, "no longer available") {
+		t.Fatalf("unexpected removal notice = %q", notice)
+	}
+}
+
+func TestTranscriptOpenAIStopsListingUnavailableAfterRedeclare(t *testing.T) {
+	model := transcriptModelBase(t)
+	model.ID = "gpt-5.4"
+	model.Name = "GPT-5.4"
+	model.API = types.ApiOpenAIResponses
+	model.Provider = "openai"
+	model.Compat = &types.OpenAIResponsesCompat{
+		SupportsMidConvoSystemMessages: lo.ToPtr(true),
+		SupportsAdditionalTools:        lo.ToPtr(true),
+	}
+	dropTool := transcriptTool("drop_tool")
+	payload := captureTranscriptPayload(t, model, &types.Context{Messages: []types.Message{
+		types.SystemMessage{Role: types.RoleSystem, Content: types.SystemContent{String: "base prompt"}, ToolsAdded: []types.Tool{transcriptTool("base_tool"), dropTool}, Timestamp: 0},
+		types.SystemMessage{Role: types.RoleSystem, ToolsRemoved: []types.ToolReference{{Name: "drop_tool"}}, Timestamp: 1},
+		types.SystemMessage{Role: types.RoleSystem, ToolsAdded: []types.Tool{dropTool}, Timestamp: 2},
+		types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "go"}, Timestamp: 3},
+	}})
+
+	input := payloadMaps(t, payload, "input")
+	var notice string
+	for _, item := range input {
+		if content, _ := item["content"].(string); strings.Contains(content, "incremental tools update") {
+			notice = content
+		}
+	}
+	if notice == "" {
+		t.Fatal("missing incremental notice")
+	}
+	if strings.Contains(notice, "Still unavailable") {
+		t.Fatalf("notice = %q", notice)
+	}
+	lastAdditional := input[len(input)-2]
+	if lastAdditional["type"] != "additional_tools" {
+		t.Fatalf("input[-2] = %#v", lastAdditional)
+	}
+}
+
+func TestTranscriptOpenAIToolSearchKeepsPrefixAcrossLoads(t *testing.T) {
+	model := transcriptModelBase(t)
+	model.ID = "gpt-5.4"
+	model.Name = "GPT-5.4"
+	model.API = types.ApiOpenAIResponses
+	model.Provider = "openai"
+	model.Compat = &types.OpenAIResponsesCompat{
+		SupportsMidConvoSystemMessages: lo.ToPtr(true),
+		SupportsToolSearch:             lo.ToPtr(true),
+	}
+	payloads := captureTranscriptToolHistory(t, model)
+
+	toolNames := func(payload map[string]any) []string {
+		var names []string
+		for _, tool := range payloadMaps(t, payload, "tools") {
+			name, _ := tool["name"].(string)
+			names = append(names, name)
+		}
+		return names
+	}
+	if got := toolNames(payloads[0]); !equalStrings(got, []string{"base_tool", "drop_tool"}) {
+		t.Fatalf("initial tools = %v", got)
+	}
+	afterRemoval := payloads[1:]
+	for _, payload := range afterRemoval {
+		if got := toolNames(payload); !equalStrings(got, []string{"base_tool"}) {
+			t.Fatalf("post-removal tools = %v", got)
+		}
+	}
+	expectGrowingInputPrefix(t, afterRemoval, "input")
+	var loads []string
+	for _, item := range payloadMaps(t, afterRemoval[len(afterRemoval)-1], "input") {
+		if item["type"] != "tool_search_output" {
+			continue
+		}
+		for _, tool := range payloadMaps(t, item, "tools") {
+			name, _ := tool["name"].(string)
+			loads = append(loads, name)
+		}
+	}
+	if !equalStrings(loads, []string{"late_tool", "later_tool"}) {
+		t.Fatalf("tool_search_output tools = %v", loads)
+	}
+}
+
+func TestTranscriptKimiKeepsPrefixAcrossLoads(t *testing.T) {
+	payloads := captureTranscriptToolHistory(t, kimiCodingTranscriptModel(t, "k3"))
+
+	toolNames := func(payload map[string]any) []string {
+		var names []string
+		for _, tool := range payloadMaps(t, payload, "tools") {
+			function := tool["function"].(map[string]any)
+			name, _ := function["name"].(string)
+			names = append(names, name)
+		}
+		return names
+	}
+	if got := toolNames(payloads[0]); !equalStrings(got, []string{"base_tool", "drop_tool"}) {
+		t.Fatalf("initial tools = %v", got)
+	}
+	afterRemoval := payloads[1:]
+	for _, payload := range afterRemoval {
+		if got := toolNames(payload); !equalStrings(got, []string{"base_tool"}) {
+			t.Fatalf("post-removal tools = %v", got)
+		}
+	}
+	expectGrowingInputPrefix(t, afterRemoval, "messages")
+	var loads []string
+	for _, message := range payloadMaps(t, afterRemoval[len(afterRemoval)-1], "messages") {
+		if _, has := message["tools"]; !has {
+			continue
+		}
+		for _, tool := range payloadMaps(t, message, "tools") {
+			function := tool["function"].(map[string]any)
+			name, _ := function["name"].(string)
+			loads = append(loads, name)
+		}
+	}
+	if !equalStrings(loads, []string{"late_tool", "later_tool"}) {
+		t.Fatalf("tool-bearing tools = %v", loads)
 	}
 }
