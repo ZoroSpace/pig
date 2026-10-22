@@ -1,7 +1,7 @@
 # S21 — pi main@73f8de80b (pre-v1.4.0) → pi v1.4.0
 
 - **日期**：2026-10-22
-- **状态**：进行中
+- **状态**：✅ 已收口（2026-10-22）
 - **基线**：`73f8de80bc87021375f8b525292ac07492253002..v1.4.0`（39 commit）
 - **策略**：按 S20 收口点直接对齐正式 tag；durable/chord/env/telemetry/evals/experimental/codemode/扩展 TS loader 面一律跳过。
 
@@ -73,3 +73,10 @@
 ## 3. 明确不要读的
 
 `packages/durable/`、`packages/chord/`、`packages/env/`、`packages/telemetry/`、`packages/evals/`、`packages/coding-agent/docs/extensions.md`、`scripts/*.mjs`、`packages/ai/src/telemetry.ts`。
+
+## 4. 收口记录（2026-10-22）
+
+- commit：`9459614` S21-1、`35f470a` S21-2、`09ee105` S21-3、`b81889f` S21-4。
+- `codingagent.Version` / `TestVersionTracksPiBaseline` / README → `1.4.0`；`ai/utils/version.go` 已为 1.4.0。
+- 验证：`gofmt -l .` 无输出、`go vet ./...` 通过、`go test ./... -race -count=1 -timeout 600s` 全绿（33 包）。
+- 跳过项按 §0 表格执行；`18e56a069` 因 pig 无 image opt-in 兼容字段整体跳过。

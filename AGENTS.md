@@ -17,7 +17,7 @@
 
 ## 当前状态（2026-10-20）
 
-- **pig 基线跟踪 pi main@73f8de80b（2026-10-19，pre-v1.4.0；正式 tag 仍 v1.3.0）**（S20 收口：ai retry 模式扩展 / 任意 error 态 413 overflow / 纯空白 tool result / MiniMax denylist+adaptive thinking 目录 + coding-agent compaction 摘要去固定输出上限 / Windows Store shell alias / PowerShell 与 legacy WSL 安装目录发现 / xiaomi·nvidia 默认模型 + tui Rex hyperlink 检测；目录未整体重生成，定点补 M3.1-Flash、nemotron-3.5-super-vl；跳过 durable/chord/env/telemetry/发布 schema/文档杂项）；全量 `go test ./... -race` 全绿；最近一批 = S20（handoff：`docs/handoffs/SYNC-S20-pre-v1.4.0.md`，计划稿 `SYNC-S20-pre-digest.md`）。
+- **pig 基线跟踪 pi v1.4.0（正式 tag）**（S21 收口：ai client identity + retry classification / Responses 工具变更缓存与目录收缩 / 长度恢复配对省略 + grep --no-config + loadout 恢复 + compaction 自定义指令 + MCP BOM + clipboard 进程组 + 扩展对话框栈 + HTML 导出 CJK 强调 / tui 退出终端恢复 + 未闭合 display math 表格 + Rex Kitty 图片 + CJK 强调；目录定点更新不整体重生成；跳过 durable/chord/env/telemetry/codemode/changelog）；全量 `go test ./... -race` 全绿；最近一批 = S21（handoff：`docs/handoffs/SYNC-S21-v1.4.0.md`）。
 - **Dogfooding（2026-09-11 起）**：用户日常自用 pig，pi 保留作 fallback 与规格书。约定：① 日常撞到的 pig bug 一律走 `docs/fix/` 登记 + 回归测试锁定流程；② 缺 provider/adapter 卡住日常时按需提前拉起移植批；③ **真机验证矩阵** `docs/handoffs/verify-matrix.md`——provider 真机/OAuth 验证逐家解锁，每拿到一个 key 按表销账。
 - **真机冒烟测试**一律 `//go:build smoke` 门控移出默认门禁（跑法见 `docs/feat/TEST-SUITE-RUNTIME.md`）；冒烟启动必须 mock provider / 清凭证（见仓库机制 tmux 条）。
 - 路线余量：Phase 8 余量（photon/wazero、telemetry、goreleaser、/share、terminal-image）顺序由用户拍板；dogfooding 插批随时插入。
@@ -77,6 +77,7 @@
 - S17 ✅（2026-10-09，→v1.1.0）ai 模型/定价（Haiku 5.5 手插 + 生成器 tier 保真重构 + Kimi K3 钉价 + bedrock 四函数）+ MCP OAuth 取消语义（Manager 会话级取消 + close 不刷新 + 15s 全程）+ OSC 7501 program status（PI_PROGRAM_STATUS 三值 + agent_settled.aborted + reporter 全挂钩）— `docs/handoffs/S17.md`
 - S18 ✅（2026-10-16，→v1.2.0）ai retry 正则 + anthropic strict tool 容量降级 + OpenRouter 个性化目录 / agent_session `startRun`+`prepareRun` 拆分与 custom run（磁铁）+ Windows EPERM lock 重试 + `~` 展开/Match 修复 / TUI stdin buffer 延迟回复 + fake-cursor + keys shifted symbol / MCP RFC 9207 / lean 配置校验（theme 严格 + keybinding 语法，schema 发布管线跳过）— `docs/handoffs/SYNC-S18-v1.2.0.md` + 计划稿 `SYNC-S18-pre-digest.md`
 - S20 ✅（2026-10-20，→main@73f8de80b，pre-v1.4.0，未 bump Version）ai retry/413 overflow/空白 tool result/MiniMax 目录 + coding-agent compaction 摘要去固定输出上限/Windows shell alias·PowerShell 发现/默认模型 + tui Rex — `docs/handoffs/SYNC-S20-pre-v1.4.0.md` + 计划稿 `SYNC-S20-pre-digest.md`
+- S21 ✅（2026-10-22，→v1.4.0）ai client identity/retry classification/Responses 工具变更缓存与目录收缩 + core 长度恢复配对省略/grep --no-config/loadout 恢复/compaction 自定义指令/MCP BOM/clipboard 进程组/扩展对话框栈/HTML 导出 CJK 强调 + tui 退出终端恢复/表内 display math/Rex Kitty 图片/CJK 强调 — `docs/handoffs/SYNC-S21-v1.4.0.md`
 - S19 ✅（2026-10-17，→v1.3.0）ai 层 14 commit（tool call 参数严格解析 `ArgumentsError` + retry 两模式 + 错误 tool result 图片拆分 + 跨模型 thinking 丢弃 + anthropic off thinking + openai-responses GPT-6 mid-convo effort + opencode `inference`/kimi-coding openai-completions/xiaomi MiMo/codex 500K）/ coding-agent 小修（resume 恢复 loadout、空引号参数、read 行范围标签统一）+ model-resolver 统一解析器磁铁（`resolveModelReference` + `InlineApiKey` + scope ambiguous 诊断）— `docs/handoffs/SYNC-S19-v1.3.0.md` + 计划稿 `SYNC-S19-pre-digest.md`
 
 **Phase 2 provider/adapter 批（2026-09-11~15，Phase 2 收口）**：
