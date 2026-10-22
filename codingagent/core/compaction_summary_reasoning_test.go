@@ -264,6 +264,36 @@ func TestPreservesPreviousSummaryWithoutEmptyHistoryRequestForSplitTurn(t *testi
 	}
 }
 
+func TestAppliesCustomInstructionsToSplitTurnPrefixSummary(t *testing.T) {
+	// Regression test for #11058.
+	mock := newSummaryMock(t, &mockSummaryResponse)
+
+	preparation := &CompactionPreparation{
+		FirstKeptEntryID:    "entry-keep",
+		MessagesToSummarize: nil,
+		TurnPrefixMessages:  summarizationMessages,
+		IsSplitTurn:         true,
+		TokensBefore:        100,
+		PreviousSummary:     "previous checkpoint",
+		FileOps:             CreateFileOps(),
+		Settings:            CompactionSettingsValues{Enabled: true, ReserveTokens: 2000, KeepRecentTokens: 20},
+	}
+
+	if _, err := Compact(t.Context(), preparation, createTestModel(false, 8192), "test-key", nil, "keep migration decisions", "", nil, nil, nil, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(mock.contexts) != 1 {
+		t.Fatalf("summary requests = %d, want 1", len(mock.contexts))
+	}
+	userMsg, ok := mock.contexts[0].Messages[0].(types.UserMessage)
+	if !ok {
+		t.Fatalf("expected user message, got %T", mock.contexts[0].Messages[0])
+	}
+	if prompt := ai.ContentText(userMsg.Content.Parts, ""); !strings.Contains(prompt, "Additional focus: keep migration decisions") {
+		t.Fatalf("missing custom instructions: %s", prompt)
+	}
+}
+
 func TestRejectsToolCallsFromConversationSummaries(t *testing.T) {
 	newSummaryMock(t, &mockToolCallResponse)
 

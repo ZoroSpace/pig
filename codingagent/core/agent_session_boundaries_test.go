@@ -1294,7 +1294,7 @@ func TestBoundaryNoThresholdCompactionFromPostEditUsageBeforeCompaction(t *testi
 	errorMessage.ErrorMessage = "invalid_api_key"
 	errorMessage.Timestamp = time.Now().UnixMilli() + 1000
 
-	if _, err := harness.session.checkCompaction(context.Background(), errorMessage, true, nil); err != nil {
+	if _, err := harness.session.checkCompaction(context.Background(), errorMessage, true); err != nil {
 		t.Fatal(err)
 	}
 	if runAutoCompactionCalled {
@@ -2008,4 +2008,83 @@ func fauxAsTypesMessage(message agent.AgentMessage) types.Message {
 		return typed
 	}
 	return nil
+}
+
+// Ported from pi's 11227-recovery-omits-tool-results.test.ts (#11227):
+// pre-prompt recovery of a resumed length stop must omit the truncated tool
+// call together with the results that answered it.
+func TestLengthRecoveryPrePromptOmitsTruncatedCallAndResults(t *testing.T) {
+	compactionHandler := func(ctx context.Context, extCtx *ExtensionContext, event ExtensionEvent) (any, error) {
+		beforeCompact, ok := event.(*SessionBeforeCompactEvent)
+		if !ok {
+			return nil, fmt.Errorf("unexpected event %T", event)
+		}
+		return &SessionBeforeCompactResult{Compaction: &CompactionResult{
+			Summary:          "summary",
+			FirstKeptEntryID: beforeCompact.Preparation.FirstKeptEntryID,
+			TokensBefore:     beforeCompact.Preparation.TokensBefore,
+			Details:          map[string]any{},
+		}}, nil
+	}
+	harness := createFauxHarness(t, &fauxHarnessOptions{
+		contextWindow: 100000,
+		maxTokens:     1000,
+		settings:      Settings{"compaction": map[string]any{"enabled": true}},
+		extensions:    []*Extension{{Path: "compact-ext", Handlers: map[string][]ExtensionHandler{"session_before_compact": {compactionHandler}}}},
+	})
+	now := time.Now().UnixMilli()
+	if _, err := harness.sessionManager.AppendMessage(types.UserMessage{
+		Role: types.RoleUser, Content: types.UserContent{String: "check status"}, Timestamp: now - 1000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	truncated := fauxAssistantMessage(
+		[]types.Content{fauxToolCall("bash", map[string]any{"command": "echo"})},
+		withStopReason(types.StopReasonLength),
+		fauxWithTimestamp(now-500),
+	)(nil)
+	truncated.API = harness.model.API
+	truncated.Provider = harness.model.Provider
+	truncated.Model = harness.model.ID
+	truncated.Usage = types.Usage{Input: 100, Output: 16, TotalTokens: 116}
+	if _, err := harness.sessionManager.AppendMessage(*truncated); err != nil {
+		t.Fatal(err)
+	}
+	toolCall := truncated.Content[0].(types.ToolCall)
+	if _, err := harness.sessionManager.AppendMessage(types.ToolResultMessage{
+		Role:       types.RoleToolResult,
+		ToolCallID: toolCall.ID,
+		ToolName:   "bash",
+		IsError:    true,
+		Content:    []types.Content{types.NewTextContent("Not executed: output token limit reached.")},
+		Timestamp:  now - 400,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	harness.session.RefreshContext()
+
+	var requestRoles []types.Role
+	var hasLengthAssistant bool
+	harness.setResponses(func(llmContext *types.TranscriptContext) *types.AssistantMessage {
+		for _, message := range llmContext.Messages {
+			requestRoles = append(requestRoles, message.MessageRole())
+			if assistant, ok := message.(types.AssistantMessage); ok && assistant.StopReason == types.StopReasonLength {
+				hasLengthAssistant = true
+			}
+		}
+		return fauxAssistantMessage("done")(llmContext)
+	})
+
+	if err := harness.session.Prompt(context.Background(), "continue", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, role := range requestRoles {
+		if role == types.RoleToolResult {
+			t.Fatalf("request roles = %v, truncated tool result must be omitted", requestRoles)
+		}
+	}
+	if hasLengthAssistant {
+		t.Fatal("truncated length assistant message must be omitted")
+	}
 }

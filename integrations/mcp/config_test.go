@@ -27,6 +27,17 @@ func TestParseConfigValid(t *testing.T) {
 	}
 }
 
+func TestParseConfigUTF8BOM(t *testing.T) {
+	// Regression: #11191. A BOM-prefixed file must load like plain JSON.
+	config, diags := ParseConfigBytes("test.json", []byte("\xef\xbb\xbf"+`{"mcpServers":{"demo":{"command":"echo","enabled":false}}}`))
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diags)
+	}
+	if config == nil || config.MCPServers["demo"].Command != "echo" {
+		t.Fatalf("BOM config not parsed: %+v", config)
+	}
+}
+
 func TestParseConfigEmptyServers(t *testing.T) {
 	config, diags := ParseConfigBytes("test.json", []byte(`{}`))
 	if len(diags) != 0 {

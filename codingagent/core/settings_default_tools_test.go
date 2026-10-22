@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/codingagent/core/tools"
 )
 
 func TestDefaultToolsPlusMinusSyntax(t *testing.T) {
@@ -170,6 +171,7 @@ func TestDefaultToolsReloadActivatesNewlyAddedTools(t *testing.T) {
 			opts.Tools = options.Tools
 			opts.NoTools = options.NoTools
 			opts.ExcludeTools = options.ExcludeTools
+			opts.CustomTools = options.CustomTools
 		}
 		result, err := CreateAgentSession(context.Background(), opts)
 		if err != nil {
@@ -355,29 +357,60 @@ func TestDefaultToolsResumeRestoresRecordedLoadout(t *testing.T) {
 	if err := os.MkdirAll(agentDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	toolReferences := func(names []string) []types.Tool {
+		refs := make([]types.Tool, 0, len(names))
+		for _, name := range names {
+			refs = append(refs, types.Tool{
+				Name:        name,
+				Description: name,
+				Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
+			})
+		}
+		return refs
+	}
+	recordLoadoutChange := func(t *testing.T, sessionManager *SessionManager, added, removed []string) {
+		t.Helper()
+		message := types.SystemMessage{
+			Role:      types.RoleSystem,
+			Content:   types.SystemContent{String: ""},
+			Timestamp: 1,
+		}
+		if len(added) > 0 {
+			message.ToolsAdded = toolReferences(added)
+		}
+		if len(removed) > 0 {
+			refs := make([]types.ToolReference, 0, len(removed))
+			for _, name := range removed {
+				refs = append(refs, types.ToolReference{Name: name})
+			}
+			message.ToolsRemoved = refs
+		}
+		if _, err := sessionManager.AppendMessage(message); err != nil {
+			t.Fatal(err)
+		}
+	}
 	sessionWithLoadout := func(t *testing.T, toolNames ...string) *SessionManager {
 		t.Helper()
 		sessionManager, err := InMemorySession(tempDir, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		tools := make([]types.Tool, 0, len(toolNames))
-		for _, name := range toolNames {
-			tools = append(tools, types.Tool{
-				Name:        name,
-				Description: name,
-				Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
-			})
-		}
-		if _, err := sessionManager.AppendMessage(types.SystemMessage{
-			Role:       types.RoleSystem,
-			Content:    types.SystemContent{String: ""},
-			ToolsAdded: tools,
-			Timestamp:  1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		recordLoadoutChange(t, sessionManager, toolNames, nil)
 		return sessionManager
+	}
+	sessionWithChanges := func(t *testing.T) *SessionManager {
+		t.Helper()
+		sessionManager := sessionWithLoadout(t, "read", "grep", "active_tool")
+		recordLoadoutChange(t, sessionManager, []string{"inactive_tool"}, []string{"active_tool"})
+		return sessionManager
+	}
+	customTool := func(name string) *tools.ToolDefinition {
+		return &tools.ToolDefinition{
+			Name:        name,
+			Label:       name,
+			Description: name,
+			Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
+		}
 	}
 	resume := func(t *testing.T, sessionManager *SessionManager, options *CreateAgentSessionOptions) *AgentSession {
 		t.Helper()
@@ -391,6 +424,7 @@ func TestDefaultToolsResumeRestoresRecordedLoadout(t *testing.T) {
 			opts.Tools = options.Tools
 			opts.NoTools = options.NoTools
 			opts.ExcludeTools = options.ExcludeTools
+			opts.CustomTools = options.CustomTools
 		}
 		result, err := CreateAgentSession(context.Background(), opts)
 		if err != nil {
@@ -400,12 +434,107 @@ func TestDefaultToolsResumeRestoresRecordedLoadout(t *testing.T) {
 	}
 
 	t.Run("restores the loadout the transcript records", func(t *testing.T) {
-		session := resume(t, sessionWithLoadout(t, "read", "grep", "find"), nil)
+		session := resume(t, sessionWithChanges(t), &CreateAgentSessionOptions{
+			CustomTools: []*tools.ToolDefinition{customTool("active_tool"), customTool("inactive_tool")},
+		})
 		defer session.Dispose()
 		got := session.GetActiveToolNames()
 		slices.Sort(got)
-		if want := []string{"find", "grep", "read"}; !slices.Equal(got, want) {
+		if want := []string{"grep", "inactive_tool", "read"}; !slices.Equal(got, want) {
 			t.Fatalf("active tools = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("activates extension tools the transcript never added or removed", func(t *testing.T) {
+		session := resume(t, sessionWithLoadout(t, "read", "grep"), &CreateAgentSessionOptions{
+			CustomTools: []*tools.ToolDefinition{customTool("active_tool")},
+		})
+		defer session.Dispose()
+		got := session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"active_tool", "grep", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("keeps tools removed before a compaction inactive", func(t *testing.T) {
+		sessionManager := sessionWithChanges(t)
+		userID, err := sessionManager.AppendMessage(types.UserMessage{
+			Role:      types.RoleUser,
+			Content:   types.UserContent{String: "hi"},
+			Timestamp: 2,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := sessionManager.AppendCompaction("summary", &userID, 1000, nil, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+		session := resume(t, sessionManager, &CreateAgentSessionOptions{
+			CustomTools: []*tools.ToolDefinition{customTool("active_tool"), customTool("inactive_tool")},
+		})
+		defer session.Dispose()
+		got := session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"grep", "inactive_tool", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("restores the target branch loadout on tree navigation", func(t *testing.T) {
+		sessionManager := sessionWithLoadout(t, "read", "grep")
+		recordLoadoutChange(t, sessionManager, nil, []string{"grep"})
+		targetID, err := sessionManager.AppendMessage(types.UserMessage{
+			Role:      types.RoleUser,
+			Content:   types.UserContent{String: "first"},
+			Timestamp: 2,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		recordLoadoutChange(t, sessionManager, []string{"grep"}, []string{"active_tool"})
+		session := resume(t, sessionManager, &CreateAgentSessionOptions{
+			CustomTools: []*tools.ToolDefinition{customTool("active_tool")},
+		})
+		defer session.Dispose()
+		got := session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"grep", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools = %v, want %v", got, want)
+		}
+		if _, err := session.NavigateTree(context.Background(), targetID, &NavigateTreeOptions{Summarize: false}); err != nil {
+			t.Fatal(err)
+		}
+		got = session.GetActiveToolNames()
+		slices.Sort(got)
+		if want := []string{"active_tool", "read"}; !slices.Equal(got, want) {
+			t.Fatalf("active tools after tree navigation = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("keeps registered tools outside the tools allowlist inactive on tree navigation", func(t *testing.T) {
+		sessionManager := sessionWithLoadout(t, "read")
+		targetID, err := sessionManager.AppendMessage(types.UserMessage{
+			Role:      types.RoleUser,
+			Content:   types.UserContent{String: "first"},
+			Timestamp: 2,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		session := resume(t, sessionManager, &CreateAgentSessionOptions{
+			Tools:       []string{"read"},
+			CustomTools: []*tools.ToolDefinition{customTool("mcp__server__lookup")},
+		})
+		defer session.Dispose()
+		if got := session.GetActiveToolNames(); !slices.Equal(got, []string{"read"}) {
+			t.Fatalf("active tools = %v, want [read]", got)
+		}
+		if _, err := session.NavigateTree(context.Background(), targetID, &NavigateTreeOptions{Summarize: false}); err != nil {
+			t.Fatal(err)
+		}
+		if got := session.GetActiveToolNames(); !slices.Equal(got, []string{"read"}) {
+			t.Fatalf("active tools after tree navigation = %v, want [read]", got)
 		}
 	})
 

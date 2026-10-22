@@ -11,6 +11,7 @@
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -164,7 +165,7 @@ type Diagnostic struct {
 // missing `mcpServers` key is not an error (empty config); malformed JSON and
 // invalid server entries produce diagnostics.
 func ParseConfigBytes(path string, content []byte) (*Config, []Diagnostic) {
-	config, diags, _ := parseConfigBytesScoped(path, content, false)
+	config, diags, _ := parseConfigBytesScoped(path, stripUTF8BOM(content), false)
 	return config, diags
 }
 
@@ -180,6 +181,7 @@ type pendingOverride struct {
 }
 
 func parseConfigBytesScoped(path string, content []byte, project bool) (*Config, []Diagnostic, []pendingOverride) {
+	content = stripUTF8BOM(content)
 	var config Config
 	if err := json.Unmarshal(content, &config); err != nil {
 		return nil, []Diagnostic{{Severity: "error", Message: fmt.Sprintf("invalid JSON: %v", err), Path: path}}, nil
@@ -249,6 +251,13 @@ func parseConfigBytesScoped(path string, content []byte, project bool) (*Config,
 		}
 	}
 	return &config, diags, pending
+}
+
+// stripUTF8BOM removes a leading UTF-8 byte order mark. Some editors write
+// mcp.json with a BOM; encoding/json rejects it even though the rest of the
+// file is valid JSON (pi: stripBom, #11191).
+func stripUTF8BOM(content []byte) []byte {
+	return bytes.TrimPrefix(content, []byte("\xef\xbb\xbf"))
 }
 
 // sortedRawServerNames returns raw entry names in deterministic order

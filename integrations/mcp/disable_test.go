@@ -114,6 +114,24 @@ func TestReconnectFailureSurfaces(t *testing.T) {
 	}
 }
 
+func TestSetServerDisabledUTF8BOM(t *testing.T) {
+	// Regression: #11191. Editing a BOM-prefixed file must not fail.
+	path := filepath.Join(t.TempDir(), "mcp.json")
+	if err := os.WriteFile(path, []byte("\xef\xbb\xbf"+`{"mcpServers":{"a":{"command":"cmd-a"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := setServerDisabledInFile(path, "a", true, false); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), `"disabled": true`) {
+		t.Fatalf("disabled key missing after BOM edit:\n%s", content)
+	}
+}
+
 func TestSetServerDisabledFileSurgery(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mcp.json")

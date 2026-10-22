@@ -73,6 +73,10 @@ func runClipboardCommand(command string, args []string, options *clipboardComman
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, command, args...)
+	// Clipboard writers can daemonize. Do not give them output pipes to
+	// retain, and detach them from pi's process group so Ctrl+Z suspend
+	// (SIGTSTP to the group) does not stop the clipboard owner (#11179).
+	setClipboardCommandDetached(cmd)
 	cmd.Stderr = nil
 
 	var stdout limitedBuffer

@@ -145,7 +145,7 @@ func TestGenerateHtmlEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, placeholder := range []string{"{{CSS}}", "{{JS}}", "{{SESSION_DATA}}", "{{MARKED_JS}}"} {
+	for _, placeholder := range []string{"{{CSS}}", "{{JS}}", "{{SESSION_DATA}}", "{{MARKED_JS}}", "{{MARKED_CJK_FRIENDLY_JS}}"} {
 		if strings.Contains(html, placeholder) {
 			t.Errorf("placeholder %s not replaced", placeholder)
 		}
@@ -246,5 +246,21 @@ func TestTemplateJsReadLineRange(t *testing.T) {
 		if !strings.Contains(templateJS, fragment) {
 			t.Fatalf("template.js missing read line range fragment: %q", fragment)
 		}
+	}
+}
+
+// TestTemplateJsCjkEmphasis canaries the vendored CJK-friendly emphasis
+// tokenizer (pi 26293e74f, #11168): HTML export must render emphasis right
+// next to CJK punctuation the same way the TUI does.
+func TestTemplateJsCjkEmphasis(t *testing.T) {
+	for _, fragment := range []string{
+		"emStrong: markedCjkFriendly().tokenizer.emStrong",
+	} {
+		if !strings.Contains(templateJS, fragment) {
+			t.Fatalf("template.js missing CJK emphasis fragment: %q", fragment)
+		}
+	}
+	if !strings.Contains(markedCjkFriendlyJS, "marked-cjk-friendly v0.1.2") {
+		t.Fatal("vendored marked-cjk-friendly plugin missing")
 	}
 }

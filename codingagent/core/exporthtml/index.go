@@ -286,6 +286,8 @@ var (
 	templateJS string
 	//go:embed templates/vendor/marked.min.js
 	markedJS string
+	//go:embed templates/vendor/marked-cjk-friendly.min.js
+	markedCjkFriendlyJS string
 	//go:embed templates/vendor/highlight.min.js
 	highlightJS string
 )
@@ -397,6 +399,7 @@ func GenerateHtml(sessionData SessionData, themeName string) (string, error) {
 	html = jsStringReplace(html, "{{JS}}", templateJS)
 	html = jsStringReplace(html, "{{SESSION_DATA}}", sessionDataBase64)
 	html = jsStringReplace(html, "{{MARKED_JS}}", markedJS)
+	html = jsStringReplace(html, "{{MARKED_CJK_FRIENDLY_JS}}", markedCjkFriendlyJS)
 	html = jsStringReplace(html, "{{HIGHLIGHT_JS}}", highlightJS)
 	return html, nil
 }

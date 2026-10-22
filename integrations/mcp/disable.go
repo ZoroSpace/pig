@@ -39,7 +39,7 @@ func setServerDisabledInFile(path, name string, disabled bool, create bool) erro
 			return fmt.Errorf("read mcp config: %w", err)
 		}
 	}
-	dec := json.NewDecoder(bytes.NewReader(content))
+	dec := json.NewDecoder(bytes.NewReader(stripUTF8BOM(content)))
 	dec.UseNumber()
 	var root map[string]any
 	if err := dec.Decode(&root); err != nil {

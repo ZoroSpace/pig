@@ -1247,6 +1247,7 @@ func Compact(
 			retry,
 			callbacks,
 			sessionID,
+			customInstructions,
 		)
 		if err != nil {
 			return nil, err
@@ -1317,10 +1318,14 @@ func generateTurnPrefixSummary(
 	retry *ai.RetryPolicy,
 	callbacks *ai.RetryCallbacks,
 	sessionID string,
+	customInstructions string,
 ) (*SummaryWithUsage, error) {
 	llmMessages := harness.ConvertToLlm(messages)
 	conversationText := SerializeConversation(llmMessages)
 	promptText := fmt.Sprintf("# Conversation\n%s\n\n# Instructions\n%s", conversationText, turnPrefixSummarizationPrompt)
+	if customInstructions != "" {
+		promptText = fmt.Sprintf("%s\n\nAdditional focus: %s", promptText, customInstructions)
+	}
 
 	response, err := CompleteSummarization(
 		ctx,

@@ -1013,6 +1013,22 @@ func TestGrepTool(t *testing.T) {
 		}
 	})
 
+	t.Run("should ignore RIPGREP_CONFIG_PATH", func(t *testing.T) {
+		configFile := filepath.Join(testDir, "rg-config")
+		testFile := filepath.Join(testDir, "fixture.txt")
+		writeTestFile(t, configFile, "--fixed-strings\n")
+		writeTestFile(t, testFile, "aXb\na.b\n")
+		t.Setenv("RIPGREP_CONFIG_PATH", configFile)
+
+		result := execTool(t, grepTool, "test-call-rg-config", map[string]any{
+			"pattern": "a.b", "path": testFile, "literal": false,
+		})
+		output := textOf(result)
+		if !strings.Contains(output, "fixture.txt:1: aXb") || !strings.Contains(output, "fixture.txt:2: a.b") {
+			t.Fatalf("output = %q", output)
+		}
+	})
+
 	t.Run("should treat flag-like patterns as search text", func(t *testing.T) {
 		marker := filepath.Join(testDir, "grep-injection-marker")
 		payload := filepath.Join(testDir, "payload.sh")

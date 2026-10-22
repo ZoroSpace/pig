@@ -460,11 +460,13 @@ type InteractiveMode struct {
 	// Extension UI state (pi: extensionWidgetsAbove/Below,
 	// extensionSelector/extensionInput/extensionEditor, custom editors,
 	// terminal input subscriptions).
-	extensionWidgetsAbove               map[string]extensionWidget
-	extensionWidgetsBelow               map[string]extensionWidget
-	extensionSelector                   *components.ExtensionSelectorComponent
-	extensionInput                      *components.ExtensionInputComponent
-	extensionEditor                     *components.ExtensionEditorComponent
+	extensionWidgetsAbove map[string]extensionWidget
+	extensionWidgetsBelow map[string]extensionWidget
+	// extensionDialogs shown in the editor slot (select, confirm, input,
+	// editor, inline custom). The last entry is visible; see
+	// pushExtensionDialog.
+	extensionDialogs                    []extensionDialog
+	extensionDialogsMu                  sync.Mutex
 	editorComponentFactory              core.EditorFactory
 	extensionTerminalInputSubscriptions []*extensionTerminalInputSubscription
 	// autocompleteProviderWrappers is declared in the autocomplete block above.
@@ -527,6 +529,15 @@ func (g *userInputGate) wait() string {
 }
 
 // NewInteractiveMode builds the mode (pi: constructor).
+// extensionDialog is one entry in the editor-slot dialog stack (pi:
+// ExtensionDialogComponent + blocked). dispose is used by resetExtensionUI;
+// close paths dispose themselves before removing the entry.
+type extensionDialog struct {
+	component tui.Component
+	blocked   *blockedStatus
+	dispose   func()
+}
+
 func NewInteractiveMode(runtimeHost *core.AgentSessionRuntime, options InteractiveModeOptions) *InteractiveMode {
 	m := &InteractiveMode{
 		runtimeHost:                         runtimeHost,
@@ -5866,9 +5877,13 @@ func (m *InteractiveMode) showExtensionSelector(ctx context.Context, title strin
 	resultCh := make(chan string, 1)
 	done := make(chan struct{})
 	var closeOnce sync.Once
+	var selector *components.ExtensionSelectorComponent
 	finish := func(value string) {
-		closeOnce.Do(func() { close(done) })
-		m.hideExtensionSelector()
+		closeOnce.Do(func() {
+			close(done)
+			selector.Dispose()
+			m.removeExtensionDialog(selector)
+		})
 		resultCh <- value
 	}
 
@@ -5884,7 +5899,10 @@ func (m *InteractiveMode) showExtensionSelector(ctx context.Context, title strin
 		}()
 	}
 
-	m.extensionSelector = components.NewExtensionSelectorComponent(
+	if blocked == nil {
+		blocked = &blockedStatus{kind: tui.ProgramStatusBlockedQuestion, message: title}
+	}
+	selector = components.NewExtensionSelectorComponent(
 		title,
 		options,
 		func(option string) { finish(option) },
@@ -5895,23 +5913,73 @@ func (m *InteractiveMode) showExtensionSelector(ctx context.Context, title strin
 			OnToggleToolsExpanded: func() { m.toggleToolOutputExpansion() },
 		},
 	)
-
-	m.disposeActiveSelector()
-	m.mutateUI(func() {
-		m.editorContainer.Clear()
-		m.editorContainer.AddChild(m.extensionSelector)
-		m.ui.SetFocus(m.extensionSelector)
-	})
-	// S17 (pi 503c60552): extension dialogs share the editor slot; opening
-	// one replaces the status of a displaced one.
-	if blocked == nil {
-		blocked = &blockedStatus{kind: tui.ProgramStatusBlockedQuestion, message: title}
-	}
-	m.reportBlockedDialog("extension-dialog", blocked.kind, blocked.message)
-	m.ui.RequestRender(false)
+	m.pushExtensionDialog(selector, blocked, selector.Dispose)
 
 	result := <-resultCh
 	return result, result != ""
+}
+
+// pushExtensionDialog shows an extension dialog in the editor slot. Dialogs
+// form a stack: a new dialog hides the visible one, and closing the visible
+// dialog shows the previous one again. Every dialog stays answerable, so no
+// dialog is left pending, and dialogs opened from inside another dialog (for
+// example a confirm from a custom component) work (pi: pushExtensionDialog,
+// #11166).
+func (m *InteractiveMode) pushExtensionDialog(component tui.Component, blocked *blockedStatus, dispose func()) {
+	m.disposeActiveSelector()
+	m.extensionDialogsMu.Lock()
+	m.extensionDialogs = append(m.extensionDialogs, extensionDialog{component: component, blocked: blocked, dispose: dispose})
+	m.extensionDialogsMu.Unlock()
+	m.showTopExtensionDialog()
+}
+
+// removeExtensionDialog removes an extension dialog. If it was visible, show
+// the previous dialog or the editor (pi: removeExtensionDialog).
+func (m *InteractiveMode) removeExtensionDialog(component tui.Component) {
+	m.extensionDialogsMu.Lock()
+	index := -1
+	for i, dialog := range m.extensionDialogs {
+		if dialog.component == component {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		m.extensionDialogsMu.Unlock()
+		return
+	}
+	m.extensionDialogs = append(m.extensionDialogs[:index], m.extensionDialogs[index+1:]...)
+	wasTop := index == len(m.extensionDialogs)
+	m.extensionDialogsMu.Unlock()
+	if wasTop {
+		m.showTopExtensionDialog()
+	}
+}
+
+// showTopExtensionDialog renders the top of the dialog stack, or the editor
+// when the stack is empty (pi: showTopExtensionDialog).
+func (m *InteractiveMode) showTopExtensionDialog() {
+	m.extensionDialogsMu.Lock()
+	var component tui.Component = m.editor
+	var blocked *blockedStatus
+	if len(m.extensionDialogs) > 0 {
+		top := m.extensionDialogs[len(m.extensionDialogs)-1]
+		component = top.component
+		blocked = top.blocked
+	}
+	m.extensionDialogsMu.Unlock()
+
+	m.mutateUI(func() {
+		m.editorContainer.Clear()
+		m.editorContainer.AddChild(component)
+		m.ui.SetFocus(component)
+	})
+	if blocked != nil {
+		m.reportBlockedDialog("extension-dialog", blocked.kind, blocked.message)
+	} else {
+		m.clearBlockedDialog("extension-dialog")
+	}
+	m.ui.RequestRender(false)
 }
 
 // reportBlockedDialog reports a `blocked` program status for an open dialog
@@ -5930,19 +5998,6 @@ func (m *InteractiveMode) clearBlockedDialog(source string) {
 		return
 	}
 	m.programStatus.SetBlocked(source, nil)
-}
-
-// hideExtensionSelector hides the extension selector (pi:
-// hideExtensionSelector).
-func (m *InteractiveMode) hideExtensionSelector() {
-	m.extensionSelector = nil
-	m.mutateUI(func() {
-		m.editorContainer.Clear()
-		m.editorContainer.AddChild(m.editor)
-		m.ui.SetFocus(m.editor)
-	})
-	m.clearBlockedDialog("extension-dialog")
-	m.ui.RequestRender(false)
 }
 
 // showExtensionConfirm shows a confirmation dialog for extensions (pi:
@@ -5981,46 +6036,26 @@ func (m *InteractiveMode) showExtensionInput(ctx context.Context, title string, 
 	if placeholder != "" {
 		placeholderPtr = lo.ToPtr(placeholder)
 	}
-	m.extensionInput = components.NewExtensionInputComponent(
+	var input *components.ExtensionInputComponent
+	finish := func(value string) {
+		input.Dispose()
+		m.removeExtensionDialog(input)
+		resultCh <- value
+	}
+	input = components.NewExtensionInputComponent(
 		title,
 		placeholderPtr,
-		func(value string) {
-			m.hideExtensionInput()
-			resultCh <- value
-		},
-		func() {
-			m.hideExtensionInput()
-			resultCh <- ""
-		},
+		func(value string) { finish(value) },
+		func() { finish("") },
 		&components.ExtensionInputOptions{
 			Tui:     m.ui,
 			Timeout: dialogTimeout(opts),
 		},
 	)
-
-	m.disposeActiveSelector()
-	m.mutateUI(func() {
-		m.editorContainer.Clear()
-		m.editorContainer.AddChild(m.extensionInput)
-		m.ui.SetFocus(m.extensionInput)
-	})
-	m.reportBlockedDialog("extension-dialog", tui.ProgramStatusBlockedQuestion, title)
-	m.ui.RequestRender(false)
+	m.pushExtensionDialog(input, &blockedStatus{kind: tui.ProgramStatusBlockedQuestion, message: title}, input.Dispose)
 
 	result := <-resultCh
 	return result, result != ""
-}
-
-// hideExtensionInput hides the extension input (pi: hideExtensionInput).
-func (m *InteractiveMode) hideExtensionInput() {
-	m.extensionInput = nil
-	m.mutateUI(func() {
-		m.editorContainer.Clear()
-		m.editorContainer.AddChild(m.editor)
-		m.ui.SetFocus(m.editor)
-	})
-	m.clearBlockedDialog("extension-dialog")
-	m.ui.RequestRender(false)
 }
 
 // showExtensionEditor shows a multi-line editor for extensions (pi:
@@ -6028,46 +6063,25 @@ func (m *InteractiveMode) hideExtensionInput() {
 func (m *InteractiveMode) showExtensionEditor(ctx context.Context, title string, prefill string) (string, bool) {
 	resultCh := make(chan string, 1)
 
-	m.extensionEditor = components.NewExtensionEditorComponent(
+	var editor *components.ExtensionEditorComponent
+	finish := func(value string) {
+		m.removeExtensionDialog(editor)
+		resultCh <- value
+	}
+	editor = components.NewExtensionEditorComponent(
 		m.ui,
 		m.keybindings,
 		title,
 		prefill,
-		func(value string) {
-			m.hideExtensionEditor()
-			resultCh <- value
-		},
-		func() {
-			m.hideExtensionEditor()
-			resultCh <- ""
-		},
+		func(value string) { finish(value) },
+		func() { finish("") },
 		nil,
 		m.settingsManager().GetExternalEditorCommand(),
 	)
-
-	m.disposeActiveSelector()
-	m.mutateUI(func() {
-		m.editorContainer.Clear()
-		m.editorContainer.AddChild(m.extensionEditor)
-		m.ui.SetFocus(m.extensionEditor)
-	})
-	m.reportBlockedDialog("extension-dialog", tui.ProgramStatusBlockedQuestion, title)
-	m.ui.RequestRender(false)
+	m.pushExtensionDialog(editor, &blockedStatus{kind: tui.ProgramStatusBlockedQuestion, message: title}, nil)
 
 	result := <-resultCh
 	return result, result != ""
-}
-
-// hideExtensionEditor hides the extension editor (pi: hideExtensionEditor).
-func (m *InteractiveMode) hideExtensionEditor() {
-	m.extensionEditor = nil
-	m.mutateUI(func() {
-		m.editorContainer.Clear()
-		m.editorContainer.AddChild(m.editor)
-		m.ui.SetFocus(m.editor)
-	})
-	m.clearBlockedDialog("extension-dialog")
-	m.ui.RequestRender(false)
 }
 
 // setCustomEditorComponent sets a custom editor component from an extension,
@@ -6168,16 +6182,13 @@ func (m *InteractiveMode) showExtensionCustom(ctx context.Context, factory core.
 	resultCh := make(chan any, 1)
 	closed := false
 
-	restoreEditor := func() {
-		m.mutateUI(func() {
-			m.editorContainer.Clear()
-			m.editorContainer.AddChild(m.editor)
-			m.editor.SetText(savedText)
-			m.ui.SetFocus(m.editor)
-		})
+	restoreEditor := func(component tui.Component) {
+		m.removeExtensionDialog(component)
+		m.mutateUI(func() { m.editor.SetText(savedText) })
 		m.ui.RequestRender(false)
 	}
 
+	var component tui.Component
 	close := func(result any) {
 		if closed {
 			return
@@ -6186,13 +6197,14 @@ func (m *InteractiveMode) showExtensionCustom(ctx context.Context, factory core.
 		if isOverlay {
 			m.ui.HideOverlay()
 		} else {
-			restoreEditor()
+			restoreEditor(component)
 		}
 		// Note: both branches above already call requestRender
 		resultCh <- result
 	}
 
-	component, dispose := factory(m.ui, m.keybindings, close)
+	var dispose func()
+	component, dispose = factory(m.ui, m.keybindings, close)
 	if isOverlay {
 		// Resolve overlay options — dynamic function or component width
 		var overlayOptions *tui.OverlayOptions
@@ -6209,13 +6221,7 @@ func (m *InteractiveMode) showExtensionCustom(ctx context.Context, factory core.
 			options.OnHandle(handle)
 		}
 	} else {
-		m.disposeActiveSelector()
-		m.mutateUI(func() {
-			m.editorContainer.Clear()
-			m.editorContainer.AddChild(component)
-			m.ui.SetFocus(component)
-		})
-		m.ui.RequestRender(false)
+		m.pushExtensionDialog(component, nil, dispose)
 	}
 
 	result := <-resultCh
@@ -8129,14 +8135,17 @@ func (m *InteractiveMode) disposeActiveSelector() {
 // resetExtensionUI restores the extension UI surface to defaults (pi:
 // resetExtensionUI).
 func (m *InteractiveMode) resetExtensionUI() {
-	if m.extensionSelector != nil {
-		m.hideExtensionSelector()
+	m.extensionDialogsMu.Lock()
+	dialogs := m.extensionDialogs
+	m.extensionDialogs = nil
+	m.extensionDialogsMu.Unlock()
+	for _, dialog := range dialogs {
+		if dialog.dispose != nil {
+			dialog.dispose()
+		}
 	}
-	if m.extensionInput != nil {
-		m.hideExtensionInput()
-	}
-	if m.extensionEditor != nil {
-		m.hideExtensionEditor()
+	if len(dialogs) > 0 {
+		m.showTopExtensionDialog()
 	}
 	m.ui.HideOverlay()
 	m.clearExtensionTerminalInputListeners()

@@ -600,10 +600,6 @@ type AgentSession struct {
 	// _boundaryDispatchedMessages WeakSet<object>, v0.87.0; same
 	// identity-key adaptation as entryIDsByMessage).
 	boundaryDispatchedMessages map[string]struct{}
-	// lastAssistantToolResults are the tool results of the last completed
-	// turn, captured on turn_end for the post-run recovery omissions (pi:
-	// _lastAssistantToolResults, v0.87.0).
-	lastAssistantToolResults []agent.AgentMessage
 	// lastActivityOutcome classifies the most recent completed turn (pi:
 	// _lastActivityOutcome, v0.87.0).
 	lastActivityOutcome AgentActivityOutcome
@@ -1630,13 +1626,6 @@ func (s *AgentSession) handleAgentEvent(ctx context.Context, event agent.AgentEv
 	// the flush moved here from the extension dispatch, whose turn_end branch
 	// now owns the boundary flow).
 	if event.Type == agent.AgentEventTurnEnd {
-		toolResults := make([]agent.AgentMessage, len(event.ToolResults))
-		for i, result := range event.ToolResults {
-			toolResults[i] = result
-		}
-		s.mu.Lock()
-		s.lastAssistantToolResults = toolResults
-		s.mu.Unlock()
 		s.flushPendingCustomMessages()
 	}
 }
@@ -1717,7 +1706,64 @@ func (s *AgentSession) findPersistedMessageEntryID(message agent.AgentMessage) s
 // omitRecoveryAttempt durably omits a failed/truncated attempt from the
 // model projection via context edits while keeping it in raw history (pi:
 // _omitRecoveryAttempt, v0.87.0).
-func (s *AgentSession) omitRecoveryAttempt(ctx context.Context, message *types.AssistantMessage, toolResults []agent.AgentMessage) error {
+func (s *AgentSession) omitRecoveryAttempt(ctx context.Context, message *types.AssistantMessage) error {
+	// Persistently omit a failed attempt and its tool results from model
+	// context. Results are found in the projected context, so the pair stays
+	// together whether the attempt comes from the current run or a resumed
+	// session. An unpaired result fails the next request (#11227).
+	toolCallIDs := map[string]struct{}{}
+	if message != nil {
+		for _, block := range message.Content {
+			switch call := block.(type) {
+			case types.ToolCall:
+				toolCallIDs[call.ID] = struct{}{}
+			case *types.ToolCall:
+				toolCallIDs[call.ID] = struct{}{}
+			}
+		}
+	}
+	state := s.Agent.State()
+	entryID := ""
+	if message != nil {
+		entryID = s.findPersistedMessageEntryID(*message)
+	}
+	messageIndex := -1
+	for i, candidate := range state.Messages {
+		if message != nil && agentMessageIdentityKey(candidate) == agentMessageIdentityKey(*message) {
+			messageIndex = i
+			break
+		}
+		if entryID != "" {
+			s.mu.Lock()
+			mapped := s.entryIDsByMessage[agentMessageIdentityKey(candidate)]
+			s.mu.Unlock()
+			if mapped == entryID {
+				messageIndex = i
+				break
+			}
+		}
+	}
+	var toolResults []agent.AgentMessage
+	if messageIndex >= 0 {
+		for _, candidate := range state.Messages[messageIndex+1:] {
+			if candidate.MessageRole() == types.RoleAssistant {
+				break
+			}
+			if candidate.MessageRole() != types.RoleToolResult {
+				continue
+			}
+			callID := ""
+			switch result := candidate.(type) {
+			case types.ToolResultMessage:
+				callID = result.ToolCallID
+			case *types.ToolResultMessage:
+				callID = result.ToolCallID
+			}
+			if _, ok := toolCallIDs[callID]; ok {
+				toolResults = append(toolResults, candidate)
+			}
+		}
+	}
 	targets := make([]agent.AgentMessage, 0, len(toolResults)+1)
 	if message != nil {
 		targets = append(targets, *message)
@@ -1725,7 +1771,6 @@ func (s *AgentSession) omitRecoveryAttempt(ctx context.Context, message *types.A
 	targets = append(targets, toolResults...)
 	targetIDs := make([]string, len(targets))
 	unresolvedProjectedTarget := false
-	state := s.Agent.State()
 	for i, target := range targets {
 		targetIDs[i] = s.findPersistedMessageEntryID(target)
 		if targetIDs[i] == "" && agentMessagesContain(state.Messages, target) {
@@ -2427,7 +2472,7 @@ func (s *AgentSession) prepareRun(ctx context.Context, trigger BeforeAgentStartT
 	// Check if we need to compact before sending (catches aborted responses).
 	// The starting message is sent below, so do not call agent.continue() here.
 	if lastAssistant := s.findLastAssistantMessage(); lastAssistant != nil {
-		if _, err := s.checkCompaction(ctx, lastAssistant, false, nil); err != nil {
+		if _, err := s.checkCompaction(ctx, lastAssistant, false); err != nil {
 			return nil, err
 		}
 	}
@@ -2525,8 +2570,6 @@ func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 	s.mu.Lock()
 	message := s.lastAssistantMessage
 	s.lastAssistantMessage = nil
-	toolResults := s.lastAssistantToolResults
-	s.lastAssistantToolResults = nil
 	s.mu.Unlock()
 
 	// pi v0.86.0: an abort request ends the post-run loop immediately; the
@@ -2577,7 +2620,7 @@ func (s *AgentSession) handlePostAgentRun(ctx context.Context) (bool, error) {
 		s.mu.Unlock()
 	}
 
-	shouldCompact, err := s.checkCompaction(ctx, message, true, toolResults)
+	shouldCompact, err := s.checkCompaction(ctx, message, true)
 	if err != nil {
 		return false, err
 	}
@@ -3005,22 +3048,74 @@ func (s *AgentSession) installAgentForcedPromptProjection() {
 // are the `+name`/`-name` entries applied to the restored loadout (S19-2,
 // pi 6f2f164ab).
 func (s *AgentSession) restoreToolsFromTranscript(modifiers []string) {
-	sessionContext := s.SessionManager.BuildSessionContext()
+	// All system messages on the branch, including those before a compaction.
+	// Compaction snapshots are derived from these, so replaying them gives the
+	// current loadout.
 	var transcript aiutils.TranscriptMessages
-	for _, message := range sessionContext.Messages {
-		if typed, ok := message.(types.Message); ok {
-			transcript = append(transcript, typed)
+	for _, entry := range s.SessionManager.GetBranch("") {
+		messageEntry, ok := entry.(*SessionMessageEntry)
+		if !ok {
+			continue
 		}
+		message, ok := messageEntry.Message.(*types.SystemMessage)
+		if !ok {
+			if value, ok := messageEntry.Message.(types.SystemMessage); ok {
+				message = &value
+			}
+		}
+		if message == nil || message.MessageRole() != types.RoleSystem {
+			continue
+		}
+		transcript = append(transcript, message)
 	}
-	current := aiutils.GetCurrentSystemMessage(transcript)
-	if current == nil {
+	// No recorded loadout: keep the current tools.
+	if len(transcript) == 0 {
 		return
 	}
+	// Tools the branch ever added or removed. Removed tools stay inactive.
+	mentioned := map[string]struct{}{}
+	for _, message := range transcript {
+		systemMessage, ok := message.(*types.SystemMessage)
+		if !ok {
+			continue
+		}
+		for _, tool := range systemMessage.ToolsAdded {
+			mentioned[tool.Name] = struct{}{}
+		}
+		for _, tool := range systemMessage.ToolsRemoved {
+			mentioned[tool.Name] = struct{}{}
+		}
+	}
+	// Tools the branch never mentioned were registered after it recorded its
+	// loadout, so they are activated like newly registered tools. Built-in
+	// tools follow `defaultTools` instead.
+	//
+	// Deviation from pi: pi also excludes extension tools with
+	// `defaultActive: false`; pig's Phase 7 extension system is not ported,
+	// so there is no defaultActive face (custom SDK tools are active on
+	// registration, matching refreshToolRegistry).
+	var newTools []string
+	for _, name := range s.toolRegistryOrder() {
+		if _, ok := mentioned[name]; ok {
+			continue
+		}
+		if _, ok := s.baseToolDefinitions[name]; ok {
+			continue
+		}
+		newTools = append(newTools, name)
+	}
+	// The recorded loadout plus the new tools, with `--tools +name`/`-name`
+	// applied.
 	var toolNames []string
-	for _, tool := range current.ToolsAdded {
+	for _, tool := range aiutils.GetCurrentTools(transcript) {
 		toolNames = append(toolNames, tool.Name)
 	}
+	toolNames = append(toolNames, newTools...)
 	toolNames = applyToolModifiers(toolNames, modifiers)
+	// pi keeps unregistered recorded tools pending so MCP tools of servers
+	// still connecting activate when they register. pig's registry refresh
+	// already activates tools that appear after the previous snapshot, so no
+	// separate pending set is needed.
 	s.SetActiveToolsByName(toolNames)
 }
 
@@ -4050,7 +4145,7 @@ func (s *AgentSession) AbortBranchSummary() {
 // skipAbortedCheck=false includes aborted messages (for the pre-prompt check).
 // Returns whether the post-run loop should call agent.Continue for overflow
 // recovery or queued messages.
-func (s *AgentSession) checkCompaction(ctx context.Context, assistantMessage *types.AssistantMessage, skipAbortedCheck bool, toolResults []agent.AgentMessage) (bool, error) {
+func (s *AgentSession) checkCompaction(ctx context.Context, assistantMessage *types.AssistantMessage, skipAbortedCheck bool) (bool, error) {
 	// pi: getCompactionSettings(this.model) throws on invalid settings; the
 	// error propagates to the prompt caller like pi's rejection.
 	settings, err := s.SettingsManager.GetCompactionSettings(s.Model())
@@ -4182,7 +4277,7 @@ func (s *AgentSession) checkCompaction(ctx context.Context, assistantMessage *ty
 		s.mu.Lock()
 		s.overflowRecoveryAttempted = true
 		s.mu.Unlock()
-		if err := s.omitRecoveryAttempt(ctx, assistantMessage, toolResults); err != nil {
+		if err := s.omitRecoveryAttempt(ctx, assistantMessage); err != nil {
 			return false, err
 		}
 		return s.runAutoCompactionChecked(ctx, "overflow", willRetry)
@@ -5140,7 +5235,7 @@ func (s *AgentSession) prepareRetry(ctx context.Context, message *types.Assistan
 
 	// Keep the failed attempt in raw history while durably omitting it from
 	// model projection (pi v0.87.0).
-	if err := s.omitRecoveryAttempt(ctx, message, nil); err != nil {
+	if err := s.omitRecoveryAttempt(ctx, message); err != nil {
 		return false, err
 	}
 

@@ -214,7 +214,10 @@ func CreateGrepToolDefinition(cwd string, options *GrepToolOptions) *ToolDefinit
 				return lines
 			}
 
-			args := []string{"--json", "--line-number", "--color=never", "--hidden"}
+			// --no-config: the tool contract (literal, glob, limit, ...) must not
+			// depend on ambient user config like RIPGREP_CONFIG_PATH. Users can
+			// customize via bash or extensions.
+			args := []string{"--no-config", "--json", "--line-number", "--color=never", "--hidden"}
 			if input.IgnoreCase != nil && *input.IgnoreCase {
 				args = append(args, "--ignore-case")
 			}

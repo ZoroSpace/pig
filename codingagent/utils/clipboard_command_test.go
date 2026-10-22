@@ -7,8 +7,11 @@ package utils
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -114,6 +117,30 @@ func TestClipboardCommandTimesOutWithoutBlocking(t *testing.T) {
 	}
 	if elapsed > 10*time.Second {
 		t.Fatalf("call blocked for %v — deadline not enforced", elapsed)
+	}
+}
+
+func TestClipboardCommandRunsOutsidePIGProcessGroup(t *testing.T) {
+	// Regression: #11179. Clipboard daemons must not share pig's process
+	// group, or Ctrl+Z suspend stops them.
+	if runtime.GOOS == "windows" {
+		t.Skip("detached is false on Windows")
+	}
+	childPGID, ok := runClipboardCommand("sh", []string{"-c", "ps -o pgid= -p $$"}, nil)
+	if !ok {
+		t.Fatal("failed to read child process group")
+	}
+	ownPGID, ok := runClipboardCommand("ps", []string{"-o", "pgid=", "-p", fmt.Sprintf("%d", os.Getpid())}, nil)
+	if !ok {
+		t.Fatal("failed to read own process group")
+	}
+	child := strings.TrimSpace(string(childPGID))
+	own := strings.TrimSpace(string(ownPGID))
+	if child == "" || own == "" {
+		t.Fatalf("empty pgid (child=%q own=%q)", child, own)
+	}
+	if child == own {
+		t.Fatalf("clipboard helper shares pig's process group %q", own)
 	}
 }
 
