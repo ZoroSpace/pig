@@ -675,3 +675,60 @@ func TestMarkdownPreservesSourceBackslashEscapesWhenConfigured(t *testing.T) {
 	lines := mapStripTrim(markdown.Render(80))
 	assertDeepLines(t, lines, []string{`"\"`}, "preserved escapes")
 }
+
+// Regression tests for #11159: unclosed display math before tables.
+func TestMarkdownUnclosedDisplayMathBeforeTables(t *testing.T) {
+	table := []string{"| A | B |", "|---|---|", "| 1 | 2 |"}
+	renderedTable := []string{"┌───┬───┐", "│ A │ B │", "├───┼───┤", "│ 1 │ 2 │", "└───┴───┘"}
+	render := func(source string) []string {
+		lines := NewMarkdown(source, 0, 0, defaultMarkdownTheme, nil, nil).Render(80)
+		return mapStripTrim(lines)
+	}
+
+	tests := []struct {
+		name string
+		src  string
+		want []string
+	}{
+		{
+			name: "orphan dollar opener",
+			src:  strings.Join([]string{"Intro", "", "$$", "", table[0], table[1], table[2], "", "After"}, "\n"),
+			want: []string{"Intro", "", "$$", "", renderedTable[0], renderedTable[1], renderedTable[2], renderedTable[3], renderedTable[4], "", "After"},
+		},
+		{
+			name: "orphan dollar opener with math-like content",
+			src:  strings.Join([]string{"$$", "x = 1", "", table[0], table[1], table[2]}, "\n"),
+			want: []string{"$$", "x = 1", "", renderedTable[0], renderedTable[1], renderedTable[2], renderedTable[3], renderedTable[4]},
+		},
+		{
+			name: "unclosed dollar does not pair across table",
+			src:  strings.Join([]string{"Intro", "", "$$", "x = 1", "", table[0], table[1], table[2], "", "$$", "y^2", "$$"}, "\n"),
+			want: []string{"Intro", "", "$$", "x = 1", "", renderedTable[0], renderedTable[1], renderedTable[2], renderedTable[3], renderedTable[4], "", "y²"},
+		},
+		{
+			name: "single-column table with pipe-free aligned delimiter",
+			src:  strings.Join([]string{"$$", "", "| A |", ":---:", "| 1 |"}, "\n"),
+			want: []string{"$$", "", "┌───┐", "│ A │", "├───┤", "│ 1 │", "└───┘"},
+		},
+		{
+			name: "orphan bracket opener",
+			src:  strings.Join([]string{"\\\\[", "x^2", "", table[0], table[1], table[2]}, "\n"),
+			want: []string{"", "\\[", "x^2", "", renderedTable[0], renderedTable[1], renderedTable[2], renderedTable[3], renderedTable[4]},
+		},
+		{
+			name: "table with pipe-free header",
+			src:  strings.Join([]string{"$$", "x^2", "", "Value", "| --- |", "1"}, "\n"),
+			want: []string{"$$", "x^2", "", "┌───────┐", "│ Value │", "├───────┤", "│ 1     │", "└───────┘"},
+		},
+		{
+			name: "closed display math followed by table still renders",
+			src:  strings.Join([]string{"$$", "a", "+ b", "$$", "", table[0], table[1], table[2]}, "\n"),
+			want: []string{"a + b", "", renderedTable[0], renderedTable[1], renderedTable[2], renderedTable[3], renderedTable[4]},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertDeepLines(t, render(tc.src), tc.want, tc.name)
+		})
+	}
+}

@@ -57,7 +57,7 @@ func escapeRegex(value string) string {
 func buildFdPathQuery(query string) string {
 	normalized := toDisplayPath(query)
 	if !strings.Contains(normalized, "/") {
-		return normalized
+		return escapeRegex(normalized)
 	}
 
 	hasTrailingSeparator := strings.HasSuffix(normalized, "/")
@@ -73,10 +73,6 @@ func buildFdPathQuery(query string) string {
 			segments = append(segments, escapeRegex(segment))
 		}
 	}
-	if len(segments) == 0 {
-		return normalized
-	}
-
 	pattern := strings.Join(segments, separatorPattern)
 	if hasTrailingSeparator {
 		pattern += separatorPattern

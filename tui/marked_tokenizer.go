@@ -600,22 +600,27 @@ func (t *markedTokenizer) emStrong(src string, maskedSrc string, lastChar string
 	if mGroup(m, 1) == "" && mGroup(m, 2) == "" && mGroup(m, 3) == "" && mGroup(m, 4) == "" {
 		return nil
 	}
+	// pi overrides emStrong with marked-cjk-friendly: CJK text and punctuation
+	// count as punctuation for the flanking checks (#10154).
 	if mGroup(m, 4) != "" && lastChar != "" && reTest(t.other.UnicodeAlphaNumeric, lastChar) {
 		return nil
 	}
-	g1 := mGroup(m, 1)
-	g3 := mGroup(m, 3)
-	if !((g1 == "" && g3 == "") || lastChar == "" || reExec(t.inlineRules.Punctuation, lastChar) != nil) {
+	nextChar := mGroup(m, 1)
+	if nextChar == "" {
+		nextChar = mGroup(m, 3)
+	}
+	if !(nextChar == "" || lastChar == "" || reExec(t.inlineRules.Punctuation, lastChar) != nil ||
+		t.isPrevCharCjk(lastChar, maskedSrc, src) || reTest(t.inlineRules.CjkTest, nextChar)) {
 		return nil
 	}
+
 	delimRuneLen := jsRuneLen(m.String()) - 1
-	after := delimRuneLen
-	counter := 0
-	var rdelim *regexp2.Regexp
-	if strings.HasPrefix(m.String(), "*") {
-		rdelim = t.inlineRules.EmStrongRDelimAst
-	} else {
-		rdelim = t.inlineRules.EmStrongRDelimUnd
+	delimTotal := delimRuneLen
+	midDelimTotal := 0
+	prevCharIsSameDelimiter := lastChar == firstRuneOf(m.String())
+	rdelim := t.inlineRules.CjkEmStrongRDelimAst
+	if !strings.HasPrefix(m.String(), "*") {
+		rdelim = t.inlineRules.CjkEmStrongRDelimUnd
 	}
 	tail := jsSlice(maskedSrc, jsRuneLen(maskedSrc)-jsRuneLen(src)+delimRuneLen, jsRuneLen(maskedSrc))
 	for s := reExec(rdelim, tail); s != nil; s = nextMatch(rdelim, s) {
@@ -630,23 +635,28 @@ func (t *markedTokenizer) emStrong(src string, maskedSrc string, lastChar string
 			continue
 		}
 		endersLen := jsRuneLen(enders)
-		if mGroup(s, 3) != "" || mGroup(s, 4) != "" {
-			after += endersLen
-			continue
-			// marked: else if ((s[5] || s[6]) && i % 3 && !((i + u) % 3)) — the
-			// closer candidate is rejected only when (i+u) is a multiple of 3
-			// (CommonMark multiple-of-3 rule). The != here was ported inverted
-			// (2026-09-12 fix): punct-flanked closers (`）*。`) were wrongly
-			// rejected and the run fell back to literal text.
-		} else if (mGroup(s, 5) != "" || mGroup(s, 6) != "") && delimRuneLen%3 != 0 && (delimRuneLen+endersLen)%3 == 0 {
-			counter += endersLen
+		isCjkAdjacent := t.isCjkAdjacentToDelimiter(s, tail)
+		isLeftOnly := mGroup(s, 3) != "" || mGroup(s, 4) != ""
+		isBoth := mGroup(s, 5) != "" || mGroup(s, 6) != ""
+		if isLeftOnly && !isCjkAdjacent {
+			delimTotal += endersLen
 			continue
 		}
-		after -= endersLen
-		if after > 0 {
+		if isBoth || isCjkAdjacent {
+			// CommonMark multiple-of-3 rule.
+			if delimRuneLen%3 != 0 && (delimRuneLen+endersLen)%3 == 0 {
+				midDelimTotal += endersLen
+				continue
+			}
+			if prevCharIsSameDelimiter && isBoth {
+				break
+			}
+		}
+		delimTotal -= endersLen
+		if delimTotal > 0 {
 			continue
 		}
-		endersLen = min(endersLen, endersLen+after+counter)
+		endersLen = min(endersLen, endersLen+delimTotal+midDelimTotal)
 		firstRuneLen := jsRuneLen(firstRuneOf(s.String()))
 		end := delimRuneLen + s.Index + firstRuneLen + endersLen
 		h := jsSlice(src, 0, end)
@@ -658,6 +668,42 @@ func (t *markedTokenizer) emStrong(src string, maskedSrc string, lastChar string
 		return &MarkedToken{Type: "strong", Raw: h, Text: text, Tokens: t.lexer.inlineTokensNow(text)}
 	}
 	return nil
+}
+
+// isPrevCharCjk checks whether the character immediately before src is CJK.
+// marked passes a UTF-16 code unit; Go's lastChar is a rune, but a variation
+// selector can still stand in for the base character, so recover it from
+// maskedSrc when needed (pi: marked-cjk-friendly isPrevCharCjk).
+func (t *markedTokenizer) isPrevCharCjk(lastChar string, maskedSrc string, src string) bool {
+	if lastChar != "" && reTest(t.inlineRules.CjkTest, lastChar) {
+		return true
+	}
+	index := jsRuneLen(maskedSrc) - jsRuneLen(src) - 1
+	if index < 0 {
+		return false
+	}
+	runes := []rune(maskedSrc)
+	r := runes[index]
+	if r >= 0xFE00 && r <= 0xFE0F && index >= 1 {
+		index--
+		r = runes[index]
+	}
+	return reTest(t.inlineRules.CjkTest, string(r))
+}
+
+// isCjkAdjacentToDelimiter reports whether a right delimiter classified as
+// left-only sits next to CJK text (pi: isCjkAdjacentToDelimiter).
+func (t *markedTokenizer) isCjkAdjacentToDelimiter(rightMatch *regexp2.Match, clippedMaskedSrc string) bool {
+	if mGroup(rightMatch, 1) == "" && mGroup(rightMatch, 2) == "" && mGroup(rightMatch, 3) == "" && mGroup(rightMatch, 4) == "" {
+		return false
+	}
+	charBefore := firstRuneOf(rightMatch.String())
+	afterPos := rightMatch.Index + rightMatch.Length
+	charAfter := ""
+	if afterPos < jsRuneLen(clippedMaskedSrc) {
+		charAfter = string([]rune(clippedMaskedSrc)[afterPos])
+	}
+	return reTest(t.inlineRules.CjkTest, charBefore) || (charAfter != "" && reTest(t.inlineRules.CjkTest, charAfter))
 }
 
 func (t *markedTokenizer) codespan(src string) *MarkedToken {

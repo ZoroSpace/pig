@@ -73,3 +73,35 @@ func TestMarkdownEmphasisCloseFlankedByPunctuationRealSentence(t *testing.T) {
 		t.Fatalf("tokenize real-world sentence\n  got  %s\n  want %s", got, want)
 	}
 }
+
+// TestMarkdownCjkFriendlyEmphasis ports markdown.test.ts "CJK emphasis"
+// (#10154): CJK characters count as punctuation for flanking, so emphasis
+// delimited next to CJK punctuation renders.
+func TestMarkdownCjkFriendlyEmphasis(t *testing.T) {
+	cases := []struct {
+		src  string
+		want string
+	}{
+		{"**这是测试。**后面", "strong:这是测试。|text:后面"},
+		{"**一句话说清：**一台机器", "strong:一句话说清：|text:一台机器"},
+		{"**要点到此为止。**20 小时", "strong:要点到此为止。|text:20 小时"},
+		{"字**「引用」**字", "text:字|strong:「引用」|text:字"},
+		{"*斜体。*后面", "em:斜体。|text:后面"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			if got := inlineKinds(t, tc.src); got != tc.want {
+				t.Fatalf("tokenize %q\n  got  %s\n  want %s", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMarkdownCjkFriendlyKeepsCommonMarkFlanking locks the non-CJK case:
+// emphasis still cannot close before non-space non-punctuation text.
+func TestMarkdownCjkFriendlyKeepsCommonMarkFlanking(t *testing.T) {
+	src := "**end.**Then next"
+	if got := inlineKinds(t, src); got != "text:"+src {
+		t.Fatalf("tokenize %q = %s, want literal text", src, got)
+	}
+}

@@ -150,6 +150,12 @@ type Terminal interface {
 	SetProgramStatus(status ProgramStatus)
 }
 
+// ExitRestorer is implemented by terminals that can restore their modes from
+// a process exit handler after Stop did not run (pi: Terminal.restoreOnExit?).
+type ExitRestorer interface {
+	RestoreOnExit(before string, after string)
+}
+
 // ResolveEscapeTimeoutMs resolves how long to wait for the rest of an escape
 // sequence before dispatching a lone ESC as the Escape key. Legacy Alt+key
 // input is ESC plus another byte, so high-latency transports need a longer
@@ -715,6 +721,28 @@ func (t *ProcessTerminal) Stop() {
 		t.oldStateSaved = false
 		t.oldState = nil
 	}
+}
+
+// RestoreOnExit synchronously restores terminal modes when the process exits
+// without Stop (pi: ProcessTerminal.restoreOnExit, #11170).
+func (t *ProcessTerminal) RestoreOnExit(before string, after string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	var sequence strings.Builder
+	sequence.WriteString(before)
+	if t.clearProgressIntervalLocked() {
+		sequence.WriteString(terminalProgressClearSequence)
+	}
+	sequence.WriteString("\x1b[?2004l")
+	if t.keyboardProtocolPushed || t.kittyProtocolActive {
+		sequence.WriteString("\x1b[<u")
+	}
+	if t.modifyOtherKeysActive {
+		sequence.WriteString("\x1b[>4;0m")
+	}
+	sequence.WriteString(after)
+	_, _ = io.WriteString(t.out, sequence.String())
 }
 
 func (t *ProcessTerminal) Write(data string) {

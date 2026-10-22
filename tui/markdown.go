@@ -133,20 +133,38 @@ func latexTokenizeInlineLatex(source string) *MarkedToken {
 	return &MarkedToken{Type: "latex", Raw: raw, Text: text}
 }
 
+var tableDelimiterRowRe = regexp.MustCompile(`^ {0,3}\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$`)
+
+// containsTableStart reports whether source contains a GFM table header
+// followed by a delimiter row. Display math must never span a table: an
+// unclosed opener paired with a later opener (or treated as pending streaming
+// math) would otherwise swallow the table (#11159).
+func containsTableStart(source string) bool {
+	lines := strings.Split(source, "\n")
+	for index := 0; index+1 < len(lines); index++ {
+		delimiterRow := lines[index+1]
+		if (strings.Contains(delimiterRow, "|") || strings.Contains(lines[index], "|")) &&
+			tableDelimiterRowRe.MatchString(delimiterRow) {
+			return true
+		}
+	}
+	return false
+}
+
 func latexTokenizeBlockLatex(source string) *MarkedToken {
 	dollarRe := regexp.MustCompile(`(?s)^ {0,3}\$\$[ \t]*(?:\n)?(.*?)\$\$[ \t]*(?:\n|$)`)
-	if m := dollarRe.FindStringSubmatch(source); m != nil && m[1] != "" {
+	if m := dollarRe.FindStringSubmatch(source); m != nil && m[1] != "" && !containsTableStart(m[1]) {
 		return &MarkedToken{Type: "latexBlock", Raw: m[0], Text: strings.TrimSpace(m[1])}
 	}
 
-	if m := regexp.MustCompile(`(?s)^ {0,3}\\\[[ \t]*(?:\n)?([\s\S]*?)\\\][ \t]*(?:\n|$)`).FindStringSubmatch(source); m != nil && m[1] != "" {
+	if m := regexp.MustCompile(`(?s)^ {0,3}\\\[[ \t]*(?:\n)?([\s\S]*?)\\\][ \t]*(?:\n|$)`).FindStringSubmatch(source); m != nil && m[1] != "" && !containsTableStart(m[1]) {
 		return &MarkedToken{Type: "latexBlock", Raw: m[0], Text: strings.TrimSpace(m[1])}
 	}
 
-	if m := regexp.MustCompile(`(?s)^ {0,3}\\\[[ \t]*(?:\n)?([\s\S]*)$`).FindStringSubmatch(source); m != nil {
+	if m := regexp.MustCompile(`(?s)^ {0,3}\\\[[ \t]*(?:\n)?([\s\S]*)$`).FindStringSubmatch(source); m != nil && !containsTableStart(m[1]) {
 		return &MarkedToken{Type: "latexBlock", Raw: m[0], Text: m[1], Pending: true}
 	}
-	if m := regexp.MustCompile(`(?s)^ {0,3}\$\$[ \t]*(?:\n)?([\s\S]*)$`).FindStringSubmatch(source); m != nil && m[1] != "" && latexLooksLikePendingDollarMath(m[1]) {
+	if m := regexp.MustCompile(`(?s)^ {0,3}\$\$[ \t]*(?:\n)?([\s\S]*)$`).FindStringSubmatch(source); m != nil && m[1] != "" && latexLooksLikePendingDollarMath(m[1]) && !containsTableStart(m[1]) {
 		return &MarkedToken{Type: "latexBlock", Raw: m[0], Text: m[1], Pending: true}
 	}
 	return nil

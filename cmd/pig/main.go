@@ -48,6 +48,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive"
 	"github.com/ZoroSpace/pig/codingagent/modes/rpc"
 	"github.com/ZoroSpace/pig/codingagent/utils"
+	"github.com/ZoroSpace/pig/tui"
 	pigutils "github.com/ZoroSpace/pig/utils"
 )
 
@@ -1263,5 +1264,8 @@ func main() {
 		}
 		exitCode = 1
 	}
+	// Go has no process "exit" event: restore any TUI that exited without
+	// Stop() before terminating (pi: terminal exit fallback, #11170).
+	tui.RestoreActiveOnExit()
 	os.Exit(exitCode)
 }

@@ -219,6 +219,38 @@ func TestCombinedAutocompleteProviderFdFileSuggestions(t *testing.T) {
 		}
 	})
 
+	// #10972
+	t.Run("matches regex metacharacters in queries literally", func(t *testing.T) {
+		setupFolder(t, baseDir, folderStructure{
+			files: map[string]string{
+				"pages/[id].tsx":   "x",
+				"pages/index.tsx":  "x",
+				"pages/(group).ts": "x",
+			},
+		})
+
+		provider := NewCombinedAutocompleteProvider(nil, baseDir, fdPath)
+		for _, tc := range []struct {
+			line string
+			want string
+		}{
+			{"@pages/[", "@pages/[id].tsx"},
+			{"@pages/(", "@pages/(group).ts"},
+			{"@[id", "@pages/[id].tsx"},
+		} {
+			result := autocompleteSuggestions(provider, []string{tc.line}, 0, len(tc.line), false)
+			var values []string
+			if result != nil {
+				for _, item := range result.Items {
+					values = append(values, item.Value)
+				}
+			}
+			if len(values) != 1 || values[0] != tc.want {
+				t.Fatalf("%s: values = %v, want [%s]", tc.line, values, tc.want)
+			}
+		}
+	})
+
 	t.Run("filters are case insensitive", func(t *testing.T) {
 		setupFolder(t, baseDir, folderStructure{
 			dirs:  []string{"src"},

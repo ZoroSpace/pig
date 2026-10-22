@@ -504,6 +504,29 @@ func (t *TuiAltScreen) beforeTerminalStop(options TuiStopOptions) {
 	t.uploadedKittyOrder = nil
 }
 
+// exitRestorePrefix puts mouse/autowrap resets before the terminal's own
+// resets (pi: getExitRestorePrefix override, #11170).
+func (t *TuiAltScreen) exitRestorePrefix(base string) string {
+	if !t.altScreenActive {
+		return base
+	}
+	mousePart := ""
+	if t.mouseEnabled {
+		mousePart = disableMouse
+	}
+	return endSyncOutput + mousePart + enableAutowrap + base
+}
+
+// exitRestoreSuffix leaves the alternate screen after the terminal's own
+// resets; Kitty keyboard flags are per screen, so the pop must come first
+// (pi: getExitRestoreSuffix override, #11170).
+func (t *TuiAltScreen) exitRestoreSuffix(base string) string {
+	if !t.altScreenActive {
+		return base
+	}
+	return base + exitAltScreen + "\x1b[?25h"
+}
+
 func (t *TuiAltScreen) afterTerminalStart() {}
 
 func (t *TuiAltScreen) afterTerminalStop(options TuiStopOptions) {

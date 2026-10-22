@@ -136,12 +136,13 @@ func parseBooleanCapabilityOverride(value string) *bool {
 // detectImagesCapability reports the auto-detected image protocol. Herdr
 // supports the Kitty graphics protocol and is checked before the
 // outer-terminal detection because variables like KITTY_WINDOW_ID can leak
-// into its panes (pi 78a3c10ba #10774). The remaining image families stay
-// deferred with the Phase 8 image pipeline, so this reports nil (pi
-// images:null) otherwise.
+// into its panes (pi 78a3c10ba #10774). Rex only partially implements the
+// protocol (no Unicode placeholders) but enough to support pi (#11133).
+// The remaining image families stay deferred with the Phase 8 image
+// pipeline, so this reports nil (pi images:null) otherwise.
 func detectImagesCapability() any {
 	termProgram := strings.ToLower(os.Getenv("TERM_PROGRAM"))
-	if termProgram == "herdr" {
+	if termProgram == "herdr" || termProgram == "rex" {
 		return "kitty"
 	}
 	return nil
@@ -179,9 +180,9 @@ func detectTrueColorCapability() bool {
 		return hasTrueColorHint
 	}
 
-	// Rex supports OSC 8 hyperlinks but only partially implements the Kitty
-	// graphics protocol (no Unicode placeholders), so leave images off (pi
-	// 0ed1b0431 #11131). Check it before outer-terminal detection.
+	// Rex supports OSC 8 hyperlinks and only partially implements the Kitty
+	// graphics protocol (no Unicode placeholders), but enough to support pi
+	// (#11133). Check it before outer-terminal detection.
 	if termProgram == "rex" {
 		return true
 	}

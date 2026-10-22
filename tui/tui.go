@@ -756,6 +756,30 @@ type TuiBase struct {
 	overlayFocusRestore    overlayFocusRestoreState
 }
 
+// activeTuiInstances tracks running TuiBase instances so the process exit
+// path can synchronously restore terminal modes when Stop did not run (pi:
+// process.on("exit") registration, #11170).
+var activeTuiInstances sync.Map
+
+// RestoreActiveOnExit restores every running TUI's terminal modes. Call it
+// from the process exit path where pi's `exit` event would fire; hard kills
+// and native aborts cannot run Go code either.
+func RestoreActiveOnExit() {
+	activeTuiInstances.Range(func(key, _ any) bool {
+		if b, ok := key.(*TuiBase); ok {
+			b.restoreOnExitIfRunning()
+		}
+		return true
+	})
+}
+
+// exitRestoreCustomizer lets a subclass contribute mode resets around the
+// terminal's own resets (pi: getExitRestorePrefix/Suffix overrides).
+type exitRestoreCustomizer interface {
+	exitRestorePrefix(base string) string
+	exitRestoreSuffix(base string) string
+}
+
 func newTuiBase(terminal Terminal, mode TuiMode, self tuiSubclass, showHardwareCursor *bool, logDirectory string) *TuiBase {
 	b := &TuiBase{
 		mode:     mode,
@@ -1347,10 +1371,46 @@ func (b *TuiBase) Invalidate() {
 	})
 }
 
+// getExitRestorePrefix is the mode reset written before the terminal's own
+// resets on process exit (pi: getExitRestorePrefix).
+func (b *TuiBase) getExitRestorePrefix() string {
+	prefix := ""
+	if b.terminalColorSchemeNotificationsEnabled {
+		prefix = "\x1b[?2031l"
+	}
+	return prefix + "\x1b[?25h"
+}
+
+// getExitRestoreSuffix is the mode reset written after the terminal's own
+// resets on process exit (pi: getExitRestoreSuffix).
+func (b *TuiBase) getExitRestoreSuffix() string { return "" }
+
+// restoreOnExitIfRunning is the last-resort restore for exit paths that skip
+// Stop (pi: exitRestoreHandler, #11170).
+func (b *TuiBase) restoreOnExitIfRunning() {
+	b.lock(func() {
+		if b.stopped {
+			return
+		}
+		restorer, ok := b.terminal.(ExitRestorer)
+		if !ok {
+			return
+		}
+		prefix := b.getExitRestorePrefix()
+		suffix := b.getExitRestoreSuffix()
+		if customizer, ok := b.self.(exitRestoreCustomizer); ok {
+			prefix = customizer.exitRestorePrefix(prefix)
+			suffix = customizer.exitRestoreSuffix(suffix)
+		}
+		restorer.RestoreOnExit(prefix, suffix)
+	})
+}
+
 // Start begins the terminal session.
 func (b *TuiBase) Start() {
 	b.lock(func() {
 		b.stopped = false
+		activeTuiInstances.Store(b, struct{}{})
 		b.self.beforeTerminalStart()
 		b.terminal.Start(
 			func(data string) { b.handleTerminalInput(data) },
@@ -1444,6 +1504,7 @@ func (b *TuiBase) queryCellSizeLocked() {
 func (b *TuiBase) Stop(options *TuiStopOptions) {
 	b.lock(func() {
 		b.stopped = true
+		activeTuiInstances.Delete(b)
 		b.cancelRenderTimerLocked()
 		if b.terminalColorSchemeNotificationsEnabled {
 			b.terminal.Write("\x1b[?2031l")

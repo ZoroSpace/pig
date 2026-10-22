@@ -141,6 +141,20 @@ const markedSrcInlineEscape = "^\\\\([!\"#$%&'()*+,\\-./:;<=>?@\\[\\]\\\\^_`{|}~
 const markedSrcInlineLink = "^!?\\[((?:\\[(?:\\\\[\\s\\S]|[^\\[\\]\\\\])*\\]|\\\\[\\s\\S]|`+(?!`)[^`]*?`+(?!`)|``+(?=\\])|[^\\[\\]\\\\`])*?)\\]\\(\\s*(<(?:\\\\.|[^\\n<>\\\\])+>|[^ \\t\\n\\x00-\\x1f]*)(?:(?:[ \\t]+(?:\\n[ \\t]*)?|\\n[ \\t]*)(\"(?:\\\\\"?|[^\"\\\\])*\"|'(?:\\\\'?|[^'\\\\])*'|\\((?:\\\\\\)?|[^)\\\\])*\\)))?\\s*\\)"
 const markedSrcInlineNolink = "^!?\\[((?!\\s*\\])(?:\\\\[\\s\\S]|[^\\[\\]\\\\])+)\\](?:\\[\\])?"
 const markedSrcInlinePunctuation = "^((?![*_])[\\s\\p{P}\\p{S}])"
+
+// marked-cjk-friendly 0.1.3 (pi uses it to override emStrong): CJK text and
+// punctuation count as punctuation for flanking checks (#10154).
+const markedCjkPattern = `\u1100-\u11ff\u20a9\u2329-\u232a\u2630-\u2637\u268a-\u268f\u2e80-\u2e99\u2e9b-\u2ef3\u2f00-\u2fd5\u2ff0-\u303e\u3041-\u3096\u3099-\u30ff\u3105-\u312f\u3131-\u318e\u3190-\u31e5\u31ef-\u321e\u3220-\u3247\u3250-\ua48c\ua490-\ua4c6\ua960-\ua97c\uac00-\ud7a3\ud7b0-\ud7c6\ud7cb-\ud7fb\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe52\ufe54-\ufe66\ufe68-\ufe6b\uff01-\uffbe\uffc2-\uffc7\uffca-\uffcf\uffd2-\uffd7\uffda-\uffdc\uffe0-\uffe6\uffe8-\uffee𖿠-𖿤𖿰-𖿶𗀀-𘳚𘳿-𘴠𘶀-𘷲𘸀-𙆑𙆠-𙇒𚿰-𚿳𚿵-𚿻𚿽-𚿾𛀀-𛄨𛄲𛅐-𛅒𛅕𛅤-𛅨𛅰-𛋻𝌀-𝍖𝍠-𝍶🆮🈀🈂🈐-🈙🈛-🈮🈰-🈱🈷🈻🉀-🉈🉠-🉥🟚𠀀-𿿽`
+
+const markedCjkPunct = `[\p{P}\p{S}` + markedCjkPattern + `]`
+const markedCjkPunctSpace = `[\s\p{P}\p{S}` + markedCjkPattern + `]`
+const markedCjkNotPunctSpace = `[^\s\p{P}\p{S}` + markedCjkPattern + `]`
+
+const markedSrcInlineEmStrongRDelimAstCjk = `^[^_*]*?__[^_*]*?\*[^_*]*?(?=__)|[^*]+(?=[^*])|(?!\*)` + markedCjkPunct + `(\*+)(?=[\s]|$)|` + markedCjkNotPunctSpace + `(\*+)(?!\*)(?=` + markedCjkPunctSpace + `|$)|(?!\*)` + markedCjkPunctSpace + `(\*+)(?=` + markedCjkNotPunctSpace + `)|[\s](\*+)(?!\*)(?=` + markedCjkPunct + `)|(?!\*)` + markedCjkPunct + `(\*+)(?!\*)(?=` + markedCjkPunct + `)|` + markedCjkNotPunctSpace + `(\*+)(?=` + markedCjkNotPunctSpace + `)`
+const markedSrcInlineEmStrongRDelimUndCjk = `^[^_*]*?\*\*[^_*]*?_[^_*]*?(?=\*\*)|[^_]+(?=[^_])|(?!_)` + markedCjkPunct + `(_+)(?=[\s]|$)|` + markedCjkNotPunctSpace + `(_+)(?!_)(?=` + markedCjkPunctSpace + `|$)|(?!_)` + markedCjkPunctSpace + `(_+)(?=` + markedCjkNotPunctSpace + `)|[\s](_+)(?!_)(?=` + markedCjkPunct + `)|(?!_)` + markedCjkPunct + `(_+)(?!_)(?=` + markedCjkPunct + `)`
+const markedSrcInlinePunctuationCjk = `^((?![*_])[\s\p{P}\p{S}` + markedCjkPattern + `])`
+const markedSrcCjkTest = `[` + markedCjkPattern + `]`
+
 const markedSrcInlineReflink = "^!?\\[((?:\\[(?:\\\\[\\s\\S]|[^\\[\\]\\\\])*\\]|\\\\[\\s\\S]|`+(?!`)[^`]*?`+(?!`)|``+(?=\\])|[^\\[\\]\\\\`])*?)\\]\\[((?!\\s*\\])(?:\\\\[\\s\\S]|[^\\[\\]\\\\])+)\\]"
 const markedSrcInlineReflinkSearch = "!?\\[((?:\\[(?:\\\\[\\s\\S]|[^\\[\\]\\\\])*\\]|\\\\[\\s\\S]|`+(?!`)[^`]*?`+(?!`)|``+(?=\\])|[^\\[\\]\\\\`])*?)\\]\\[((?!\\s*\\])(?:\\\\[\\s\\S]|[^\\[\\]\\\\])+)\\]|!?\\[((?!\\s*\\])(?:\\\\[\\s\\S]|[^\\[\\]\\\\])+)\\](?:\\[\\])?(?!\\()"
 const markedSrcInlineTag = "^<!--(?:-?>|[\\s\\S]*?-->)|^<\\/[a-zA-Z][\\w:-]*\\s*>|^<[a-zA-Z][\\w-]*(?:\\s+[a-zA-Z:_][\\w.:-]*(?:\\s*=\\s*\"[^\"]*\"|\\s*=\\s*'[^']*'|\\s*=\\s*[^\\s\"'=<>`]+)?)*?\\s*\\/?>|^<\\?[\\s\\S]*?\\?>|^<![a-zA-Z]+\\s[\\s\\S]*?>|^<!\\[CDATA\\[[\\s\\S]*?\\]\\]>"
@@ -286,15 +300,20 @@ type markedInlineRules struct {
 	EmStrongLDelim    *regexp2.Regexp
 	EmStrongRDelimAst *regexp2.Regexp
 	EmStrongRDelimUnd *regexp2.Regexp
-	Escape            *regexp2.Regexp
-	Link              *regexp2.Regexp
-	Nolink            *regexp2.Regexp
-	Punctuation       *regexp2.Regexp
-	Reflink           *regexp2.Regexp
-	ReflinkSearch     *regexp2.Regexp
-	Tag               *regexp2.Regexp
-	Text              *regexp2.Regexp
-	Url               *regexp2.Regexp
+	// marked-cjk-friendly overrides (#10154).
+	CjkEmStrongRDelimAst *regexp2.Regexp
+	CjkEmStrongRDelimUnd *regexp2.Regexp
+	CjkPunctuation       *regexp2.Regexp
+	CjkTest              *regexp2.Regexp
+	Escape               *regexp2.Regexp
+	Link                 *regexp2.Regexp
+	Nolink               *regexp2.Regexp
+	Punctuation          *regexp2.Regexp
+	Reflink              *regexp2.Regexp
+	ReflinkSearch        *regexp2.Regexp
+	Tag                  *regexp2.Regexp
+	Text                 *regexp2.Regexp
+	Url                  *regexp2.Regexp
 }
 
 // newMarkedInlineRules compiles the gfm inline rules.
@@ -312,15 +331,20 @@ func newMarkedInlineRules() *markedInlineRules {
 		EmStrongLDelim:    markedCompile(markedSrcInlineEmStrongLDelim, "u"),
 		EmStrongRDelimAst: markedCompile(markedSrcInlineEmStrongRDelimAst, "gu"),
 		EmStrongRDelimUnd: markedCompile(markedSrcInlineEmStrongRDelimUnd, "gu"),
-		Escape:            markedCompile(markedSrcInlineEscape, ""),
-		Link:              markedCompile(markedSrcInlineLink, ""),
-		Nolink:            markedCompile(markedSrcInlineNolink, ""),
-		Punctuation:       markedCompile(markedSrcInlinePunctuation, "u"),
-		Reflink:           markedCompile(markedSrcInlineReflink, ""),
-		ReflinkSearch:     markedCompile(markedSrcInlineReflinkSearch, "g"),
-		Tag:               markedCompile(markedSrcInlineTag, ""),
-		Text:              markedCompile(markedSrcInlineText, ""),
-		Url:               markedCompile(markedSrcInlineUrl, ""),
+
+		CjkEmStrongRDelimAst: markedCompile(markedSrcInlineEmStrongRDelimAstCjk, "gu"),
+		CjkEmStrongRDelimUnd: markedCompile(markedSrcInlineEmStrongRDelimUndCjk, "gu"),
+		CjkPunctuation:       markedCompile(markedSrcInlinePunctuationCjk, "u"),
+		CjkTest:              markedCompile(markedSrcCjkTest, "u"),
+		Escape:               markedCompile(markedSrcInlineEscape, ""),
+		Link:                 markedCompile(markedSrcInlineLink, ""),
+		Nolink:               markedCompile(markedSrcInlineNolink, ""),
+		Punctuation:          markedCompile(markedSrcInlinePunctuation, "u"),
+		Reflink:              markedCompile(markedSrcInlineReflink, ""),
+		ReflinkSearch:        markedCompile(markedSrcInlineReflinkSearch, "g"),
+		Tag:                  markedCompile(markedSrcInlineTag, ""),
+		Text:                 markedCompile(markedSrcInlineText, ""),
+		Url:                  markedCompile(markedSrcInlineUrl, ""),
 	}
 }
 
