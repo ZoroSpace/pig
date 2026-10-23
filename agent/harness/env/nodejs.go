@@ -447,7 +447,10 @@ func getShellEnv(shellEnv map[string]string, extraEnv map[string]string, inherit
 
 // processWaiter reproduces pi's waitForChildProcess: it resolves once the
 // child has exited and both stdio pipes have ended, or after a 100ms grace
-// period post-exit if grandchildren keep the pipes open.
+// period post-exit if grandchildren keep the pipes open. drainActive reports
+// whether output is still draining when the grace timer fires; pi re-arms the
+// timer instead of finalizing while the spill is draining (spillIsDraining),
+// so a slow-draining pipe is not cut short.
 type processWaiter struct {
 	mu            sync.Mutex
 	exited        bool
@@ -457,10 +460,11 @@ type processWaiter struct {
 	finalized     bool
 	postExitTimer *time.Timer
 	done          chan struct{}
+	drainActive   func() bool
 }
 
-func newProcessWaiter() *processWaiter {
-	return &processWaiter{done: make(chan struct{})}
+func newProcessWaiter(drainActive func() bool) *processWaiter {
+	return &processWaiter{done: make(chan struct{}), drainActive: drainActive}
 }
 
 func (w *processWaiter) onStdoutEnd() {
@@ -510,8 +514,19 @@ func (w *processWaiter) armIdleTimerLocked() {
 	}
 	w.postExitTimer = time.AfterFunc(exitStdioGraceMs*time.Millisecond, func() {
 		w.mu.Lock()
+		defer w.mu.Unlock()
+		if w.finalized {
+			return
+		}
+		if w.drainActive != nil && w.drainActive() {
+			// pi: if (spillIsDraining()) armIdleTimer(); else finalize(); —
+			// output is still arriving, give the drain more time instead of
+			// cutting it short (a reader starved under load would otherwise
+			// lose the pipe's buffered tail).
+			w.armIdleTimerLocked()
+			return
+		}
 		w.finalizeLocked()
-		w.mu.Unlock()
 	})
 }
 
@@ -689,7 +704,13 @@ func (e *NodeExecutionEnv) Exec(ctx context.Context, command string, options *ha
 		}
 	}()
 
-	waiter := newProcessWaiter()
+	waiter := newProcessWaiter(func() bool {
+		// pi: spillIsDraining() — re-arm the grace timer while either pipe
+		// still holds readable data, so finalizing never cuts a draining
+		// stdout/stderr short (2026-10-20 flake: the chatty-output test
+		// lost the pipe tail under -race + CPU contention).
+		return pipeHasData(stdoutRead) || pipeHasData(stderrRead)
+	})
 	stdoutDecoder := &utf8ChunkDecoder{}
 	stderrDecoder := &utf8ChunkDecoder{}
 	var activePID atomic.Int64

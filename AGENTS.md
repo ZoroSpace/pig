@@ -101,6 +101,7 @@
 **登记规则**：每起 fix 完成后在下方「现有文件」列表补一条**一行摘要**（现象 + 根因），详情一律落对应 md；**禁止把长摘要写回本文件**。**每起 fix 必须同时落地回归测试函数**（stash 验证红→绿，fix 文档写明测试函数名与验证方式）。**README 同步义务**：fix 或批次若改变用户可见面，同批更新 README 对应段 + `docs/handoffs/verify-matrix.md`。
 
 现有文件：
+- `2026-10-20-bash-throttle-and-pipe-drain-load-flaky.md`：全量 -race 满负载下 bash 节流测试 69 次更新 flaky（5000 OnData 循环 ~7s，断言依赖墙钟；节流器本身与 pi 语义一致，加假时钟/捕获定时器测试缝改确定性 + 新单测）+ harness 管道尾丢失（processWaiter 100ms 宽限定时器在 stdout 排空前 finalize，丢缓冲尾部；按 pi spillIsDraining 语义回填 drainActive=pipeHasData(unix.Poll) 排空时重起定时器，Windows 回退）
 - `2026-10-17-mcp-panel-signin-test-race.md`：MCP 面板登录测试竞态（signInSelected 同步渲染登录屏、异步 goroutine 调 SignIn，测试见屏幕即读 calls；改 waitFor 轮询）
 - `2026-10-16-system-prompt-sections-dropped-on-next-turn-refresh.md`：同一次运行工具调用后 system prompt 段丢失（agent 下一轮刷新逐字段重建 prompt 选项时漏 `Sections`；补一行，影响所有 run 非仅自定义消息 run；移植 a447ba11f 时发现）
 - `2026-10-16-minimatch-argument-order.md`：Minimatch 参数顺序反置（调用点照抄 pi 的 `minimatch(value, pattern)`，而 pig 助手是 `Minimatch(pattern, text)`；设置项 `!`/`+`/`-`/glob 过滤与 `--model` 通配全部失效；八处调用改序 + 回归测试）
