@@ -237,6 +237,14 @@ func CreateLocalShellOperations(shellName string, cwd string, resolveShellConfig
 
 // shellUpdateThrottle coalesces streamed output updates (pi: the closure
 // state updateTimer/updateDirty/lastUpdateAt).
+//
+// Test seams: the clock and timer scheduler are indirections so the
+// coalescing test can run on a fake clock and capture the timer instead of
+// waiting on wall time (pi uses Date.now()/setTimeout; same pattern as
+// writePreviewClock in renderers_write.go).
+var shellThrottleNow = time.Now
+var shellThrottleAfterFunc = time.AfterFunc
+
 type shellUpdateThrottle struct {
 	mu         sync.Mutex
 	timer      *time.Timer
@@ -255,7 +263,7 @@ func (t *shellUpdateThrottle) dirty() bool {
 func (t *shellUpdateThrottle) clearDirty() {
 	t.mu.Lock()
 	t.dirtyFlag = false
-	t.lastUpdate = time.Now()
+	t.lastUpdate = shellThrottleNow()
 	t.mu.Unlock()
 }
 
@@ -271,7 +279,7 @@ func (t *shellUpdateThrottle) clearTimer() {
 func (t *shellUpdateThrottle) schedule(emit func()) {
 	t.mu.Lock()
 	t.dirtyFlag = true
-	delay := bashUpdateThrottleMs - time.Since(t.lastUpdate).Milliseconds()
+	delay := bashUpdateThrottleMs - shellThrottleNow().Sub(t.lastUpdate).Milliseconds()
 	if delay <= 0 {
 		if t.timer != nil {
 			t.timer.Stop()
@@ -282,7 +290,7 @@ func (t *shellUpdateThrottle) schedule(emit func()) {
 		return
 	}
 	if t.timer == nil {
-		t.timer = time.AfterFunc(time.Duration(delay)*time.Millisecond, func() {
+		t.timer = shellThrottleAfterFunc(time.Duration(delay)*time.Millisecond, func() {
 			t.mu.Lock()
 			t.timer = nil
 			t.mu.Unlock()

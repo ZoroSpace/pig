@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ZoroSpace/pig/agent"
 	"github.com/ZoroSpace/pig/ai/types"
@@ -855,6 +856,19 @@ func TestBashTool(t *testing.T) {
 	})
 
 	t.Run("should coalesce streaming updates for chatty output", func(t *testing.T) {
+		// Drive the throttle on a fake clock with a captured (never-firing)
+		// timer so the assertion is deterministic regardless of machine load:
+		// under -race with CPU contention the 5000-append loop used to take
+		// seconds and the real 100ms timer fired dozens of times, making the
+		// old wall-clock bound flaky. With the clock frozen at one instant the
+		// burst coalesces into a single immediate emit (+ the initial and
+		// final updates), and output completeness is still verified.
+		clock := time.Unix(0, 0)
+		oldNow, oldAfter := shellThrottleNow, shellThrottleAfterFunc
+		shellThrottleNow = func() time.Time { return clock }
+		shellThrottleAfterFunc = func(d time.Duration, f func()) *time.Timer { return nil }
+		defer func() { shellThrottleNow, shellThrottleAfterFunc = oldNow, oldAfter }()
+
 		operations := BashOperations{
 			Exec: func(ctx context.Context, command string, cwd string, options *BashExecOptions) (*int, error) {
 				for i := 0; i < 5000; i++ {
@@ -978,6 +992,70 @@ func TestBashTool(t *testing.T) {
 			t.Fatalf("full output = %q", fullOutput)
 		}
 	})
+}
+
+// TestShellUpdateThrottleCoalescesBursts locks the throttle cadence
+// deterministically on a fake clock + captured timer: a burst of updates at
+// one instant emits once immediately and arms a single pending timer; the
+// pending timer emits once when the window elapses; an update landing at the
+// window boundary emits immediately. This is the semantic the chatty-output
+// integration test relies on, verified without depending on wall time
+// (which made the old <25 bound flaky under -race + CPU contention).
+func TestShellUpdateThrottleCoalescesBursts(t *testing.T) {
+	clock := time.Unix(0, 0)
+	var pending func()
+	oldNow, oldAfter := shellThrottleNow, shellThrottleAfterFunc
+	shellThrottleNow = func() time.Time { return clock }
+	shellThrottleAfterFunc = func(d time.Duration, f func()) *time.Timer {
+		pending = f
+		return nil
+	}
+	defer func() { shellThrottleNow, shellThrottleAfterFunc = oldNow, oldAfter }()
+
+	th := newShellUpdateThrottle()
+	var emits int
+	// Mirror emitOutputUpdate: a no-op when nothing is dirty, otherwise it
+	// consumes the dirty flag and stamps lastUpdate.
+	emit := func() {
+		if !th.dirty() {
+			return
+		}
+		th.clearDirty()
+		emits++
+	}
+
+	// A burst at the same instant: one immediate emit, one armed timer.
+	for i := 0; i < 1000; i++ {
+		th.schedule(emit)
+	}
+	if emits != 1 {
+		t.Fatalf("burst emits = %d, want 1", emits)
+	}
+	if pending == nil {
+		t.Fatal("no pending timer armed")
+	}
+
+	// Within the window further updates coalesce into the same pending timer.
+	th.schedule(emit)
+	if emits != 1 {
+		t.Fatalf("within-window emits = %d, want 1", emits)
+	}
+
+	// The window elapses: the pending timer emits exactly once.
+	clock = clock.Add(100 * time.Millisecond)
+	fire := pending
+	pending = nil
+	fire()
+	if emits != 2 {
+		t.Fatalf("post-window emits = %d, want 2", emits)
+	}
+
+	// An update landing exactly at the boundary emits immediately.
+	clock = clock.Add(100 * time.Millisecond)
+	th.schedule(emit)
+	if emits != 3 {
+		t.Fatalf("boundary emits = %d, want 3", emits)
+	}
 }
 
 func TestGrepTool(t *testing.T) {
