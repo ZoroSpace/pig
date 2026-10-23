@@ -1,5 +1,9 @@
 # pig
 
+<p align="center">
+  <img src="assets/pig-logo.png" alt="pig" width="200"/>
+</p>
+
 > **Go 版 AI 编程助手 · pi 的行为级兼容重写**
 
 [![Go 1.26+](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
@@ -196,4 +200,4 @@ go test ./... -race -count=1 -timeout 600s   # 全量回归
 
 ## License
 
-本项目基于 [pi](https://github.com/earendil-works/pi)（MIT，© Mario Zechner）的行为规格重写，沿用 MIT License，上游版权声明见 [LICENSE](LICENSE)。
+本项目基于 [pi](https://github.com/earendil-works/pi)（MIT）的行为规格重写，沿用 MIT License。

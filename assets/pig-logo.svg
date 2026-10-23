@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="100%" height="100%">
+  <!-- 背景色（透明） -->
+
+  <g transform="translate(20, 20)">
+    <!-- ==================== 1. 粉红色部分 (#E98B81) ==================== -->
+    <!-- 左侧 p 的顶部粉色区 -->
+    <rect x="0" y="0" width="40" height="40" fill="#E98B81" />
+    <rect x="40" y="0" width="40" height="40" fill="#E98B81" />
+    <rect x="80" y="0" width="40" height="40" fill="#E98B81" />
+    <rect x="80" y="40" width="40" height="40" fill="#E98B81" />
+
+    <!-- 右侧 g 的顶部粉色区 -->
+    <rect x="160" y="0" width="40" height="40" fill="#E98B81" />
+    <rect x="200" y="0" width="40" height="40" fill="#E98B81" />
+    <rect x="240" y="0" width="40" height="40" fill="#E98B81" />
+    <rect x="160" y="40" width="40" height="40" fill="#E98B81" />
+
+
+    <!-- ==================== 2. 蓝色部分 (#4FA1C7) ==================== -->
+    <!-- 左侧 p 的蓝色主体（含第三行第一列） -->
+    <rect x="0" y="40" width="40" height="40" fill="#4FA1C7" />
+    <rect x="0" y="80" width="40" height="40" fill="#4FA1C7" /> <!-- p第三行第一列 -->
+    <rect x="0" y="120" width="40" height="40" fill="#4FA1C7" />
+    <rect x="40" y="80" width="40" height="40" fill="#4FA1C7" />
+
+    <!-- 右侧 g 的蓝色主体（含第三行最后一列） -->
+    <rect x="240" y="40" width="40" height="40" fill="#4FA1C7" />
+    <rect x="240" y="80" width="40" height="40" fill="#4FA1C7" /> <!-- g第三行最后一列 -->
+    <rect x="240" y="120" width="40" height="40" fill="#4FA1C7" />
+    <rect x="200" y="80" width="40" height="40" fill="#4FA1C7" />
+
+
+    <!-- ==================== 3. 黄色部分 (#F0C05B) ==================== -->
+    <!-- 中间 i 竖条 -->
+    <rect x="120" y="80" width="40" height="80" fill="#F0C05B" />
+    
+    <!-- 右下角 g 的底钩 -->
+    <rect x="200" y="160" width="80" height="40" fill="#F0C05B" />
+  </g>
+</svg>
