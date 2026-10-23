@@ -8,15 +8,17 @@
 
 [![Go 1.26+](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
-[![Status: Dogfooding](https://img.shields.io/badge/status-dogfooding-orange.svg)](#provider实现--验证要分开看)
+[![Status: Dogfooding](https://img.shields.io/badge/status-dogfooding-orange.svg)](#provider-验证状态)
 [![Go](https://github.com/ZoroSpace/pig/actions/workflows/go.yml/badge.svg)](https://github.com/ZoroSpace/pig/actions/workflows/go.yml)
 [![codecov](https://codecov.io/gh/ZoroSpace/pig/graph/badge.svg)](https://codecov.io/gh/ZoroSpace/pig)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ZoroSpace/pig)](https://goreportcard.com/report/github.com/ZoroSpace/pig)
 
+<p align="center"><a href="README.en.md">English</a> | 中文</p>
+
 pig 是 [pi coding agent](https://github.com/earendil-works/pi) 的 Go 实现——一个跑在终端里的 AI 编程智能体：读代码、改代码、跑命令、流式回复，会话可分支可回溯。pi 的 TypeScript 代码就是 pig 的规格书，provider 事件序列、CLI 参数、会话 JSONL 格式、TUI 按键手感逐项对齐。
 
 > [!WARNING]
-> pig 处于 dogfooding 阶段，CLI 与内部结构可能变化。真实服务仅验证了 DeepSeek、火山方舟 Coding Plan 与 Google（部分），其余 provider 请勿默认可用，详见[验证分层](#provider实现--验证要分开看)。
+> pig 目前处于 dogfooding 阶段，CLI 与内部结构仍可能调整。真实服务只验证过 DeepSeek、火山方舟 Coding Plan；其余 provider 尚未验证，详见 [provider 验证状态](#provider-验证状态)。
 
 ## 背景
 
@@ -27,6 +29,16 @@ pig 是 [pi coding agent](https://github.com/earendil-works/pi) 的 Go 实现—
 ## 快速开始
 
 ### 1. 构建
+
+需要 Go 1.26+。二选一：
+
+**推荐：go install**——已有 Go 工具链的话一条命令装到 `$GOPATH/bin`：
+
+```bash
+go install github.com/ZoroSpace/pig/cmd/pig@latest
+```
+
+**备选：clone + 构建**——产出单个静态精简二进制（体积更小、不嵌入本机路径、Linux 上为纯静态），想改代码或拷到别的机器即跑时用：
 
 ```bash
 git clone https://github.com/ZoroSpace/pig.git && cd pig
@@ -156,17 +168,34 @@ pi 需要装社区扩展（pi-mcp-adapter）才有 MCP，pig 编译即得。配�
 - **/bug 上报链路**：不单独做上报通道，pig 用户直接提 [issue](https://github.com/ZoroSpace/pig/issues)。
 - **sqlite 会话后端 / client-server 栈**：上游已经删了，pig 不再跟进。
 
-## Provider：实现 ≠ 验证
+## Provider 验证状态
 
-同一家 provider，「移植完成」「协议验证」「真实服务验证」是三个可信度层级：
+注意：**有些模型厂商 provider 还没用真实服务验证过。** 下表按验证程度标注：
 
-| 状态 | 范围 |
-| --- | --- |
-| ✅ 真实端点已验证 | DeepSeek、火山方舟 Coding Plan、Google（部分） |
-| 🔶 兼容端点已验证 | Anthropic Messages、OpenAI Responses 系（经 DeepSeek 兼容端点验证协议层） |
-| 🧪 mock / 单测已验证 | 其余 provider、OAuth、provider 特有语义 |
+- **已实现**：代码和本地单测已具备对应能力
+- **协议级验证**：通过 DeepSeek 兼容端点或 mock 验证了请求、事件和解析逻辑
+- **真实服务验证**：确实访问了目标 provider 的真实 API，并完成最小可用链路
 
-完整边界与待验证条件见[真实服务验证矩阵](docs/handoffs/verify-matrix.md)。欢迎拿到其他家 key 的朋友帮忙实测——发现偏差请提 issue 或 PR，修复会按仓库惯例带回归测试合入。
+| 状态 | 范围 | 说明 |
+| --- | --- | --- |
+| ✅ 真实端点已验证 | DeepSeek、火山方舟 Coding Plan、Google（部分） | 真实 API 流式对话；火山方舟包含 thinking 场景；Google 为 gemini-3.x flash 基础链路 + thinking 关闭探针（部分模型受账号档位/地区限制，详见验证清单） |
+| 🔶 兼容端点已验证 | Anthropic Messages、OpenAI Responses 系 | 通过 DeepSeek 的 `/anthropic` 和 Responses 兼容端点验证了协议层；Anthropic / OpenAI 官方端点尚未实测 |
+| 🧪 mock / 单测已验证 | 其余 provider、OAuth、provider 特有语义 | 尚未通过真实服务或真实登录链路验证 |
+
+常用 provider 的当前验证状态：
+
+| Provider | 环境变量 | 当前验证 |
+| --- | --- | --- |
+| DeepSeek | `DEEPSEEK_API_KEY` | ✅ 真实端点 |
+| 火山方舟 Coding Plan | `VOLCENGINE_API_KEY` | ✅ 真实端点 |
+| Google Gemini | `GEMINI_API_KEY` | ✅ 部分（gemini-3.x flash 基础链路 + thinking 关闭；部分模型受账号档位/地区限制） |
+| Anthropic | `ANTHROPIC_API_KEY` | 🔶 协议层（经 DeepSeek `/anthropic` 兼容端点）；官方端点未实测 |
+| OpenAI | `OPENAI_API_KEY` | 🔶 协议层（经 DeepSeek Responses 兼容端点）；官方端点未实测 |
+| xAI | `XAI_API_KEY` | 🔶 协议层（openai-responses 系）；OAuth 设备流未实测 |
+| OpenRouter | `OPENROUTER_API_KEY` | 🔶 协议层；OAuth 未实测 |
+| Amazon Bedrock | `AWS_BEARER_TOKEN_BEDROCK` 或 AWS 凭证链（`AWS_PROFILE` / env keys / IAM role） | 🧪 mock（真实 SDK 传输的本地 e2e，无真实 AWS） |
+
+完整验证边界、待验证条件与现成 probe 见[Provider 验证清单](docs/handoffs/verify-matrix.md)。欢迎有其他 provider key 的朋友帮忙实测；发现偏差请提 issue 或 PR，修复会按仓库惯例附带回归测试后合入。
 
 ## 项目结构
 
