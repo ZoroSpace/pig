@@ -32,11 +32,11 @@ type g struct {
 }
 
 type rect struct {
-	X      string `xml:"x,attr"`
-	Y      string `xml:"y,attr"`
-	W      string `xml:"width,attr"`
-	H      string `xml:"height,attr"`
-	Fill   string `xml:"fill,attr"`
+	X    string `xml:"x,attr"`
+	Y    string `xml:"y,attr"`
+	W    string `xml:"width,attr"`
+	H    string `xml:"height,attr"`
+	Fill string `xml:"fill,attr"`
 }
 
 func parseHex(s string) color.RGBA {
@@ -113,12 +113,15 @@ func main() {
 	viewH, _ := strconv.Atoi(parts[3])
 
 	// Collect pixel rects with final absolute coords + color.
-	type px struct{ x, y, w, h int; c color.RGBA }
+	type px struct {
+		x, y, w, h int
+		c          color.RGBA
+	}
 	var rects []px
 	bg := color.RGBA{} // zero alpha => transparent when unset
 	for _, r := range s.Rect {
 		col := parseHex(r.Fill)
-		if r.X == "" && r.Y == "" && r.W == string(viewW) && r.H == string(viewH) {
+		if r.X == "" && r.Y == "" && r.W == strconv.Itoa(viewW) && r.H == strconv.Itoa(viewH) {
 			bg = col
 			continue
 		}
