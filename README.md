@@ -135,17 +135,26 @@ pi 需要装社区扩展（pi-mcp-adapter）才有 MCP，pig 编译即得。配�
 
 **23 万行 Go 源码 + 11 万行测试，2100+ 个测试函数，44 个包，`-race` 全绿**。pi 的大部分测试被 test-for-test 移植，每个修复都带回归测试；任何 goroutine panic 落盘到 `~/.pig/agent/logs/` 并尽力恢复。
 
-### ✅ 做了什么 / ⏳ 没做什么
+### ✅ 已经做完
 
-**已对齐**：交互 / print / JSON 三模式、7 种 API 协议、41 家 provider、模型 catalog、会话树 / 分支 / 压缩 / 导出 HTML、TUI 全量移植、RPC 模式（`--mode rpc`）、图像处理（Go 原生替代 photon/WASM）、MCP 内建客户端。
+- **三种运行模式**：交互模式、print 模式、JSON 模式都已支持。
+- **API 和模型服务商**：支持 7 种 API 协议、41 家 provider，并有模型目录（catalog）。
+- **会话能力**：会话树、分支、压缩、导出 HTML 都已具备。
+- **终端界面（TUI）**：已完整移植。
+- **RPC 模式**：支持 `--mode rpc`。
+- **图像处理**：用 Go 原生实现替代了 photon/WASM。
+- **MCP**：已内置 MCP 客户端。
 
-**明确不做的**：`/bug` 上报链路（pig 用户直接提 [issue](https://github.com/ZoroSpace/pig/issues)）；sqlite 会话后端 / client-server 栈（上游已删）。
+### ⏳ 暂不跟进
 
-**押后的**：
+- **durable**：pi 把代号 Pico 的实验性 harness 抽取/迁移成了独立包 `packages/durable`。durable 这类包属于快速迭代的包，随时可能有 breaking change，等稳定后再迁移。
+- **pi 的 experimental 代码**：比如远程编排等实验性架构，变化较快，且可能后续下掉，暂不跟进。
+- **扩展系统（Node sidecar、包管理器）**：代码里已经预留了接入位置，设计存档在 [EXTENSION-PLAN](docs/handoffs/EXTENSION-PLAN.md)，暂不实施。
 
-- **harness runtime（新版门面）**：pi 已将 agent-harness 重构迁至 `packages/durable`（scheduler / inbox / live / submissions 等新门面），pig 侧保留 v0.87 时代的 session / JSONL / compaction / tools 主体，新版 durable 门面按需排期
-- **pi 的 experimental 代码**（远程编排等实验性架构）：暂不跟进
-- **扩展系统**（Node sidecar、包管理器）：装配位已留，设计存档见 [EXTENSION-PLAN](docs/handoffs/EXTENSION-PLAN.md)
+### ⛔ 明确不做
+
+- **/bug 上报链路**：不单独做上报通道，pig 用户直接提 [issue](https://github.com/ZoroSpace/pig/issues)。
+- **sqlite 会话后端 / client-server 栈**：上游已经删了，pig 不再跟进。
 
 ## Provider：实现 ≠ 验证
 
