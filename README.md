@@ -8,23 +8,20 @@
 
 [![Go 1.26+](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
-[![Status: Dogfooding](https://img.shields.io/badge/status-dogfooding-orange.svg)](#provider-验证状态)
 [![Go](https://github.com/ZoroSpace/pig/actions/workflows/go.yml/badge.svg)](https://github.com/ZoroSpace/pig/actions/workflows/go.yml)
-[![codecov](https://codecov.io/gh/ZoroSpace/pig/graph/badge.svg)](https://codecov.io/gh/ZoroSpace/pig)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ZoroSpace/pig)](https://goreportcard.com/report/github.com/ZoroSpace/pig)
 
 <p align="center"><a href="README.en.md">English</a> | 中文</p>
 
-pig 是 [pi coding agent](https://github.com/earendil-works/pi) 的 Go 实现——一个跑在终端里的 AI 编程智能体：读代码、改代码、跑命令、流式回复，会话可分支可回溯。pi 的 TypeScript 代码就是 pig 的规格书，provider 事件序列、CLI 参数、会话 JSONL 格式、TUI 按键手感逐项对齐。
+pig 是 [pi coding agent](https://github.com/earendil-works/pi) 的 Go 实现——一个跑在终端里的 AI 编程智能体：读代码、改代码、跑命令、流式回复，会话可分支可回溯。pi 的 TypeScript 代码就是 pig 的规格书，provider 事件序列、CLI 参数、会话 JSONL 格式、TUI 快捷键与交互用法逐项对齐。
 
 > [!WARNING]
 > pig 目前处于 dogfooding 阶段，CLI 与内部结构仍可能调整。真实服务只验证过 DeepSeek、火山方舟 Coding Plan；其余 provider 尚未验证，详见 [provider 验证状态](#provider-验证状态)。
 
 ## 背景
 
-项目始于一次学习：研究 pi agent 时，因不熟悉 TypeScript，但 pi 层次清晰、包分明，便把读到的逻辑逐段翻译成 Go，翻完理解顺畅许多，随即决定全部翻译、复刻一遍。
+项目始于一次学习：研究 pi agent 时，对 TypeScript 尚不熟悉；好在 pi 层次清晰、包划分分明，便把读到的逻辑逐段翻译成 Go，翻完理解顺畅许多，随即决定全部翻译、复刻一遍。
 
-随后借助 pi 与 glm-5.3-flash 开发，10 天从零构建出 pig：底层会话存储格式、中层 agent 循环与工具执行、流式事件协议，到上层按键手感与交互体验，全部对齐 pi v0.84.3。自 2026-09-11（[b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)）起，用 pig 开发 pig，长期维护。pi 出一个新版本，就对齐一个版本，现已对齐至 v1.4.0。
+随后借助 pi 与 glm-5.3-flash 开发，10 天从零构建出 pig：底层会话存储格式、中层 agent 循环与工具执行、流式事件协议，到上层快捷键与交互体验，全部对齐 pi v0.84.3。自 2026-09-11（[b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)）起，用 pig 开发 pig，长期维护。pi 出一个新版本，就对齐一个版本，现已对齐至 v1.4.0。
 
 ## 快速开始
 
@@ -47,8 +44,11 @@ scripts/build.sh
 
 ### 2. 启动并登录
 
+go install 方式直接运行 `pig`（已装到 `$GOPATH/bin`，位于 PATH 上）；clone 构建方式在仓库目录下运行 `./pig`：
+
 ```bash
-./pig
+pig        # go install 方式
+./pig      # clone + 构建方式（仓库目录下）
 ```
 
 进入交互式 TUI。输入 `/login` 选择 provider：API key 类粘贴 key 回车（凭证存入 `~/.pig/agent/auth.json`）；OAuth 类（Anthropic / Kimi / OpenAI Codex / xAI）走浏览器或设备码流程。
@@ -63,17 +63,17 @@ scripts/build.sh
 
 ```bash
 DEEPSEEK_API_KEY=your-api-key \
-  ./pig --provider deepseek --model deepseek-v4-flash -p "解释这个项目的整体结构"
+  pig --provider deepseek --model deepseek-v4-flash -p "解释这个项目的整体结构"
 ```
 
-完整环境变量见 `./pig --help`。
+完整环境变量见 `pig --help`。
 
 ## 日常用法
 
 ### 交互模式
 
 ```bash
-./pig
+pig
 ```
 
 常用交互命令：
@@ -95,14 +95,14 @@ DEEPSEEK_API_KEY=your-api-key \
 ### 脚本与 CI
 
 ```bash
-./pig -p "列出所有 Go 文件，并分别概括它们的职责"
-./pig --mode json -p "找出仓库中所有 TODO 注释"
-git diff | ./pig -p "审查这个 diff，指出可能的正确性问题"
-./pig @AGENTS.md "按仓库约定总结这个项目的提交规范"
-./pig --export ~/.pig/agent/sessions/<项目>/<会话>.jsonl session.html   # 离线分享会话
+pig -p "列出所有 Go 文件，并分别概括它们的职责"
+pig --mode json -p "找出仓库中所有 TODO 注释"
+git diff | pig -p "审查这个 diff，指出可能的正确性问题"
+pig @AGENTS.md "按仓库约定总结这个项目的提交规范"
+pig --export ~/.pig/agent/sessions/<项目>/<会话>.jsonl session.html   # 离线分享会话
 ```
 
-支持管道输入与 `@文件` 引用；`--continue` / `--resume` / `--no-session` / `--session-dir` 等会话参数见 `./pig --help`。
+支持管道输入与 `@文件` 引用；`--continue` / `--resume` / `--no-session` / `--session-dir` 等会话参数见 `pig --help`。
 
 ### 从 pi 迁移
 
@@ -121,7 +121,7 @@ cp -a ~/.pi/agent ~/.pig/agent
 ### 🔁 与 pi 无缝互通
 
 - **会话记录双向兼容**：pig 写的 JSONL，pi 读得懂，反之亦然（用 pi v1.4.0 实测）；pi 的模型 catalog 逐字段零差异
-- **配置隔离**：pig 用 `~/.pig/`、pi 用 `~/.pi/`，互不踩踏
+- **配置隔离**：pig 用 `~/.pig/`、pi 用 `~/.pi/`，互不冲突
 
 ### 🌐 41 家 provider，7 种 API 协议
 
@@ -135,9 +135,9 @@ cp -a ~/.pi/agent ~/.pig/agent
 
 pi 需要装社区扩展（pi-mcp-adapter）才有 MCP，pig 编译即得。配置复用生态标准 `mcpServers` JSON（Claude Code / Cursor 的 `.mcp.json` 直接可用），stdio 与 Streamable HTTP 都支持；上下文成本恒定（常驻只有一个代理工具，server 懒启动、空闲回收）；`/mcp` 面板可查看状态、重连、启停。
 
-### ⌨️ pi-tui 全量移植的终端手感
+### ⌨️ pi-tui 全量移植：快捷键、编辑器与交互用法
 
-差分行渲染器、编辑器引擎、补全系统一个不落：emacs 键位、流式 Markdown / LaTeX / Mermaid、会话树选择器、鼠标支持、OSC 7501 程序状态上报、主题系统。**对中文用户特别友好**：内置中文词典（gse），Ctrl+方向键按词跳转；修复了一整类 pi 上游的 CJK 渲染问题；内置火山引擎 Coding Plan provider。
+差分行渲染器、编辑器引擎、补全系统一个不落：emacs 键位（`Ctrl+B/F` 左右移、`Ctrl+A/E` 行首行尾、`Ctrl+K/U/W` 删除、`Ctrl+Y` 粘贴等，可用 `/hotkeys` 查看全部并自定义）、流式 Markdown / LaTeX / Mermaid、会话树选择器、鼠标支持、OSC 7501 程序状态上报、主题系统。**对中文用户特别友好**：内置中文词典（gse），`Ctrl+方向键` 按词跳转；修复了一整类 pi 上游的 CJK 渲染问题；内置火山引擎 Coding Plan provider。
 
 ### 🌳 会话树
 

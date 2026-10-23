@@ -40,13 +40,4 @@ jobs:
 
       # Full race regression, run once (repo convention), with explicit timeout.
       - name: Test
-        run: go test ./... -race -count=1 -timeout 600s -coverprofile=coverage.out
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.out
-          # Tokenless upload works for public repos but is rate-limited on
-          # shared runners; set CODECOV_TOKEN repo secret to make it reliable.
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+        run: go test ./... -race -count=1 -timeout 600s

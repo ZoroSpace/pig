@@ -8,10 +8,7 @@
 
 [![Go 1.26+](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
-[![Status: Dogfooding](https://img.shields.io/badge/status-dogfooding-orange.svg)](#provider-verification-status)
 [![Go](https://github.com/ZoroSpace/pig/actions/workflows/go.yml/badge.svg)](https://github.com/ZoroSpace/pig/actions/workflows/go.yml)
-[![codecov](https://codecov.io/gh/ZoroSpace/pig/graph/badge.svg)](https://codecov.io/gh/ZoroSpace/pig)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ZoroSpace/pig)](https://goreportcard.com/report/github.com/ZoroSpace/pig)
 
 <p align="center">English | <a href="README.md">中文</a></p>
 
@@ -22,9 +19,9 @@ pig is a Go implementation of the [pi coding agent](https://github.com/earendil-
 
 ## Background
 
-This project began as a learning exercise: while studying the pi agent, I was not familiar with TypeScript, but pi was clearly structured with well-defined packages, so I translated the logic I read into Go section by section. Once I finished, my understanding became much smoother, and I immediately decided to translate and reimplement the whole thing.
+The project began as a learning exercise: while studying the pi agent, I was still unfamiliar with TypeScript. Fortunately, pi has a clear hierarchy and well-defined package boundaries, so I translated the logic I read into Go section by section. Once I finished, my understanding became much clearer, and I immediately decided to translate and reimplement the whole thing.
 
-After that, I developed it with the help of pi and glm-5.3-flash and built pig from scratch in 10 days. From the low-level session storage format, the mid-level agent loop and tool execution, and the streaming event protocol, to the top-level keypress feel and interaction experience—everything was aligned with pi v0.84.3. Since 2026-09-11 ([b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)), I have been using pig to develop pig and maintaining it long-term. Each time pi releases a new version, I align pig with it, and it is now aligned up to v1.4.0.
+After that, I developed it with the help of pi and glm-5.3-flash and built pig from scratch in 10 days. From the low-level session storage format, the mid-level agent loop and tool execution, and the streaming event protocol, to the top-level key bindings and interaction experience—everything was aligned with pi v0.84.3. Since 2026-09-11 ([b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)), I have been using pig to develop pig and maintaining it long-term. Each time pi releases a new version, I align pig with it, and it is now aligned up to v1.4.0.
 
 ## Quick Start
 
@@ -47,8 +44,11 @@ scripts/build.sh
 
 ### 2. Launch and sign in
 
+With `go install`, just run `pig` (installed to `$GOPATH/bin`, on your PATH); with the clone-and-build method, run `./pig` from the repo directory:
+
 ```bash
-./pig
+pig        # go install method
+./pig      # clone + build method (from the repo directory)
 ```
 
 This enters the interactive TUI. Type `/login` to pick a provider: for API-key providers, paste the key and press Enter (credentials are stored in `~/.pig/agent/auth.json`); for OAuth providers (Anthropic / Kimi / OpenAI Codex / xAI), follow the browser or device-code flow.
@@ -63,17 +63,17 @@ For scripting and CI, skip the interactive UI and drive it with environment vari
 
 ```bash
 DEEPSEEK_API_KEY=your-api-key \
-  ./pig --provider deepseek --model deepseek-v4-flash -p "Explain the overall structure of this project"
+  pig --provider deepseek --model deepseek-v4-flash -p "Explain the overall structure of this project"
 ```
 
-See `./pig --help` for the full list of environment variables.
+See `pig --help` for the full list of environment variables.
 
 ## Everyday Usage
 
 ### Interactive mode
 
 ```bash
-./pig
+pig
 ```
 
 Common interactive commands:
@@ -95,14 +95,14 @@ Press `Ctrl+P` to quickly cycle through configured models.
 ### Scripting & CI
 
 ```bash
-./pig -p "List all Go files and summarize what each is responsible for"
-./pig --mode json -p "Find all TODO comments in this repo"
-git diff | ./pig -p "Review this diff and point out potential correctness issues"
-./pig @AGENTS.md "Summarize this project's commit conventions per the repo guidelines"
-./pig --export ~/.pig/agent/sessions/<project>/<session>.jsonl session.html   # share a session offline
+pig -p "List all Go files and summarize what each is responsible for"
+pig --mode json -p "Find all TODO comments in this repo"
+git diff | pig -p "Review this diff and point out potential correctness issues"
+pig @AGENTS.md "Summarize this project's commit conventions per the repo guidelines"
+pig --export ~/.pig/agent/sessions/<project>/<session>.jsonl session.html   # share a session offline
 ```
 
-Pipe input and `@file` references are supported; session-related flags such as `--continue` / `--resume` / `--no-session` / `--session-dir` are documented in `./pig --help`.
+Pipe input and `@file` references are supported; session-related flags such as `--continue` / `--resume` / `--no-session` / `--session-dir` are documented in `pig --help`.
 
 ### Migrating from pi
 
@@ -121,7 +121,7 @@ The build produces a **single static binary** (38 MB) with no Node dependency �
 ### 🔁 Seamless interop with pi
 
 - **Bidirectional-compatible session records**: JSONL written by pig reads in pi and vice versa (verified against pi v1.4.0); the model catalog matches pi field by field with zero diffs
-- **Isolated config**: pig uses `~/.pig/`, pi uses `~/.pi/`, no stepping on each other
+- **Isolated config**: pig uses `~/.pig/`, pi uses `~/.pi/`, no conflicts
 
 ### 🌐 41 providers, 7 API protocols
 
@@ -135,9 +135,9 @@ Providers differ wildly in wire format (OpenAI, Anthropic, and Gemini look nothi
 
 pi needs a community extension (pi-mcp-adapter) for MCP; pig ships it in the binary. Config reuses the ecosystem-standard `mcpServers` JSON (Claude Code / Cursor `.mcp.json` files work directly), with both stdio and Streamable HTTP; context cost stays constant (only one resident proxy tool, servers lazy-start and are reaped when idle); the `/mcp` panel shows status, reconnect, and start/stop.
 
-### ⌨️ pi-tui, fully ported — the terminal feel
+### ⌨️ pi-tui, fully ported — key bindings, editor, and interaction
 
-Diff renderer, editor engine, and completion system — all included: emacs key bindings, streaming Markdown / LaTeX / Mermaid, session-tree selector, mouse support, OSC 7501 program-status reporting, and a theme system. **Especially friendly to Chinese users**: a built-in Chinese word dictionary (gse), Ctrl+arrow word jumps, a whole class of pi upstream CJK rendering bugs fixed, and a built-in Volcengine Ark Coding Plan provider.
+Diff renderer, editor engine, and completion system — all included: emacs key bindings (`Ctrl+B/F` to move left/right, `Ctrl+A/E` to line start/end, `Ctrl+K/U/W` to delete, `Ctrl+Y` to yank, etc. — run `/hotkeys` for the full list, all customizable), streaming Markdown / LaTeX / Mermaid, session-tree selector, mouse support, OSC 7501 program-status reporting, and a theme system. **Especially friendly to Chinese users**: a built-in Chinese word dictionary (gse), `Ctrl+arrow` word jumps, a whole class of pi upstream CJK rendering bugs fixed, and a built-in Volcengine Ark Coding Plan provider.
 
 ### 🌳 Session tree
 
