@@ -3,6 +3,7 @@
 package components
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -104,19 +105,21 @@ func TestSessionSelectorSearchRecentSortPreservesInputOrder(t *testing.T) {
 func TestSessionSelectorSearchRelevanceSort(t *testing.T) {
 	sessions := []core.SessionInfo{
 		makeSessionForSearch(func(s *core.SessionInfo) {
-			s.ID = "late"
+			s.ID = "message"
 			s.Modified = time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
-			s.AllMessagesText = "xxxx brave"
+			s.AllMessagesText = "brave"
 		}),
 		makeSessionForSearch(func(s *core.SessionInfo) {
-			s.ID = "early"
+			s.ID = "name"
+			name := "Brave work"
+			s.Name = &name
 			s.Modified = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-			s.AllMessagesText = "brave xxxx"
+			s.AllMessagesText = "xxxx"
 		}),
 	}
 
 	result := FilterAndSortSessions(sessions, "\"brave\"", SortModeRelevance, NameFilterAll)
-	assertIDs(t, sessionIDs(result), "early", "late")
+	assertIDs(t, sessionIDs(result), "name", "message")
 
 	tieSessions := []core.SessionInfo{
 		makeSessionForSearch(func(s *core.SessionInfo) {
@@ -216,4 +219,130 @@ func TestSessionSelectorSearchNameFilter(t *testing.T) {
 		result := FilterAndSortSessions(sessionsWithWhitespace, "", SortModeRecent, NameFilterNamed)
 		assertIDs(t, sessionIDs(result), "named")
 	})
+}
+
+// TestSessionSelectorSearchIgnoresMessagePosition guards pi 8c03fef4d:
+// exact matches in message text rank by tier without a position penalty.
+func TestSessionSelectorSearchIgnoresMessagePosition(t *testing.T) {
+	filler := strings.Repeat("lorem ipsum dolor sit amet ", 400)
+	sessions := []core.SessionInfo{
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "early"
+			s.Modified = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = "opus " + filler
+		}),
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "deep"
+			s.Modified = time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = filler + " we discussed the opus model"
+		}),
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "scattered"
+			s.Modified = time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = filler
+		}),
+	}
+
+	result := FilterAndSortSessions(sessions, "opus", SortModeRelevance, NameFilterAll)
+	assertIDs(t, sessionIDs(result), "deep", "early")
+}
+
+// TestSessionSelectorSearchDoesNotMatchScatteredIDs guards pi 8c03fef4d:
+// session ids and message text match exactly only.
+func TestSessionSelectorSearchDoesNotMatchScatteredIDs(t *testing.T) {
+	sessions := []core.SessionInfo{
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "019e9024-aaaa-7bbb-8ccc-dddddddddddd"
+			s.Modified = time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = "unrelated"
+		}),
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "01a1ffff-aaaa-7bbb-8ccc-dddddddddddd"
+			name := "#1024 TDD bare env"
+			s.Name = &name
+			s.Modified = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = "unrelated"
+		}),
+	}
+
+	byName := FilterAndSortSessions(sessions, "1024", SortModeRelevance, NameFilterAll)
+	if len(byName) != 1 || byName[0].Name == nil || *byName[0].Name != "#1024 TDD bare env" {
+		t.Fatalf("1024 result = %#v", byName)
+	}
+	assertIDs(t, sessionIDs(FilterAndSortSessions(sessions, "9024-aa", SortModeRelevance, NameFilterAll)),
+		"019e9024-aaaa-7bbb-8ccc-dddddddddddd")
+}
+
+// TestSessionSelectorSearchTierRanking guards pi 8c03fef4d: name text,
+// then id/message/cwd text, then scattered name/cwd matches.
+func TestSessionSelectorSearchTierRanking(t *testing.T) {
+	sessions := []core.SessionInfo{
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "scattered-name"
+			name := "c-a-c-h-e notes"
+			s.Name = &name
+			s.Modified = time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = "unrelated"
+		}),
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "message"
+			name := "Other work"
+			s.Name = &name
+			s.Modified = time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = "A discussion mentioning the cache."
+		}),
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "name"
+			name := "Cache work"
+			s.Name = &name
+			s.Modified = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = "Summary"
+		}),
+	}
+
+	assertIDs(t, sessionIDs(FilterAndSortSessions(sessions, "cache", SortModeRelevance, NameFilterAll)),
+		"name", "message", "scattered-name")
+}
+
+// TestSessionSelectorSearchMatchesEachTokenWithinOneField guards pi
+// 8c03fef4d: tokens never match across field boundaries.
+func TestSessionSelectorSearchMatchesEachTokenWithinOneField(t *testing.T) {
+	sessions := []core.SessionInfo{
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "split"
+			name := "Fuzzy"
+			s.Name = &name
+			s.Modified = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = "search ranking"
+		}),
+	}
+
+	assertIDs(t, sessionIDs(FilterAndSortSessions(sessions, "fuzzy ranking", SortModeRelevance, NameFilterAll)), "split")
+	if got := FilterAndSortSessions(sessions, "zzysea", SortModeRelevance, NameFilterAll); len(got) != 0 {
+		t.Fatalf("zzysea = %v, want empty", sessionIDs(got))
+	}
+	if got := FilterAndSortSessions(sessions, "re:fuzzy search", SortModeRelevance, NameFilterAll); len(got) != 0 {
+		t.Fatalf("re:fuzzy search = %v, want empty", sessionIDs(got))
+	}
+}
+
+// TestSessionSelectorSearchRanksRegexNameMatchesFirst guards pi 8c03fef4d.
+func TestSessionSelectorSearchRanksRegexNameMatchesFirst(t *testing.T) {
+	sessions := []core.SessionInfo{
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "message"
+			s.Modified = time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = "brave"
+		}),
+		makeSessionForSearch(func(s *core.SessionInfo) {
+			s.ID = "name"
+			name := "Brave"
+			s.Name = &name
+			s.Modified = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			s.AllMessagesText = "xxxx"
+		}),
+	}
+
+	assertIDs(t, sessionIDs(FilterAndSortSessions(sessions, "re:\\bbrave\\b", SortModeRelevance, NameFilterAll)),
+		"name", "message")
 }

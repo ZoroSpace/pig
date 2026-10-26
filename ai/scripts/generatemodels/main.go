@@ -200,8 +200,11 @@ func generateModels(ctx context.Context) error {
 		if candidate.Provider == ai.ProviderOpenAI && candidate.ID == "gpt-5-pro" {
 			candidate.MaxTokens = 128000
 		}
-		if (candidate.Provider == ai.ProviderOpenRouter && openRouterKimiK3ModelIds[candidate.ID]) ||
-			(candidate.Provider == ai.ProviderVercelAIGateway && candidate.ID == "moonshotai/kimi-k3") {
+		if candidate.Provider == ai.ProviderOpenRouter && candidate.ID == "~moonshotai/kimi-latest" {
+			candidate.MaxTokens = kimiK3MaxTokens
+		} else if (candidate.Provider == ai.ProviderOpenRouter || candidate.Provider == ai.ProviderVercelAIGateway) &&
+			strings.HasPrefix(candidate.ID, "moonshotai/") &&
+			isKimiK3FamilyID(strings.TrimPrefix(candidate.ID, "moonshotai/")) {
 			candidate.MaxTokens = kimiK3MaxTokens
 		}
 		if candidate.Provider == ai.ProviderOpenRouter && candidate.ID == "moonshotai/kimi-k2.5" {

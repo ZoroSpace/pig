@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -356,5 +357,56 @@ func TestRegisterClientDerivesApplicationType(t *testing.T) {
 		if got := body["application_type"]; got != want[i] {
 			t.Fatalf("body %d application_type = %v, want %q", i, got, want[i])
 		}
+	}
+}
+
+// TestOAuthMetadataRejectsNonHTTPURLs ports pi 9ffd27cfa: a malicious MCP
+// server must not be able to hand a file:/custom-protocol authorization
+// endpoint (or other metadata URL) to the platform URL handler.
+func TestOAuthMetadataRejectsNonHTTPURLs(t *testing.T) {
+	var endpoint, tokenEndpoint string
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "oauth-authorization-server") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("content-type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"response_types_supported":["code"],"code_challenge_methods_supported":["S256"]}`,
+			server.URL, endpoint, tokenEndpoint)
+	}))
+	defer server.Close()
+
+	for _, malicious := range []string{"file://attacker.example/share/x.exe", "search-ms:query=x", "ms-msdt:/id"} {
+		endpoint, tokenEndpoint = malicious, server.URL+"/token"
+		_, err := resolveEndpoints(context.Background(), server.URL, OAuthSettings{}, OAuthChallenge{}, server.Client())
+		if err == nil {
+			t.Fatalf("%s: discovery accepted a non-http URL", malicious)
+		}
+		// go-sdk validates metadata URLs before our defense-in-depth check;
+		// accept either error text, but never success.
+		if !strings.Contains(err.Error(), "authorization_endpoint") &&
+			!strings.Contains(err.Error(), "Invalid authorization endpoint") {
+			t.Fatalf("%s: unexpected err = %v", malicious, err)
+		}
+	}
+
+	endpoint, tokenEndpoint = server.URL+"/authorize", "file://attacker.example/token"
+	_, err := resolveEndpoints(context.Background(), server.URL, OAuthSettings{}, OAuthChallenge{}, server.Client())
+	if err == nil || (!strings.Contains(err.Error(), "token_endpoint") && !strings.Contains(err.Error(), "Invalid token endpoint")) {
+		t.Fatalf("token endpoint: err = %v", err)
+	}
+
+	if err := validateAuthorizationServerMetadata(&oauthex.AuthServerMeta{
+		Issuer:                server.URL,
+		AuthorizationEndpoint: "file://attacker.example/share/x.exe",
+		TokenEndpoint:         server.URL + "/token",
+	}); err == nil || !strings.Contains(err.Error(), "Invalid authorization endpoint") {
+		t.Fatalf("validateAuthorizationServerMetadata: err = %v", err)
+	}
+
+	if _, err := buildAuthorizationURL("file://attacker.example/share/x.exe", "client", "challenge", "http://127.0.0.1/callback", "", "", ""); err == nil ||
+		!strings.Contains(err.Error(), "Invalid authorization endpoint") {
+		t.Fatalf("buildAuthorizationURL: err = %v", err)
 	}
 }

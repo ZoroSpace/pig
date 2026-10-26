@@ -37,7 +37,7 @@ type streamingCustomInput struct {
 
 type streamingToolBlock struct {
 	content        types.ToolCall
-	partialArgs    string
+	arguments      *utils.ToolCallArgumentsStream
 	hasPartialArgs bool
 	customInput    *streamingCustomInput
 	streamIndex    int
@@ -478,22 +478,26 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 		}
 		push(types.AssistantMessageEvent{Type: types.EventStart, Partial: output})
 
-		getCustomToolCallInput := func(block *streamingToolBlock) string {
-			if block.customInput == nil {
-				return ""
-			}
-			value, _ := block.content.Arguments[block.customInput.property].(string)
-			return value
-		}
-		appendCustomToolCallInput := func(block *streamingToolBlock, nextInput string, close bool) *string {
+		appendCustomToolCallInput := func(block *streamingToolBlock, inputDelta string) *string {
 			if block.customInput == nil {
 				return nil
 			}
-			delta, err := AppendGrammarToolInputJSONDelta(&block.customInput.jsonBuffer, block.customInput.property, nextInput, close)
+			delta, err := AppendGrammarToolInputJSONDelta(&block.customInput.jsonBuffer, block.customInput.property, inputDelta)
 			if err != nil {
 				panic(err)
 			}
-			block.content.Arguments = map[string]any{block.customInput.property: nextInput}
+			block.content.Arguments = map[string]any{block.customInput.property: block.customInput.jsonBuffer.Input}
+			return delta
+		}
+		closeCustomToolCallInput := func(block *streamingToolBlock) *string {
+			if block.customInput == nil {
+				return nil
+			}
+			delta, err := CloseGrammarToolInputJSON(&block.customInput.jsonBuffer, block.customInput.property, nil)
+			if err != nil {
+				panic(err)
+			}
+			block.content.Arguments = map[string]any{block.customInput.property: block.customInput.jsonBuffer.Input}
 			return delta
 		}
 
@@ -556,6 +560,7 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 					}
 					block.content.Arguments = map[string]any{customInputProperty: ""}
 				} else {
+					block.arguments = utils.NewToolCallArgumentsStream()
 					block.hasPartialArgs = true
 				}
 				if hasStreamIndex {
@@ -590,6 +595,7 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 					property:   customInputProperty,
 					jsonBuffer: GrammarToolInputJSONBuffer{},
 				}
+				block.arguments = nil
 				block.hasPartialArgs = false
 			}
 			return block
@@ -608,12 +614,12 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 				push(types.AssistantMessageEvent{Type: types.EventThinkingEnd, ContentIndex: contentIndex, Content: b.content.Thinking, Partial: output})
 			case *streamingToolBlock:
 				if b.customInput != nil {
-					delta := appendCustomToolCallInput(b, getCustomToolCallInput(b), true)
+					delta := closeCustomToolCallInput(b)
 					if delta != nil {
 						push(types.AssistantMessageEvent{Type: types.EventToolCallDelta, ContentIndex: contentIndex, Delta: *delta, Partial: output})
 					}
-				} else if b.hasPartialArgs {
-					b.content.Arguments, b.content.ArgumentsError = utils.ParseToolCallArguments(b.partialArgs)
+				} else if b.hasPartialArgs && b.arguments != nil {
+					b.content.Arguments, b.content.ArgumentsError = b.arguments.Finish()
 				}
 				b.finalize()
 				toolCall := b.content
@@ -723,13 +729,11 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 					block.content.Name = name
 				}
 				var deltaStr string
-				if toolCall.Function != nil && toolCall.Function.Arguments != "" {
+				if toolCall.Function != nil && toolCall.Function.Arguments != "" && block.hasPartialArgs && block.arguments != nil {
 					deltaStr = toolCall.Function.Arguments
-					block.partialArgs += toolCall.Function.Arguments
-					block.content.Arguments = utils.ParseStreamingJSON(&block.partialArgs)
-				} else if toolCall.Custom != nil && toolCall.Custom.Input != "" {
-					nextInput := getCustomToolCallInput(block) + toolCall.Custom.Input
-					if d := appendCustomToolCallInput(block, nextInput, false); d != nil {
+					block.content.Arguments = block.arguments.Append(deltaStr)
+				} else if toolCall.Custom != nil && toolCall.Custom.Input != "" && block.customInput != nil {
+					if d := appendCustomToolCallInput(block, toolCall.Custom.Input); d != nil {
 						deltaStr = *d
 					}
 				}
@@ -812,7 +816,7 @@ func streamOpenAICompletions(ctx context.Context, model *types.Model, llmContext
 // parsed arguments (pi: delete block.partialArgs/customInput/streamIndex).
 func (b *streamingToolBlock) finalize() {
 	b.hasPartialArgs = false
-	b.partialArgs = ""
+	b.arguments = nil
 	b.customInput = nil
 	b.hasStreamIndex = false
 	b.streamIndex = 0

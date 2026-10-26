@@ -738,6 +738,9 @@ func ConvertResponsesTools(tools []types.Tool, options *ConvertResponsesToolsOpt
 type responsesCustomInput struct {
 	property   string
 	jsonBuffer GrammarToolInputJSONBuffer
+	// unsent is the JSON text of the item's initial input, sent with the
+	// first delta (pi: ToolCallInput.unsent).
+	unsent string
 }
 
 // responsesStreamBlock is one block of the in-progress response (pi's
@@ -756,31 +759,61 @@ func (*responsesThinkingStreamBlock) isResponsesBlock() {}
 
 type responsesToolCallStreamBlock struct {
 	content        types.ToolCall
-	partialJSON    string
+	arguments      *utils.ToolCallArgumentsStream
 	hasPartialJSON bool
 	customInput    *responsesCustomInput
 }
 
 func (*responsesToolCallStreamBlock) isResponsesBlock() {}
 
-func getCustomToolCallInput(block *responsesToolCallStreamBlock) string {
-	if block.customInput == nil {
-		return ""
+// startResponsesCustomInput creates the stream state of a custom tool call
+// (pi: customInput) and holds back the JSON text of its initial input.
+func startResponsesCustomInput(property, initialInput string) *responsesCustomInput {
+	input := &responsesCustomInput{property: property}
+	if initialInput != "" {
+		if delta, err := AppendGrammarToolInputJSONDelta(&input.jsonBuffer, property, initialInput); err == nil && delta != nil {
+			input.unsent = *delta
+		}
 	}
-	value, _ := block.content.Arguments[block.customInput.property].(string)
-	return value
+	return input
 }
 
-func appendCustomToolCallInput(block *responsesToolCallStreamBlock, nextInput string, close bool) *string {
+func appendCustomToolCallInput(block *responsesToolCallStreamBlock, inputDelta string) *string {
 	if block.customInput == nil {
 		return nil
 	}
-	delta, err := AppendGrammarToolInputJSONDelta(&block.customInput.jsonBuffer, block.customInput.property, nextInput, close)
+	delta, err := AppendGrammarToolInputJSONDelta(&block.customInput.jsonBuffer, block.customInput.property, inputDelta)
 	if err != nil {
 		panic(err)
 	}
-	block.content.Arguments = map[string]any{block.customInput.property: nextInput}
-	return delta
+	return sendResponsesCustomInput(block, delta)
+}
+
+func closeCustomToolCallInput(block *responsesToolCallStreamBlock, finalInput *string) *string {
+	if block.customInput == nil {
+		return nil
+	}
+	delta, err := CloseGrammarToolInputJSON(&block.customInput.jsonBuffer, block.customInput.property, finalInput)
+	if err != nil {
+		panic(err)
+	}
+	return sendResponsesCustomInput(block, delta)
+}
+
+func sendResponsesCustomInput(block *responsesToolCallStreamBlock, jsonDelta *string) *string {
+	if block.customInput == nil {
+		return jsonDelta
+	}
+	block.content.Arguments = map[string]any{block.customInput.property: block.customInput.jsonBuffer.Input}
+	if block.customInput.unsent == "" {
+		return jsonDelta
+	}
+	sent := block.customInput.unsent
+	if jsonDelta != nil {
+		sent += *jsonDelta
+	}
+	block.customInput.unsent = ""
+	return &sent
 }
 
 // responsesTextPart is a reasoning summary/content part (pi:
@@ -812,7 +845,7 @@ type responsesOutputItem struct {
 	CallID           string                 `json:"call_id"`
 	Name             string                 `json:"name"`
 	Arguments        string                 `json:"arguments"`
-	Input            string                 `json:"input"`
+	Input            *string                `json:"input"`
 	Namespace        string                 `json:"namespace"`
 	EncryptedContent string                 `json:"encrypted_content"`
 	Summary          []responsesTextPart    `json:"summary"`
@@ -985,6 +1018,7 @@ func ProcessResponsesStream(events iter.Seq[*responsesStreamEvent], output *type
 			push(types.AssistantMessageEvent{Type: types.EventTextStart, ContentIndex: slot.contentIndex, Partial: output})
 			return slot
 		case "function_call":
+			arguments := utils.NewToolCallArgumentsStream()
 			block := &responsesToolCallStreamBlock{
 				content: types.ToolCall{
 					Kind:      types.KindToolCall,
@@ -992,8 +1026,11 @@ func ProcessResponsesStream(events iter.Seq[*responsesStreamEvent], output *type
 					Name:      item.Name,
 					Arguments: map[string]any{},
 				},
-				partialJSON:    item.Arguments,
+				arguments:      arguments,
 				hasPartialJSON: true,
+			}
+			if item.Arguments != "" {
+				block.content.Arguments = arguments.Append(item.Arguments)
 			}
 			if item.Namespace != "" {
 				block.content.Namespace = item.Namespace
@@ -1010,17 +1047,18 @@ func ProcessResponsesStream(events iter.Seq[*responsesStreamEvent], output *type
 					inputProperty = prop
 				}
 			}
+			initialInput := ""
+			if item.Input != nil {
+				initialInput = *item.Input
+			}
 			block := &responsesToolCallStreamBlock{
 				content: types.ToolCall{
 					Kind:      types.KindToolCall,
 					ID:        item.CallID + "|" + item.ID,
 					Name:      item.Name,
-					Arguments: map[string]any{inputProperty: item.Input},
+					Arguments: map[string]any{inputProperty: initialInput},
 				},
-				customInput: &responsesCustomInput{
-					property:   inputProperty,
-					jsonBuffer: GrammarToolInputJSONBuffer{},
-				},
+				customInput: startResponsesCustomInput(inputProperty, initialInput),
 			}
 			if item.Namespace != "" {
 				block.content.Namespace = item.Namespace
@@ -1205,40 +1243,33 @@ func ProcessResponsesStream(events iter.Seq[*responsesStreamEvent], output *type
 			})
 		case "response.function_call_arguments.delta":
 			slot := getSlot(event.OutputIndex, "toolCall")
-			if slot == nil || !slot.toolCall.hasPartialJSON {
+			if slot == nil || !slot.toolCall.hasPartialJSON || slot.toolCall.arguments == nil {
 				continue
 			}
-			slot.toolCall.partialJSON += event.Delta
-			slot.toolCall.content.Arguments = utils.ParseStreamingJSON(&slot.toolCall.partialJSON)
+			slot.toolCall.content.Arguments = slot.toolCall.arguments.Append(event.Delta)
 			pushToolCallDelta(slot, &event.Delta)
 		case "response.function_call_arguments.done":
 			slot := getSlot(event.OutputIndex, "toolCall")
-			if slot == nil || !slot.toolCall.hasPartialJSON {
+			if slot == nil || !slot.toolCall.hasPartialJSON || slot.toolCall.arguments == nil {
 				continue
 			}
-			previousPartialJSON := slot.toolCall.partialJSON
-			slot.toolCall.partialJSON = event.Arguments
-			slot.toolCall.content.Arguments = utils.ParseStreamingJSON(&slot.toolCall.partialJSON)
-
-			if strings.HasPrefix(event.Arguments, previousPartialJSON) {
-				delta := event.Arguments[len(previousPartialJSON):]
-				if delta != "" {
-					pushToolCallDelta(slot, &delta)
-				}
+			delta, hasDelta, arguments := slot.toolCall.arguments.Replace(event.Arguments)
+			slot.toolCall.content.Arguments = arguments
+			if hasDelta {
+				pushToolCallDelta(slot, &delta)
 			}
 		case "response.custom_tool_call_input.delta":
 			slot := getSlot(event.OutputIndex, "toolCall")
 			if slot == nil || slot.toolCall.customInput == nil {
 				continue
 			}
-			next := getCustomToolCallInput(slot.toolCall) + event.Delta
-			pushToolCallDelta(slot, appendCustomToolCallInput(slot.toolCall, next, false))
+			pushToolCallDelta(slot, appendCustomToolCallInput(slot.toolCall, event.Delta))
 		case "response.custom_tool_call_input.done":
 			slot := getSlot(event.OutputIndex, "toolCall")
 			if slot == nil || slot.toolCall.customInput == nil {
 				continue
 			}
-			pushToolCallDelta(slot, appendCustomToolCallInput(slot.toolCall, event.Input, true))
+			pushToolCallDelta(slot, closeCustomToolCallInput(slot.toolCall, &event.Input))
 		case "response.output_item.done":
 			item := event.Item
 			if item == nil {
@@ -1278,30 +1309,25 @@ func ProcessResponsesStream(events iter.Seq[*responsesStreamEvent], output *type
 					Content: slot.text.content.Text, Partial: output,
 				})
 				delete(outputSlots, event.OutputIndex)
-			} else if item.Type == "function_call" && slot != nil && slot.kind == "toolCall" && slot.toolCall.hasPartialJSON {
-				args := item.Arguments
-				if args == "" {
-					args = slot.toolCall.partialJSON
+			} else if item.Type == "function_call" && slot != nil && slot.kind == "toolCall" && slot.toolCall.hasPartialJSON && slot.toolCall.arguments != nil {
+				if item.Arguments != "" {
+					slot.toolCall.arguments.Replace(item.Arguments)
 				}
-				slot.toolCall.content.Arguments, slot.toolCall.content.ArgumentsError = utils.ParseToolCallArguments(args)
+				slot.toolCall.content.Arguments, slot.toolCall.content.ArgumentsError = slot.toolCall.arguments.Finish()
 				if item.Namespace != "" {
 					slot.toolCall.content.Namespace = item.Namespace
 				}
-				// Finalize in-place and strip the scratch buffer so replay only
+				// Finalize in-place and drop the scratch stream so replay only
 				// carries parsed arguments.
 				slot.toolCall.hasPartialJSON = false
-				slot.toolCall.partialJSON = ""
+				slot.toolCall.arguments = nil
 				toolCall := slot.toolCall.content
 				push(types.AssistantMessageEvent{
 					Type: types.EventToolCallEnd, ContentIndex: slot.contentIndex, ToolCall: &toolCall, Partial: output,
 				})
 				delete(outputSlots, event.OutputIndex)
 			} else if item.Type == "custom_tool_call" && slot != nil && slot.kind == "toolCall" && slot.toolCall.customInput != nil {
-				next := item.Input
-				if next == "" {
-					next = getCustomToolCallInput(slot.toolCall)
-				}
-				pushToolCallDelta(slot, appendCustomToolCallInput(slot.toolCall, next, true))
+				pushToolCallDelta(slot, closeCustomToolCallInput(slot.toolCall, item.Input))
 				if item.Namespace != "" {
 					slot.toolCall.content.Namespace = item.Namespace
 				}

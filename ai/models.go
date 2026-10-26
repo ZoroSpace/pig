@@ -1571,6 +1571,8 @@ func CalculateCost(model *Model, usage *Usage) *Cost {
 	usage.Cost.CacheRead = (rates.CacheRead / 1_000_000) * float64(usage.CacheRead)
 	usage.Cost.CacheWrite = (rates.CacheWrite*float64(shortWrite) + rates.Input*2*float64(longWrite)) / 1_000_000
 	usage.Cost.Total = usage.Cost.Input + usage.Cost.Output + usage.Cost.CacheRead + usage.Cost.CacheWrite
+	catalogEstimate := false
+	usage.Cost.TotalFromProvider = &catalogEstimate
 	return &usage.Cost
 }
 

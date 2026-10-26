@@ -21,10 +21,17 @@ type OAuthAuthInfo struct {
 // OAuthDeviceCodeInfo is the legacy device-code notification (pi:
 // OAuthDeviceCodeInfo).
 type OAuthDeviceCodeInfo struct {
-	UserCode         string
-	VerificationURI  string
-	IntervalSeconds  *int64
-	ExpiresInSeconds *int64
+	UserCode        string
+	VerificationURI string
+	// OpenBrowserOnConfirm offers best-effort browser opening on user
+	// confirmation. Defaults to true; clients may ignore it (pi:
+	// openBrowserOnConfirm?).
+	OpenBrowserOnConfirm *bool
+	// CopyCodeOnConfirm offers copying the user code on user confirmation,
+	// replacing the clipboard. Defaults to true (pi: copyCodeOnConfirm?).
+	CopyCodeOnConfirm *bool
+	IntervalSeconds   *int64
+	ExpiresInSeconds  *int64
 }
 
 // OAuthSelectOption is one select option (pi: OAuthSelectOption).

@@ -214,21 +214,35 @@ type providerPrefix struct {
 // provider in models, returning the canonical provider (pi:
 // splitProviderPrefix).
 func splitProviderPrefix(text string, models []ai.Model) (providerPrefix, bool) {
-	slashIndex := strings.Index(text, "/")
-	if slashIndex == -1 {
-		return providerPrefix{}, false
-	}
-	prefix := strings.ToLower(strings.TrimSpace(text[:slashIndex]))
-	modelText := strings.TrimSpace(text[slashIndex+1:])
-	if prefix == "" || modelText == "" {
-		return providerPrefix{}, false
-	}
+	// Provider ids may contain "/" themselves (e.g. URL-derived ids), so match
+	// known ids, longest first.
+	lowerText := strings.ToLower(text)
+	var best providerPrefix
+	found := false
 	for _, model := range models {
-		if strings.ToLower(string(model.Provider)) == prefix {
-			return providerPrefix{provider: string(model.Provider), modelText: modelText}, true
+		provider := string(model.Provider)
+		prefix := strings.ToLower(strings.TrimSpace(provider))
+		if prefix == "" || (found && len(best.provider) >= len(provider)) {
+			continue
+		}
+		if len(prefix) >= len(lowerText) {
+			continue
+		}
+		slashIndex := strings.Index(lowerText[len(prefix):], "/")
+		if slashIndex == -1 {
+			continue
+		}
+		slashIndex += len(prefix)
+		if strings.TrimSpace(lowerText[:slashIndex]) != prefix {
+			continue
+		}
+		modelText := strings.TrimSpace(text[slashIndex+1:])
+		if modelText != "" {
+			best = providerPrefix{provider: provider, modelText: modelText}
+			found = true
 		}
 	}
-	return providerPrefix{}, false
+	return best, found
 }
 
 // ResolveModelReference resolves a model reference against models, using

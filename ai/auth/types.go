@@ -256,10 +256,17 @@ type AuthEvent struct {
 	URL          string `json:"url,omitempty"`
 	Instructions string `json:"instructions,omitempty"`
 	// device_code
-	UserCode         string `json:"userCode,omitempty"`
-	VerificationURI  string `json:"verificationUri,omitempty"`
-	IntervalSeconds  *int64 `json:"intervalSeconds,omitempty"`
-	ExpiresInSeconds *int64 `json:"expiresInSeconds,omitempty"`
+	UserCode        string `json:"userCode,omitempty"`
+	VerificationURI string `json:"verificationUri,omitempty"`
+	// OpenBrowserOnConfirm offers best-effort browser opening on user
+	// confirmation. Defaults to true; clients may ignore it (pi:
+	// openBrowserOnConfirm?).
+	OpenBrowserOnConfirm *bool `json:"openBrowserOnConfirm,omitempty"`
+	// CopyCodeOnConfirm offers copying the user code on user confirmation,
+	// replacing the clipboard. Defaults to true (pi: copyCodeOnConfirm?).
+	CopyCodeOnConfirm *bool  `json:"copyCodeOnConfirm,omitempty"`
+	IntervalSeconds   *int64 `json:"intervalSeconds,omitempty"`
+	ExpiresInSeconds  *int64 `json:"expiresInSeconds,omitempty"`
 }
 
 // AuthInteraction serves both api-key and OAuth login flows.

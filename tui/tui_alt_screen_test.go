@@ -9,6 +9,7 @@ package tui
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -1838,3 +1839,99 @@ func (c *mutableLinesComponent) Render(int) []string {
 }
 
 func (c *mutableLinesComponent) Invalidate() {}
+
+// TestTuiAltScreenWordSelectionKeepsITerm2WordCharactersWhole guards pi
+// ff6896471: ~/..., ~\..., and foo+bar select as whole words.
+func TestTuiAltScreenWordSelectionKeepsITerm2WordCharactersWhole(t *testing.T) {
+	cases := []struct {
+		line   string
+		needle string
+	}{
+		{"~/.pi/agent/settings.json", "agent"},
+		{"~\\Documents\\pi", "Documents"},
+		{"foo+bar", "bar"},
+	}
+	for _, tc := range cases {
+		terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(80, 1)}
+		tui := NewTuiAltScreen(terminal, nil, "", nil)
+		tui.AddChild(NewText(tc.line, 0, 0))
+		tui.Start()
+		terminal.WaitForRender()
+
+		col := strings.Index(tc.line, tc.needle) + 1
+		terminal.SendInput(fmt.Sprintf("\x1b[<0;%d;1M", col))
+		terminal.SendInput(fmt.Sprintf("\x1b[<0;%d;1m", col))
+		terminal.SendInput(fmt.Sprintf("\x1b[<0;%d;1M", col))
+		terminal.SendInput(fmt.Sprintf("\x1b[<0;%d;1m", col))
+		terminal.WaitForRender()
+
+		copied := "\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte(tc.line)) + "\x07"
+		if !strings.Contains(terminal.eventsJoined(), copied) {
+			t.Fatalf("%q: expected whole-word copy of %q", tc.line, tc.line)
+		}
+		tui.Stop(nil)
+	}
+}
+
+// TestTuiAltScreenCropsKittyImageInPaddedColoredBox guards pi 4464442f9:
+// placeholder rows containing only padding and SGR codes must not stop the
+// backward search for the image line.
+func TestTuiAltScreenCropsKittyImageInPaddedColoredBox(t *testing.T) {
+	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(20, 3)}
+	tui := NewTuiAltScreen(terminal, nil, "", nil)
+	imageId := 11271
+	imageLine := EncodeKitty("AAAA", EncodeKittyParams{Columns: 2, Rows: 3, ImageId: imageId, MoveCursorOff: true})
+	RegisterKittyImageMetadata(KittyImageMetadata{ImageId: imageId, Columns: 2, Rows: 3, WidthPx: 100, HeightPx: 100})
+	box := NewBox(1, 0, func(text string) string { return "\x1b[44m" + text + "\x1b[49m" })
+	box.AddChild(&countingComponent{lines: []string{imageLine, "", ""}})
+	tui.AddChild(&countingComponent{lines: []string{"before"}})
+	tui.AddChild(box)
+	tui.AddChild(&countingComponent{lines: []string{"after", "end"}})
+	tui.Start()
+	terminal.WaitForRender()
+
+	if got := tui.ViewportTop(); got != 3 {
+		t.Fatalf("viewportTop = %d, want 3", got)
+	}
+	found := false
+	for _, e := range terminal.Events() {
+		if e.typ == "write" && strings.Contains(e.data, "i=11271") && strings.Contains(e.data, "y=66,h=34,r=1") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("missing cropped boxed image write")
+	}
+	tui.Stop(nil)
+}
+
+// TestTuiAltScreenCropsKittyImageWithTextOnPlaceholderRows guards pi
+// 1c8cb1781: placeholder rows with borders/side-by-side text must not stop
+// the search; it is bounded by the tallest registered image instead.
+func TestTuiAltScreenCropsKittyImageWithTextOnPlaceholderRows(t *testing.T) {
+	terminal := &recordingTerminal{VirtualTerminal: NewVirtualTerminal(20, 3)}
+	tui := NewTuiAltScreen(terminal, nil, "", nil)
+	imageId := 11272
+	imageLine := EncodeKitty("AAAA", EncodeKittyParams{Columns: 2, Rows: 3, ImageId: imageId, MoveCursorOff: true})
+	RegisterKittyImageMetadata(KittyImageMetadata{ImageId: imageId, Columns: 2, Rows: 3, WidthPx: 100, HeightPx: 100})
+	tui.AddChild(&countingComponent{lines: []string{"before", imageLine, "   | side", "   | side"}})
+	tui.AddChild(&countingComponent{lines: []string{"after", "end"}})
+	tui.Start()
+	terminal.WaitForRender()
+
+	if got := tui.ViewportTop(); got != 3 {
+		t.Fatalf("viewportTop = %d, want 3", got)
+	}
+	found := false
+	for _, e := range terminal.Events() {
+		if e.typ == "write" && strings.Contains(e.data, "i=11272") && strings.Contains(e.data, "y=66,h=34,r=1") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("missing cropped image write with placeholder text")
+	}
+	tui.Stop(nil)
+}

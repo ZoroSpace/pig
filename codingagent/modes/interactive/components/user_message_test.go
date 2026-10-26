@@ -20,7 +20,7 @@ func TestUserMessageComponent(t *testing.T) {
 		// block keeps its pre-border height: 3 lines for a one-line message
 		// (docs/feat/BUILTIN-THEME-PALETTES.md §BLOCK-BORDERS). The left
 		// frame: solid corner rules ┌─┐ / └─┘, content unbarred.
-		component := NewUserMessageComponent("hello", nil, 1, nil, nil)
+		component := NewUserMessageComponent("hello", nil, 1, nil, nil, "", "")
 		lines := component.Render(20)
 
 		if len(lines) != 3 {
@@ -60,7 +60,7 @@ func TestUserMessageComponent(t *testing.T) {
 				calls = append(calls, "suffix")
 				return markdown + " Done."
 			},
-		}, nil)
+		}, nil, "", "")
 
 		got := utils.StripAnsi(strings.Join(component.Render(80), "\n"))
 		if !strings.Contains(got, "The input is x². Done.") {
@@ -74,6 +74,28 @@ func TestUserMessageComponent(t *testing.T) {
 		}
 	})
 
+	t.Run("passes persisted entry identity in transformer context", func(t *testing.T) {
+		initTestTheme(t)
+		var captured []core.MarkdownTransformContext
+		capture := func(markdown string, context core.MarkdownTransformContext) string {
+			captured = append(captured, context)
+			return markdown
+		}
+
+		NewUserMessageComponent("restored", nil, 1, []core.MarkdownTransformer{capture}, nil, "entry-abc", "2025-01-15T10:30:00.000Z").Render(80)
+		NewUserMessageComponent("live", nil, 1, []core.MarkdownTransformer{capture}, nil, "", "").Render(80)
+
+		if len(captured) != 2 {
+			t.Fatalf("contexts = %d, want 2", len(captured))
+		}
+		if captured[0].MessageID != "entry-abc" || captured[0].Timestamp != "2025-01-15T10:30:00.000Z" {
+			t.Fatalf("restored context = %+v", captured[0])
+		}
+		if captured[1].MessageID != "" || captured[1].Timestamp != "" {
+			t.Fatalf("live context = %+v", captured[1])
+		}
+	})
+
 	t.Run("reapplies Markdown transformers when invalidated", func(t *testing.T) {
 		initTestTheme(t)
 		suffix := "before"
@@ -81,7 +103,7 @@ func TestUserMessageComponent(t *testing.T) {
 			func(markdown string, _ core.MarkdownTransformContext) string {
 				return markdown + " " + suffix
 			},
-		}, nil)
+		}, nil, "", "")
 
 		if got := utils.StripAnsi(strings.Join(component.Render(80), "\n")); !strings.Contains(got, "Message before") {
 			t.Fatalf("rendered = %q", got)

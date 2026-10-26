@@ -264,3 +264,53 @@ func TestTemplateJsCjkEmphasis(t *testing.T) {
 		t.Fatal("vendored marked-cjk-friendly plugin missing")
 	}
 }
+
+// TestTemplateJsSystemMessages canaries pi 9359adf0c: system entries render
+// the prompt/tools in the transcript, later entries render updates, and the
+// header fallback only applies to sessions without system entries.
+func TestTemplateJsSystemMessages(t *testing.T) {
+	for _, fragment := range []string{
+		"function getSystemMessageText(msg)",
+		"function renderSystemMessageUpdate(msg)",
+		"function isLeadingSystemEntry(entry)",
+		"function describeSystemUpdate(msg)",
+		"const hasSystemEntries = entries.some(entry => entry.type === 'message' && entry.message.role === 'system');",
+		"if (!hasSystemEntries) {",
+		"function renderSystemPromptBlock(title, text)",
+		"function renderToolsList(title, tools)",
+		"renderSystemPromptBlock(`System Prompt Update${changes ? ': ' + changes : ''}`, text);",
+	} {
+		if !strings.Contains(templateJS, fragment) {
+			t.Fatalf("template.js missing system message fragment: %q", fragment)
+		}
+	}
+}
+
+// TestTemplateJsDeepTree canaries pi 1c720d285: tree walks are iterative so
+// sessions deeper than the JS call stack still export.
+func TestTemplateJsDeepTree(t *testing.T) {
+	for _, fragment := range []string{
+		"// Sort children by timestamp. Iterative: long sessions form chains deeper than the JS call stack.",
+		"const stack = [...buildTree()];",
+		"// Iterative post-order: long sessions form chains deeper than the JS call stack.",
+		"return path.reverse();",
+	} {
+		if !strings.Contains(templateJS, fragment) {
+			t.Fatalf("template.js missing deep-tree fragment: %q", fragment)
+		}
+	}
+}
+
+// TestTemplateJsOpenRouterTotalCost canaries pi cae8d69e5: the export header
+// uses provider-reported cost.total, falling back to component sums.
+func TestTemplateJsOpenRouterTotalCost(t *testing.T) {
+	for _, fragment := range []string{
+		"const cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };",
+		"cost.total += typeof msg.usage.cost.total === 'number' ? msg.usage.cost.total : componentTotal;",
+		"const totalCost = globalStats.cost.total;",
+	} {
+		if !strings.Contains(templateJS, fragment) {
+			t.Fatalf("template.js missing total cost fragment: %q", fragment)
+		}
+	}
+}

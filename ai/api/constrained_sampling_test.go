@@ -4,7 +4,11 @@
 package api
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
+
+	"github.com/samber/lo"
 
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/ai/utils"
@@ -69,5 +73,95 @@ func TestConstrainedToolSamplingDropsForeignItemIDsWhenReplayingGrammarCalls(t *
 	}
 	if id, present := call["id"]; present {
 		t.Errorf("id = %v, want it omitted", id)
+	}
+}
+
+func TestGrammarToolInputJSONDeltas(t *testing.T) {
+	buffer := &GrammarToolInputJSONBuffer{}
+	first, err := AppendGrammarToolInputJSONDelta(buffer, "payload", `a"`)
+	if err != nil || first == nil {
+		t.Fatalf("append = %v, %v", first, err)
+	}
+	final := "a\"\nb"
+	second, err := CloseGrammarToolInputJSON(buffer, "payload", &final)
+	if err != nil || second == nil {
+		t.Fatalf("close = %v, %v", second, err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(*first+*second), &decoded); err != nil {
+		t.Fatalf("decode deltas: %v", err)
+	}
+	if decoded["payload"] != final {
+		t.Fatalf("payload = %#v, want %q", decoded["payload"], final)
+	}
+	if delta, err := CloseGrammarToolInputJSON(buffer, "payload", &final); err != nil || delta != nil {
+		t.Fatalf("second close = %v, %v", delta, err)
+	}
+	changed := "changed"
+	if _, err := CloseGrammarToolInputJSON(buffer, "payload", &changed); err == nil {
+		t.Fatal("expected changed-after-close error")
+	}
+	if _, err := AppendGrammarToolInputJSONDelta(buffer, "payload", "x"); err == nil {
+		t.Fatal("expected append-after-close error")
+	}
+
+	nonMonotonic := &GrammarToolInputJSONBuffer{}
+	AppendGrammarToolInputJSONDelta(nonMonotonic, "payload", "abc")
+	other := "abd"
+	if _, err := CloseGrammarToolInputJSON(nonMonotonic, "payload", &other); err == nil {
+		t.Fatal("expected non-monotonic error")
+	}
+}
+
+func TestOpenAIResponsesStreamsCustomToolInitialInput(t *testing.T) {
+	model := constrainedSamplingTestModel()
+	output := newResponsesTestOutput(model)
+	stream := types.NewAssistantMessageEventStream()
+	events := responsesEventSeq(
+		&responsesStreamEvent{Type: "response.output_item.added", OutputIndex: 0, Item: &responsesOutputItem{
+			Type: "custom_tool_call", ID: "ctc_1", CallID: "call_1", Name: "sample_tool", Input: lo.ToPtr("a"),
+		}},
+		&responsesStreamEvent{Type: "response.custom_tool_call_input.delta", OutputIndex: 0, Delta: "b"},
+		&responsesStreamEvent{Type: "response.custom_tool_call_input.done", OutputIndex: 0, Input: "abc"},
+		&responsesStreamEvent{Type: "response.output_item.done", OutputIndex: 0, Item: &responsesOutputItem{
+			Type: "custom_tool_call", ID: "ctc_1", CallID: "call_1", Name: "sample_tool", Input: lo.ToPtr("abc"),
+		}},
+		&responsesStreamEvent{Type: "response.completed", Response: &responsesResponseObject{ID: "resp_1", Status: "completed"}},
+	)
+	if err := ProcessResponsesStream(events, output, stream, model, &OpenAIResponsesStreamOptions{
+		GrammarToolInputProperties: map[string]string{"sample_tool": "payload"},
+	}); err != nil {
+		t.Fatalf("ProcessResponsesStream: %v", err)
+	}
+	stream.End()
+
+	var startArguments map[string]any
+	var JSONDeltas []string
+	for event := range stream.Events() {
+		switch event.Type {
+		case types.EventToolCallStart:
+			if call, ok := event.Partial.Content[event.ContentIndex].(types.ToolCall); ok {
+				startArguments = call.Arguments
+			}
+		case types.EventToolCallDelta:
+			JSONDeltas = append(JSONDeltas, event.Delta)
+		}
+	}
+	if startArguments["payload"] != "a" {
+		t.Fatalf("start arguments = %#v", startArguments)
+	}
+	if output.StopReason != types.StopReasonToolUse {
+		t.Fatalf("stop reason = %v", output.StopReason)
+	}
+	toolCall, ok := output.Content[0].(types.ToolCall)
+	if !ok || toolCall.Arguments["payload"] != "abc" {
+		t.Fatalf("tool call = %#v", output.Content[0])
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(strings.Join(JSONDeltas, "")), &decoded); err != nil {
+		t.Fatalf("decode deltas: %v", err)
+	}
+	if decoded["payload"] != "abc" {
+		t.Fatalf("delta payload = %#v", decoded["payload"])
 	}
 }

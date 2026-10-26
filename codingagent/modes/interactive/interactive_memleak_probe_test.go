@@ -39,7 +39,7 @@ func probeMessageText() string {
 }
 
 func buildTurnComponents(text string) (*components.UserMessageComponent, *components.AssistantMessageComponent) {
-	user := components.NewUserMessageComponent("probe question with padding "+text[:20], &mdThemeProbe, 1, nil, nil)
+	user := components.NewUserMessageComponent("probe question with padding "+text[:20], &mdThemeProbe, 1, nil, nil, "", "")
 	assistant := components.NewAssistantMessageComponent(testAssistantMessageForProbe(text), &components.AssistantMessageOptions{
 		MarkdownTheme: &mdThemeProbe,
 	})

@@ -107,6 +107,8 @@ var referenceCatalog = []ai.Model{
 	referenceModel("gw-b", "claude-opus-4-8"),
 	referenceModel("gw-b", "gw-b/free"),
 	referenceModel("gw-b", "zz:free"),
+	// URL-derived provider id containing "/" (#11394)
+	referenceModel("llama=http://host:10800", "unsloth/qwen-gguf:BF16"),
 }
 
 type refExpect struct {
@@ -136,6 +138,8 @@ var referenceCases = []refCase{
 	{name: "thinking suffix", text: "sonnet:high", expected: refExpect{status: "resolved", model: "anthropic/claude-sonnet-4-5", thinkingLevel: "high"}},
 	{name: "colon in a literal id is not a thinking suffix", text: "qwen/qwen3-coder:exacto", expected: refExpect{status: "resolved", model: "openrouter/qwen/qwen3-coder:exacto"}},
 	{name: "provider prefix, colon id, and thinking suffix", text: "openrouter/qwen/qwen3-coder:exacto:high", expected: refExpect{status: "resolved", model: "openrouter/qwen/qwen3-coder:exacto", thinkingLevel: "high"}},
+	{name: "provider id containing a slash", text: "llama=http://host:10800/unsloth/qwen-gguf:BF16", expected: refExpect{status: "resolved", model: "llama=http://host:10800/unsloth/qwen-gguf:BF16"}},
+	{name: "provider id containing a slash, with thinking suffix", text: "llama=http://host:10800/unsloth/qwen-gguf:BF16:high", expected: refExpect{status: "resolved", model: "llama=http://host:10800/unsloth/qwen-gguf:BF16", thinkingLevel: "high"}},
 	{name: "raw id wins when the provider prefix names no matching model", text: "openai/gpt-4o:extended", expected: refExpect{status: "resolved", model: "openrouter/openai/gpt-4o:extended"}},
 	{name: "fuzzy searches the prefixed provider first", text: "openrouter/qwen", expected: refExpect{status: "resolved", model: "openrouter/qwen/qwen3-coder:exacto"}},
 	{name: "strict keeps an invalid suffix in the id", text: "gpt-4o:random", expected: refExpect{status: "not-found"}},

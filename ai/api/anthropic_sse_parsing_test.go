@@ -720,3 +720,33 @@ func TestAnthropicSSEParsingIgnoresUnknownEventsAfterMessageStop(t *testing.T) {
 		t.Errorf("content[0] = %#v, want text \"Hello\"", result.Content[0])
 	}
 }
+
+func TestAnthropicUsesOpenRouterReportedTotal(t *testing.T) {
+	events := make([]anthropicTestEvent, len(minimalAnthropicEvents))
+	copy(events, minimalAnthropicEvents)
+	var delta map[string]any
+	if err := json.Unmarshal([]byte(events[4].data), &delta); err != nil {
+		t.Fatalf("decode message_delta: %v", err)
+	}
+	usage, _ := delta["usage"].(map[string]any)
+	usage["cost"] = 0.004
+	usage["is_byok"] = false
+	usage["cost_details"] = map[string]any{"upstream_inference_cost": 0.003}
+	events[4].data = mustJSON(delta)
+
+	model := anthropicTestModel("anthropic/claude-haiku-4.5", "openrouter-work", nil)
+	model.BaseURL = "https://openrouter.ai/api/v1"
+	llmContext := utils.NormalizeContext(&types.Context{Messages: []types.Message{
+		types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "Hello"}, Timestamp: 1},
+	}})
+	result := runAnthropicStream(t, model, llmContext, anthropicTestOptions(events, nil))
+	if result.Usage.Cost.Total != 0.004 {
+		t.Errorf("total = %v, want 0.004", result.Usage.Cost.Total)
+	}
+	if result.Usage.Cost.TotalFromProvider == nil || !*result.Usage.Cost.TotalFromProvider {
+		t.Errorf("totalFromProvider = %v, want true", result.Usage.Cost.TotalFromProvider)
+	}
+	if result.Usage.Cost.Input+result.Usage.Cost.Output == result.Usage.Cost.Total {
+		t.Errorf("catalog components should be retained: %#v", result.Usage.Cost)
+	}
+}

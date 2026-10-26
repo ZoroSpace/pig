@@ -1574,6 +1574,14 @@ type MarkdownTransformContext struct {
 	// AvailableWidth is the exact width available for content (pi:
 	// availableWidth).
 	AvailableWidth int
+	// MessageID is the persisted session-entry id. Empty for live messages
+	// or live rendering; set when rendering from persisted session entries
+	// (pi: messageId?).
+	MessageID string
+	// Timestamp is the persisted session-entry ISO timestamp. Empty for live
+	// messages or live rendering; set when rendering from persisted session
+	// entries (pi: timestamp?).
+	Timestamp string
 }
 
 // MarkdownTransformer transforms user/assistant Markdown before the

@@ -62,11 +62,14 @@ const (
 // ALT_WHEEL_SCROLL_MULTIPLIER).
 const altWheelScrollMultiplier = 5
 
-// terminalWordSelectionJoiners keeps paths and kebab-case tokens whole during
-// word selection (pi: TERMINAL_WORD_SELECTION_JOINERS). Regular mode
-// delegates double-click selection to the terminal emulator; fullscreen owns
-// mouse selection, so mirror common terminal word-selection behavior.
-var terminalWordSelectionJoiners = map[string]bool{"/": true, "-": true}
+// terminalWordSelectionJoiners mirrors iTerm2's default "characters
+// considered part of a word" set so paths, kebab-case, ~/..., and foo+bar
+// stay whole during word selection (pi: TERMINAL_WORD_SELECTION_JOINERS).
+// Regular mode delegates double-click selection to the terminal emulator;
+// fullscreen owns mouse selection.
+var terminalWordSelectionJoiners = map[string]bool{
+	"/": true, "-": true, "+": true, "\\": true, "~": true, "_": true, ".": true,
+}
 
 var osc133PromptStartRegex = regexp.MustCompile(`^\x1b\]133;A(?:\x07|\x1b\\)`)
 

@@ -143,6 +143,11 @@ type renderSessionItem struct {
 	customEntry *core.CustomEntry
 	usageEntry  *core.UsageEntry
 	costNotice  *CompactionCostNotice
+	// messageID/timestamp carry the persisted entry identity for restored
+	// messages (pi: RenderSessionItem metadata Map; pig attaches it to the
+	// item because Go interface keys holding slices are unhashable).
+	messageID string
+	timestamp string
 }
 
 // deadTerminalErrorCodes lists the errnos that mean the terminal is gone
@@ -2468,6 +2473,10 @@ func (m *InteractiveMode) addCustomEntryToChat(entry *core.CustomEntry) {
 
 type addMessageOptions struct {
 	PopulateHistory bool
+	// MessageID/Timestamp are the persisted session-entry identity (pi:
+	// options.messageId/timestamp); empty for live messages.
+	MessageID string
+	Timestamp string
 }
 
 // asAssistantMessage normalizes an assistant message that may enter the
@@ -2501,6 +2510,11 @@ func asToolResultMessage(message agent.AgentMessage) *types.ToolResultMessage {
 // addMessageToChat renders a message into the transcript (pi:
 // addMessageToChat).
 func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *addMessageOptions) {
+	var messageID, timestamp string
+	if options != nil {
+		messageID = options.MessageID
+		timestamp = options.Timestamp
+	}
 	switch message.MessageRole() {
 	case harness.RoleBashExecution:
 		// Value/pointer double form (09-11 fix convention): session entries
@@ -2594,11 +2608,11 @@ func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *
 			// Render user message separately if present
 			if skillBlock.UserMessage != nil && *skillBlock.UserMessage != "" {
 				m.chatContainer.AddChild(tui.NewSpacer(1))
-				userComponent := components.NewUserMessageComponent(m.renderClipboardImageText(*skillBlock.UserMessage), lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers(), m.userMessageRuleColor())
+				userComponent := components.NewUserMessageComponent(m.renderClipboardImageText(*skillBlock.UserMessage), lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers(), m.userMessageRuleColor(), messageID, timestamp)
 				m.chatContainer.AddChild(userComponent)
 			}
 		} else {
-			userComponent := components.NewUserMessageComponent(displayText, lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers(), m.userMessageRuleColor())
+			userComponent := components.NewUserMessageComponent(displayText, lo.ToPtr(m.getMarkdownThemeWithSettings()), m.outputPad, m.getMarkdownTransformers(), m.userMessageRuleColor(), messageID, timestamp)
 			m.chatContainer.AddChild(userComponent)
 		}
 		if options != nil && options.PopulateHistory {
@@ -2616,6 +2630,8 @@ func (m *InteractiveMode) addMessageToChat(message agent.AgentMessage, options *
 			HiddenThinkingLabel:  m.hiddenThinkingLabel,
 			OutputPad:            m.outputPad,
 			MarkdownTransformers: m.getMarkdownTransformers(),
+			MessageID:            messageID,
+			Timestamp:            timestamp,
 		})
 		m.chatContainer.AddChild(assistantComponent)
 
@@ -2666,7 +2682,7 @@ func (m *InteractiveMode) renderSessionItems(items []renderSessionItem, options 
 			if assistant == nil {
 				continue
 			}
-			m.addMessageToChat(assistant, nil)
+			m.addMessageToChat(assistant, &addMessageOptions{MessageID: item.messageID, Timestamp: item.timestamp})
 			// Render tool call components
 			for _, content := range assistant.Content {
 				if toolCall, ok := content.(types.ToolCall); ok {
@@ -2728,7 +2744,11 @@ func (m *InteractiveMode) renderSessionItems(items []renderSessionItem, options 
 			}
 		} else {
 			// All other messages use standard rendering
-			m.addMessageToChat(message, &addMessageOptions{PopulateHistory: options != nil && options.PopulateHistory})
+			m.addMessageToChat(message, &addMessageOptions{
+				PopulateHistory: options != nil && options.PopulateHistory,
+				MessageID:       item.messageID,
+				Timestamp:       item.timestamp,
+			})
 		}
 	}
 
@@ -2766,6 +2786,8 @@ func (m *InteractiveMode) renderSessionEntries(entries []core.SessionEntry, opti
 			continue
 		}
 		messages := core.SessionEntryToContextMessages(entry)
+		base := entry.Base()
+		messageID, timestamp := base.ID, base.Timestamp
 		var usage *types.Usage
 		isSummary := false
 		switch e := entry.(type) {
@@ -2782,13 +2804,13 @@ func (m *InteractiveMode) renderSessionEntries(entries []core.SessionEntry, opti
 				kind = "compaction"
 			}
 			for _, message := range messages {
-				items = append(items, renderSessionItem{message: message})
+				items = append(items, renderSessionItem{message: message, messageID: messageID, timestamp: timestamp})
 			}
 			items = append(items, renderSessionItem{costNotice: &CompactionCostNotice{Kind: kind, Usage: *usage}})
 			continue
 		}
 		for _, message := range messages {
-			items = append(items, renderSessionItem{message: message})
+			items = append(items, renderSessionItem{message: message, messageID: messageID, timestamp: timestamp})
 		}
 	}
 	m.renderSessionItems(items, options)
@@ -8054,8 +8076,10 @@ func (m *InteractiveMode) notifyAuthDialog(dialog *components.LoginDialogCompone
 		dialog.ShowAuth(event.URL, event.Instructions)
 	case "device_code":
 		dialog.ShowDeviceCode(ai.OAuthDeviceCodeInfo{
-			UserCode:        event.UserCode,
-			VerificationURI: event.VerificationURI,
+			UserCode:             event.UserCode,
+			VerificationURI:      event.VerificationURI,
+			OpenBrowserOnConfirm: event.OpenBrowserOnConfirm,
+			CopyCodeOnConfirm:    event.CopyCodeOnConfirm,
 		})
 		dialog.ShowWaiting("Waiting for authentication...")
 	case "info":

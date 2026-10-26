@@ -56,7 +56,31 @@ type toolConfig struct {
 	binaryName        string
 	systemBinaryNames []string
 	tagPrefix         string
-	getAssetName      func(version string, plat string, architecture string) string
+	getAssetName      func(version string, target string) string
+}
+
+// getReleaseTarget maps the platform/arch to the release target suffix shared
+// by fd and ripgrep. Only x64 and arm64 are mapped; other architectures (e.g.
+// ARM32 "arm", "386") must not fall back to x86-64 binaries (#11209).
+func getReleaseTarget(plat string, architecture string) (string, bool) {
+	var archStr string
+	switch architecture {
+	case "arm64":
+		archStr = "aarch64"
+	case "x64":
+		archStr = "x86_64"
+	default:
+		return "", false
+	}
+	switch plat {
+	case "darwin":
+		return archStr + "-apple-darwin.tar.gz", true
+	case "linux":
+		return archStr + "-unknown-linux-musl.tar.gz", true
+	case "win32":
+		return archStr + "-pc-windows-msvc.zip", true
+	}
+	return "", false
 }
 
 var toolsCatalog = map[string]toolConfig{
@@ -66,58 +90,14 @@ var toolsCatalog = map[string]toolConfig{
 		binaryName:        "fd",
 		systemBinaryNames: []string{"fd", "fdfind"},
 		tagPrefix:         "v",
-		getAssetName: func(version string, plat string, architecture string) string {
-			if plat == "darwin" {
-				archStr := "x86_64"
-				if architecture == "arm64" {
-					archStr = "aarch64"
-				}
-				return fmt.Sprintf("fd-v%s-%s-apple-darwin.tar.gz", version, archStr)
-			} else if plat == "linux" {
-				archStr := "x86_64"
-				if architecture == "arm64" {
-					archStr = "aarch64"
-				}
-				// pi (v0.85.1): fd switched to the static musl build on Linux.
-				return fmt.Sprintf("fd-v%s-%s-unknown-linux-musl.tar.gz", version, archStr)
-			} else if plat == "win32" {
-				archStr := "x86_64"
-				if architecture == "arm64" {
-					archStr = "aarch64"
-				}
-				return fmt.Sprintf("fd-v%s-%s-pc-windows-msvc.zip", version, archStr)
-			}
-			return ""
-		},
+		getAssetName:      func(version, target string) string { return "fd-v" + version + "-" + target },
 	},
 	"rg": {
-		name:       "ripgrep",
-		repo:       "BurntSushi/ripgrep",
-		binaryName: "rg",
-		tagPrefix:  "",
-		getAssetName: func(version string, plat string, architecture string) string {
-			if plat == "darwin" {
-				archStr := "x86_64"
-				if architecture == "arm64" {
-					archStr = "aarch64"
-				}
-				return fmt.Sprintf("ripgrep-%s-%s-apple-darwin.tar.gz", version, archStr)
-			} else if plat == "linux" {
-				// pi (v0.85.1): both architectures use the static musl build.
-				archStr := "x86_64"
-				if architecture == "arm64" {
-					archStr = "aarch64"
-				}
-				return fmt.Sprintf("ripgrep-%s-%s-unknown-linux-musl.tar.gz", version, archStr)
-			} else if plat == "win32" {
-				archStr := "x86_64"
-				if architecture == "arm64" {
-					archStr = "aarch64"
-				}
-				return fmt.Sprintf("ripgrep-%s-%s-pc-windows-msvc.zip", version, archStr)
-			}
-			return ""
-		},
+		name:         "ripgrep",
+		repo:         "BurntSushi/ripgrep",
+		binaryName:   "rg",
+		tagPrefix:    "",
+		getAssetName: func(version, target string) string { return "ripgrep-" + version + "-" + target },
 	},
 }
 
@@ -128,6 +108,13 @@ func goArch() string {
 	}
 	return runtime.GOARCH
 }
+
+// currentPlatform/currentArchitecture are the process.platform/arch seams
+// (pi: vi.mocked(os.platform/os.arch) in tests).
+var (
+	currentPlatform     = goPlatform
+	currentArchitecture = goArch
+)
 
 // goPlatform maps GOOS to pi's process.platform strings.
 func goPlatform() string {
@@ -339,8 +326,12 @@ func downloadTool(ctx context.Context, tool string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("Unknown tool: %s", tool)
 	}
-	plat := goPlatform()
-	architecture := goArch()
+	plat := currentPlatform()
+	architecture := currentArchitecture()
+	target, supported := getReleaseTarget(plat, architecture)
+	if !supported {
+		return "", fmt.Errorf("Unsupported platform: %s/%s", plat, architecture)
+	}
 
 	// pi (v0.85.1): fd is pinned on darwin/x64, so skip the version lookup
 	// there.
@@ -355,10 +346,7 @@ func downloadTool(ctx context.Context, tool string) (string, error) {
 		}
 	}
 
-	assetName := config.getAssetName(version, plat, architecture)
-	if assetName == "" {
-		return "", fmt.Errorf("Unsupported platform: %s/%s", plat, architecture)
-	}
+	assetName := config.getAssetName(version, target)
 
 	if err := os.MkdirAll(toolsDir(), 0o755); err != nil {
 		return "", err
@@ -496,6 +484,14 @@ func EnsureTool(ctx context.Context, tool string, onStatus func(status ToolStatu
 			pkgName = name
 		}
 		report(ToolStatus{Type: "warning", Message: fmt.Sprintf("%s not found. Install with: pkg install %s", config.name, pkgName)})
+		return ""
+	}
+	// Prebuilt downloads only exist for the targets mapped in
+	// getReleaseTarget.
+	if _, supported := getReleaseTarget(currentPlatform(), currentArchitecture()); !supported {
+		report(ToolStatus{Type: "warning", Message: fmt.Sprintf(
+			"%s not found. Automatic download is not supported on %s/%s. Install %s with your system package manager.",
+			config.name, currentPlatform(), currentArchitecture(), config.name)})
 		return ""
 	}
 	report(ToolStatus{Type: "info", Message: fmt.Sprintf("%s not found. Downloading...", config.name)})

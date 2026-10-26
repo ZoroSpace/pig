@@ -667,3 +667,34 @@ func TestToolExecutionCallFallbackShowsArguments(t *testing.T) {
 		t.Fatalf("expanded call row missing key: value lines: %q", expanded)
 	}
 }
+
+func TestToolExecutionDefersStreamedArgsToNextRender(t *testing.T) {
+	initTestTheme(t)
+	definition := createBaseToolDefinition("")
+	renderCount := 0
+	definition.RenderCall = func(args any, themeArg tools.UITheme, context tools.ToolRenderContext) tui.Component {
+		renderCount++
+		return tui.NewText("args", 0, 0)
+	}
+	component := NewToolExecutionComponent("custom_tool", "tool-args", map[string]any{}, ToolExecutionOptions{}, definition, &toolExecutionFakeTUI{}, mustCwd(t))
+	before := renderCount
+	for index := 0; index < 5; index++ {
+		component.UpdateArgs(map[string]any{"value": index})
+	}
+	if renderCount != before {
+		t.Fatalf("UpdateArgs rendered %d times before the next frame", renderCount-before)
+	}
+	component.Render(120)
+	if renderCount != before+1 {
+		t.Fatalf("first frame rendered %d times, want 1", renderCount-before)
+	}
+	component.Render(120)
+	if renderCount != before+1 {
+		t.Fatalf("second frame without new args rendered again")
+	}
+	component.UpdateArgs(map[string]any{"value": "done"})
+	component.Render(120)
+	if renderCount != before+2 {
+		t.Fatalf("new args rendered %d times, want 1", renderCount-before-1)
+	}
+}

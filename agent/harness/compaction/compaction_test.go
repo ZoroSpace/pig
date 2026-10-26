@@ -696,7 +696,8 @@ func TestCombinesUsageForSplitTurnCompactionSummaries(t *testing.T) {
 	}
 
 	want := createMockUsage(6, 8, 10, 12)
-	if result.Usage == nil || *result.Usage != want {
+	want.Cost.TotalFromProvider = lo.ToPtr(false)
+	if result.Usage == nil || !reflect.DeepEqual(*result.Usage, want) {
 		t.Fatalf("usage mismatch: %+v != %+v", result.Usage, want)
 	}
 }

@@ -620,9 +620,61 @@ func sanitizeForOpenApi(schema any) any {
 	}
 }
 
+// jsonSchemaNameMaps are schema keywords whose values map names to
+// subschemas, so their keys are not schema keywords.
+var jsonSchemaNameMaps = map[string]struct{}{
+	"properties":        {},
+	"patternProperties": {},
+	"$defs":             {},
+	"definitions":       {},
+	"dependentSchemas":  {},
+	"dependencies":      {},
+}
+
+// rewriteConstAsEnum rewrites string and number `const` values to single-value
+// `enum`s (pi: rewriteConstAsEnum). Gemini ignores `const` in
+// `parametersJsonSchema` but honors `enum`.
+func rewriteConstAsEnum(schema any, isNameMap bool) any {
+	switch value := schema.(type) {
+	case []any:
+		result := make([]any, len(value))
+		for i, item := range value {
+			result[i] = rewriteConstAsEnum(item, isNameMap)
+		}
+		return result
+	case map[string]any:
+		result := make(map[string]any, len(value))
+		for key, item := range value {
+			childIsNameMap := false
+			if !isNameMap {
+				_, childIsNameMap = jsonSchemaNameMaps[key]
+			}
+			result[key] = rewriteConstAsEnum(item, childIsNameMap)
+		}
+		if !isNameMap {
+			if constValue, ok := result["const"]; ok {
+				if _, hasEnum := result["enum"]; !hasEnum {
+					switch constValue.(type) {
+					case string, float64:
+						delete(result, "const")
+						result["enum"] = []any{constValue}
+					}
+				}
+			}
+		}
+		return result
+	default:
+		return schema
+	}
+}
+
 // ConvertGoogleTools converts tools to Gemini function declarations format
 // (pi: convertTools). By default uses `parametersJsonSchema` which supports
-// full JSON Schema (including anyOf, oneOf, const, etc.); useParameters=true
+// full JSON Schema (including anyOf, oneOf, etc.). Gemini ignores `const`
+// there, so string and number `const` values are sent as single-value `enum`s.
+// useParameters=true switches to the legacy `parameters` field (OpenAPI 3.03
+// Schema). This is needed for Cloud Code Assist with Claude models, where the
+// API translates `parameters` into Anthropic's `input_schema`.
 // switches to the legacy `parameters` field (OpenAPI 3.03 Schema). This is
 // needed for Cloud Code Assist with Claude models, where the API translates
 // `parameters` into Anthropic's `input_schema`.
@@ -655,7 +707,11 @@ func ConvertGoogleTools(tools []types.Tool, useParameters bool, supportsStrictMo
 			}
 			declaration["parameters"] = sanitizeForOpenApi(decoded)
 		} else {
-			declaration["parametersJsonSchema"] = parameters
+			var decoded any
+			if jsonErr := json.Unmarshal(parameters, &decoded); jsonErr != nil {
+				return nil, jsonErr
+			}
+			declaration["parametersJsonSchema"] = rewriteConstAsEnum(decoded, false)
 		}
 		declarations = append(declarations, declaration)
 	}

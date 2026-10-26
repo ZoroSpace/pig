@@ -783,7 +783,7 @@ func processKimiCodingModels(data ModelsDevCatalog) []*ai.Model {
 		if !boolVal(m.ToolCall) {
 			continue
 		}
-		isK3Style := kimiCodingK3StyleModelIDs[modelID]
+		isK3Style := isKimiCodingK3Style(m)
 		impliedCost := kimiCodingImpliedCosts[modelID]
 
 		compat := copyOpenAICompat(kimiOpenAICompat)
@@ -860,17 +860,20 @@ func processMoonshotModels(data ModelsDevCatalog) []*ai.Model {
 			if !boolVal(m.ToolCall) {
 				continue
 			}
-			isKimiK3 := modelID == "kimi-k3"
+			isKimiK3 := isKimiK3FamilyID(modelID)
 			compat := copyOpenAICompat(kimiOpenAICompat)
 			if isKimiK3 {
 				compat = copyOpenAICompat(kimiK3OpenAICompat)
 			}
 			// S17 (pi a2eef9eb6): Moonshot does not bill cache writes; models.dev
-			// lists the input rate as cache_write for Kimi K3, so the catalog cost
-			// is ignored and the pinned rates are used verbatim.
+			// lists the input rate as cache_write for Kimi K3. Pin kimi-k3's
+			// rates; other K3-family point releases keep their catalog rates
+			// with cache writes removed (pi 1de2d7ade).
 			cost := modelsDevFlatCostOf(m.Cost)
-			if isKimiK3 {
+			if modelID == "kimi-k3" {
 				cost = ai.ModelCost{ModelCostRates: kimiK3Cost}
+			} else if isKimiK3 {
+				cost.CacheWrite = 0
 			}
 			models = append(models, &ai.Model{
 				ID:            modelID,

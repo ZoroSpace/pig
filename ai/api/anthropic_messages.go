@@ -590,6 +590,12 @@ type anthropicStreamUsage struct {
 	OutputTokensDetails *struct {
 		ThinkingTokens *int64 `json:"thinking_tokens"`
 	} `json:"output_tokens_details"`
+	// OpenRouter adds billing fields to streamed message_delta usage at
+	// runtime, although its OpenAPI schema and the Anthropic SDK do not type
+	// those fields.
+	Cost        *float64                     `json:"cost"`
+	IsByok      *bool                        `json:"is_byok"`
+	CostDetails *utils.OpenRouterCostDetails `json:"cost_details"`
 }
 
 // anthropicInputTransformation is one dropped-input transformation entry (pi:
@@ -668,8 +674,9 @@ func iterateAnthropicEvents(ctx context.Context, resp *http.Response, yield func
 type anthropicBlock struct {
 	index   int
 	content types.Content
-	// partialJSON accumulates input_json_delta for tool calls.
-	partialJSON string
+	// arguments accumulates input_json_delta for tool calls. It is stream
+	// state and never reaches partial messages or transcripts.
+	arguments *utils.ToolCallArgumentsStream
 }
 
 // streamAnthropicMessages is the adapter's core stream implementation (pi:
@@ -903,7 +910,7 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 						}
 						arguments, _ := contentBlock["input"].(map[string]any)
 						toolCall := types.NewToolCall(id, toolName, arguments)
-						block := &anthropicBlock{index: index, content: toolCall}
+						block := &anthropicBlock{index: index, content: toolCall, arguments: utils.NewToolCallArgumentsStream()}
 						blocks = append(blocks, block)
 						push(types.AssistantMessageEvent{Type: types.EventToolCallStart, ContentIndex: len(blocks) - 1, Partial: output})
 					}
@@ -938,10 +945,9 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 							push(types.AssistantMessageEvent{Type: types.EventThinkingDelta, ContentIndex: blockIndex, Delta: deltaThinking, Partial: output})
 						}
 					case "input_json_delta":
-						if toolCall, ok := block.content.(types.ToolCall); ok {
+						if toolCall, ok := block.content.(types.ToolCall); ok && block.arguments != nil {
 							partialJSON, _ := delta["partial_json"].(string)
-							block.partialJSON += partialJSON
-							toolCall.Arguments = utils.ParseStreamingJSON(&block.partialJSON)
+							toolCall.Arguments = block.arguments.Append(partialJSON)
 							block.content = toolCall
 							push(types.AssistantMessageEvent{Type: types.EventToolCallDelta, ContentIndex: blockIndex, Delta: partialJSON, Partial: output})
 						}
@@ -971,11 +977,12 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 					case types.ThinkingContent:
 						push(types.AssistantMessageEvent{Type: types.EventThinkingEnd, ContentIndex: blockIndex, Content: b.Thinking, Partial: output})
 					case types.ToolCall:
-						b.Arguments, b.ArgumentsError = utils.ParseToolCallArguments(block.partialJSON)
-						// Finalize in place and strip the scratch buffer so
-						// replay only carries parsed arguments (pi: delete
-						// block.partialJson).
-						block.partialJSON = ""
+						if block.arguments != nil {
+							b.Arguments, b.ArgumentsError = block.arguments.Finish()
+						}
+						// Drop the scratch stream so replay only carries parsed
+						// arguments (pi: delete block.partialJson).
+						block.arguments = nil
 						block.content = b
 						toolCall := b
 						push(types.AssistantMessageEvent{Type: types.EventToolCallEnd, ContentIndex: blockIndex, ToolCall: &toolCall, Partial: output})
@@ -1016,9 +1023,15 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 					// Only update usage fields if present (not null).
 					// Preserves input_tokens from message_start when proxies
 					// omit it in message_delta.
+					var openRouterAccounting *utils.OpenRouterUsageAccounting
 					if usage, ok := event["usage"].(map[string]any); ok {
 						var parsed anthropicStreamUsage
 						if err := remarshal(usage, &parsed); err == nil {
+							openRouterAccounting = &utils.OpenRouterUsageAccounting{
+								Cost:        parsed.Cost,
+								IsByok:      parsed.IsByok,
+								CostDetails: parsed.CostDetails,
+							}
 							if parsed.InputTokens != nil {
 								output.Usage.Input = *parsed.InputTokens
 							}
@@ -1048,6 +1061,9 @@ func streamAnthropicMessages(ctx context.Context, model *types.Model, llmContext
 					// components.
 					output.Usage.TotalTokens = output.Usage.Input + output.Usage.Output + output.Usage.CacheRead + output.Usage.CacheWrite
 					ai.CalculateCost(usageModel, &output.Usage)
+					if openRouterAccounting != nil && utils.IsOpenRouterModel(model) {
+						utils.ApplyOpenRouterReportedCost(&output.Usage, *openRouterAccounting)
+					}
 				}
 				return nil
 			})
@@ -1644,7 +1660,11 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 			"display":       thinkingDisplayValue(options),
 			"block_binding": map[string]any{"prefix_mismatch_behavior": "drop_block"},
 		}
-		params["output_config"] = map[string]any{"effort": "high"}
+		// Effort markers set the level for every reply. The top-level effort
+		// is part of the cached prompt, so it stays fixed. It is "low" because
+		// organizations can cap effort and reject requests containing any
+		// level above the cap.
+		params["output_config"] = map[string]any{"effort": "low"}
 	} else if model.Reasoning && options.ThinkingEnabled != nil && *options.ThinkingEnabled {
 		// Default to "summarized" so Opus 4.7 and Mythos Preview behave
 		// like older Claude 4 models (whose API default is also

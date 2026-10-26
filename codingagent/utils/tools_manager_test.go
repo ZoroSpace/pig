@@ -133,6 +133,62 @@ func TestGetLatestVersionFailsOnNonTagRedirect(t *testing.T) {
 	}
 }
 
+func TestGetReleaseTarget(t *testing.T) {
+	cases := []struct {
+		plat, arch string
+		want       string
+		ok         bool
+	}{
+		{"darwin", "x64", "x86_64-apple-darwin.tar.gz", true},
+		{"darwin", "arm64", "aarch64-apple-darwin.tar.gz", true},
+		{"linux", "x64", "x86_64-unknown-linux-musl.tar.gz", true},
+		{"linux", "arm64", "aarch64-unknown-linux-musl.tar.gz", true},
+		{"win32", "x64", "x86_64-pc-windows-msvc.zip", true},
+		{"win32", "arm64", "aarch64-pc-windows-msvc.zip", true},
+		{"linux", "arm", "", false},
+		{"linux", "386", "", false},
+		{"freebsd", "x64", "", false},
+	}
+	for _, tc := range cases {
+		got, ok := getReleaseTarget(tc.plat, tc.arch)
+		if ok != tc.ok || got != tc.want {
+			t.Errorf("getReleaseTarget(%q, %q) = %q, %v; want %q, %v", tc.plat, tc.arch, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+func TestEnsureToolSkipsDownloadOnUnsupportedArchitecture(t *testing.T) {
+	forceUninstalledTool(t)
+	withOfflineDisabled(t)
+	originalPlatform, originalArchitecture := currentPlatform, currentArchitecture
+	t.Cleanup(func() {
+		currentPlatform, currentArchitecture = originalPlatform, originalArchitecture
+	})
+	currentPlatform = func() string { return "linux" }
+	var fetchCalls int
+	stubFetchDo(t, func(client *http.Client, req *http.Request) (*http.Response, error) {
+		fetchCalls++
+		return nil, errors.New("should not fetch")
+	})
+	for _, architecture := range []string{"arm", "ia32"} {
+		t.Run(architecture, func(t *testing.T) {
+			currentArchitecture = func() string { return architecture }
+			var statuses []ToolStatus
+			result := EnsureTool(t.Context(), "rg", func(status ToolStatus) { statuses = append(statuses, status) })
+			if result != "" {
+				t.Fatalf("expected no result, got %q", result)
+			}
+			if fetchCalls != 0 {
+				t.Fatalf("fetch calls = %d, want 0", fetchCalls)
+			}
+			want := "ripgrep not found. Automatic download is not supported on linux/" + architecture + ". Install ripgrep with your system package manager."
+			if len(statuses) != 1 || statuses[0].Type != "warning" || statuses[0].Message != want {
+				t.Fatalf("statuses = %+v", statuses)
+			}
+		})
+	}
+}
+
 func TestEnsureToolSurfacesErrorCauseChain(t *testing.T) {
 	forceUninstalledTool(t)
 	withOfflineDisabled(t)

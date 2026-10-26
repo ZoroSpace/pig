@@ -794,3 +794,18 @@ func TestMarkdownStabilizesPartialClosingFenceRendering(t *testing.T) {
 		t.Fatal("partial and complete fence renders should have equal line counts")
 	}
 }
+
+// TestMarkdownDeeplyNestedBlockquotesDoNotExplode guards pi 8a2ebd385: once
+// nesting uses up the width, nested quotes render without another border
+// instead of re-wrapping (and tripling) every child line per level.
+func TestMarkdownDeeplyNestedBlockquotesDoNotExplode(t *testing.T) {
+	markdown := NewMarkdown(strings.Repeat(">", 60)+"x", 0, 0, defaultMarkdownTheme, nil, nil)
+
+	lines := mapStripTrim(markdown.Render(80))
+	if len(lines) != 1 {
+		t.Fatalf("expected a single line, got %d: %q", len(lines), lines)
+	}
+	if !strings.HasSuffix(lines[0], "x") {
+		t.Fatalf("expected content to be kept, got %q", lines[0])
+	}
+}

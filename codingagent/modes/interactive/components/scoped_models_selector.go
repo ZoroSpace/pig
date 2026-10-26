@@ -449,6 +449,12 @@ func (s *ScopedModelsSelectorComponent) updateList() {
 		if isSelected {
 			modelText = theme.Fg("accent", styledID)
 		}
+		nameText := ""
+		if item.model != nil {
+			if name := GetDistinctModelName(ModelSearchItem{ID: item.model.ID, Name: item.model.Name}); name != "" {
+				nameText = theme.Fg("muted", " ("+name+")")
+			}
+		}
 		providerBadgeText := " [unavailable]"
 		if item.model != nil {
 			providerBadgeText = fmt.Sprintf(" [%s]", item.model.Provider)
@@ -458,7 +464,7 @@ func (s *ScopedModelsSelectorComponent) updateList() {
 		if item.model != nil && item.enabled {
 			status = theme.Fg("accent", "✓ ")
 		}
-		s.listContainer.AddChild(tui.NewText(prefix+status+modelText+providerBadge, 0, 0))
+		s.listContainer.AddChild(tui.NewText(prefix+status+modelText+nameText+providerBadge, 0, 0))
 	}
 
 	// Add scroll indicator if needed

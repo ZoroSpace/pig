@@ -83,9 +83,13 @@ type ToolExecutionComponent struct {
 	cwd              string
 	executionStarted bool
 	argsComplete     bool
-	result           *ToolExecutionResult
-	convertedImages  map[int]imageConversion
-	hideComponent    bool
+	// argsPending marks streamed arguments that have not reached the display
+	// yet; Render applies them, so a call streaming many deltas between two
+	// frames runs its renderer once per frame (pi: argsPending, #9265).
+	argsPending     bool
+	result          *ToolExecutionResult
+	convertedImages map[int]imageConversion
+	hideComponent   bool
 
 	mu sync.Mutex
 }
@@ -311,8 +315,9 @@ func (c *ToolExecutionComponent) createResultFallback() tui.Component {
 func (c *ToolExecutionComponent) UpdateArgs(args any) {
 	c.mu.Lock()
 	c.args = args
+	c.argsPending = true
 	c.mu.Unlock()
-	c.updateDisplay()
+	c.ui.RequestRender(false)
 }
 
 // MarkExecutionStarted flags the execution start (pi: markExecutionStarted).
@@ -399,6 +404,9 @@ func (c *ToolExecutionComponent) Render(width int) []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if c.argsPending {
+		c.updateDisplay()
+	}
 	if c.hideComponent {
 		return nil
 	}
@@ -453,6 +461,7 @@ func (c *ToolExecutionComponent) HandleMouse(event *tui.TuiMouseEvent) *tui.TuiM
 // border-only shells color the frame by state instead of filling the box
 // background (pi: bgFn pending/success/error → pig: muted/success/error).
 func (c *ToolExecutionComponent) updateDisplay() {
+	c.argsPending = false
 	c.borderStateKey = "success"
 	if c.isPartial {
 		c.borderStateKey = "muted"

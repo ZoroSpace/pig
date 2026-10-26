@@ -192,10 +192,9 @@ func StreamProxy(ctx context.Context, model *types.Model, llmContext *types.Tran
 			return
 		}
 
-		// partialJSONs holds the streaming tool-call argument scratch buffer
-		// per content index (pi keeps it on the content object as partialJson,
-		// a field pig's typed ToolCall cannot carry).
-		partialJSONs := map[int]string{}
+		// toolArguments holds the argument stream of open tool calls per content
+		// index, kept off the content blocks (pi: toolArguments).
+		toolArguments := map[int]*utils.ToolCallArgumentsStream{}
 		sawTerminalEvent := false
 
 		processLine := func(line string) error {
@@ -210,7 +209,7 @@ func StreamProxy(ctx context.Context, model *types.Model, llmContext *types.Tran
 			if err := json.Unmarshal([]byte(data), &proxyEvent); err != nil {
 				return err
 			}
-			event, err := processProxyEvent(&proxyEvent, partial, partialJSONs)
+			event, err := processProxyEvent(&proxyEvent, partial, toolArguments)
 			if err != nil {
 				return err
 			}
@@ -299,7 +298,7 @@ func setContentAt(content []types.Content, index int, entry types.Content) []typ
 // mutated in place; the caller snapshots it into the pushed event. Errors are
 // thrown in pi; pig returns them (pi's toolcall_end mismatch returns undefined
 // without throwing — mirrored as (nil, nil)).
-func processProxyEvent(proxyEvent *ProxyAssistantMessageEvent, partial *types.AssistantMessage, partialJSONs map[int]string) (*types.AssistantMessageEvent, error) {
+func processProxyEvent(proxyEvent *ProxyAssistantMessageEvent, partial *types.AssistantMessage, toolArguments map[int]*utils.ToolCallArgumentsStream) (*types.AssistantMessageEvent, error) {
 	switch proxyEvent.Type {
 	case "start":
 		return &types.AssistantMessageEvent{Type: types.EventStart, Partial: partial}, nil
@@ -389,7 +388,7 @@ func processProxyEvent(proxyEvent *ProxyAssistantMessageEvent, partial *types.As
 			Name:      proxyEvent.ToolName,
 			Arguments: map[string]any{},
 		})
-		partialJSONs[proxyEvent.ContentIndex] = ""
+		toolArguments[proxyEvent.ContentIndex] = utils.NewToolCallArgumentsStream()
 		return &types.AssistantMessageEvent{Type: types.EventToolCallStart, ContentIndex: proxyEvent.ContentIndex, Partial: partial}, nil
 
 	case "toolcall_delta":
@@ -398,13 +397,10 @@ func processProxyEvent(proxyEvent *ProxyAssistantMessageEvent, partial *types.As
 			return nil, errors.New("Received toolcall_delta for non-toolCall content")
 		}
 		if content, ok := entry.(types.ToolCall); ok {
-			partialJSONs[proxyEvent.ContentIndex] += proxyEvent.Delta
-			buffer := partialJSONs[proxyEvent.ContentIndex]
-			content.Arguments = utils.ParseStreamingJSON(&buffer)
-			if content.Arguments == nil {
-				content.Arguments = map[string]any{}
+			arguments := toolArguments[proxyEvent.ContentIndex]
+			if arguments != nil {
+				content.Arguments = arguments.Append(proxyEvent.Delta)
 			}
-			partialJSONs[proxyEvent.ContentIndex] = buffer
 			partial.Content[proxyEvent.ContentIndex] = content // Trigger reactivity (pi; a no-op for pig values)
 			return &types.AssistantMessageEvent{
 				Type:         types.EventToolCallDelta,
@@ -430,7 +426,7 @@ func processProxyEvent(proxyEvent *ProxyAssistantMessageEvent, partial *types.As
 				assigned.Kind = types.KindToolCall
 				content = assigned
 			}
-			delete(partialJSONs, proxyEvent.ContentIndex)
+			delete(toolArguments, proxyEvent.ContentIndex)
 			partial.Content[proxyEvent.ContentIndex] = content
 			return &types.AssistantMessageEvent{
 				Type:         types.EventToolCallEnd,

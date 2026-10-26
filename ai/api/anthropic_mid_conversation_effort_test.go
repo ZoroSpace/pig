@@ -135,7 +135,7 @@ func TestAnthropicMidConversationEffortMarkerPrefix(t *testing.T) {
 	if !stringMapEqual(secondMarkers[1], map[string]any{"role": "system", "content": []any{}, "output_config": map[string]any{"effort": "high"}}) {
 		t.Errorf("active marker = %#v", secondMarkers[1])
 	}
-	if !stringMapEqual(mapOf(t, firstPayload["output_config"]), map[string]any{"effort": "high"}) {
+	if !stringMapEqual(mapOf(t, firstPayload["output_config"]), map[string]any{"effort": "low"}) {
 		t.Errorf("first output_config = %#v", firstPayload["output_config"])
 	}
 	thinking := mapOf(t, secondPayload["thinking"])

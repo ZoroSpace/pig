@@ -715,8 +715,28 @@ func (m *Markdown) renderToken(token *MarkedToken, width int, nextTokenType stri
 			return quoteStyle(lineWithReappliedStyle)
 		}
 
+		quoteTokens := token.Tokens
+		if quoteTokens == nil {
+			quoteTokens = []*MarkedToken{}
+		}
+
+		// With no room for another border ("│ " plus at least one content
+		// column), render the nested content without one. Otherwise each
+		// extra level re-wraps every child line at width 1 and the output
+		// grows exponentially with nesting depth.
+		if width < 3 {
+			for i, quoteToken := range quoteTokens {
+				nextQuoteTokenType := ""
+				if i+1 < len(quoteTokens) {
+					nextQuoteTokenType = quoteTokens[i+1].Type
+				}
+				lines = append(lines, m.renderToken(quoteToken, width, nextQuoteTokenType, styleContext)...)
+			}
+			break
+		}
+
 		// Calculate available width for quote content (subtract border "│ " = 2 chars)
-		quoteContentWidth := max(1, width-2)
+		quoteContentWidth := width - 2
 
 		// Blockquotes contain block-level tokens, so render children with
 		// renderToken(). Default message style should not apply inside
@@ -724,10 +744,6 @@ func (m *Markdown) renderToken(token *MarkedToken, width int, nextTokenType stri
 		quoteInlineStyleContext := inlineStyleContext{
 			applyText:   func(text string) string { return text },
 			stylePrefix: quoteStylePrefix,
-		}
-		quoteTokens := token.Tokens
-		if quoteTokens == nil {
-			quoteTokens = []*MarkedToken{}
 		}
 		renderedQuoteLines := []string{}
 		for i, quoteToken := range quoteTokens {

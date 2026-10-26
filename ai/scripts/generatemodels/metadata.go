@@ -71,17 +71,33 @@ var kimiK3Cost = ai.ModelCostRates{Input: 3, Output: 15, CacheRead: 0.3, CacheWr
 // equivalent Moonshot API rates to estimate the value of subscription usage.
 var kimiCodingImpliedCosts = map[string]ai.ModelCostRates{
 	"k3":                        {Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0},
+	"k3-256k":                   {Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 0},
+	"k3.1-pro":                  {Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 0},
+	"k3.1-pro-highspeed":        {Input: 4, Output: 20, CacheRead: 0.2, CacheWrite: 0},
 	"kimi-for-coding":           {Input: 0.95, Output: 4, CacheRead: 0.19, CacheWrite: 0},
 	"kimi-for-coding-highspeed": {Input: 1.9, Output: 8, CacheRead: 0.38, CacheWrite: 0},
 }
 
-// kimiCodingK3StyleModelIDs is pi's KIMI_CODING_K3_STYLE_MODEL_IDS: models
-// whose /coding/v1/models entry reports effort levels and dynamic tool loading
-// (tools declared in later system messages). Highspeed reports neither and
-// rejects tool-bearing system messages with a 400.
-var kimiCodingK3StyleModelIDs = stringSet("k3", "k3-256k", "kimi-for-coding")
+// isKimiK3FamilyID reports whether a model id belongs to the Kimi K3 family,
+// including point releases such as kimi-k3.1-pro and kimi-k3.1-pro-highspeed
+// (pi: isKimiK3FamilyId). Those share K3's request format.
+func isKimiK3FamilyID(modelID string) bool {
+	matched, _ := regexp.MatchString(`^kimi-k3(?:\.\d+)?(?:-|$)`, modelID)
+	return matched
+}
 
-var openRouterKimiK3ModelIds = stringSet("moonshotai/kimi-k3", "~moonshotai/kimi-latest")
+// isKimiCodingK3Style reports whether a Kimi Coding model reports effort
+// levels and dynamic tool loading (tools declared in later system messages).
+// kimi-for-coding-highspeed reports neither and rejects tool-bearing system
+// messages with a 400.
+func isKimiCodingK3Style(m *ModelsDevModel) bool {
+	for _, option := range m.ReasoningOptions {
+		if option.Type == "effort" {
+			return true
+		}
+	}
+	return false
+}
 
 // ANT_LING_RING_THINKING_LEVEL_MAP (pi) — Ring reasons by default; only
 // high/xhigh have documented explicit effort controls.
@@ -958,9 +974,9 @@ func applyOpenAICompletionsTranscriptMetadata(model *ai.Model) {
 	if model.API != ai.ApiOpenAICompletions {
 		return
 	}
-	isKimiK3 := (strings.HasPrefix(string(model.Provider), "moonshot") && model.ID == "kimi-k3") ||
+	isKimiK3 := (strings.HasPrefix(string(model.Provider), "moonshot") && isKimiK3FamilyID(model.ID)) ||
 		(model.Provider == ai.ProviderID("fireworks") && strings.Contains(model.ID, "kimi-k3")) ||
-		((model.Provider == ai.ProviderID("opencode") || model.Provider == ai.ProviderID("opencode-go")) && model.ID == "kimi-k3")
+		((model.Provider == ai.ProviderID("opencode") || model.Provider == ai.ProviderID("opencode-go")) && isKimiK3FamilyID(model.ID))
 	isMoonshotKimiK2 := strings.HasPrefix(string(model.Provider), "moonshot") &&
 		(model.ID == "kimi-k2.6" || model.ID == "kimi-k2.7-code" || model.ID == "kimi-k2.7-code-highspeed")
 	isTextOnly := isMoonshotKimiK2 ||

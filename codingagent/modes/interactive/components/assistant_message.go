@@ -22,6 +22,8 @@ type AssistantMessageComponent struct {
 	hiddenThinkingLabel  string
 	outputPad            int
 	markdownTransformers []core.MarkdownTransformer
+	messageID            string
+	timestamp            string
 	lastMessage          *types.AssistantMessage
 	hasToolCalls         bool
 	isStreaming          bool
@@ -44,6 +46,12 @@ type AssistantMessageOptions struct {
 	OutputPad int
 	// MarkdownTransformers (pi: markdownTransformers).
 	MarkdownTransformers []core.MarkdownTransformer
+	// MessageID is the persisted session-entry id; empty for live messages
+	// (pi: messageId?).
+	MessageID string
+	// Timestamp is the persisted session-entry ISO timestamp; empty for live
+	// messages (pi: timestamp?).
+	Timestamp string
 }
 
 // NewAssistantMessageComponent builds the component (pi: constructor;
@@ -83,6 +91,8 @@ func NewAssistantMessageComponent(message *types.AssistantMessage, options *Assi
 			c.outputPad = options.OutputPad
 		}
 		c.markdownTransformers = options.MarkdownTransformers
+		c.messageID = options.MessageID
+		c.timestamp = options.Timestamp
 	} else {
 		c.markdownTheme = theme.GetMarkdownTheme()
 	}
@@ -201,7 +211,7 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 				c.markdownTheme,
 				nil,
 				&tui.MarkdownOptions{
-					Transform: CreateMarkdownTransform("assistant", c.isStreaming, c.markdownTransformers),
+					Transform: CreateMarkdownTransform("assistant", c.isStreaming, c.markdownTransformers, c.messageID, c.timestamp),
 				},
 			))
 		case *types.ThinkingContent:
@@ -264,7 +274,7 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 						Italic: true,
 					},
 					&tui.MarkdownOptions{
-						Transform: CreateMarkdownTransform("assistant-thinking", c.isStreaming, c.markdownTransformers),
+						Transform: CreateMarkdownTransform("assistant-thinking", c.isStreaming, c.markdownTransformers, c.messageID, c.timestamp),
 					},
 				)
 			}

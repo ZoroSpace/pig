@@ -150,9 +150,9 @@ type bedrockBlock struct {
 	// pos is the block's position in output.Content (pi reads the fields off
 	// output.content entries directly; pig stores scratch beside them).
 	pos int
-	// partialJson accumulates streamed tool arguments (pi: Block.partialJson);
-	// never persisted.
-	partialJson string
+	// arguments accumulates streamed tool arguments (pi: Block.partialJson is
+	// replaced by ToolCallArgumentsStream); never persisted.
+	arguments *utils.ToolCallArgumentsStream
 	// redactedChunks buffer encrypted reasoning deltas, joined into
 	// thinkingSignature on finalize (pi: Block.redactedChunks).
 	redactedChunks [][]byte
@@ -741,7 +741,7 @@ func handleBedrockContentBlockStart(event *brtypes.ContentBlockStartEvent, outpu
 			Name:      name,
 			Arguments: map[string]any{},
 		})
-		blocks[index] = &bedrockBlock{index: index, pos: len(output.Content) - 1}
+		blocks[index] = &bedrockBlock{index: index, pos: len(output.Content) - 1, arguments: utils.NewToolCallArgumentsStream()}
 		push(types.AssistantMessageEvent{Type: types.EventToolCallStart, ContentIndex: len(output.Content) - 1, Partial: output})
 	}
 }
@@ -778,9 +778,10 @@ func handleBedrockContentBlockDelta(event *brtypes.ContentBlockDeltaEvent, outpu
 			if delta.Value.Input != nil {
 				input = *delta.Value.Input
 			}
-			block.partialJson += input
 			call := output.Content[block.pos].(types.ToolCall)
-			call.Arguments = utils.ParseStreamingJSON(&block.partialJson)
+			if block.arguments != nil {
+				call.Arguments = block.arguments.Append(input)
+			}
 			output.Content[block.pos] = call
 			push(types.AssistantMessageEvent{Type: types.EventToolCallDelta, ContentIndex: block.pos, Delta: input, Partial: output})
 		}
@@ -849,9 +850,12 @@ func handleBedrockContentBlockStop(event *brtypes.ContentBlockStopEvent, output 
 		thinking := output.Content[pos].(types.ThinkingContent)
 		push(types.AssistantMessageEvent{Type: types.EventThinkingEnd, ContentIndex: pos, Content: thinking.Thinking, Partial: output})
 	case types.ToolCall:
-		content.Arguments, content.ArgumentsError = utils.ParseToolCallArguments(block.partialJson)
-		// Finalize in-place and strip the scratch buffer so replay only
-		// carries parsed arguments.
+		if block.arguments != nil {
+			content.Arguments, content.ArgumentsError = block.arguments.Finish()
+		}
+		// Finalize in-place and drop the scratch stream so replay only carries
+		// parsed arguments.
+		block.arguments = nil
 		output.Content[pos] = content
 		delete(blocks, contentBlockIndex)
 		push(types.AssistantMessageEvent{Type: types.EventToolCallEnd, ContentIndex: pos, ToolCall: &content, Partial: output})
@@ -877,7 +881,7 @@ func flushBedrockRedactedContent(output *types.AssistantMessage, block *bedrockB
 // finalizeAllBedrockBlocks strips every streaming scratch field. Runs from the
 // terminal paths as well as contentBlockStop, because a stream can settle
 // without stopping each block (pi: the finalizeStreamingBlock loops in the try
-// and catch paths). pig's scratch (index / partialJson / redactedChunks) lives
+// and catch paths). pig's scratch (index / arguments / redactedChunks) lives
 // beside output.Content, so only the redacted-payload flush is observable on
 // the message.
 func finalizeAllBedrockBlocks(output *types.AssistantMessage, blocks map[int32]*bedrockBlock) {

@@ -5,6 +5,8 @@ package api
 import (
 	"testing"
 
+	"github.com/samber/lo"
+
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/ai/utils"
 )
@@ -65,7 +67,7 @@ func TestOpenAIResponsesToolCallNamespaces(t *testing.T) {
 			}},
 			&responsesStreamEvent{Type: "response.output_item.done", OutputIndex: 0, Item: &responsesOutputItem{
 				Type: "custom_tool_call", ID: "ctc_test", CallID: "call_test", Name: "query",
-				Input: "hello", Namespace: "dynamic_tools",
+				Input: lo.ToPtr("hello"), Namespace: "dynamic_tools",
 			}},
 			&responsesStreamEvent{Type: "response.completed", Response: &responsesResponseObject{ID: "resp_test", Status: "completed"}},
 		)

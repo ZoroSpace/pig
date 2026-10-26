@@ -68,12 +68,94 @@ func normalizeWhitespaceLower(text string) string {
 	return strings.ToLower(strings.Join(strings.Fields(text), " "))
 }
 
-func getSessionSearchText(session *core.SessionInfo) string {
-	name := ""
-	if session.Name != nil {
-		name = *session.Name
+// Match tiers, best first. Each token is scored by the best field it matches; tiers dominate
+// fuzzy scores so an exact hit anywhere beats a scattered subsequence in a short field.
+const (
+	tierName   = 0 // query text appears in the session name
+	tierText   = 1 // query text appears in the session id, messages, or cwd
+	tierFuzzy  = 2 // query characters appear scattered in the session name or cwd
+	tierWeight = 1_000_000
+)
+
+func tierScore(tier int, score float64) float64 {
+	return float64(tier*tierWeight) + score
+}
+
+func sessionNameLower(session *core.SessionInfo) string {
+	if session.Name == nil {
+		return ""
 	}
-	return session.ID + " " + name + " " + session.AllMessagesText + " " + session.Cwd
+	return strings.ToLower(*session.Name)
+}
+
+func normalizeWhitespaceLowerText(text string) string {
+	return normalizeWhitespaceLower(text)
+}
+
+// matchLiteralToken is an exact (case-insensitive) text match. Messages and
+// ids are only matched exactly: scattered matches in them are noise.
+func matchLiteralToken(session *core.SessionInfo, value string) (float64, bool) {
+	name := sessionNameLower(session)
+	if strings.Contains(name, value) {
+		return tierScore(tierName, tui.FuzzyMatchScore(value, name).Score), true
+	}
+	if strings.Contains(strings.ToLower(session.ID), value) {
+		return tierScore(tierText, 0), true
+	}
+	if strings.Contains(strings.ToLower(session.AllMessagesText), value) {
+		return tierScore(tierText, 0), true
+	}
+	if strings.Contains(strings.ToLower(session.Cwd), value) {
+		return tierScore(tierText, 0), true
+	}
+	return 0, false
+}
+
+func matchFuzzyToken(session *core.SessionInfo, value string) (float64, bool) {
+	if literal, ok := matchLiteralToken(session, strings.ToLower(value)); ok {
+		return literal, true
+	}
+
+	best := 0.0
+	found := false
+	for _, field := range []string{sessionNameLower(session), session.Cwd} {
+		m := tui.FuzzyMatchScore(value, field)
+		if m.Matches && (!found || m.Score < best) {
+			best = m.Score
+			found = true
+		}
+	}
+	if !found {
+		return 0, false
+	}
+	return tierScore(tierFuzzy, best), true
+}
+
+func matchPhraseToken(session *core.SessionInfo, phrase string) (float64, bool) {
+	name := normalizeWhitespaceLowerText(sessionNameLower(session))
+	if strings.Contains(name, phrase) {
+		return tierScore(tierName, tui.FuzzyMatchScore(phrase, name).Score), true
+	}
+	if strings.Contains(strings.ToLower(session.ID), phrase) {
+		return tierScore(tierText, 0), true
+	}
+	if strings.Contains(normalizeWhitespaceLowerText(strings.ToLower(session.AllMessagesText)), phrase) {
+		return tierScore(tierText, 0), true
+	}
+	if strings.Contains(normalizeWhitespaceLowerText(strings.ToLower(session.Cwd)), phrase) {
+		return tierScore(tierText, 0), true
+	}
+	return 0, false
+}
+
+func matchRegex(session *core.SessionInfo, regex *regexp.Regexp) (float64, bool) {
+	if session.Name != nil && regex.MatchString(*session.Name) {
+		return tierScore(tierName, 0), true
+	}
+	if regex.MatchString(session.ID) || regex.MatchString(session.AllMessagesText) || regex.MatchString(session.Cwd) {
+		return tierScore(tierText, 0), true
+	}
+	return 0, false
 }
 
 // HasSessionName reports whether the session has a non-blank display name
@@ -186,49 +268,38 @@ func isJsWhitespace(r rune) bool {
 }
 
 // MatchSession matches one session against a parsed query (pi: matchSession).
+// Each field is matched separately, so a token never matches across field
+// boundaries; different tokens may match different fields.
 func MatchSession(session *core.SessionInfo, parsed ParsedSearchQuery) MatchResult {
-	text := getSessionSearchText(session)
-
 	if parsed.Mode == "regex" {
 		if parsed.Regex == nil {
 			return MatchResult{Matches: false, Score: 0}
 		}
-		loc := parsed.Regex.FindStringIndex(text)
-		if loc == nil {
+		score, ok := matchRegex(session, parsed.Regex)
+		if !ok {
 			return MatchResult{Matches: false, Score: 0}
 		}
-		return MatchResult{Matches: true, Score: float64(loc[0]) * 0.1}
-	}
-
-	if len(parsed.Tokens) == 0 {
-		return MatchResult{Matches: true, Score: 0}
+		return MatchResult{Matches: true, Score: score}
 	}
 
 	totalScore := 0.0
-	normalizedText := ""
 
 	for _, token := range parsed.Tokens {
+		var score float64
+		var ok bool
 		if token.Kind == TokenKindPhrase {
-			if normalizedText == "" {
-				normalizedText = normalizeWhitespaceLower(text)
-			}
 			phrase := normalizeWhitespaceLower(token.Value)
 			if phrase == "" {
 				continue
 			}
-			idx := strings.Index(normalizedText, phrase)
-			if idx < 0 {
-				return MatchResult{Matches: false, Score: 0}
-			}
-			totalScore += float64(idx) * 0.1
-			continue
+			score, ok = matchPhraseToken(session, phrase)
+		} else {
+			score, ok = matchFuzzyToken(session, token.Value)
 		}
-
-		m := tui.FuzzyMatchScore(token.Value, text)
-		if !m.Matches {
+		if !ok {
 			return MatchResult{Matches: false, Score: 0}
 		}
-		totalScore += m.Score
+		totalScore += score
 	}
 
 	return MatchResult{Matches: true, Score: totalScore}

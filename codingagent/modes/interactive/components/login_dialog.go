@@ -15,6 +15,7 @@ package components
 
 import (
 	"context"
+	"net/url"
 	"runtime"
 	"sync"
 
@@ -29,6 +30,17 @@ import (
 // openBrowserFn is the browser-open seam (pi tests mock open-browser; ShowAuth
 // fires it and tests must not spawn a real launcher).
 var openBrowserFn = utils.OpenBrowser
+
+// deviceCodeCopyFn is the clipboard-write seam for device-code confirmation
+// (pi tests mock clipboard; tests must not replace the user's clipboard).
+var deviceCodeCopyFn = utils.CopyToClipboard
+
+// deviceCodeAction is one pending device-code confirmation action (pi:
+// deviceCodeAction).
+type deviceCodeAction struct {
+	info ai.OAuthDeviceCodeInfo
+	hint *tui.Container
+}
 
 // loginAbortController is pi's AbortController (the abort race collapses
 // into ctx cancellation).
@@ -75,6 +87,9 @@ type LoginDialogComponent struct {
 	// Focusable implementation - propagate to input for IME cursor
 	// positioning (pi: _focused/focused getter+setter).
 	focused bool
+
+	deviceCodeAction *deviceCodeAction
+	deviceCodeHint   *tui.Container
 }
 
 // NewLoginDialogComponent builds the dialog (pi: constructor). The name and
@@ -178,7 +193,20 @@ func (d *LoginDialogComponent) resolvePending(result loginInputResult, replace b
 	pending <- result
 }
 
+// clearDeviceCodeAction removes the confirmation row and pending action
+// (pi: clearDeviceCodeAction). Callers already hold the mutation lock.
+func (d *LoginDialogComponent) clearDeviceCodeAction() {
+	if d.deviceCodeHint != nil {
+		d.contentContainer.RemoveChild(d.deviceCodeHint)
+	}
+	d.deviceCodeHint = nil
+	d.deviceCodeAction = nil
+}
+
 func (d *LoginDialogComponent) cancel() {
+	// cancel is reached from HandleInput/OnEscape on the UI thread, where the
+	// mutation lock is already held.
+	d.clearDeviceCodeAction()
 	d.abortController.cancel()
 	d.resolvePending(loginInputResult{err: errorString("Login cancelled")}, false)
 	if d.onComplete != nil {
@@ -190,6 +218,13 @@ func (d *LoginDialogComponent) cancel() {
 type errorString string
 
 func (e errorString) Error() string { return string(e) }
+
+// hasPendingInput reports whether a prompt is waiting for input.
+func (d *LoginDialogComponent) hasPendingInput() bool {
+	d.pendingMu.Lock()
+	defer d.pendingMu.Unlock()
+	return d.pendingInput != nil
+}
 
 // waitPending registers a pending input resolution channel and blocks until
 // the user submits or cancels (pi: `return new Promise(...)`).
@@ -212,6 +247,7 @@ func (d *LoginDialogComponent) requestRender() {
 // by the onAuth callback).
 func (d *LoginDialogComponent) ShowAuth(url string, instructions string) {
 	d.mutate(func() {
+		d.clearDeviceCodeAction()
 		currentTheme := theme.Current()
 		d.contentContainer.Clear()
 		d.contentContainer.AddChild(tui.NewSpacer(1))
@@ -239,8 +275,18 @@ func clickToOpenHint() string {
 // ShowDeviceCode shows the URL and user code (pi: showDeviceCode — called
 // by the onDeviceCode callback).
 func (d *LoginDialogComponent) ShowDeviceCode(info ai.OAuthDeviceCodeInfo) {
+	if info.OpenBrowserOnConfirm == nil {
+		info.OpenBrowserOnConfirm = func() *bool { value := true; return &value }()
+	}
+	if info.CopyCodeOnConfirm == nil {
+		info.CopyCodeOnConfirm = func() *bool { value := true; return &value }()
+	}
+	openBrowserOnConfirm := *info.OpenBrowserOnConfirm
+	copyCodeOnConfirm := *info.CopyCodeOnConfirm
+
 	d.mutate(func() {
 		d.authURL = nil
+		d.clearDeviceCodeAction()
 		currentTheme := theme.Current()
 		d.contentContainer.Clear()
 		d.contentContainer.AddChild(tui.NewSpacer(1))
@@ -251,9 +297,87 @@ func (d *LoginDialogComponent) ShowDeviceCode(info ai.OAuthDeviceCodeInfo) {
 		d.contentContainer.AddChild(tui.NewText(currentTheme.Fg("dim", hyperlink), 1, 0))
 		d.contentContainer.AddChild(tui.NewSpacer(1))
 		d.contentContainer.AddChild(tui.NewText(currentTheme.Fg("warning", "Enter code: "+info.UserCode), 1, 0))
+
+		if d.abortController.ctx.Err() == nil && (openBrowserOnConfirm || copyCodeOnConfirm) {
+			actionLabel := "to open browser and copy code"
+			if openBrowserOnConfirm && !copyCodeOnConfirm {
+				actionLabel = "to open browser"
+			} else if !openBrowserOnConfirm && copyCodeOnConfirm {
+				actionLabel = "to copy code"
+			}
+			// Reuse this single row for progress/result text, including in
+			// narrow terminals.
+			hint := &tui.Container{}
+			hint.AddChild(tui.NewTruncatedText("("+coretools.KeyHint("tui.select.confirm", actionLabel)+")", 1, 0))
+			d.contentContainer.AddChild(hint)
+			d.deviceCodeHint = hint
+			d.deviceCodeAction = &deviceCodeAction{info: info, hint: hint}
+		}
 	})
 
 	d.requestRender()
+}
+
+// setDeviceCodeStatusDirect rewrites the confirmation row with
+// progress/result text (pi: setDeviceCodeStatus). Callers must already hold
+// the UI mutation lock (HandleInput runs on the UI thread; background updates
+// go through setDeviceCodeStatus).
+func (d *LoginDialogComponent) setDeviceCodeStatusDirect(hint *tui.Container, message string) {
+	if d.abortController.ctx.Err() != nil || !d.focused || !containsChild(d.contentContainer, hint) {
+		return
+	}
+	hint.Children = []tui.Component{tui.NewTruncatedText(theme.Fg("dim", message), 1, 0)}
+}
+
+// setDeviceCodeStatus updates the confirmation row from a background
+// goroutine, serialized with the render pipeline.
+func (d *LoginDialogComponent) setDeviceCodeStatus(hint *tui.Container, message string) {
+	d.mutate(func() { d.setDeviceCodeStatusDirect(hint, message) })
+	d.requestRender()
+}
+
+// containsChild reports whether container has child (pi:
+// contentContainer.children.includes(hint)).
+func containsChild(container *tui.Container, child tui.Component) bool {
+	for _, candidate := range container.Children {
+		if candidate == child {
+			return true
+		}
+	}
+	return false
+}
+
+// activateDeviceCode performs the confirmed device-code actions (pi:
+// activateDeviceCode).
+func (d *LoginDialogComponent) activateDeviceCode(info ai.OAuthDeviceCodeInfo, hint *tui.Container) {
+	openBrowserOnConfirm := info.OpenBrowserOnConfirm != nil && *info.OpenBrowserOnConfirm
+	copyCodeOnConfirm := info.CopyCodeOnConfirm != nil && *info.CopyCodeOnConfirm
+	status := "Browser open requested"
+	if copyCodeOnConfirm {
+		status = "Copying code..."
+	}
+	d.setDeviceCodeStatusDirect(hint, status)
+	if copyCodeOnConfirm {
+		// Do not delay polling or browser opening while clipboard tools are
+		// running.
+		go func() {
+			if err := deviceCodeCopyFn(info.UserCode); err != nil {
+				d.setDeviceCodeStatus(hint, "Copy code manually")
+			} else {
+				d.setDeviceCodeStatus(hint, "Code copied to clipboard")
+			}
+		}()
+	}
+	if openBrowserOnConfirm {
+		go func() {
+			// The shared launcher also opens files; device-code login must
+			// only open web URLs. Invalid URLs or launcher failures must not
+			// interrupt login.
+			if parsed, err := url.Parse(info.VerificationURI); err == nil && (parsed.Scheme == "https" || parsed.Scheme == "http") {
+				openBrowserFn(parsed.String())
+			}
+		}()
+	}
 }
 
 // ShowManualInput collects a manual code/URL entry (pi: showManualInput —
@@ -261,6 +385,7 @@ func (d *LoginDialogComponent) ShowDeviceCode(info ai.OAuthDeviceCodeInfo) {
 // is "Login cancelled" when aborted (pi: the rejected Promise).
 func (d *LoginDialogComponent) ShowManualInput(prompt string) (string, error) {
 	d.mutate(func() {
+		d.clearDeviceCodeAction()
 		currentTheme := theme.Current()
 		d.input.SetValue("")
 		d.contentContainer.AddChild(tui.NewSpacer(1))
@@ -278,6 +403,7 @@ func (d *LoginDialogComponent) ShowManualInput(prompt string) (string, error) {
 // (preserves the URL from ShowAuth). Blocks until submit or cancel.
 func (d *LoginDialogComponent) ShowPrompt(message string, placeholder string) (string, error) {
 	d.mutate(func() {
+		d.clearDeviceCodeAction()
 		currentTheme := theme.Current()
 		d.contentContainer.AddChild(tui.NewSpacer(1))
 		d.contentContainer.AddChild(tui.NewText(currentTheme.Fg("text", message), 1, 0))
@@ -301,6 +427,7 @@ func (d *LoginDialogComponent) ShowPrompt(message string, placeholder string) (s
 func (d *LoginDialogComponent) ShowDetails(lines []string) {
 	d.mutate(func() {
 		d.authURL = nil
+		d.clearDeviceCodeAction()
 		d.contentContainer.Clear()
 		d.contentContainer.AddChild(tui.NewSpacer(1))
 		for _, line := range lines {
@@ -365,6 +492,17 @@ func (d *LoginDialogComponent) HandleInput(data string) {
 	}
 	if d.authURL != nil && kb.Matches(data, "app.message.copy") {
 		d.authURL.Copy(d.tui)
+		return
+	}
+
+	if d.deviceCodeAction != nil && !d.hasPendingInput() && d.abortController.ctx.Err() == nil && d.focused &&
+		kb.Matches(data, "tui.select.confirm") {
+		action := d.deviceCodeAction
+		// Consume once so a repeated Enter cannot launch multiple browsers or
+		// clipboard writes.
+		d.deviceCodeAction = nil
+		d.activateDeviceCode(action.info, action.hint)
+		d.requestRender()
 		return
 	}
 

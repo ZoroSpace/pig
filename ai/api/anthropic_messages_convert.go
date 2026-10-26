@@ -39,12 +39,14 @@ func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken 
 	var params []map[string]any
 	converted := convertedAnthropicMessages{assistantLevels: map[int]AnthropicEffort{}}
 	// Later system messages are held back and emitted directly before the
-	// next assistant message (or at the end of the transcript). Anthropic
-	// requires tool_result blocks to immediately follow their tool_use, so a
-	// system message between them is rejected; this also mirrors where the
-	// managed-effort system messages are inserted. As a result an update
-	// placed before a user message in the transcript lands after it on the
-	// wire.
+	// next assistant message that is sent (or at the end of the transcript).
+	// Assistant messages that convert to no blocks are dropped, so holding
+	// past them keeps an update from landing before a user message (#11091).
+	// Anthropic requires tool_result blocks to immediately follow their
+	// tool_use, so a system message between them is rejected; this also
+	// mirrors where the managed-effort system messages are inserted. As a
+	// result an update placed before a user message in the transcript lands
+	// after it on the wire.
 	var pendingSystemMessages []map[string]any
 	flushPendingSystemMessages := func() {
 		params = append(params, pendingSystemMessages...)
@@ -130,7 +132,6 @@ func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken 
 				params = append(params, map[string]any{"role": "user", "content": filteredBlocks})
 			}
 		} else if assistant, ok := msg.(types.AssistantMessage); ok {
-			flushPendingSystemMessages()
 			var blocks []map[string]any
 
 			for _, block := range assistant.Content {
@@ -196,6 +197,7 @@ func convertAnthropicMessages(transformedMessages []types.Message, isOAuthToken 
 			if len(blocks) == 0 {
 				continue
 			}
+			flushPendingSystemMessages()
 			messageIndex := len(params)
 			params = append(params, map[string]any{"role": "assistant", "content": blocks})
 			if managedProvider != "" && assistant.API == types.ApiAnthropicMessages &&

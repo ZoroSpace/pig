@@ -8,6 +8,7 @@
 package tui
 
 import (
+	"math"
 	"regexp"
 	"sort"
 	"strings"
@@ -31,85 +32,106 @@ var fuzzyAlphaNumeric = regexp.MustCompile(`^([a-z]+)([0-9]+)$`)
 // (pi: /^(?<digits>[0-9]+)(?<letters>[a-z]+)$/).
 var fuzzyNumericAlpha = regexp.MustCompile(`^([0-9]+)([a-z]+)$`)
 
-// FuzzyMatchScore computes the match of query against text (pi:
-// fuzzyMatch's matchQuery helper folded into the exported function shape —
-// pi's fuzzyMatch returns matchQuery's result or the swapped-retry result).
+// scoreFuzzyPositions scores one alignment (pi: scorePositions).
+func scoreFuzzyPositions(text []rune, positions []int) float64 {
+	score := 0.0
+	lastMatchIndex := -1
+	consecutiveMatches := 0
+
+	for _, i := range positions {
+		// Reward consecutive matches
+		if lastMatchIndex == i-1 {
+			consecutiveMatches++
+			score -= float64(consecutiveMatches) * 5
+		} else {
+			consecutiveMatches = 0
+			// Penalize gaps
+			if lastMatchIndex >= 0 {
+				score += float64(i-lastMatchIndex-1) * 2
+			}
+		}
+
+		// Reward word boundary matches
+		if i == 0 || fuzzyWordBoundary.MatchString(string(text[i-1])) {
+			score -= 10
+		}
+
+		// Slight penalty for later matches
+		score += float64(i) * 0.1
+
+		lastMatchIndex = i
+	}
+
+	return score
+}
+
+// matchFuzzyQuery is pi's matchQuery helper: greedy alignment plus every
+// contiguous occurrence, keeping the best score.
+func matchFuzzyQuery(normalizedQuery, textLower string) FuzzyMatch {
+	if len(normalizedQuery) == 0 {
+		return FuzzyMatch{Matches: true, Score: 0}
+	}
+	if len(normalizedQuery) > len(textLower) {
+		return FuzzyMatch{Matches: false, Score: 0}
+	}
+
+	text := []rune(textLower)
+	normalized := []rune(normalizedQuery)
+
+	// Greedy alignment: each query character at its first occurrence after the previous one.
+	positions := make([]int, 0, len(normalized))
+	lastMatchIndex := -1
+	for _, want := range normalized {
+		i := -1
+		for j := lastMatchIndex + 1; j < len(text); j++ {
+			if text[j] == want {
+				i = j
+				break
+			}
+		}
+		if i == -1 {
+			return FuzzyMatch{Matches: false, Score: 0}
+		}
+		positions = append(positions, i)
+		lastMatchIndex = i
+	}
+
+	score := scoreFuzzyPositions(text, positions)
+
+	// The greedy alignment can scatter the query over an earlier, unrelated part of the text,
+	// e.g. "opus" in "openrouter openrouter/anthropic/claude-opus" takes o, p, u from "openrouter".
+	// Also score every contiguous occurrence and keep the best alignment.
+	n := len(normalized)
+	for start := 0; start+n <= len(text); start++ {
+		matched := true
+		for k := 0; k < n; k++ {
+			if text[start+k] != normalized[k] {
+				matched = false
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		for k := 0; k < n; k++ {
+			positions[k] = start + k
+		}
+		score = math.Min(score, scoreFuzzyPositions(text, positions))
+	}
+
+	if normalizedQuery == textLower {
+		score -= 100
+	}
+
+	return FuzzyMatch{Matches: true, Score: score}
+}
+
+// FuzzyMatchScore computes the match of query against text (pi: fuzzyMatch).
 func FuzzyMatchScore(query, text string) FuzzyMatch {
 	queryLower := strings.ToLower(query)
 	textLower := strings.ToLower(text)
 
-	matchQuery := func(normalizedQuery string) FuzzyMatch {
-		if len(normalizedQuery) == 0 {
-			return FuzzyMatch{Matches: true, Score: 0}
-		}
-		if len(normalizedQuery) > len(textLower) {
-			return FuzzyMatch{Matches: false, Score: 0}
-		}
-
-		queryIndex := 0
-		score := 0.0
-		lastMatchIndex := -1
-		consecutiveMatches := 0
-
-		// pi iterates by UTF-16 code unit; byte iteration matches its
-		// single-char indexing for ASCII queries and differs only for
-		// multi-byte text, where both still compare full characters via
-		// prefix equality. We iterate runes for correctness.
-		runes := []rune(textLower)
-		normalized := []rune(normalizedQuery)
-		// pi v0.86.0 replaced the full scan with indexOf per query character
-		// (skips non-matching characters in bulk); semantics are identical
-		// greedy leftmost matching, so we mirror the new shape.
-		for queryIndex < len(normalized) {
-			i := -1
-			for j := lastMatchIndex + 1; j < len(runes); j++ {
-				if runes[j] == normalized[queryIndex] {
-					i = j
-					break
-				}
-			}
-			if i == -1 {
-				break
-			}
-
-			isWordBoundary := i == 0 || fuzzyWordBoundary.MatchString(string(runes[i-1]))
-
-			// Reward consecutive matches
-			if lastMatchIndex == i-1 {
-				consecutiveMatches++
-				score -= float64(consecutiveMatches) * 5
-			} else {
-				consecutiveMatches = 0
-				// Penalize gaps
-				if lastMatchIndex >= 0 {
-					score += float64(i-lastMatchIndex-1) * 2
-				}
-			}
-
-			// Reward word boundary matches
-			if isWordBoundary {
-				score -= 10
-			}
-
-			// Slight penalty for later matches
-			score += float64(i) * 0.1
-
-			lastMatchIndex = i
-			queryIndex++
-		}
-
-		if queryIndex < len(normalized) {
-			return FuzzyMatch{Matches: false, Score: 0}
-		}
-
-		if normalizedQuery == textLower {
-			score -= 100
-		}
-
-		return FuzzyMatch{Matches: true, Score: score}
-	}
-
-	primaryMatch := matchQuery(queryLower)
+	primaryMatch := matchFuzzyQuery(queryLower, textLower)
 	if primaryMatch.Matches {
 		return primaryMatch
 	}
@@ -125,7 +147,7 @@ func FuzzyMatchScore(query, text string) FuzzyMatch {
 		return primaryMatch
 	}
 
-	swappedMatch := matchQuery(swappedQuery)
+	swappedMatch := matchFuzzyQuery(swappedQuery, textLower)
 	if !swappedMatch.Matches {
 		return primaryMatch
 	}

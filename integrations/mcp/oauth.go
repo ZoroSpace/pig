@@ -183,6 +183,55 @@ type oauthEndpoints struct {
 	HasMetadata bool
 }
 
+// isHTTPURL reports whether u uses the http or https scheme (pi: isHttpUrl).
+// These URLs come from MCP servers and the authorization endpoint is opened
+// with the platform URL handler; file: or custom protocols would launch local
+// programs.
+func isHTTPURL(u *url.URL) bool {
+	return u != nil && (u.Scheme == "http" || u.Scheme == "https")
+}
+
+// validateOAuthMetadataURLs rejects a metadata URL that is not http(s) (pi:
+// safeUrl). name names the field for the error message.
+func validateOAuthMetadataURLs(raw string, name string) error {
+	if raw == "" {
+		return fmt.Errorf("Invalid %s", name)
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || !isHTTPURL(parsed) {
+		return fmt.Errorf("Invalid %s", name)
+	}
+	return nil
+}
+
+// validateAuthorizationServerMetadata validates the server-supplied URLs pi's
+// parser checks before discovery hands the document to the flow (pi:
+// parseAuthorizationServerMetadata safeUrl calls).
+func validateAuthorizationServerMetadata(asm *oauthex.AuthServerMeta) error {
+	if asm == nil {
+		return nil
+	}
+	fields := []struct {
+		value string
+		name  string
+	}{
+		{asm.Issuer, "authorization server issuer"},
+		{asm.AuthorizationEndpoint, "authorization endpoint"},
+		{asm.TokenEndpoint, "token endpoint"},
+	}
+	for _, field := range fields {
+		if err := validateOAuthMetadataURLs(field.value, field.name); err != nil {
+			return err
+		}
+	}
+	if asm.RegistrationEndpoint != "" {
+		if err := validateOAuthMetadataURLs(asm.RegistrationEndpoint, "registration endpoint"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func endpointsFromMeta(asm *oauthex.AuthServerMeta) *oauthEndpoints {
 	return &oauthEndpoints{
 		AuthURL:                           asm.AuthorizationEndpoint,
@@ -285,6 +334,16 @@ func resolveEndpoints(ctx context.Context, serverURL string, settings OAuthSetti
 	if prmErr != nil && !isDiscoveryMiss(prmErr) {
 		return discoveryOutcome{}, prmErr
 	}
+	if prm != nil {
+		if err := validateOAuthMetadataURLs(prm.Resource, "OAuth protected resource metadata resource"); err != nil {
+			return discoveryOutcome{}, err
+		}
+		for _, authorizationServer := range prm.AuthorizationServers {
+			if err := validateOAuthMetadataURLs(authorizationServer, "authorization server URL"); err != nil {
+				return discoveryOutcome{}, err
+			}
+		}
+	}
 	resource, err := selectResource(serverURL, prmResource(prm))
 	if err != nil {
 		return discoveryOutcome{}, err
@@ -303,6 +362,9 @@ func resolveEndpoints(ctx context.Context, serverURL string, settings OAuthSetti
 		if asm == nil {
 			return discoveryOutcome{}, fmt.Errorf("HTTP 4xx loading authorization server metadata from %s", settings.AuthServerMetadataURL)
 		}
+		if err := validateAuthorizationServerMetadata(asm); err != nil {
+			return discoveryOutcome{}, err
+		}
 		return discoveryOutcome{endpoints: endpointsFromMeta(asm), resource: resource}, nil
 	}
 
@@ -319,6 +381,11 @@ func resolveEndpoints(ctx context.Context, serverURL string, settings OAuthSetti
 	asm, err := discoverAuthServerMeta(ctx, asURL, client)
 	if err != nil {
 		return discoveryOutcome{}, err
+	}
+	if asm != nil {
+		if err := validateAuthorizationServerMetadata(asm); err != nil {
+			return discoveryOutcome{}, err
+		}
 	}
 	out := discoveryOutcome{resource: resource, scopesSupported: prmScopesSupported(prm)}
 	if asm != nil {
@@ -985,6 +1052,11 @@ func buildAuthorizationURL(authEndpoint, clientID, challenge, redirectURL, state
 	u, err := url.Parse(authEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("invalid authorization endpoint %q: %w", authEndpoint, err)
+	}
+	// The platform URL handler opens this endpoint and also launches files and
+	// custom protocols (pi 9ffd27cfa).
+	if !isHTTPURL(u) {
+		return "", fmt.Errorf("Invalid authorization endpoint %s", u.String())
 	}
 	q := u.Query()
 	q.Set("response_type", "code")

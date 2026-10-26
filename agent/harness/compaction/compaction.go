@@ -193,6 +193,12 @@ func CombineUsage(first *types.Usage, second *types.Usage) *types.Usage {
 			CacheRead:  first.Cost.CacheRead + second.Cost.CacheRead,
 			CacheWrite: first.Cost.CacheWrite + second.Cost.CacheWrite,
 			Total:      first.Cost.Total + second.Cost.Total,
+			// A sum is provider-reported only when every part is.
+			TotalFromProvider: func() *bool {
+				combined := first.Cost.TotalFromProvider != nil && *first.Cost.TotalFromProvider &&
+					second.Cost.TotalFromProvider != nil && *second.Cost.TotalFromProvider
+				return &combined
+			}(),
 		},
 	}
 	if first.CacheWrite1h != nil || second.CacheWrite1h != nil {

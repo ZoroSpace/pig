@@ -41,6 +41,7 @@ func newAuthURLTestDialog(t *testing.T) *authURLTestHarness {
 	h := &authURLTestHarness{}
 	h.dialog = NewLoginDialogComponent(nil, "test", func(bool, string) {}, "", "")
 	h.dialog.Mutator = func(fn func()) { h.mu.Lock(); defer h.mu.Unlock(); fn() }
+	h.dialog.SetFocused(true)
 	return h
 }
 

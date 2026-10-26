@@ -17,6 +17,12 @@ func GetModelSearchText(item modelSearchItem) string {
 	return components.GetModelSearchText(item)
 }
 
+// GetDistinctModelName returns the model name only when it adds words the ID
+// lacks (pi: getDistinctModelName).
+func GetDistinctModelName(item modelSearchItem) string {
+	return components.GetDistinctModelName(item)
+}
+
 // GetModelSelectorSearchText ranks exact provider-prefixed queries before
 // proxy-provider IDs like openrouter/openai/gpt-5 (pi:
 // getModelSelectorSearchText).

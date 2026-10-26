@@ -744,7 +744,13 @@ func (a *adaptedExtensionOAuth) Login(ctx context.Context, interaction auth.Auth
 			interaction.Notify(auth.AuthEvent{Type: "auth_url", URL: info.URL, Instructions: info.Instructions})
 		},
 		OnDeviceCode: func(info ai.OAuthDeviceCodeInfo) {
-			event := auth.AuthEvent{Type: "device_code", UserCode: info.UserCode, VerificationURI: info.VerificationURI}
+			event := auth.AuthEvent{
+				Type:                 "device_code",
+				UserCode:             info.UserCode,
+				VerificationURI:      info.VerificationURI,
+				OpenBrowserOnConfirm: info.OpenBrowserOnConfirm,
+				CopyCodeOnConfirm:    info.CopyCodeOnConfirm,
+			}
 			if info.IntervalSeconds != nil {
 				event.IntervalSeconds = lo.ToPtr(*info.IntervalSeconds)
 			}

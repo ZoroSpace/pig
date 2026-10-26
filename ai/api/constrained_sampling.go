@@ -353,35 +353,55 @@ func GetGrammarToolInput(toolName string, arguments map[string]any, inputPropert
 	return input, nil
 }
 
-// AppendGrammarToolInputJSONDelta appends the next streamed input, returning
-// the JSON delta to emit (pi: appendGrammarToolInputJsonDelta). A nil return
-// means no delta.
-func AppendGrammarToolInputJSONDelta(buffer *GrammarToolInputJSONBuffer, inputProperty, nextInput string, close bool) (*string, error) {
+// AppendGrammarToolInputJSONDelta appends one streamed grammar tool input
+// delta, returning the matching piece of its JSON arguments text (pi:
+// appendGrammarToolInputJsonDelta). Costs time linear in the delta, never in
+// the input so far. A nil return means no delta.
+func AppendGrammarToolInputJSONDelta(buffer *GrammarToolInputJSONBuffer, inputProperty, inputDelta string) (*string, error) {
 	if buffer.Closed {
-		if close && nextInput == buffer.Input {
+		return nil, fmt.Errorf("grammar tool input for property %q changed after it was closed", inputProperty)
+	}
+	if inputDelta == "" {
+		return nil, nil
+	}
+	buffer.Input += inputDelta
+	delta := grammarToolInputJSONStart(buffer, inputProperty) + jsonStringInner(inputDelta)
+	return &delta, nil
+}
+
+// CloseGrammarToolInputJSON closes a streaming grammar tool input and returns
+// the rest of its JSON arguments text (pi: closeGrammarToolInputJson).
+// finalInput is the provider's complete input when it sent one; it must
+// continue the input streamed so far. Closing again with the same input
+// returns nil.
+func CloseGrammarToolInputJSON(buffer *GrammarToolInputJSONBuffer, inputProperty string, finalInput *string) (*string, error) {
+	if buffer.Closed {
+		if finalInput == nil || *finalInput == buffer.Input {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("grammar tool input for property %q changed after it was closed", inputProperty)
 	}
-	if len(nextInput) < len(buffer.Input) || nextInput[:len(buffer.Input)] != buffer.Input {
+	if finalInput != nil && !strings.HasPrefix(*finalInput, buffer.Input) {
 		return nil, fmt.Errorf("grammar tool input for property %q changed non-monotonically", inputProperty)
 	}
-	inputDelta := nextInput[len(buffer.Input):]
-	if !close && len(inputDelta) == 0 {
-		return nil, nil
+	rest := ""
+	if finalInput != nil {
+		rest = (*finalInput)[len(buffer.Input):]
+		buffer.Input = *finalInput
 	}
-	var delta string
-	if !buffer.Started {
-		delta += `{` + jsonStringProperty(inputProperty) + `:"`
-		buffer.Started = true
-	}
-	delta += jsonStringInner(inputDelta)
-	buffer.Input = nextInput
-	if close {
-		delta += `"}`
-		buffer.Closed = true
-	}
+	buffer.Closed = true
+	delta := grammarToolInputJSONStart(buffer, inputProperty) + jsonStringInner(rest) + `"}`
 	return &delta, nil
+}
+
+// grammarToolInputJSONStart renders the opening of the JSON arguments text
+// once (pi: grammarToolInputJsonStart).
+func grammarToolInputJSONStart(buffer *GrammarToolInputJSONBuffer, inputProperty string) string {
+	if buffer.Started {
+		return ""
+	}
+	buffer.Started = true
+	return `{` + jsonStringProperty(inputProperty) + `:"`
 }
 
 // jsonStringProperty renders `"name"` (JSON-quoted key).

@@ -475,8 +475,13 @@ func (s *ModelSelectorComponent) updateList() {
 		if isSelected {
 			modelText = theme.Fg("accent", item.id)
 		}
+		name := GetDistinctModelName(ModelSearchItem{ID: item.id, Provider: item.provider, Name: item.model.Name})
+		nameText := ""
+		if name != "" {
+			nameText = theme.Fg("muted", " ("+name+")")
+		}
 		providerBadge := theme.Fg("muted", fmt.Sprintf("[%s]", item.provider))
-		line := cursor + currentMarker + modelText + " " + providerBadge + defaultBadge
+		line := cursor + currentMarker + modelText + nameText + " " + providerBadge + defaultBadge
 
 		s.listContainer.AddChild(tui.NewText(line, 0, 0))
 	}

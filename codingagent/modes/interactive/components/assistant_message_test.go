@@ -171,6 +171,37 @@ func TestAssistantMessageComponent(t *testing.T) {
 		}
 	})
 
+	t.Run("passes persisted entry identity in transformer context", func(t *testing.T) {
+		initTestTheme(t)
+		var captured []core.MarkdownTransformContext
+		capture := func(markdown string, context core.MarkdownTransformContext) string {
+			captured = append(captured, context)
+			return markdown
+		}
+		message := createAssistantMessage([]types.Content{
+			&types.TextContent{Kind: types.KindText, Text: "restored"},
+		}, "")
+
+		NewAssistantMessageComponent(message, &AssistantMessageOptions{
+			MarkdownTransformers: []core.MarkdownTransformer{capture},
+			MessageID:            "entry-abc",
+			Timestamp:            "2025-01-15T10:30:00.000Z",
+		}).Render(80)
+		NewAssistantMessageComponent(message, &AssistantMessageOptions{
+			MarkdownTransformers: []core.MarkdownTransformer{capture},
+		}).Render(80)
+
+		if len(captured) != 2 {
+			t.Fatalf("contexts = %d, want 2", len(captured))
+		}
+		if captured[0].MessageID != "entry-abc" || captured[0].Timestamp != "2025-01-15T10:30:00.000Z" {
+			t.Fatalf("restored context = %+v", captured[0])
+		}
+		if captured[1].MessageID != "" || captured[1].Timestamp != "" {
+			t.Fatalf("live context = %+v", captured[1])
+		}
+	})
+
 	t.Run("identifies partial assistant Markdown as streaming", func(t *testing.T) {
 		initTestTheme(t)
 		var streamingStates []bool
@@ -297,13 +328,13 @@ func TestAssistantMessageComponent(t *testing.T) {
 func TestUserMessageComponentPadding(t *testing.T) {
 	initTestTheme(t)
 
-	paddedComponent := NewUserMessageComponent("hello", nil, 1, nil, nil)
+	paddedComponent := NewUserMessageComponent("hello", nil, 1, nil, nil, "", "")
 	paddedLines := paddedComponent.Render(40)
 	if !someLineStartsWith(paddedLines, " hello") {
 		t.Fatalf("padded lines missing: %v", paddedLines)
 	}
 
-	unpaddedComponent := NewUserMessageComponent("hello", nil, 0, nil, nil)
+	unpaddedComponent := NewUserMessageComponent("hello", nil, 0, nil, nil, "", "")
 	unpaddedLines := unpaddedComponent.Render(40)
 	if !someLineStartsWith(unpaddedLines, "hello") {
 		t.Fatalf("unpadded lines missing: %v", unpaddedLines)

@@ -441,6 +441,13 @@ func parseChunkUsage(raw *chatCompletionUsage, model *types.Model) types.Usage {
 		Cost:        types.Cost{},
 	}
 	ai.CalculateCost(model, &usage)
+	if utils.IsOpenRouterModel(model) {
+		utils.ApplyOpenRouterReportedCost(&usage, utils.OpenRouterUsageAccounting{
+			Cost:        raw.Cost,
+			IsByok:      raw.IsByok,
+			CostDetails: raw.CostDetails,
+		})
+	}
 	return usage
 }
 

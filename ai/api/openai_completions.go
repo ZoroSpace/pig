@@ -442,6 +442,11 @@ type chatCompletionUsage struct {
 	CompletionTokensDetails *struct {
 		ReasoningTokens int `json:"reasoning_tokens"`
 	} `json:"completion_tokens_details"`
+	// OpenRouter adds billing fields to streamed usage at runtime, although
+	// the OpenAI SDK does not type those fields.
+	Cost        *float64                     `json:"cost"`
+	IsByok      *bool                        `json:"is_byok"`
+	CostDetails *utils.OpenRouterCostDetails `json:"cost_details"`
 }
 
 // openaiCompletionsClient is the openai SDK client replacement (pi:

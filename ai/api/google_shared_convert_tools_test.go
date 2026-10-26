@@ -157,10 +157,7 @@ func TestGoogleConvertToolsPreservesSchemaInParametersJsonSchema(t *testing.T) {
 	})}
 
 	decl := googleTestDeclaration(t, tools, false)
-	var rawSchema any
-	if err := json.Unmarshal(decl["parametersJsonSchema"].(json.RawMessage), &rawSchema); err != nil {
-		t.Fatalf("parametersJsonSchema is not JSON: %v", err)
-	}
+	rawSchema := decl["parametersJsonSchema"]
 	want := map[string]any{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"type":    "object",
@@ -226,5 +223,51 @@ func TestGoogleConvertToolsReturnsNilForEmptyToolList(t *testing.T) {
 	}
 	if result, err := ConvertGoogleTools(empty, true, true); err != nil || result != nil {
 		t.Errorf("ConvertGoogleTools(empty, true) = %v, %v; want nil, nil", result, err)
+	}
+}
+
+func TestGoogleConvertToolsRewritesConstAsEnum(t *testing.T) {
+	parameters := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"origin": map[string]any{"type": "string", "const": "zq-src-7"},
+			"mode": map[string]any{
+				"anyOf": []any{
+					map[string]any{"type": "string", "const": "a"},
+					map[string]any{"type": "string", "const": "b"},
+				},
+			},
+			"level": map[string]any{"oneOf": []any{map[string]any{"const": float64(1)}, map[string]any{"const": float64(2)}}},
+			"flag":  map[string]any{"type": "boolean", "const": true},
+			"list":  map[string]any{"type": "array", "items": map[string]any{"const": "x"}},
+			"const": map[string]any{"type": "string"},
+		},
+		"required": []any{"origin"},
+	}
+	tools := []types.Tool{googleTestTool(parameters)}
+
+	decl := googleTestDeclaration(t, tools, false)
+	want := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"origin": map[string]any{"type": "string", "enum": []any{"zq-src-7"}},
+			"mode": map[string]any{
+				"anyOf": []any{
+					map[string]any{"type": "string", "enum": []any{"a"}},
+					map[string]any{"type": "string", "enum": []any{"b"}},
+				},
+			},
+			"level": map[string]any{"oneOf": []any{map[string]any{"enum": []any{float64(1)}}, map[string]any{"enum": []any{float64(2)}}}},
+			"flag":  map[string]any{"type": "boolean", "const": true},
+			"list":  map[string]any{"type": "array", "items": map[string]any{"enum": []any{"x"}}},
+			"const": map[string]any{"type": "string"},
+		},
+		"required": []any{"origin"},
+	}
+	if !reflect.DeepEqual(decl["parametersJsonSchema"], want) {
+		t.Errorf("parametersJsonSchema = %#v, want %#v", decl["parametersJsonSchema"], want)
+	}
+	if !reflect.DeepEqual(parameters["properties"].(map[string]any)["origin"], map[string]any{"type": "string", "const": "zq-src-7"}) {
+		t.Errorf("original schema mutated: %#v", parameters["properties"])
 	}
 }

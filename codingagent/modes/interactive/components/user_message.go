@@ -23,6 +23,8 @@ type UserMessageComponent struct {
 	markdownTheme        tui.MarkdownTheme
 	outputPad            int
 	markdownTransformers []core.MarkdownTransformer
+	messageID            string
+	timestamp            string
 	// ruleColor colors the border-only frame; pig-only param (pi has no
 	// rules). interactive_mode passes the editor's thinking-level border
 	// color so the sent block matches the input box; nil = theme "border".
@@ -32,12 +34,14 @@ type UserMessageComponent struct {
 // NewUserMessageComponent builds the component (pi: constructor;
 // markdownTheme nil = getMarkdownTheme(), outputPad 0 = default 1,
 // ruleColor nil = theme "border" — pig-only extension).
-func NewUserMessageComponent(text string, markdownTheme *tui.MarkdownTheme, outputPad int, markdownTransformers []core.MarkdownTransformer, ruleColor func(string) string) *UserMessageComponent {
+func NewUserMessageComponent(text string, markdownTheme *tui.MarkdownTheme, outputPad int, markdownTransformers []core.MarkdownTransformer, ruleColor func(string) string, messageID string, timestamp string) *UserMessageComponent {
 	c := &UserMessageComponent{
 		text:                 text,
 		outputPad:            outputPad,
 		markdownTransformers: markdownTransformers,
 		ruleColor:            ruleColor,
+		messageID:            messageID,
+		timestamp:            timestamp,
 	}
 	if markdownTheme != nil {
 		c.markdownTheme = *markdownTheme
@@ -81,7 +85,7 @@ func (c *UserMessageComponent) rebuild() {
 		&tui.MarkdownOptions{
 			PreserveOrderedListMarkers: true,
 			PreserveBackslashEscapes:   true,
-			Transform:                  CreateMarkdownTransform("user", false, c.markdownTransformers),
+			Transform:                  CreateMarkdownTransform("user", false, c.markdownTransformers, c.messageID, c.timestamp),
 		},
 	)))
 	c.AddChild(NewDynamicBorderCorner(ruleColor, '└'))

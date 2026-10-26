@@ -26,12 +26,16 @@ func CreateMarkdownTransform(
 	messageType string,
 	isStreaming bool,
 	transformers []core.MarkdownTransformer,
+	messageID string,
+	timestamp string,
 ) func(markdown string, availableWidth int) string {
 	return func(markdown string, availableWidth int) string {
 		return applyMarkdownTransformers(markdown, core.MarkdownTransformContext{
 			MessageType:    messageType,
 			IsStreaming:    isStreaming,
 			AvailableWidth: availableWidth,
+			MessageID:      messageID,
+			Timestamp:      timestamp,
 		}, transformers)
 	}
 }

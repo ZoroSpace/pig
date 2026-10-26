@@ -84,7 +84,7 @@ func TestUserMessageNoBackgroundFill(t *testing.T) {
 	// thinking-level color so the sent block matches the input box.
 	component := NewUserMessageComponent("hello world", nil, 1, nil, func(s string) string {
 		return theme.Fg("thinkingMedium", s)
-	})
+	}, "", "")
 	lines := component.Render(40)
 	joined := strings.Join(lines, "\n")
 	if !strings.Contains(lines[0], ruleLine("thinkingMedium")) {
@@ -96,7 +96,7 @@ func TestUserMessageNoBackgroundFill(t *testing.T) {
 	assertNoBackgroundFill(t, joined)
 
 	// nil ruleColor falls back to the theme "border" token.
-	defaultComponent := NewUserMessageComponent("hello world", nil, 1, nil, nil)
+	defaultComponent := NewUserMessageComponent("hello world", nil, 1, nil, nil, "", "")
 	defaultLines := defaultComponent.Render(40)
 	if !strings.Contains(defaultLines[0], ruleLine("border")) {
 		t.Fatalf("default top rule missing or not border-colored: %q", defaultLines[0])

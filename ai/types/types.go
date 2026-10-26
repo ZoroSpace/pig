@@ -640,11 +640,20 @@ func DecodeContentList(data json.RawMessage) ([]Content, error) {
 
 // Cost holds USD amounts for one request.
 type Cost struct {
-	Input      float64 `json:"input"`
-	Output     float64 `json:"output"`
-	CacheRead  float64 `json:"cacheRead"`
+	// Input is the catalog-derived input cost.
+	Input float64 `json:"input"`
+	// Output is the catalog-derived output cost.
+	Output float64 `json:"output"`
+	// CacheRead is the catalog-derived cache-read cost.
+	CacheRead float64 `json:"cacheRead"`
+	// CacheWrite is the catalog-derived cache-write cost.
 	CacheWrite float64 `json:"cacheWrite"`
-	Total      float64 `json:"total"`
+	// Total is the best available total: the provider-reported billed cost
+	// when supported, otherwise the catalog estimate.
+	Total float64 `json:"total"`
+	// TotalFromProvider is true when Total is the billed cost reported by the
+	// provider. False when it is a catalog estimate; nil also means false.
+	TotalFromProvider *bool `json:"totalFromProvider,omitempty"`
 }
 
 // Usage is the token accounting of one assistant response.
