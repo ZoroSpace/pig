@@ -341,21 +341,6 @@ func isAnthropicStrictUnsupportedKeyword(key string, value any) bool {
 	return false
 }
 
-// isPreferredJSONSchemaStrictSampling reports whether a tool opted into strict
-// JSON-schema sampling with "prefer" (pi: the inline `config.type ===
-// "json_schema" && config.strict === "prefer"` probe in convertTools).
-func isPreferredJSONSchemaStrictSampling(constrained any) bool {
-	config, ok := constrained.(map[string]any)
-	if !ok {
-		return false
-	}
-	if config["type"] != "json_schema" {
-		return false
-	}
-	strict, _ := config["strict"].(string)
-	return strict == "prefer"
-}
-
 // convertAnthropicTools converts tools to Anthropic tool params (pi:
 // convertTools). disablePreferredStrictTools drops strict on tools that only
 // preferred it, for the strict-capacity fallback retry (#10409).
@@ -367,7 +352,7 @@ func convertAnthropicTools(tools []types.Tool, isOAuthToken bool, supportsEagerT
 	out := make([]map[string]any, 0, len(tools))
 	for index, tool := range tools {
 		var strict *bool
-		if disablePreferredStrictTools && isPreferredJSONSchemaStrictSampling(tool.ConstrainedSampling) {
+		if disablePreferredStrictTools && prefersJSONSchemaStrictSampling(&tool) {
 			strict = nil
 		} else {
 			resolved, err := ResolveJSONSchemaStrictSampling(&tool, supportsStrictTools, isAnthropicStrictUnsupportedKeyword)

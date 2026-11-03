@@ -23,6 +23,65 @@ func (e *UnsupportedStrictJSONSchemaError) Error() string { return e.Message }
 // UnsupportedStrictSchemaKeywordCheck).
 type UnsupportedStrictSchemaKeywordCheck func(key string, value any) bool
 
+// prefersJSONSchemaStrictSampling reports whether a tool asks for strict
+// JSON-schema sampling only when possible (pi:
+// prefersJsonSchemaStrictSampling).
+func prefersJSONSchemaStrictSampling(tool *types.Tool) bool {
+	if tool == nil {
+		return false
+	}
+	strict, ok := constrainedJSONSchemaStrict(tool.ConstrainedSampling)
+	return ok && strict == "prefer"
+}
+
+// constrainedJSONSchemaStrict reads the strictness of a json_schema
+// constrained-sampling config. Registry tools carry the value form
+// (types.ConstrainedSamplingConfig) while session-resumed tools are decoded
+// from JSONL into map[string]any, so both are accepted.
+func constrainedJSONSchemaStrict(constrained any) (string, bool) {
+	switch config := constrained.(type) {
+	case types.ConstrainedSamplingConfig:
+		if config.Type != "json_schema" {
+			return "", false
+		}
+		return config.Strict, true
+	case *types.ConstrainedSamplingConfig:
+		if config == nil || config.Type != "json_schema" {
+			return "", false
+		}
+		return config.Strict, true
+	case map[string]any:
+		if config["type"] != "json_schema" {
+			return "", false
+		}
+		strict, _ := config["strict"].(string)
+		return strict, true
+	}
+	return "", false
+}
+
+// strictToolLimitErrorMessages are the provider messages that mean the
+// request exceeded Claude's strict-tool capacity (pi:
+// STRICT_TOOL_LIMIT_ERROR_MESSAGES). Observed limits: 20 strict tools, and 16
+// optional or union-typed parameters across all strict tools.
+var strictToolLimitErrorMessages = []string{
+	"The compiled grammar is too large",
+	"Too many strict tools (",
+	"Schemas contains too many parameters with union types (",
+}
+
+// isStrictToolLimitErrorMessage reports whether a provider error message says
+// the request's strict tools exceed the provider's limits (pi:
+// isStrictToolLimitErrorMessage).
+func isStrictToolLimitErrorMessage(message string) bool {
+	for _, marker := range strictToolLimitErrorMessages {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 var UNSUPPORTED_STRICT_SCHEMA_KEYS = []string{
 	"$ref", "$defs", "definitions", "allOf", "oneOf", "patternProperties",
 	"dependentSchemas", "dependencies", "unevaluatedProperties", "propertyNames",
@@ -459,14 +518,10 @@ func inferGrammarInputProperty(tool *types.Tool) (string, error) {
 // extra keywords its strict mode does not accept, so "prefer" tools fall
 // back to non-strict.
 func ResolveJSONSchemaStrictSampling(tool *types.Tool, supportsStrictMode bool, isUnsupportedKeyword UnsupportedStrictSchemaKeywordCheck) (*bool, error) {
-	config, ok := tool.ConstrainedSampling.(map[string]any)
+	strict, ok := constrainedJSONSchemaStrict(tool.ConstrainedSampling)
 	if !ok {
 		return nil, nil
 	}
-	if config["type"] != "json_schema" {
-		return nil, nil
-	}
-	strict, _ := config["strict"].(string)
 	if supportsStrictMode {
 		if _, err := MakeStrictJSONSchema(tool.Parameters, isUnsupportedKeyword); err == nil {
 			v := true

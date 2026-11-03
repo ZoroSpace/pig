@@ -328,3 +328,10 @@ func TestIsContextOverflowScopesBodylessErrorsToCerebras(t *testing.T) {
 		t.Errorf("%s (opencode-go): want no overflow", errorMessage)
 	}
 }
+
+func TestIsContextOverflowDetectsLiteLLMPreCallContextWindowExceeded(t *testing.T) {
+	message := createErrorMessage("litellm.ContextWindowExceededError: ContextWindowExceededError: OpenAIException - context window exceeded")
+	if !IsContextOverflow(&message, 131072) {
+		t.Fatal("want overflow")
+	}
+}

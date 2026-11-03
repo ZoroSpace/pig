@@ -1548,7 +1548,7 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 		// and strict mode was available (pi: definition.strict === true &&
 		// config.strict === "prefer").
 		for index, definition := range definitions {
-			if strict, _ := definition["strict"].(bool); strict && index < len(tools) && isPreferredJSONSchemaStrictSampling(tools[index].ConstrainedSampling) {
+			if strict, _ := definition["strict"].(bool); strict && index < len(tools) && prefersJSONSchemaStrictSampling(&tools[index]) {
 				hasPreferredStrictTools = true
 			}
 		}
@@ -1717,15 +1717,6 @@ func buildAnthropicParams(model *types.Model, llmContext *types.TranscriptContex
 	return params, hasPreferredStrictTools, providerThinkingLevel, nil
 }
 
-// anthropicStrictToolLimitMessages are the API error messages that mean the
-// request exceeded Anthropic's strict-tool capacity (pi: the same three
-// substrings, #10409).
-var anthropicStrictToolLimitMessages = []string{
-	"The compiled grammar is too large",
-	"Too many strict tools (",
-	"Schemas contains too many parameters with union types (",
-}
-
 // isAnthropicStrictToolsLimitError reports whether err is a 400
 // invalid_request_error whose message names a strict-tool capacity limit
 // (pi: error instanceof Anthropic.APIError && error.status === 400 &&
@@ -1751,12 +1742,7 @@ func isAnthropicStrictToolsLimitError(err error) bool {
 	if message == "" {
 		message = norm.Message
 	}
-	for _, marker := range anthropicStrictToolLimitMessages {
-		if strings.Contains(message, marker) {
-			return true
-		}
-	}
-	return false
+	return isStrictToolLimitErrorMessage(message)
 }
 
 // maxTokensValue resolves the max_tokens param (pi: options?.maxTokens ??

@@ -440,38 +440,56 @@ func runBedrockConverseStream(ctx context.Context, model *types.Model, normalize
 		maxTokens := model.MaxTokens
 		inferenceMaxTokens = &maxTokens
 	}
-	toolConfig, err := convertBedrockToolConfig(utils.GetCurrentTools(normalizedContext.Messages), options.ToolChoice, supportsStrictMode)
-	if err != nil {
-		return err
-	}
 	initialSystemMessage := utils.GetInitialSystemMessage(normalizedContext.Messages)
 	initialSystemPrompt := ""
 	if initialSystemMessage != nil {
 		initialSystemPrompt = utils.GetSystemMessageText(initialSystemMessage)
 	}
-	commandInput := &bedrockConverseInput{
-		ModelID:  model.ID,
-		Messages: convertBedrockMessages(normalizedContext, model, cacheRetention, options.Env),
-		System:   buildBedrockSystemPrompt(initialSystemPrompt, model, cacheRetention, options.Env),
-		InferenceConfig: &bedrockInferenceConfig{
-			MaxTokens:   inferenceMaxTokens,
-			Temperature: options.Temperature,
-		},
-		ToolConfig:                   toolConfig,
-		AdditionalModelRequestFields: buildAdditionalModelRequestFields(model, options),
-		RequestMetadata:              options.RequestMetadata,
-	}
-	if options.OnPayload != nil {
-		if next := options.OnPayload(commandInput, model); next != nil {
-			if nextInput, ok := next.(*bedrockConverseInput); ok {
-				commandInput = nextInput
+
+	// Bedrock checks the tool schemas before it starts the stream, so a
+	// strict-tool capacity rejection can be retried once with preferred tools
+	// downgraded to their non-strict schemas, exactly like the Anthropic API
+	// (#11416). A started stream is never retried.
+	disablePreferredStrictTools := false
+	var response *bedrockConverseStreamResult
+	for {
+		toolConfig, hasPreferredStrictTools, err := convertBedrockToolConfig(utils.GetCurrentTools(normalizedContext.Messages), options.ToolChoice, supportsStrictMode, disablePreferredStrictTools)
+		if err != nil {
+			return err
+		}
+		commandInput := &bedrockConverseInput{
+			ModelID:  model.ID,
+			Messages: convertBedrockMessages(normalizedContext, model, cacheRetention, options.Env),
+			System:   buildBedrockSystemPrompt(initialSystemPrompt, model, cacheRetention, options.Env),
+			InferenceConfig: &bedrockInferenceConfig{
+				MaxTokens:   inferenceMaxTokens,
+				Temperature: options.Temperature,
+			},
+			ToolConfig:                   toolConfig,
+			AdditionalModelRequestFields: buildAdditionalModelRequestFields(model, options),
+			RequestMetadata:              options.RequestMetadata,
+		}
+		if options.OnPayload != nil {
+			if next := options.OnPayload(commandInput, model); next != nil {
+				if nextInput, ok := next.(*bedrockConverseInput); ok {
+					commandInput = nextInput
+				}
 			}
 		}
-	}
 
-	response, err := client.ConverseStream(ctx, commandInput)
-	if err != nil {
-		return err
+		response, err = client.ConverseStream(ctx, commandInput)
+		if err == nil {
+			break
+		}
+		code, message, modeled, ok := extractBedrockAPIError(err)
+		if ctx.Err() != nil || disablePreferredStrictTools || !hasPreferredStrictTools ||
+			!ok || !modeled || code != "ValidationException" ||
+			!isStrictToolLimitErrorMessage(message) {
+			return err
+		}
+		disablePreferredStrictTools = true
+		utils.AppendAssistantMessageDiagnostic(output, utils.CreateAssistantMessageDiagnostic(
+			"bedrock_strict_tools_fallback", err, map[string]any{"reason": "strict_tool_limits_exceeded"}))
 	}
 	defer response.Events.Close()
 
@@ -1368,25 +1386,32 @@ func bedrockToolResultStatus(isError bool) string {
 	return "success"
 }
 
-func convertBedrockToolConfig(tools []types.Tool, toolChoice *BedrockToolChoice, supportsStrictMode bool) (*bedrockToolConfiguration, error) {
+func convertBedrockToolConfig(tools []types.Tool, toolChoice *BedrockToolChoice, supportsStrictMode bool, disablePreferredStrictTools bool) (toolConfig *bedrockToolConfiguration, hasPreferredStrictTools bool, err error) {
 	if len(tools) == 0 {
-		return nil, nil
+		return nil, false, nil
 	}
 	if toolChoice != nil && toolChoice.Type == "none" {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	var bedrockTools []bedrockTool
 	for i := range tools {
 		tool := &tools[i]
+		preferred := prefersJSONSchemaStrictSampling(tool)
 		strict, err := ResolveJSONSchemaStrictSampling(tool, supportsStrictMode, nil)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		strictEnabled := strict != nil
+		if disablePreferredStrictTools && preferred {
+			strict = nil
+		}
+		strictEnabled := strict != nil && *strict
+		if strictEnabled && preferred {
+			hasPreferredStrictTools = true
+		}
 		parameters, err := GetJSONSchemaToolParameters(tool, strictEnabled)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		spec := bedrockToolSpec{
 			Name:        tool.Name,
@@ -1411,7 +1436,7 @@ func convertBedrockToolConfig(tools []types.Tool, toolChoice *BedrockToolChoice,
 		}
 	}
 
-	return &bedrockToolConfiguration{Tools: bedrockTools, ToolChoice: bedrockChoice}, nil
+	return &bedrockToolConfiguration{Tools: bedrockTools, ToolChoice: bedrockChoice}, hasPreferredStrictTools, nil
 }
 
 func mapBedrockStopReason(reason string) (types.StopReason, string) {

@@ -102,21 +102,6 @@ func metaErrorDetail(body map[string]any) string {
 	return ""
 }
 
-// metaTrustedHTTPURL validates the URL is http(s) so a malicious response
-// cannot make `open` launch something else (pi: trustedHttpUrl). "" when
-// untrusted (pi null/undefined).
-func metaTrustedHTTPURL(value any) string {
-	raw, ok := value.(string)
-	if !ok || raw == "" {
-		return ""
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
-		return ""
-	}
-	return parsed.String()
-}
-
 // metaPositiveNumber extracts a finite positive number (pi: positiveNumber);
 // ok=false = pi undefined.
 func metaPositiveNumber(body map[string]any, field string) (int64, bool) {
@@ -158,9 +143,9 @@ func metaStartDeviceAuthorization(ctx context.Context) (*metaDeviceAuthorization
 	}
 	deviceCode, _ := body["device_code"].(string)
 	userCode, _ := body["user_code"].(string)
-	verificationURI := metaTrustedHTTPURL(body["verification_uri_complete"])
+	verificationURI := trustedHTTPURL(body["verification_uri_complete"])
 	if verificationURI == "" {
-		verificationURI = metaTrustedHTTPURL(body["verification_uri"])
+		verificationURI = trustedHTTPURL(body["verification_uri"])
 	}
 	if deviceCode == "" || userCode == "" || verificationURI == "" {
 		encoded, _ := json.Marshal(body)
@@ -256,7 +241,7 @@ func metaMintAPIKey(ctx context.Context, identityToken string) (*OAuthCredential
 	}
 	apiKey, _ := body["api_key"].(string)
 	if apiKey == "" {
-		actionURL := metaTrustedHTTPURL(body["action_url"])
+		actionURL := trustedHTTPURL(body["action_url"])
 		suffix := ""
 		if actionURL != "" {
 			suffix = " Complete setup at " + actionURL

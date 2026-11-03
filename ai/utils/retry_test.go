@@ -226,3 +226,10 @@ func TestIsRetryableAssistantErrorRejectsWorkspaceLimit(t *testing.T) {
 		t.Fatal("ChatGPT Business workspace usage limit should not be retryable")
 	}
 }
+
+func TestIsRetryableAssistantErrorRejectsZhipu1308UsageLimit(t *testing.T) {
+	message := retryTestMessage("", types.StopReasonError, `429 {"code": 1308, "message": "Your account's usage limit has been reached"}`)
+	if IsRetryableAssistantError(message) {
+		t.Fatal("Zhipu 1308 usage limit should not be retryable")
+	}
+}

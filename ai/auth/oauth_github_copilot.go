@@ -410,23 +410,17 @@ func githubCopilotStartDeviceFlow(ctx context.Context, domain string) (*githubCo
 	}
 
 	// The verification URI is opened in the user's browser and to prevent
-	// `open` from opening an executable or similar, we force it to be a URL.
-	// pi's URL parser percent-encodes control characters and normalizes the
-	// URI; Go's url.Parse rejects them outright, so escape them first to keep
-	// the normalization semantics (github-copilot-oauth
-	// "normalizes verification_uri" case).
-	parsedURI, err := url.Parse(escapeControlBytes(verificationURI))
-	if err != nil {
-		return nil, fmt.Errorf("Untrusted verification_uri in device code response")
-	}
-	if parsedURI.Scheme != "https" && parsedURI.Scheme != "http" {
+	// `open` from opening an executable or similar, only http(s) URLs are
+	// trusted (pi: trustedHttpUrl, shared by all login flows).
+	trustedVerificationURI := trustedHTTPURL(verificationURI)
+	if trustedVerificationURI == "" {
 		return nil, fmt.Errorf("Untrusted verification_uri in device code response")
 	}
 
 	return &githubCopilotDeviceCodeResponse{
 		deviceCode:       deviceCode,
 		userCode:         userCode,
-		verificationURI:  parsedURI.String(),
+		verificationURI:  trustedVerificationURI,
 		intervalSeconds:  intervalSeconds,
 		expiresInSeconds: int64(expiresIn),
 	}, nil

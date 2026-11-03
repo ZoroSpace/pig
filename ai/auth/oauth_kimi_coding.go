@@ -70,20 +70,6 @@ func kimiReadJSON(response *http.Response) (map[string]any, error) {
 	return nil, nil
 }
 
-// trustedHTTPURL only trusts http(s) URLs for the browser (pi:
-// trustedHttpUrl).
-func trustedHTTPURL(value any) string {
-	s, ok := value.(string)
-	if !ok || s == "" {
-		return ""
-	}
-	parsed, err := url.Parse(s)
-	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
-		return ""
-	}
-	return parsed.String()
-}
-
 // kimiDeviceAuthorization is the device authorization response (pi:
 // DeviceAuthorization).
 type kimiDeviceAuthorization struct {

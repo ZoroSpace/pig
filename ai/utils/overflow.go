@@ -20,6 +20,7 @@ var overflowPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)input is too long for requested model`),                                                     // Amazon Bedrock
 	regexp.MustCompile(`(?i)exceeds the context window`),                                                                // OpenAI (Completions & Responses API)
 	regexp.MustCompile(`(?i)exceeds (?:the )?(?:model'?s )?maximum context length(?: of [\d,]+ tokens?|\s*\([\d,]+\))`), // OpenAI-compatible proxies (LiteLLM)
+	regexp.MustCompile(`(?i)context window exceeded`),                                                                   // LiteLLM pre-call check (ContextWindowExceededError)
 	regexp.MustCompile(`(?i)input token count.*exceeds the maximum`),                                                    // Google (Gemini)
 	regexp.MustCompile(`(?i)maximum prompt length is \d+`),                                                              // xAI (Grok)
 	regexp.MustCompile(`(?i)reduce the length of the messages`),                                                         // Groq
