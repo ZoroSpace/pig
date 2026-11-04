@@ -350,12 +350,12 @@ func TestModelRegistryCustomProviderWithSameNameAsBuiltinMerges(t *testing.T) {
 func TestModelRegistryCustomModelWithSameIDReplacesBuiltinModel(t *testing.T) {
 	h := newRegistryHarness(t)
 	h.writeRawModelsJSON(t, map[string]any{
-		"openrouter": registryProviderConfig("https://my-proxy.example.com/v1", []string{"anthropic/claude-sonnet-4"}, "openai-completions"),
+		"openrouter": registryProviderConfig("https://my-proxy.example.com/v1", []string{"anthropic/claude-sonnet-4.5"}, "openai-completions"),
 	})
 	registry := h.createRegistry(t)
 	var sonnetModels []ai.Model
 	for _, model := range getModelsForProvider(registry, "openrouter") {
-		if model.ID == "anthropic/claude-sonnet-4" {
+		if model.ID == "anthropic/claude-sonnet-4.5" {
 			sonnetModels = append(sonnetModels, model)
 		}
 	}
@@ -701,7 +701,7 @@ func TestModelRegistryModelOverridesStillApplyWhenProviderAlsoDefinesModels(t *t
 				},
 			},
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{"name": "Overridden Built-in Sonnet"},
+				"anthropic/claude-sonnet-4.5": map[string]any{"name": "Overridden Built-in Sonnet"},
 			},
 		},
 	})
@@ -714,7 +714,7 @@ func TestModelRegistryModelOverridesStillApplyWhenProviderAlsoDefinesModels(t *t
 		if model.ID == "custom/openrouter-model" {
 			hasCustom = true
 		}
-		if model.ID == "anthropic/claude-sonnet-4" && model.Name == "Overridden Built-in Sonnet" {
+		if model.ID == "anthropic/claude-sonnet-4.5" && model.Name == "Overridden Built-in Sonnet" {
 			sonnetOverridden = true
 		}
 	}
@@ -798,14 +798,14 @@ func TestModelRegistryModelOverrideAppliesToASingleBuiltinModel(t *testing.T) {
 	h.writeRawModelsJSON(t, map[string]any{
 		"openrouter": map[string]any{
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{"name": "Custom Sonnet Name"},
+				"anthropic/claude-sonnet-4.5": map[string]any{"name": "Custom Sonnet Name"},
 			},
 		},
 	})
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
 
-	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if sonnet.ID == "" {
 		t.Fatal("sonnet missing")
 	}
@@ -841,7 +841,7 @@ func TestModelRegistryCustomModelAndModelOverrideCarrySamplingParams(t *testing.
 						"max": map[string]any{"temperature": 1},
 					},
 				},
-				"anthropic/claude-sonnet-4": map[string]any{
+				"anthropic/claude-sonnet-4.5": map[string]any{
 					"samplingParams": map[string]any{"top_p": 0.9},
 					"samplingParamsByThinkingLevel": map[string]any{
 						"high": map[string]any{"temperature": 0.8},
@@ -872,7 +872,7 @@ func TestModelRegistryCustomModelAndModelOverrideCarrySamplingParams(t *testing.
 	if max := customByLevel[types.ModelThinkingMax]; len(max) != 1 || max["temperature"] != float64(1) {
 		t.Fatalf("custom max = %+v", max)
 	}
-	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if len(sonnet.SamplingParams) != 1 || sonnet.SamplingParams["top_p"] != 0.9 {
 		t.Fatalf("sonnet samplingParams = %+v", sonnet.SamplingParams)
 	}
@@ -939,7 +939,7 @@ func TestModelRegistrySupportsFinishReasonConfiguredAtProviderAndModelLevels(t *
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
 	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-chat" })
-	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-r1" })
+	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-v3.2" })
 
 	sonnetCompat, ok := sonnet.Compat.(*ai.OpenAICompletionsCompat)
 	if !ok {
@@ -996,7 +996,7 @@ func TestModelRegistryMultipleModelOverridesOnSameProvider(t *testing.T) {
 				"deepseek/deepseek-chat": map[string]any{
 					"compat": map[string]any{"openRouterRouting": map[string]any{"only": []string{"amazon-bedrock"}}},
 				},
-				"deepseek/deepseek-r1": map[string]any{
+				"deepseek/deepseek-v3.2": map[string]any{
 					"compat": map[string]any{"openRouterRouting": map[string]any{"only": []string{"anthropic"}}},
 				},
 			},
@@ -1005,7 +1005,7 @@ func TestModelRegistryMultipleModelOverridesOnSameProvider(t *testing.T) {
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
 	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-chat" })
-	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-r1" })
+	opus := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "deepseek/deepseek-v3.2" })
 	sonnetCompat, ok := sonnet.Compat.(*ai.OpenAICompletionsCompat)
 	if !ok {
 		t.Fatalf("sonnet compat type = %T", sonnet.Compat)
@@ -1028,13 +1028,13 @@ func TestModelRegistryModelOverrideCombinedWithBaseURLOverride(t *testing.T) {
 		"openrouter": map[string]any{
 			"baseUrl": "https://my-proxy.example.com/v1",
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{"name": "Proxied Sonnet"},
+				"anthropic/claude-sonnet-4.5": map[string]any{"name": "Proxied Sonnet"},
 			},
 		},
 	})
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
-	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if sonnet.BaseURL != "https://my-proxy.example.com/v1" || sonnet.Name != "Proxied Sonnet" {
 		t.Fatalf("sonnet = %+v", sonnet)
 	}
@@ -1071,7 +1071,7 @@ func TestModelRegistryModelOverrideCanChangeCostFieldsPartially(t *testing.T) {
 	h.writeRawModelsJSON(t, map[string]any{
 		"openrouter": map[string]any{
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{
+				"anthropic/claude-sonnet-4.5": map[string]any{
 					"cost": map[string]any{"input": 99},
 				},
 			},
@@ -1079,7 +1079,7 @@ func TestModelRegistryModelOverrideCanChangeCostFieldsPartially(t *testing.T) {
 	})
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
-	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if sonnet.Cost.Input != 99 {
 		t.Fatalf("input cost = %v", sonnet.Cost.Input)
 	}
@@ -1093,7 +1093,7 @@ func TestModelRegistryModelOverrideCanAddHeadersAtRequestTime(t *testing.T) {
 	h.writeRawModelsJSON(t, map[string]any{
 		"openrouter": map[string]any{
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{
+				"anthropic/claude-sonnet-4.5": map[string]any{
 					"headers": map[string]any{"X-Custom-Model-Header": "value"},
 				},
 			},
@@ -1101,7 +1101,7 @@ func TestModelRegistryModelOverrideCanAddHeadersAtRequestTime(t *testing.T) {
 	})
 	registry := h.createRegistry(t)
 	models := getModelsForProvider(registry, "openrouter")
-	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+	sonnet := lo.FindOrElse(models, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if sonnet.ID == "" {
 		t.Fatal("sonnet missing")
 	}
@@ -1119,13 +1119,13 @@ func TestModelRegistryRefreshPicksUpModelOverrideChanges(t *testing.T) {
 	h.writeRawModelsJSON(t, map[string]any{
 		"openrouter": map[string]any{
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{"name": "First Name"},
+				"anthropic/claude-sonnet-4.5": map[string]any{"name": "First Name"},
 			},
 		},
 	})
 	registry := h.createRegistry(t)
 	sonnet := lo.FindOrElse(getModelsForProvider(registry, "openrouter"), ai.Model{},
-		func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+		func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if sonnet.Name != "First Name" {
 		t.Fatalf("name = %q", sonnet.Name)
 	}
@@ -1133,14 +1133,14 @@ func TestModelRegistryRefreshPicksUpModelOverrideChanges(t *testing.T) {
 	h.writeRawModelsJSON(t, map[string]any{
 		"openrouter": map[string]any{
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{"name": "Second Name"},
+				"anthropic/claude-sonnet-4.5": map[string]any{"name": "Second Name"},
 			},
 		},
 	})
 	registry.Refresh(context.Background(), nil)
 
 	sonnet = lo.FindOrElse(getModelsForProvider(registry, "openrouter"), ai.Model{},
-		func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+		func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if sonnet.Name != "Second Name" {
 		t.Fatalf("name = %q", sonnet.Name)
 	}
@@ -1151,13 +1151,13 @@ func TestModelRegistryRemovingModelOverrideRestoresBuiltinValues(t *testing.T) {
 	h.writeRawModelsJSON(t, map[string]any{
 		"openrouter": map[string]any{
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{"name": "Custom Name"},
+				"anthropic/claude-sonnet-4.5": map[string]any{"name": "Custom Name"},
 			},
 		},
 	})
 	registry := h.createRegistry(t)
 	sonnet := lo.FindOrElse(getModelsForProvider(registry, "openrouter"), ai.Model{},
-		func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+		func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if sonnet.Name != "Custom Name" {
 		t.Fatalf("name = %q", sonnet.Name)
 	}
@@ -1166,7 +1166,7 @@ func TestModelRegistryRemovingModelOverrideRestoresBuiltinValues(t *testing.T) {
 	registry.Refresh(context.Background(), nil)
 
 	restored := lo.FindOrElse(getModelsForProvider(registry, "openrouter"), ai.Model{},
-		func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+		func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if restored.Name == "Custom Name" {
 		t.Fatalf("name = %q, want builtin restored", restored.Name)
 	}
@@ -2272,7 +2272,7 @@ func TestModelRegistryCustomModelAndOverrideCarryPromptCacheLifetimes(t *testing
 				map[string]any{"id": "custom/cached-model", "promptCache": map[string]any{"short": 120}},
 			},
 			"modelOverrides": map[string]any{
-				"anthropic/claude-sonnet-4": map[string]any{"promptCache": map[string]any{"short": 300}},
+				"anthropic/claude-sonnet-4.5": map[string]any{"promptCache": map[string]any{"short": 300}},
 			},
 		},
 		"anthropic": map[string]any{
@@ -2291,7 +2291,7 @@ func TestModelRegistryCustomModelAndOverrideCarryPromptCacheLifetimes(t *testing
 	if cached.PromptCache[ai.CacheRetentionShort] != 120 || len(cached.PromptCache) != 1 {
 		t.Fatalf("custom promptCache = %+v", cached.PromptCache)
 	}
-	overridden := lo.FindOrElse(openrouter, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4" })
+	overridden := lo.FindOrElse(openrouter, ai.Model{}, func(m ai.Model) bool { return m.ID == "anthropic/claude-sonnet-4.5" })
 	if overridden.PromptCache[ai.CacheRetentionShort] != 300 || len(overridden.PromptCache) != 1 {
 		t.Fatalf("override promptCache = %+v", overridden.PromptCache)
 	}

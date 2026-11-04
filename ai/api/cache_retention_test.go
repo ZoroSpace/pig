@@ -403,7 +403,7 @@ func TestCacheRetentionOpenAICompletionsOmitLongCacheForOpencode(t *testing.T) {
 	// pi: "should omit long cache retention for $provider/$id" over the
 	// opencode / opencode-go catalog entries.
 	for _, spec := range []struct{ provider, id string }{
-		{"opencode", "deepseek-v4-flash"},
+		{"opencode", "deepseek-v4.1-flash"},
 		{"opencode", "deepseek-v4-pro"},
 		{"opencode", "kimi-k2.5"},
 		{"opencode", "kimi-k2.6"},

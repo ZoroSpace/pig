@@ -883,6 +883,9 @@ func mergeOpenAIResponsesCompat(model *ai.Model, compat *ai.OpenAIResponsesCompa
 	if compat.SupportsExplicitPromptCacheMode != nil {
 		existing.SupportsExplicitPromptCacheMode = compat.SupportsExplicitPromptCacheMode
 	}
+	if compat.SupportsMidConvoEffort != nil {
+		existing.SupportsMidConvoEffort = compat.SupportsMidConvoEffort
+	}
 	if compat.SupportsMaxOutputTokens != nil {
 		existing.SupportsMaxOutputTokens = compat.SupportsMaxOutputTokens
 	}
@@ -922,8 +925,8 @@ var openAIGrammarToolGptRe = regexp.MustCompile(`^gpt-(\d+)`)
 // openAIToolSearchModelIDs lists the models with tool-search verified
 // (pi: OPENAI_TOOL_SEARCH_MODEL_IDS).
 var openAIToolSearchModelIDs = stringSet(
-	"gpt-5.4", "gpt-5.4-mini", "gpt-5.4-pro", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
-	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol",
+	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra",
 )
 
 // openAIAdditionalToolsModelIDs is pi's OPENAI_ADDITIONAL_TOOLS_MODEL_IDS
@@ -931,21 +934,26 @@ var openAIToolSearchModelIDs = stringSet(
 var openAIAdditionalToolsModelIDs = openAIToolSearchModelIDs
 
 // openAIMidConvoSystemMessageModelIDs is pi's
-// OPENAI_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS (same set as the tool-search
-// ids; v0.86.0 mid-conversation system messages).
-var openAIMidConvoSystemMessageModelIDs = openAIToolSearchModelIDs
+// OPENAI_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS (v0.86.0 mid-conversation system
+// messages).
+var openAIMidConvoSystemMessageModelIDs = stringSet(
+	"gpt-5.4", "gpt-5.4-mini", "gpt-5.4-pro", "gpt-5.5",
+	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra",
+)
 
 // openAICodexAdditionalToolsModelIDs is pi's
 // OPENAI_CODEX_ADDITIONAL_TOOLS_MODEL_IDS (the codex branch stays inert
 // until the codex adapter lands).
 var openAICodexAdditionalToolsModelIDs = stringSet(
-	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol",
+	"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
+	"gpt-6.1-sol", "gpt-6.1-terra",
 )
 
 // openAIMidConvoEffortModelIDs is pi's OPENAI_MID_CONVO_EFFORT_MODEL_IDS.
 // OpenAI documents configuration_update for the GPT-6 family.
 // https://developers.openai.com/api/docs/guides/reasoning
-var openAIMidConvoEffortModelIDs = stringSet("gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol")
+var openAIMidConvoEffortModelIDs = stringSet("gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra")
 
 // applyOpenAIToolSearchMetadata (pi: applyOpenAIToolSearchMetadata).
 func applyOpenAIToolSearchMetadata(model *ai.Model) {
@@ -1013,7 +1021,7 @@ func applyOpenAIResponsesTranscriptMetadata(model *ai.Model) {
 		return
 	}
 	compat := &ai.OpenAIResponsesCompat{SupportsMidConvoSystemMessages: lo.ToPtr(true)}
-	if isProxiedResponses {
+	if isProxiedResponses && openAIToolSearchModelIDs[model.ID] {
 		compat.SupportsAdditionalTools = lo.ToPtr(true)
 	}
 	mergeOpenAIResponsesCompat(model, compat)
@@ -1248,11 +1256,11 @@ func applyThinkingLevelMetadata(model *ai.Model) {
 		strings.HasPrefix(model.ID, "gpt-5") {
 		mergeThinkingLevelMap(model, ai.ThinkingLevelMap{ai.ModelThinkingOff: nil})
 	}
-	if model.ID == "gpt-6-astra" || model.ID == "gpt-6-sol" || model.ID == "gpt-6-luna" || model.ID == "gpt-6.1-sol" {
+	if model.ID == "gpt-6-astra" || model.ID == "gpt-6-sol" || model.ID == "gpt-6-luna" || model.ID == "gpt-6.1-sol" || model.ID == "gpt-6.1-terra" {
 		if model.API == ai.ApiOpenAIResponses || model.API == ai.ApiAzureOpenAIResponses || model.API == ai.Api("openai-codex-responses") {
 			// pi db91e0331: Astra rejects an explicit off effort (null), Sol/Luna
 			// accept the provider-native "none". v0.99.1 12c416e1a: GPT-6.1 Sol
-			// joins Astra in rejecting effort "none".
+			// joins Astra in rejecting effort "none"; GPT-6.1 Terra accepts it.
 			merge := ai.ThinkingLevelMap{
 				ai.ModelThinkingMinimal: nil,
 				ai.ModelThinkingLow:     lo.ToPtr("low"),

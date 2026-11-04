@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	modelsDevURL       = "https://models.dev/api.json"
+	modelsDevURL       = "https://models.dev/experimental/v2.0/api.json"
 	openRouterURL      = "https://openrouter.ai/api/v1/models"
 	aiGatewayModelsURL = "https://ai-gateway.vercel.sh/v1/models"
 	aiGatewayBaseURL   = "https://ai-gateway.vercel.sh"
@@ -33,7 +33,7 @@ var nvidiaHeaders = map[string]string{"NVCF-POLL-SECONDS": "3600"}
 
 // anthropicPrefixRegexp matches pi's /^anthropic\// OpenRouter routing test
 // (Go raw string: the slash needs no escape).
-var anthropicPrefixRegexp = regexp.MustCompile(`^anthropic/`)
+var anthropicPrefixRegexp = regexp.MustCompile(`^~?anthropic/`)
 
 // nvidiaOpenAICompat is the NVIDIA NIM compat override (pi: NVIDIA_OPENAI_COMPAT).
 var nvidiaOpenAICompat = &ai.OpenAICompletionsCompat{

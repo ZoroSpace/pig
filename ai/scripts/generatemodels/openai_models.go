@@ -17,14 +17,14 @@ const openAILongContextInputThreshold = 272000
 // OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS).
 var openAIShortContextCappedModelIds = stringSet(
 	"gpt-5.4", "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
-	"gpt-6.1-sol",
+	"gpt-6.1-sol", "gpt-6.1-terra",
 )
 
 // openAILongContextPricingModelIds lists the models carrying long-context
 // tier pricing (pi: OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS).
 var openAILongContextPricingModelIds = stringSet(
 	"gpt-5.4", "gpt-5.4-pro", "gpt-5.5", "gpt-5.5-pro", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
-	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol",
+	"gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra",
 )
 
 // openAIStandardCosts keeps the current OpenAI prices authoritative until
@@ -39,14 +39,17 @@ var openAIStandardCosts = map[string]ai.ModelCost{
 	"gpt-6-luna":    {ModelCostRates: ai.ModelCostRates{Input: 0.1, Output: 0.5, CacheRead: 0.01, CacheWrite: 0.125}},
 	"gpt-6-sol":     {ModelCostRates: ai.ModelCostRates{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
 	"gpt-6.1-sol":   {ModelCostRates: ai.ModelCostRates{Input: 2, Output: 10, CacheRead: 0.1, CacheWrite: 2.5}},
+	"gpt-6.1-terra": {ModelCostRates: ai.ModelCostRates{Input: 1, Output: 5, CacheRead: 0.05, CacheWrite: 1.25}},
 }
 
-// withOpenAiLongContextPricing appends the long-context tier to a cost (pi:
-// withOpenAiLongContextPricing): the base cost stays the short-context
-// tier, and requests above the threshold use 2x input/cache rates and 1.5x
-// output.
+// withOpenAiLongContextPricing replaces the cost tiers with the long-context
+// tier (pi: withOpenAiLongContextPricing): the base cost stays the
+// short-context tier, and requests above the threshold use 2x input/cache
+// rates and 1.5x output.
 func withOpenAiLongContextPricing(cost ai.ModelCost) ai.ModelCost {
-	cost.Tiers = append(cost.Tiers, ai.ModelCostTier{
+	// pi replaces the tiers with the long-context one (models.dev v2 may
+	// already list a context tier for the same model).
+	cost.Tiers = []ai.ModelCostTier{{
 		InputTokensAbove: openAILongContextInputThreshold,
 		ModelCostRates: ai.ModelCostRates{
 			Input:      roundCost(cost.Input * 2),
@@ -54,7 +57,7 @@ func withOpenAiLongContextPricing(cost ai.ModelCost) ai.ModelCost {
 			CacheRead:  roundCost(cost.CacheRead * 2),
 			CacheWrite: roundCost(cost.CacheWrite * 2),
 		},
-	})
+	}}
 	return cost
 }
 

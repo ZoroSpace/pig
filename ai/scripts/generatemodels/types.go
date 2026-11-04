@@ -30,6 +30,16 @@ type ModelsDevModel struct {
 	Cost             *ModelsDevCost             `json:"cost"`
 	Modalities       *ModelsDevModalities       `json:"modalities"`
 	Provider         *ModelsDevProviderInfo     `json:"provider"`
+	// APIs are the endpoints models.dev lists for the model, normalized from
+	// v2 (pi: ModelsDevModel.apis). nil for the v1 decision metadata endpoint.
+	APIs []ModelsDevAPI `json:"-"`
+}
+
+// ModelsDevAPI is one protocol endpoint models.dev lists (pi: ModelsDevApi).
+type ModelsDevAPI struct {
+	Protocol string
+	BaseURL  string
+	AISDK    string
 }
 
 // ModelsDevLimit is a model's context/output token limits (pi: limit).

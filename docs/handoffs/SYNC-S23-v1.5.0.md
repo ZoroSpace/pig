@@ -107,3 +107,4 @@
 ## 4. 执行记录
 
 - 2026-11-03：计划稿落盘，开始 S23-1。
+- 2026-11-04：S23-2 完成。models.dev v2 读取/normalize（`models_dev_v2.go`，仅保留 `type == "chat"`）、OpenCode 按 `apis[].protocol` 选端点、OpenRouter `~anthropic/*` 走 Messages、GPT-6.1 Terra 全规则、GPT-5.4/5.5 顶层工具与 mid-convo 集合拆分、长上下文定价 tier 改为替换。生成器与 pi v1.5.0 新生成目录逐字段比对仅剩未移植的 mistral 与 pi 环境自身拉取失败的 OpenRouter；5 个 golden 已重同步（OpenRouter golden 因 pi 侧拉取为空，按 pig 当前生成快照记录）。新增 `models_dev_v2_test.go`（v2 normalize/缓存 TTL/协议选择/长上下文 tier）；`go test ./... -race` 全绿。

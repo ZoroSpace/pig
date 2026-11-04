@@ -1,8 +1,8 @@
 // pi: generate-models.ts — the codexModels block (ChatGPT Codex / OAuth
 // openai-codex-responses models, hardcoded outside models.dev). Older model
 // limits are based on observed server behavior; GPT-5.6 and GPT-6 use
-// Codex's 272k default catalog limit. GPT-6.1 Sol uses the 500k default
-// returned by /backend-api/codex/models.
+// Codex's 272k default catalog limit. The GPT-6.1 family uses the 500k
+// default returned by /backend-api/codex/models.
 package main
 
 import "github.com/ZoroSpace/pig/ai"
@@ -24,6 +24,13 @@ func codexModels() []*ai.Model {
 			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
 			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
 			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6.1-sol")),
+			ContextWindow: codexGpt61SolContext, MaxTokens: codexMaxTokens,
+		},
+		{
+			ID: "gpt-6.1-terra", Name: "GPT-6.1 Terra",
+			API: ai.ApiOpenAICodexResponses, Provider: ai.ProviderOpenAICodex, BaseURL: codexBaseURL,
+			Reasoning: true, Input: []ai.ModelInput{ai.ModelInputText, ai.ModelInputImage},
+			Cost:          withOpenAiLongContextPricing(mustStandardCost("gpt-6.1-terra")),
 			ContextWindow: codexGpt61SolContext, MaxTokens: codexMaxTokens,
 		},
 		{

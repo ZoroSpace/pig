@@ -929,10 +929,11 @@ func processHuggingFaceModels(data ModelsDevCatalog) []*ai.Model {
 // the tool-capable models for the ported providers (pi: loadModelsDevData).
 func loadModelsDevData(ctx context.Context) ([]*ai.Model, error) {
 	fmt.Println("Fetching models from models.dev API...")
-	var data ModelsDevCatalog
-	if err := httpGetJSON(ctx, modelsDevURL, &data); err != nil {
+	var raw modelsDevV2Catalog
+	if err := httpGetJSON(ctx, modelsDevURL, &raw); err != nil {
 		return nil, err
 	}
+	data := normalizeModelsDevV2Catalog(raw)
 
 	var models []*ai.Model
 
@@ -1043,6 +1044,7 @@ var qwenTokenPlanIndividualModelIDs = stringSet(
 // OPENCODE_OPENAI_COMPLETIONS_LONG_CACHE_RETENTION_UNSUPPORTED_MODELS).
 var openCodeOpenAICompletionsLongCacheRetentionUnsupportedModels = stringSet(
 	"opencode:deepseek-v4-flash",
+	"opencode:deepseek-v4.1-flash",
 	"opencode:deepseek-v4-pro",
 	"opencode:kimi-k2.5",
 	"opencode:kimi-k2.6",
@@ -1247,6 +1249,45 @@ func processCloudflareModels(data ModelsDevCatalog) []*ai.Model {
 	return models
 }
 
+// openCodeProtocols is pi's OPENCODE_PROTOCOLS: native protocols come before
+// generic Chat Completions if models.dev lists several.
+var openCodeProtocols = []string{"responses", "messages", "generate-content", "chat-completions"}
+
+// openCodeAPI is pi opencodeApi: the API and base URL models.dev lists for a
+// model, or ok=false when no protocol pi supports is listed.
+func openCodeAPI(model *ModelsDevModel) (ai.Api, string, ai.ModelCompat, bool) {
+	var entry *ModelsDevAPI
+	for _, protocol := range openCodeProtocols {
+		for i := range model.APIs {
+			if model.APIs[i].Protocol == protocol {
+				entry = &model.APIs[i]
+				break
+			}
+		}
+		if entry != nil {
+			break
+		}
+	}
+	if entry == nil {
+		return "", "", nil, false
+	}
+	switch entry.Protocol {
+	case "responses":
+		return ai.ApiOpenAIResponses, entry.BaseURL, &ai.OpenAIResponsesCompat{SessionAffinityFormat: lo.ToPtr(ai.SessionAffinityOpenAINoSession)}, true
+	case "messages":
+		// The Anthropic SDK appends /v1/messages itself.
+		return ai.ApiAnthropicMessages, strings.TrimSuffix(strings.TrimSuffix(entry.BaseURL, "/"), "/v1"), nil, true
+	case "generate-content":
+		return ai.ApiGoogleGenerativeAI, entry.BaseURL, nil, true
+	default:
+		var compat ai.ModelCompat
+		if entry.AISDK == "@ai-sdk/alibaba" {
+			compat = &ai.OpenAICompletionsCompat{CacheControlFormat: lo.ToPtr(ai.CacheControlAnthropic)}
+		}
+		return ai.ApiOpenAICompletions, entry.BaseURL, compat, true
+	}
+}
+
 // processOpenCodeModels handles opencode and opencode-go (pi:
 // loadModelsDevData opencodeVariants block). models.dev's provider.npm hint
 // routes each model to its wire API.
@@ -1254,11 +1295,10 @@ func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
 	type openCodeVariant struct {
 		key      string
 		provider ai.ProviderID
-		basePath string
 	}
 	variants := []openCodeVariant{
-		{key: "opencode", provider: ai.ProviderOpenCode, basePath: "https://opencode.ai/inference"},
-		{key: "opencode-go", provider: ai.ProviderOpenCodeGo, basePath: "https://opencode.ai/inference/go"},
+		{key: "opencode", provider: ai.ProviderOpenCode},
+		{key: "opencode-go", provider: ai.ProviderOpenCodeGo},
 	}
 
 	var models []*ai.Model
@@ -1271,35 +1311,16 @@ func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
 			if !boolVal(m.ToolCall) || m.Status == "deprecated" {
 				continue
 			}
-
-			npm := ""
-			if m.Provider != nil {
-				npm = m.Provider.Npm
+			// Codex Spark is not usable through OpenCode (pi include filter).
+			if modelID == "gpt-5.3-codex-spark" {
+				continue
 			}
-			var apiKind ai.Api
-			var baseURL string
-			var compat ai.ModelCompat
 
-			switch npm {
-			case "@ai-sdk/openai":
-				apiKind = ai.ApiOpenAIResponses
-				baseURL = variant.basePath + "/v1"
-				compat = &ai.OpenAIResponsesCompat{SessionAffinityFormat: lo.ToPtr(ai.SessionAffinityOpenAINoSession)}
-			case "@ai-sdk/anthropic":
-				apiKind = ai.ApiAnthropicMessages
-				// Anthropic SDK appends /v1/messages to baseURL
-				baseURL = variant.basePath
-			case "@ai-sdk/google":
-				apiKind = ai.ApiGoogleGenerativeAI
-				baseURL = variant.basePath + "/v1"
-			case "@ai-sdk/alibaba":
-				apiKind = ai.ApiOpenAICompletions
-				baseURL = variant.basePath + "/v1"
-				compat = &ai.OpenAICompletionsCompat{CacheControlFormat: lo.ToPtr(ai.CacheControlAnthropic)}
-			default:
-				// null, undefined, or @ai-sdk/openai-compatible
-				apiKind = ai.ApiOpenAICompletions
-				baseURL = variant.basePath + "/v1"
+			apiKind, baseURL, compat, ok := openCodeAPI(m)
+			if !ok {
+				// pi skips models models.dev lists without a supported API
+				// (strict generation fails instead; the generator is lenient).
+				continue
 			}
 
 			if variant.provider == ai.ProviderOpenCode && modelID == "grok-build-0.1" {
@@ -1344,7 +1365,7 @@ func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
 			if variant.provider == ai.ProviderOpenCodeGo {
 				if modelID == "qwen3.5-plus" || modelID == "qwen3.6-plus" {
 					apiKind = ai.ApiOpenAICompletions
-					baseURL = variant.basePath + "/v1"
+					baseURL = strings.TrimSuffix(baseURL, "/anthropic") + "/openai/v1"
 					// Qwen/DashScope uses enable_thinking at the top level.
 					openAICompat := asOpenAICompat(compat)
 					openAICompat.ThinkingFormat = lo.ToPtr(ai.ThinkingFormatQwen)
@@ -1368,6 +1389,21 @@ func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
 				thinkingLevelMap = getEffortThinkingLevelMap(m.ReasoningOptions)
 			}
 
+			contextWindow := int64Or(limitContext(m), 4096)
+			maxTokens := int64Or(limitOutput(m), 4096)
+			// OpenCode variants list Claude Sonnet 4/4.5 with 1M context,
+			// actual limit is 200K; the 4.6 family is 1M.
+			if modelID == "claude-sonnet-4-5" || modelID == "claude-sonnet-4" {
+				contextWindow = 200000
+			}
+			if modelID == "claude-opus-4-6" || modelID == "claude-sonnet-4-6" ||
+				modelID == "claude-opus-4.6" || modelID == "claude-sonnet-4.6" {
+				contextWindow = 1000000
+			}
+			if modelID == "gpt-5.4" {
+				contextWindow = 272000
+				maxTokens = 128000
+			}
 			models = append(models, &ai.Model{
 				ID:               modelID,
 				Name:             modelsDevName(m, modelID),
@@ -1379,8 +1415,8 @@ func processOpenCodeModels(data ModelsDevCatalog) []*ai.Model {
 				Input:            inputOf(m),
 				Cost:             modelsDevCostOf(m.Cost),
 				Compat:           compat,
-				ContextWindow:    int64Or(limitContext(m), 4096),
-				MaxTokens:        int64Or(limitOutput(m), 4096),
+				ContextWindow:    contextWindow,
+				MaxTokens:        maxTokens,
 			})
 			recordModelsDevReasoningOptions(string(variant.provider), modelID, m)
 		}
