@@ -21,7 +21,7 @@ pig is a Go implementation of the [pi coding agent](https://github.com/earendil-
 
 The project began as a learning exercise: while studying the pi agent, I was still unfamiliar with TypeScript. Fortunately, pi has a clear hierarchy and well-defined package boundaries, so I translated the logic I read into Go section by section. Once I finished, my understanding became much clearer, and I immediately decided to translate and reimplement the whole thing.
 
-After that, I developed it with the help of pi and glm-5.3-flash and built pig from scratch in 10 days. From the low-level session storage format, the mid-level agent loop and tool execution, and the streaming event protocol, to the top-level key bindings and interaction experience—everything was aligned with pi v0.84.3. Since 2026-09-11 ([b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)), I have been using pig to develop pig and maintaining it long-term. Each time pi releases a new version, I align pig with it, and it is now aligned up to v1.4.0.
+After that, I developed it with the help of pi and glm-5.3-flash and built pig from scratch in 10 days. From the low-level session storage format, the mid-level agent loop and tool execution, and the streaming event protocol, to the top-level key bindings and interaction experience—everything was aligned with pi v0.84.3. Since 2026-09-11 ([b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)), I have been using pig to develop pig and maintaining it long-term. Each time pi releases a new version, I align pig with it, and it is now aligned up to v1.5.0.
 
 ## Quick Start
 

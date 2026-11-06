@@ -1,7 +1,7 @@
 # S23 — pi v1.4.0（S22 pre-tag 已在 main@d5b3de22d 消化 67 commit）→ pi v1.5.0
 
 - **日期**：2026-11-03
-- **状态**：🚧 进行中（S23-1..4 完成，S23-5 待开工）
+- **状态**：✅ 完成（S23-1..5；Version 1.5.0）
 - **基线**：`d5b3de22d0e24a3e9c38a9410d3329b099717283..v1.5.0`（241 commit；其中触及已移植源码面 60 个，其余为 chord/durable/env/evals/docs/scripts/examples）
 - **策略**：durable/chord/env/evals/telemetry/experiments/examples/scripts/package-manager/TS extension loader 一律跳过；catalog 结构性重构（`catalog/` 目录、TypeBox→pi-schema 类型面）不逐文件搬，按「行为规格级对齐」保留 pig 生成器架构并同步规则与产物。
 - **收口**：Version 1.4.0 → 1.5.0，README/verify-matrix 同步，打 annotated tag v1.5.0。
@@ -72,9 +72,9 @@
 
 | pi commit | 内容 | pig 落点 |
 |---|---|---|
-| `908aa7b74` | MCP OAuth Client ID Metadata Document 优先、DCR 回退、`clientRegistration` auto/dcr | `integrations/mcp/oauth.go`、`oauth_signin.go`、`config.go`、`core/mcp_integration.go` |
+| `908aa7b74` | MCP OAuth Client ID Metadata Document 优先、DCR 回退、`clientRegistration` auto/dcr | `integrations/mcp/config.go`：接受 `auto`（默认，pig 非 pi 官方构建时与 dcr 等价）；`cimd` 按既有 pig-only 偏差继续拒绝（pi.dev 文档标识 pi，pig 无对应托管文档） |
 | `be15fe3c1` | `pi mcp login/logout -l` 项目服务器 | pig 无 `pi mcp` CLI（`/mcp` 面板）→ **跳过**，面板已有项目/全局语义 |
-| `0f21a3319`（coding-agent 部分） | 工具行/助手消息复用高亮与渲染块 | `codingagent/modes/interactive/components/{assistant_message,tool_execution}.go`、`codingagent/utils/syntax_highlight.go` |
+| `0f21a3319`（coding-agent 部分） | 工具行/助手消息复用高亮与渲染块 | `codingagent/modes/interactive/theme/theme.go`（`CodeHighlighter`）、`codingagent/utils/syntax_highlight.go`（语言数）、`codingagent/core/tools/renderers_write.go`、`components/{assistant_message,markdown_transform,user_message}.go` |
 | `9376c8d17` | 扩展渲染器注入 keybinding hints | pig 无 TS 扩展渲染器 → **跳过** |
 | `b4b72a351`/`8bc94b19f`/package-manager 族 | 扩展 changelog、self-update、npm/git 包刷新 | pig 无 package-manager / TS 扩展装载 → **跳过** |
 | `79006f061`/`e033f255f`/`cc44fa216`/`ae823bc0b`/`f6ee9ce9c` | tool_search/codemode | 不做清单（codemode+tool_search）→ **跳过** |
@@ -110,3 +110,5 @@
 - 2026-11-04：S23-2 完成。models.dev v2 读取/normalize（`models_dev_v2.go`，仅保留 `type == "chat"`）、OpenCode 按 `apis[].protocol` 选端点、OpenRouter `~anthropic/*` 走 Messages、GPT-6.1 Terra 全规则、GPT-5.4/5.5 顶层工具与 mid-convo 集合拆分、长上下文定价 tier 改为替换。生成器与 pi v1.5.0 新生成目录逐字段比对仅剩未移植的 mistral 与 pi 环境自身拉取失败的 OpenRouter；5 个 golden 已重同步（OpenRouter golden 因 pi 侧拉取为空，按 pig 当前生成快照记录）。新增 `models_dev_v2_test.go`（v2 normalize/缓存 TTL/协议选择/长上下文 tier）；`go test ./... -race` 全绿。
 - 2026-11-05：S23-3 完成。换行边界 styled word/strikethrough 复位、Orca Kitty 探测、native Shift+ESC+CR、regular mode OSC 133 去标记、Kitty F1-F12（含 modifier/release/repeat、F13+ PUA 拒绝）、裸 URL CJK 标点停止、display math 超宽回退原始 LaTeX、terminal title 控制字符清洗、SelectList/SettingsList/Editor 翻页键与 `capturesViewportInput`、Markdown 顶层块复用 + Text 未变文本保留 wrap。新增/扩展 wrap/keys/markdown/text/terminal/select/settings/editor/render 回归测试；`go build ./...`、`go vet ./...`、`go test ./... -race` 全绿（33 包）。
 - 2026-11-06：S23-4 完成。branch summary 应用最新 context edits + thinking level；session 写入失败回滚内存；grep 单独 CR 上下文对齐；同工具集重排不刷新 prompt；fullscreen model scope 入 header；cwd 删除友好报错；`[Skill warnings]`；PNG/JPEG 取小；private CSI 剥离；已保存 trust 决策优先；WSL helper `/` 启动与外部编辑器失败提示；SDK summary 走 runtime auth；hidden thinking 空标签零行；extension dialog 保留 + blocked status；prompt 收紧；Windows 路径比较全量接入；选择器翻页键 + `/mcp` 面板 viewport capture。补 branch/session/grep/tool-order/path/trust/image/ANSI/external-editor/thinking/MCP 回归测试；`go build ./...`、`go vet ./...`、`gofmt -l` 干净，全量 `go test ./... -race -count=1 -timeout 600s` 全绿（33 包，日志 `/tmp/pig-test-out-s23-4.log`）。
+- 2026-11-06：S23-5 完成。MCP `oauth.clientRegistration` 接受 pi v1.5.0 的 `auto` 默认值（pig 非官方构建下等价 dcr；`cimd` 继续按 pig-only 偏差拒绝，pi.dev 文档不属于 pig）。coding-agent 侧新增 `theme.CodeHighlighter`（代码/语言/主题/语法数量变化才重算）、write 渲染首次高亮完整文件后复用行高亮、assistant message 以 `markdownSlots` 复用 Markdown 实例且 transform 动态读取 streaming 状态。新增 `TestCodeHighlighter`、assistant Markdown 复用/主题失效回归，更新 MCP config `auto` 用例；`go build ./...`、`go vet ./...`、`gofmt -l` 干净，全量 `go test ./... -race -count=1 -timeout 600s` 全绿（33 包，日志 `/tmp/pig-test-out-s23-final.log`；assistant Markdown 复用测试关闭 GC 避免弱缓存被回收导致计数抖动）。
+- 2026-11-06：S23 收口准备完成。Version / `TestVersionTracksPiBaseline` / `ai/utils/version.go` → 1.5.0，README 中英文对齐版本号；收口 commit 后打 annotated tag v1.5.0。

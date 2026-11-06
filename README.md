@@ -21,7 +21,7 @@ pig 是 [pi coding agent](https://github.com/earendil-works/pi) 的 Go 实现—
 
 项目始于一次学习：研究 pi agent 时，对 TypeScript 尚不熟悉；好在 pi 层次清晰、包划分分明，便把读到的逻辑逐段翻译成 Go，翻完理解顺畅许多，随即决定全部翻译、复刻一遍。
 
-随后借助 pi 与 glm-5.3-flash 开发，10 天从零构建出 pig：底层会话存储格式、中层 agent 循环与工具执行、流式事件协议，到上层快捷键与交互体验，全部对齐 pi v0.84.3。自 2026-09-11（[b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)）起，用 pig 开发 pig，长期维护。pi 出一个新版本，就对齐一个版本，现已对齐至 v1.4.0。
+随后借助 pi 与 glm-5.3-flash 开发，10 天从零构建出 pig：底层会话存储格式、中层 agent 循环与工具执行、流式事件协议，到上层快捷键与交互体验，全部对齐 pi v0.84.3。自 2026-09-11（[b5ff964](https://github.com/ZoroSpace/pig/commit/b5ff964d1b6a70fbfca25220cff7812b6cdb751b)）起，用 pig 开发 pig，长期维护。pi 出一个新版本，就对齐一个版本，现已对齐至 v1.5.0。
 
 ## 快速开始
 
