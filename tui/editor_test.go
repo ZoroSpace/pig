@@ -4286,3 +4286,37 @@ func setupEditorFolder(t *testing.T, baseDir string) {
 	t.Helper()
 	setupFolder(t, baseDir, folderStructure{files: map[string]string{"文档/说明.md": "text"}})
 }
+
+func TestEditorAutocompletePageKeysCaptureViewportInput(t *testing.T) {
+	editor := newTestEditor(80, 24, nil)
+	var submitted string
+	editor.OnSubmit = func(text string) { submitted = text }
+	editor.SetAutocompleteProvider(&mockAutocompleteProvider{
+		triggerCharacters: []string{"/"},
+		getSuggestions: func(ctx context.Context, lines []string, cursorLine, cursorCol int, options AutocompleteGetSuggestionsOptions) *AutocompleteSuggestions {
+			items := make([]AutocompleteItem, 12)
+			for index := range items {
+				value := "/command-" + string(rune('0'+index))
+				items[index] = AutocompleteItem{Value: value, Label: value}
+			}
+			return &AutocompleteSuggestions{Items: items, Prefix: "/"}
+		},
+	})
+
+	if editor.CapturesViewportInput() {
+		t.Fatal("capturesViewportInput = true before autocomplete opens")
+	}
+	editor.HandleInput("/")
+	flushAutocomplete(t, editor)
+	if !editor.CapturesViewportInput() {
+		t.Fatal("capturesViewportInput = false with autocomplete open")
+	}
+
+	editor.HandleInput("\x1b[6~")
+	editor.HandleInput("\x1b[6~")
+	editor.HandleInput("\x1b[5~")
+	editor.HandleInput("\r")
+	if submitted != "/command-5" {
+		t.Fatalf("submitted = %q, want /command-5", submitted)
+	}
+}

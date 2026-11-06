@@ -145,7 +145,18 @@ func detectImagesCapability() any {
 	if termProgram == "herdr" || termProgram == "rex" {
 		return "kitty"
 	}
+	// Orca supports Kitty graphics but only advertises it through
+	// ORCA_IMAGE_PROTOCOL. Require both signals so Orca releases predating that
+	// advertisement keep the text fallback instead of reserving image rows that
+	// nothing renders.
+	if isOrcaKitty(termProgram) {
+		return "kitty"
+	}
 	return nil
+}
+
+func isOrcaKitty(termProgram string) bool {
+	return termProgram == "orca" && os.Getenv("ORCA_IMAGE_PROTOCOL") == "kitty"
 }
 
 // detectTrueColorCapability reports whether the terminal renders 24-bit
@@ -184,6 +195,12 @@ func detectTrueColorCapability() bool {
 	// graphics protocol (no Unicode placeholders), but enough to support pi
 	// (#11133). Check it before outer-terminal detection.
 	if termProgram == "rex" {
+		return true
+	}
+
+	// Orca advertises Kitty graphics through ORCA_IMAGE_PROTOCOL and supports
+	// true color and OSC 8 hyperlinks alongside it.
+	if isOrcaKitty(termProgram) {
 		return true
 	}
 
@@ -260,6 +277,11 @@ func detectHyperlinksCapability() bool {
 	// so leaked variables like KITTY_WINDOW_ID do not change the outcome (pi
 	// 0ed1b0431 #11131).
 	if termProgram == "rex" {
+		return true
+	}
+
+	// Orca supports OSC 8 hyperlinks when it advertises Kitty image support.
+	if isOrcaKitty(termProgram) {
 		return true
 	}
 

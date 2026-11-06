@@ -788,6 +788,20 @@ func (t *markedTokenizer) autolink(src string) *MarkedToken {
 }
 
 func (t *markedTokenizer) url(src string) *MarkedToken {
+	token := t.urlBase(src)
+	if token == nil {
+		return nil
+	}
+	// Bare URLs stop at CJK punctuation; explicit links and angle autolinks
+	// use separate tokenizers and can still contain these characters.
+	punctuationIndex := cjkPunctuationIndex(token.Raw)
+	if punctuationIndex < 0 {
+		return token
+	}
+	return t.urlBase(token.Raw[:punctuationIndex])
+}
+
+func (t *markedTokenizer) urlBase(src string) *MarkedToken {
 	m := reExec(t.inlineRules.Url, src)
 	if m == nil {
 		return nil

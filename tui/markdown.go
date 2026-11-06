@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"weak"
 
 	"github.com/dlclark/regexp2"
 )
@@ -347,6 +348,23 @@ type inlineStyleContext struct {
 	stylePrefix string
 }
 
+// renderedBlock is a top-level block of the last render, keyed by its source
+// and reused by the next render.
+type renderedBlock struct {
+	// Width and type of the following block (which decides the spacing) that
+	// the lines were rendered for.
+	width         int
+	nextTokenType string
+	lines         []string
+	// Highlighted lines of the block's code, keyed by language and source;
+	// they survive a resize or new spacing.
+	highlightedCode map[string][]string
+}
+
+type renderedBlocks struct {
+	blocks map[string]*renderedBlock
+}
+
 // Markdown is the markdown component (pi: class Markdown implements
 // Component).
 type Markdown struct {
@@ -368,9 +386,20 @@ type Markdown struct {
 	cachedLines    []string
 	// Parsed tokens depend only on the source, so they survive theme and
 	// width invalidation (pi v0.99.1: cachedTokens).
-	cachedTokens    string
-	cachedTokensSet bool
-	cachedTokenList []*MarkedToken
+	cachedTokens       string
+	cachedTokensSet    bool
+	cachedTokenList    []*MarkedToken
+	cachedLinkCount    int
+	cachedLinkCountSet bool
+	// The last render's top-level blocks. While a message streams only its
+	// last block changes, so a render styles and wraps only that block. Each
+	// render keeps only the blocks it used, which drops a streamed block's
+	// earlier versions. Held weakly like the tokens (pi: WeakRef): the blocks
+	// repeat the source in their keys and the code in their highlighting.
+	blocks weak.Pointer[renderedBlocks]
+	// Highlighted code of the block being rendered, only set while
+	// renderBlock runs.
+	blockHighlightedCode map[string][]string
 }
 
 // NewMarkdown mirrors pi's constructor (defaultTextStyle/options may be nil).
@@ -392,16 +421,20 @@ func (m *Markdown) SetText(text string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.text = text
-	m.invalidateLocked()
+	m.clearRenderCacheLocked()
 }
 
 func (m *Markdown) Invalidate() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.invalidateLocked()
+	m.clearRenderCacheLocked()
+	// The theme may have changed, which changes every styled line and the
+	// default style's prefix.
+	m.blocks = weak.Pointer[renderedBlocks]{}
+	m.defaultStylePrefixSet = false
 }
 
-func (m *Markdown) invalidateLocked() {
+func (m *Markdown) clearRenderCacheLocked() {
 	m.cachedTextSet = false
 	m.cachedWidthSet = false
 	m.cachedLines = nil
@@ -424,6 +457,7 @@ func (m *Markdown) Render(width int) []string {
 
 	// Don't render anything if there's no actual text
 	if text == "" || strings.TrimSpace(text) == "" {
+		m.blocks = weak.Pointer[renderedBlocks]{}
 		m.cachedText = m.text
 		m.cachedTextSet = true
 		m.cachedWidth = width
@@ -447,54 +481,52 @@ func (m *Markdown) Render(width int) []string {
 		m.cachedTokens = normalizedText
 		m.cachedTokensSet = true
 		m.cachedTokenList = tokens
+		m.cachedLinkCount = len(lexer.links)
+		m.cachedLinkCountSet = true
 	}
 
-	// Convert tokens to styled terminal output
-	renderedLines := []string{}
+	// A reference link resolves through a definition anywhere in the text, so
+	// blocks with the same source can render differently; such texts are rare
+	// in practice and render without reusing blocks.
+	reuseBlocks := !m.cachedLinkCountSet || m.cachedLinkCount == 0
+	var previousBlocks map[string]*renderedBlock
+	if previous := m.blocks.Value(); previous != nil {
+		previousBlocks = previous.blocks
+	}
+	blocks := &renderedBlocks{blocks: map[string]*renderedBlock{}}
+	m.blocks = weak.Make(blocks)
+	contentLines := []string{}
 	for i, token := range tokens {
 		nextTokenType := ""
 		if i+1 < len(tokens) {
 			nextTokenType = tokens[i+1].Type
 		}
-		renderedLines = append(renderedLines, m.renderToken(token, contentWidth, nextTokenType, nil)...)
-	}
-
-	// Wrap lines (NO padding, NO background yet)
-	wrappedLines := []string{}
-	for _, line := range renderedLines {
-		if IsImageLine(line) {
-			wrappedLines = append(wrappedLines, line)
-			continue
+		var reused *renderedBlock
+		if reuseBlocks {
+			reused = blocks.blocks[token.Raw]
+			if reused == nil {
+				reused = previousBlocks[token.Raw]
+			}
 		}
-		wrappedLines = append(wrappedLines, WrapTextWithAnsi(line, contentWidth)...)
+		block := reused
+		if block == nil {
+			block = &renderedBlock{width: -1, nextTokenType: nextTokenType, highlightedCode: map[string][]string{}}
+		}
+		if block.width != width || block.nextTokenType != nextTokenType {
+			m.renderBlockLocked(block, token, nextTokenType, width, contentWidth)
+		}
+		if reuseBlocks {
+			blocks.blocks[token.Raw] = block
+		}
+		contentLines = append(contentLines, block.lines...)
 	}
 
-	// Add margins and background to each wrapped line
-	leftMargin := strings.Repeat(" ", m.paddingX)
-	rightMargin := strings.Repeat(" ", m.paddingX)
+	// Add top/bottom padding (empty lines)
 	bgFn := (*func(string) string)(nil)
 	if m.defaultTextStyle != nil && m.defaultTextStyle.BgColor != nil {
 		fn := m.defaultTextStyle.BgColor
 		bgFn = &fn
 	}
-	contentLines := []string{}
-	for _, line := range wrappedLines {
-		if IsImageLine(line) {
-			contentLines = append(contentLines, line)
-			continue
-		}
-		lineWithMargins := leftMargin + line + rightMargin
-		if bgFn != nil {
-			contentLines = append(contentLines, ApplyBackgroundToLine(lineWithMargins, width, *bgFn))
-		} else {
-			// No background - just pad to width
-			visibleLen := VisibleWidth(lineWithMargins)
-			paddingNeeded := max(0, width-visibleLen)
-			contentLines = append(contentLines, lineWithMargins+strings.Repeat(" ", paddingNeeded))
-		}
-	}
-
-	// Add top/bottom padding (empty lines)
 	emptyLine := strings.Repeat(" ", width)
 	emptyLines := []string{}
 	for i := 0; i < m.paddingY; i++ {
@@ -519,6 +551,40 @@ func (m *Markdown) Render(width int) []string {
 		return result
 	}
 	return []string{""}
+}
+
+// renderBlockLocked renders one top-level block to output lines: wrapped, with
+// margins, and padded or backgrounded to the width.
+func (m *Markdown) renderBlockLocked(block *renderedBlock, token *MarkedToken, nextTokenType string, width int, contentWidth int) {
+	m.blockHighlightedCode = block.highlightedCode
+	leftMargin := strings.Repeat(" ", m.paddingX)
+	rightMargin := strings.Repeat(" ", m.paddingX)
+	bgFn := (*func(string) string)(nil)
+	if m.defaultTextStyle != nil && m.defaultTextStyle.BgColor != nil {
+		fn := m.defaultTextStyle.BgColor
+		bgFn = &fn
+	}
+	lines := []string{}
+	for _, line := range m.renderToken(token, contentWidth, nextTokenType, nil) {
+		if IsImageLine(line) {
+			lines = append(lines, line)
+			continue
+		}
+		for _, wrappedLine := range WrapTextWithAnsi(line, contentWidth) {
+			lineWithMargins := leftMargin + wrappedLine + rightMargin
+			if bgFn != nil {
+				lines = append(lines, ApplyBackgroundToLine(lineWithMargins, width, *bgFn))
+			} else {
+				// No background - just pad to width
+				paddingNeeded := max(0, width-VisibleWidth(lineWithMargins))
+				lines = append(lines, lineWithMargins+strings.Repeat(" ", paddingNeeded))
+			}
+		}
+	}
+	m.blockHighlightedCode = nil
+	block.lines = lines
+	block.width = width
+	block.nextTokenType = nextTokenType
 }
 
 // applyDefaultStyle applies the default text style to a string. Background
@@ -666,6 +732,14 @@ func (m *Markdown) renderToken(token *MarkedToken, width int, nextTokenType stri
 		} else {
 			rendered = strings.TrimSpace(token.Raw)
 		}
+		// A 2D layout cannot be wrapped row by row; fall back to the raw source
+		// when it does not fit.
+		for _, line := range strings.Split(rendered, "\n") {
+			if VisibleWidth(line) > width {
+				rendered = strings.TrimSpace(token.Raw)
+				break
+			}
+		}
 		for _, line := range strings.Split(rendered, "\n") {
 			lines = append(lines, m.applyDefaultStyle(line))
 		}
@@ -680,7 +754,15 @@ func (m *Markdown) renderToken(token *MarkedToken, width int, nextTokenType stri
 		}
 		lines = append(lines, m.theme.CodeBlockBorder("```"+token.Lang))
 		if m.theme.HighlightCode != nil {
-			for _, hlLine := range m.theme.HighlightCode(token.Text, token.Lang) {
+			key := token.Lang + "\x00" + token.Text
+			highlighted := m.blockHighlightedCode[key]
+			if highlighted == nil {
+				highlighted = m.theme.HighlightCode(token.Text, token.Lang)
+				if m.blockHighlightedCode != nil {
+					m.blockHighlightedCode[key] = highlighted
+				}
+			}
+			for _, hlLine := range highlighted {
 				lines = append(lines, indent+hlLine)
 			}
 		} else {

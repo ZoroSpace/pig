@@ -43,6 +43,9 @@ func NewText(text string, paddingX int, paddingY int, customBgFn ...func(text st
 func (t *Text) SetText(text string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if text == t.text {
+		return
+	}
 	t.text = text
 	t.invalidateLocked()
 }

@@ -279,3 +279,19 @@ func GetKeybindings() *KeybindingsManager {
 	}
 	return globalKeybindings
 }
+
+// GetSelectPageIndex returns the selection index after a selection page key,
+// moved by pageSize and clamped to 0..itemCount-1. ok=false when data is not a
+// page key; a page key on an empty list returns 0, so callers must still check
+// that the list has items before selecting (pi: getSelectPageIndex).
+func GetSelectPageIndex(keybindings *KeybindingsManager, data string, selectedIndex int, itemCount int, pageSize int) (int, bool) {
+	direction := 0
+	if keybindings.Matches(data, "tui.select.pageUp") {
+		direction = -1
+	} else if keybindings.Matches(data, "tui.select.pageDown") {
+		direction = 1
+	} else {
+		return 0, false
+	}
+	return clampInt(selectedIndex+direction*pageSize, 0, maxInt(0, itemCount-1)), true
+}

@@ -350,3 +350,61 @@ var (
 	// /\x1b\]8;;\x1b\\/g
 	osc8CloseCountRegex = regexp.MustCompile(`\x1b\]8;;\x1b\\`)
 )
+
+func TestWrapTextWithAnsiStyledWordsAtWrapBoundary(t *testing.T) {
+	t.Run("keeps closing code on wrapped line and drops following space", func(t *testing.T) {
+		got := WrapTextWithAnsi("aaaa \x1b[1mbold\x1b[22m next word", 9)
+		want := []string{"aaaa \x1b[1mbold\x1b[22m", "next word"}
+		assertEqualStrings(t, got, want)
+	})
+
+	t.Run("does not re-open style closed by dropped space", func(t *testing.T) {
+		got := WrapTextWithAnsi("aaaa \x1b[31mred\x1b[39m  next", 8)
+		want := []string{"aaaa \x1b[31mred\x1b[39m", "next"}
+		assertEqualStrings(t, got, want)
+	})
+
+	t.Run("does not exceed width for styled whitespace wider than line", func(t *testing.T) {
+		for _, text := range []string{
+			"\x1b[41m" + strings.Repeat(" ", 20) + "\x1b[0m",
+			"ab\x1b[41m" + strings.Repeat(" ", 20) + "\x1b[49mcd",
+			"\x1b[33m" + strings.Repeat(" ", 20) + "x\x1b[39m",
+		} {
+			for _, line := range WrapTextWithAnsi(text, 10) {
+				if got := VisibleWidth(line); got > 10 {
+					t.Errorf("visibleWidth(%q) = %d, want <= 10", line, got)
+				}
+			}
+		}
+	})
+
+	t.Run("trims trailing spaces before line-end reset when long word follows", func(t *testing.T) {
+		got := WrapTextWithAnsi("aaa\x1b[9m    abcdefghij\x1b[29m", 9)
+		want := []string{"aaa\x1b[9m\x1b[29m", "\x1b[9mabcdefghi\x1b[29m", "\x1b[9mj\x1b[29m"}
+		assertEqualStrings(t, got, want)
+	})
+
+	t.Run("resets strikethrough at line end and restores on next line", func(t *testing.T) {
+		got := WrapTextWithAnsi("aaaa \x1b[9mstrike me\x1b[29m next", 12)
+		want := []string{"aaaa \x1b[9mstrike\x1b[29m", "\x1b[9mme\x1b[29m next"}
+		assertEqualStrings(t, got, want)
+	})
+
+	t.Run("preserves background when resetting strikethrough", func(t *testing.T) {
+		got := WrapTextWithAnsi("\x1b[41;9mstrike me\x1b[0m", 6)
+		want := []string{"\x1b[41;9mstrike\x1b[29m", "\x1b[9;41mme\x1b[0m"}
+		assertEqualStrings(t, got, want)
+	})
+}
+
+func assertEqualStrings(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("line %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}

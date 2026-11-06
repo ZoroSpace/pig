@@ -913,3 +913,62 @@ func TestIsValidKeyId(t *testing.T) {
 		}
 	}
 }
+
+func TestKittyFunctionKeys(t *testing.T) {
+	t.Run("parses legacy and kitty F1-F12 forms", func(t *testing.T) {
+		cases := map[string]string{
+			"\x1bOP":       "f1",
+			"\x1b[P":       "f1",
+			"\x1b[1;5P":    "ctrl+f1",
+			"\x1b[1;2Q":    "shift+f2",
+			"\x1b[13~":     "f3",
+			"\x1b[1;3S":    "alt+f4",
+			"\x1b[15;5~":   "ctrl+f5",
+			"\x1b[24~":     "f12",
+			"\x1b[24;2:3~": "shift+f12",
+		}
+		for data, want := range cases {
+			got, ok := ParseKey(data)
+			if !ok || got != want {
+				t.Errorf("ParseKey(%q) = %q, %v; want %q, true", data, got, ok, want)
+			}
+		}
+	})
+
+	t.Run("matches modifiers through kitty sequence", func(t *testing.T) {
+		if !MatchesKey("\x1b[15;5~", "ctrl+f5") {
+			t.Error("ctrl+f5 did not match kitty CSI 15;5~")
+		}
+		if !MatchesKey("\x1b[1;2P", "shift+f1") {
+			t.Error("shift+f1 did not match kitty CSI 1;2P")
+		}
+	})
+
+	t.Run("does not confuse F3 with cursor position report", func(t *testing.T) {
+		if got, ok := ParseKey("\x1b[1;2R"); ok && got == "f3" {
+			t.Errorf("ParseKey(cursor position report) = %q", got)
+		}
+	})
+
+	t.Run("detects F1/F2/F4 release and repeat", func(t *testing.T) {
+		for _, data := range []string{"\x1b[1;5:3P", "\x1b[1;5:3Q", "\x1b[1;5:3S"} {
+			if !IsKeyRelease(data) {
+				t.Errorf("IsKeyRelease(%q) = false", data)
+			}
+		}
+		for _, data := range []string{"\x1b[1;5:2P", "\x1b[1;5:2Q", "\x1b[1;5:2S"} {
+			if !IsKeyRepeat(data) {
+				t.Errorf("IsKeyRepeat(%q) = false", data)
+			}
+		}
+	})
+
+	t.Run("rejects kitty functional PUA codepoints as text", func(t *testing.T) {
+		if got, ok := DecodeKittyPrintable("\x1b[57376u"); ok {
+			t.Errorf("DecodeKittyPrintable(F13) = %q, true", got)
+		}
+		if got, ok := ParseKey("\x1b[57376u"); ok {
+			t.Errorf("ParseKey(F13) = %q, true", got)
+		}
+	})
+}

@@ -89,8 +89,14 @@ func IsAppleTerminalSession() bool {
 // NormalizeNativeShiftEnterInput rewrites a bare Return to the CSI-u
 // Shift+Enter sequence when native Shift detection is enabled and Shift is
 // physically held.
+// isNativeShiftEnterCandidate reports the inputs some Apple Terminal setups send
+// for Shift+Enter: plain CR or ESC+CR (which otherwise parses as Alt+Enter).
+func isNativeShiftEnterCandidate(data string) bool {
+	return data == "\r" || data == "\x1b\r"
+}
+
 func NormalizeNativeShiftEnterInput(data string, shouldDetectNativeShiftEnter bool, isShiftPressed bool) string {
-	if shouldDetectNativeShiftEnter && data == "\r" && isShiftPressed {
+	if shouldDetectNativeShiftEnter && isNativeShiftEnterCandidate(data) && isShiftPressed {
 		return nativeShiftEnterSequence
 	}
 	return data
@@ -601,7 +607,7 @@ func (t *ProcessTerminal) forwardInputSequence(sequence string, inputHandler fun
 	if inputHandler == nil {
 		return
 	}
-	shouldDetectNativeShiftEnter := sequence == "\r" && (IsAppleTerminalSession() || runtime.GOOS == "windows")
+	shouldDetectNativeShiftEnter := isNativeShiftEnterCandidate(sequence) && (IsAppleTerminalSession() || runtime.GOOS == "windows")
 	input := sequence
 	if shouldDetectNativeShiftEnter {
 		input = NormalizeNativeShiftEnterInput(sequence, shouldDetectNativeShiftEnter,
@@ -808,8 +814,10 @@ func (t *ProcessTerminal) ClearScreen() {
 }
 
 func (t *ProcessTerminal) SetTitle(title string) {
-	// OSC 0;title BEL - set terminal window title
-	t.Write("\x1b]0;" + title + "\x07")
+	// OSC 0;title BEL - set terminal window title. A BEL or ESC in the title
+	// would end the sequence early and send the rest to the terminal as escape
+	// sequences (session names come from session files).
+	t.Write("\x1b]0;" + ReplaceControlCharacters(title) + "\x07")
 }
 
 // SetProgramStatus reports what the program is doing (OSC 7501) (pi:

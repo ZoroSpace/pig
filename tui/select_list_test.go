@@ -153,3 +153,32 @@ func TestSelectList(t *testing.T) {
 		}
 	})
 }
+
+func TestSelectListPageKeys(t *testing.T) {
+	items := make([]SelectItem, 12)
+	for index := range items {
+		items[index] = SelectItem{Value: "item-" + string(rune('0'+index/10)) + string(rune('0'+index%10)), Label: "Item " + string(rune('0'+index/10)) + string(rune('0'+index%10))}
+	}
+	list := NewSelectList(items, 5, passthroughSelectListTheme(), nil)
+	selections := []string{}
+	list.OnSelectionChange = func(item SelectItem) { selections = append(selections, item.Value) }
+
+	for _, key := range []string{"\x1b[6~", "\x1b[6~", "\x1b[6~", "\x1b[6~", "\x1b[5~"} {
+		list.HandleInput(key)
+	}
+	want := []string{"item-05", "item-10", "item-11", "item-06"}
+	if len(selections) != len(want) {
+		t.Fatalf("selections = %v, want %v", selections, want)
+	}
+	for i := range want {
+		if selections[i] != want[i] {
+			t.Fatalf("selections = %v, want %v", selections, want)
+		}
+	}
+
+	list.SetFilter("no match")
+	list.HandleInput("\x1b[6~")
+	if len(selections) != len(want) {
+		t.Fatalf("page key on empty filtered list changed selection: %v", selections)
+	}
+}

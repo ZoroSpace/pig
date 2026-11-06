@@ -574,3 +574,22 @@ func TestProcessTerminalProgramStatus(t *testing.T) {
 		}
 	})
 }
+
+func TestNativeShiftEnterAcceptsEscReturn(t *testing.T) {
+	if got := NormalizeNativeShiftEnterInput("\x1b\r", true, true); got != "\x1b[13;2u" {
+		t.Fatalf("ESC+CR with Shift = %q, want CSI-u Shift+Enter", got)
+	}
+	if got := NormalizeNativeShiftEnterInput("\x1b\r", true, false); got != "\x1b\r" {
+		t.Fatalf("ESC+CR without Shift = %q", got)
+	}
+}
+
+func TestProcessTerminalSetTitleReplacesControlCharacters(t *testing.T) {
+	var out bytes.Buffer
+	terminal := &ProcessTerminal{out: &out}
+	terminal.SetTitle("pig - work\x07\x1b]52;c;Zm9v\x07\u009b2J - repo")
+	want := "\x1b]0;pig - work ]52;c;Zm9v 2J - repo\x07"
+	if got := out.String(); got != want {
+		t.Fatalf("SetTitle output = %q, want %q", got, want)
+	}
+}

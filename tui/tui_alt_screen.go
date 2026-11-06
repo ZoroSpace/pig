@@ -968,7 +968,13 @@ func (t *TuiAltScreen) Flash(message string, durationMs int) {
 	t.flashes.Flash(message, durationMs)
 }
 
-func (t *TuiAltScreen) shouldDeferViewportInputToOverlay() bool {
+// shouldDeferViewportInput reports whether a focused overlay or component that
+// captures viewport input should receive viewport keys instead of the
+// transcript (pi: shouldDeferViewportInput).
+func (t *TuiAltScreen) shouldDeferViewportInput() bool {
+	if capture, ok := t.focusedComponent.(ViewportInputCapture); ok && capture.CapturesViewportInput() {
+		return true
+	}
 	// pi: this.isOverlayFocused() && this.activeSearch?.overlay?.isFocused() !== true.
 	// The overlay focus check reads focusedComponent directly (under the TUI
 	// lock); overlayHandleImpl.IsFocused would re-lock the same mutex.
@@ -1072,7 +1078,7 @@ func (t *TuiAltScreen) handleViewportInput(data string) *TuiInputListenerResult 
 			return &TuiInputListenerResult{Consume: true}
 		}
 	}
-	if t.shouldDeferViewportInputToOverlay() {
+	if t.shouldDeferViewportInput() {
 		return nil
 	}
 	if keybindings.Matches(data, "tui.altScreen.pageUp") {

@@ -24,6 +24,7 @@ import (
 var capabilityEnvKeys = []string{
 	"TERM",
 	"TERM_PROGRAM",
+	"ORCA_IMAGE_PROTOCOL",
 	"TERMINAL_EMULATOR",
 	"COLORTERM",
 	"TMUX",
@@ -264,4 +265,33 @@ func TestKittyImagePlacementRowsPreferExplicitControlsOverMetadata(t *testing.T)
 	if placement.Sequence != "\x1b_Ga=p,q=2,C=1,c=3,i=42,y=66,h=34,r=1\x1b\\" {
 		t.Fatalf("Sequence = %q", placement.Sequence)
 	}
+}
+
+func TestGetCapabilitiesDetectsOrca(t *testing.T) {
+	t.Run("keeps images disabled without capability signal", func(t *testing.T) {
+		withCapabilityEnv(t, map[string]string{"TERM_PROGRAM": "Orca"}, func() {
+			caps := GetCapabilities()
+			if caps.Images != nil {
+				t.Fatalf("images = %v, want nil", caps.Images)
+			}
+			if caps.TrueColor || caps.Hyperlinks {
+				t.Fatalf("trueColor=%v hyperlinks=%v, want both false", caps.TrueColor, caps.Hyperlinks)
+			}
+		})
+	})
+
+	t.Run("enables images, truecolor, and hyperlinks when advertising kitty", func(t *testing.T) {
+		withCapabilityEnv(t, map[string]string{
+			"TERM_PROGRAM":        "Orca",
+			"ORCA_IMAGE_PROTOCOL": "kitty",
+		}, func() {
+			caps := GetCapabilities()
+			if caps.Images != "kitty" {
+				t.Fatalf("images = %v, want kitty", caps.Images)
+			}
+			if !caps.TrueColor || !caps.Hyperlinks {
+				t.Fatalf("trueColor=%v hyperlinks=%v, want both true", caps.TrueColor, caps.Hyperlinks)
+			}
+		})
+	})
 }

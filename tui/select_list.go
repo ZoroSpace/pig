@@ -111,6 +111,10 @@ type SelectList struct {
 	OnSelectionChange func(item SelectItem)
 }
 
+// CapturesViewportInput reports that the focused list consumes PageUp/PageDown
+// rather than the transcript (pi: readonly capturesViewportInput = true).
+func (s *SelectList) CapturesViewportInput() bool { return true }
+
 // NewSelectList creates a select list (pi: constructor; layout optional —
 // pass nil for defaults).
 func NewSelectList(items []SelectItem, maxVisible int, theme SelectListTheme, layout *SelectListLayoutOptions) *SelectList {
@@ -257,6 +261,7 @@ func (s *SelectList) Render(width int) []string {
 // HandleInput implements InputHandler (pi: handleInput).
 func (s *SelectList) HandleInput(keyData string) {
 	kb := GetKeybindings()
+	pageIndex, isPageKey := GetSelectPageIndex(kb, keyData, s.selectedIndex, len(s.filteredItems), s.maxVisible)
 	// Up arrow - wrap to bottom when at top
 	if kb.Matches(keyData, "tui.select.up") {
 		if s.selectedIndex == 0 {
@@ -272,6 +277,13 @@ func (s *SelectList) HandleInput(keyData string) {
 		} else {
 			s.selectedIndex++
 		}
+		s.notifySelectionChange()
+	} else if isPageKey {
+		// Page up/down - move by one visible page, clamped to the list bounds
+		if len(s.filteredItems) == 0 || pageIndex == s.selectedIndex {
+			return
+		}
+		s.selectedIndex = pageIndex
 		s.notifySelectionChange()
 	} else if kb.Matches(keyData, "tui.select.confirm") {
 		// Enter

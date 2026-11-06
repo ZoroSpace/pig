@@ -242,6 +242,25 @@ const (
 	funcPageDn = -13
 	funcHome   = -14
 	funcEnd    = -15
+	funcF1     = -21
+	funcF2     = -22
+	funcF3     = -23
+	funcF4     = -24
+	funcF5     = -25
+	funcF6     = -26
+	funcF7     = -27
+	funcF8     = -28
+	funcF9     = -29
+	funcF10    = -30
+	funcF11    = -31
+	funcF12    = -32
+)
+
+// Kitty reserves this Private Use Area range for functional keys (F13-F35,
+// media keys, modifier keys, ...). CSI-u codepoints in it are never text.
+const (
+	kittyFunctionalPUAStart = 57344
+	kittyFunctionalPUAEnd   = 63743
 )
 
 var kittyFunctionalKeyEquivalents = map[int]int{
@@ -476,7 +495,7 @@ func IsKeyRelease(data string) bool {
 	if strings.Contains(data, "\x1b[200~") {
 		return false
 	}
-	for _, marker := range []string{":3u", ":3~", ":3A", ":3B", ":3C", ":3D", ":3H", ":3F"} {
+	for _, marker := range []string{":3u", ":3~", ":3A", ":3B", ":3C", ":3D", ":3H", ":3F", ":3P", ":3Q", ":3S"} {
 		if strings.Contains(data, marker) {
 			return true
 		}
@@ -492,7 +511,7 @@ func IsKeyRepeat(data string) bool {
 	if strings.Contains(data, "\x1b[200~") {
 		return false
 	}
-	for _, marker := range []string{":2u", ":2~", ":2A", ":2B", ":2C", ":2D", ":2H", ":2F"} {
+	for _, marker := range []string{":2u", ":2~", ":2A", ":2B", ":2C", ":2D", ":2H", ":2F", ":2P", ":2Q", ":2S"} {
 		if strings.Contains(data, marker) {
 			return true
 		}
@@ -521,6 +540,7 @@ var kittyCsiURegex = regexp.MustCompile(`^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(
 var kittyArrowRegex = regexp.MustCompile(`^\x1b\[1;(\d+)(?::(\d+))?([ABCD])$`)
 var kittyFuncRegex = regexp.MustCompile(`^\x1b\[(\d+)(?:;(\d+))?(?::(\d+))?~$`)
 var kittyHomeEndRegex = regexp.MustCompile(`^\x1b\[1;(\d+)(?::(\d+))?([HF])$`)
+var kittyFKeyRegex = regexp.MustCompile(`^\x1b\[(?:1;(\d+)(?::(\d+))?)?([PQS])$`)
 
 func parseKittySequence(data string) *parsedKittySequence {
 	// CSI u format with alternate keys (flag 4):
@@ -568,16 +588,40 @@ func parseKittySequence(data string) *parsedKittySequence {
 		}
 		eventType := parseEventType(m[3], m[3] != "")
 		funcCodes := map[int]int{
-			2: funcInsert,
-			3: funcDelete,
-			5: funcPageUp,
-			6: funcPageDn,
-			7: funcHome,
-			8: funcEnd,
+			2:  funcInsert,
+			3:  funcDelete,
+			5:  funcPageUp,
+			6:  funcPageDn,
+			7:  funcHome,
+			8:  funcEnd,
+			11: funcF1,
+			12: funcF2,
+			13: funcF3,
+			14: funcF4,
+			15: funcF5,
+			17: funcF6,
+			18: funcF7,
+			19: funcF8,
+			20: funcF9,
+			21: funcF10,
+			23: funcF11,
+			24: funcF12,
 		}
 		if codepoint, ok := funcCodes[keyNum]; ok {
 			return &parsedKittySequence{codepoint: codepoint, baseLayoutKey: -1, modifier: modValue - 1, eventType: eventType}
 		}
+	}
+
+	// F1, F2, F4: \x1b[P/Q/S or \x1b[1;<mod>P/Q/S or \x1b[1;<mod>:<event>P/Q/S
+	// F3 is sent as \x1b[13~ because \x1b[1;<mod>R collides with cursor position reports.
+	if m := kittyFKeyRegex.FindStringSubmatch(data); m != nil {
+		modValue := 1
+		if m[1] != "" {
+			modValue, _ = strconv.Atoi(m[1])
+		}
+		eventType := parseEventType(m[2], m[2] != "")
+		fKeyCodes := map[string]int{"P": funcF1, "Q": funcF2, "S": funcF4}
+		return &parsedKittySequence{codepoint: fKeyCodes[m[3]], baseLayoutKey: -1, modifier: modValue - 1, eventType: eventType}
 	}
 
 	// Home/End with modifier: \x1b[1;<mod>H/F or \x1b[1;<mod>:<event>H/F
@@ -1088,10 +1132,13 @@ func MatchesKey(data string, keyId KeyId) bool {
 		return matchesKittySequence(data, arrowRight, modifier)
 
 	case "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12":
-		if modifier != 0 {
-			return false
+		if modifier == 0 && matchesLegacySequence(data, legacyKeySequences[key]) {
+			return true
 		}
-		return matchesLegacySequence(data, legacyKeySequences[key])
+		return matchesKittySequence(data, map[string]int{
+			"f1": funcF1, "f2": funcF2, "f3": funcF3, "f4": funcF4, "f5": funcF5, "f6": funcF6,
+			"f7": funcF7, "f8": funcF8, "f9": funcF9, "f10": funcF10, "f11": funcF11, "f12": funcF12,
+		}[key], modifier)
 	}
 
 	// Handle single letter/digit keys and symbols
@@ -1193,6 +1240,8 @@ func formatParsedKey(codepoint int, modifier int, baseLayoutKey int) (string, bo
 		keyName = "home"
 	case funcEnd:
 		keyName = "end"
+	case funcF1, funcF2, funcF3, funcF4, funcF5, funcF6, funcF7, funcF8, funcF9, funcF10, funcF11, funcF12:
+		keyName = "f" + strconv.Itoa(funcF1-effectiveCodepoint+1)
 	case funcPageUp:
 		keyName = "pageUp"
 	case funcPageDn:
@@ -1413,6 +1462,10 @@ func DecodeKittyPrintable(data string) (string, bool) {
 	effectiveCodepoint = normalizeKittyFunctionalCodepoint(effectiveCodepoint)
 	// Drop control characters or invalid codepoints.
 	if effectiveCodepoint < 32 || effectiveCodepoint > 0x10FFFF {
+		return "", false
+	}
+	// Drop unmapped Kitty functional keys (F13-F35, media keys, ...).
+	if effectiveCodepoint >= kittyFunctionalPUAStart && effectiveCodepoint <= kittyFunctionalPUAEnd {
 		return "", false
 	}
 

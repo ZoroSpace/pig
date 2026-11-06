@@ -396,8 +396,15 @@ func (m *TuiMainScreen) doRender() error {
 	}
 
 	// Render all components to get new lines
+	// Drop OSC 133 markers: the terminal reads 133;A as a new shell prompt,
+	// which ends program status (OSC 7501). Fullscreen uses the markers for
+	// prompt navigation and strips them before writing too.
+	renderedLines := m.Render(width)
+	for i, line := range renderedLines {
+		renderedLines[i] = osc133ZonePrefixRegex.ReplaceAllString(line, "")
+	}
 	// Resolve fake cursors before compositing so overlays and line slicing see plain SGR codes
-	newLines := m.resolveFakeCursors(m.Render(width))
+	newLines := m.resolveFakeCursors(renderedLines)
 
 	// Composite overlays into the rendered lines (before differential compare)
 	if len(m.overlayStack) > 0 {

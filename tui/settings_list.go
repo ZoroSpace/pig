@@ -68,6 +68,10 @@ type SettingsList struct {
 	navigateAfterClose  string
 }
 
+// CapturesViewportInput reports that the focused list consumes PageUp/PageDown
+// rather than the transcript (pi: readonly capturesViewportInput = true).
+func (l *SettingsList) CapturesViewportInput() bool { return true }
+
 // NewSettingsList creates a SettingsList.
 func NewSettingsList(
 	items []*SettingItem,
@@ -323,6 +327,7 @@ func (l *SettingsList) HandleInput(data string) {
 	// Main list input handling
 	kb := GetKeybindings()
 	displayItems := l.displayItems()
+	pageIndex, isPageKey := GetSelectPageIndex(kb, data, l.selectedIndex, len(displayItems), l.maxVisible)
 	switch {
 	case kb.Matches(data, "tui.select.up"):
 		if len(displayItems) == 0 {
@@ -342,6 +347,11 @@ func (l *SettingsList) HandleInput(data string) {
 		} else {
 			l.selectedIndex++
 		}
+	case isPageKey:
+		if len(displayItems) == 0 {
+			return
+		}
+		l.selectedIndex = pageIndex
 	// Only Enter activates an item (pig deviation, 2026-09-29; pi also lets a
 	// plain space activate when the search query is empty). Space is
 	// ambiguous here: the list has an always-present search box, so a space

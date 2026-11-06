@@ -204,3 +204,29 @@ func TestSettingsListHintSaysConfirmAndGoBackNotCancel(t *testing.T) {
 		})
 	}
 }
+
+func TestSettingsListPageKeys(t *testing.T) {
+	items := make([]*SettingItem, 12)
+	for index := range items {
+		items[index] = &SettingItem{
+			Id:           "setting-" + string(rune('0'+index/10)) + string(rune('0'+index%10)),
+			Label:        "Setting " + string(rune('0'+index/10)) + string(rune('0'+index%10)),
+			CurrentValue: "",
+		}
+	}
+	list := NewSettingsList(items, 5, altSettingsTestTheme(), func(string, string) {}, func() {}, nil)
+
+	list.HandleInput("\x1b[6~")
+	if rendered := strings.Join(list.Render(80), "\n"); !strings.Contains(rendered, "> Setting 05") {
+		t.Fatalf("after one page down:\n%s", rendered)
+	}
+	list.HandleInput("\x1b[6~")
+	list.HandleInput("\x1b[6~")
+	if rendered := strings.Join(list.Render(80), "\n"); !strings.Contains(rendered, "> Setting 11") {
+		t.Fatalf("after three page downs:\n%s", rendered)
+	}
+	list.HandleInput("\x1b[5~")
+	if rendered := strings.Join(list.Render(80), "\n"); !strings.Contains(rendered, "> Setting 06") {
+		t.Fatalf("after page up:\n%s", rendered)
+	}
+}

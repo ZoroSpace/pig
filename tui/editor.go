@@ -1266,7 +1266,8 @@ func (e *Editor) handleInputLocked(data string) {
 			return
 		}
 
-		if kb.Matches(data, "tui.select.up") || kb.Matches(data, "tui.select.down") {
+		if kb.Matches(data, "tui.select.up") || kb.Matches(data, "tui.select.down") ||
+			kb.Matches(data, "tui.select.pageUp") || kb.Matches(data, "tui.select.pageDown") {
 			e.autocompleteList.HandleInput(data)
 			return
 		}
@@ -3265,6 +3266,14 @@ func (e *Editor) IsShowingAutocomplete() bool {
 	var showing bool
 	e.lock(func() { showing = e.autocompleteState != "" })
 	return showing
+}
+
+// CapturesViewportInput reports that an open autocomplete menu receives
+// fullscreen viewport keys (pi: get capturesViewportInput).
+func (e *Editor) CapturesViewportInput() bool {
+	var capture bool
+	e.lock(func() { capture = e.autocompleteState != "" })
+	return capture
 }
 
 // updateAutocomplete re-queries with the current state's force flag (pi:

@@ -1935,3 +1935,34 @@ func TestTuiAltScreenCropsKittyImageWithTextOnPlaceholderRows(t *testing.T) {
 	}
 	tui.Stop(nil)
 }
+
+func TestTuiAltScreenDefersViewportKeysToFocusedList(t *testing.T) {
+	terminal := NewVirtualTerminal(20, 6)
+	tui := NewTuiAltScreen(terminal, nil, "", nil)
+	items := make([]SelectItem, 12)
+	for index := range items {
+		items[index] = SelectItem{Value: "item", Label: "item"}
+	}
+	list := NewSelectList(items, 3, passthroughSelectListTheme(), nil)
+	tui.AddChild(NewText(altTestLines(12), 0, 0))
+	tui.AddChild(list)
+	tui.SetFocus(list)
+	tui.Start()
+	terminal.WaitForRender()
+	topBefore := tui.ViewportTop()
+
+	terminal.SendInput("\x1b[6~")
+	terminal.SendInput("\x1b[1;5H")
+	terminal.WaitForRender()
+
+	if got := list.GetSelectedItem().Value; got != "item" {
+		t.Fatalf("selected item = %q", got)
+	}
+	if list.selectedIndex != 3 {
+		t.Fatalf("selected index = %d, want 3", list.selectedIndex)
+	}
+	if got := tui.ViewportTop(); got != topBefore {
+		t.Fatalf("viewportTop = %d, want %d", got, topBefore)
+	}
+	tui.Stop(nil)
+}

@@ -308,9 +308,27 @@ var cjkFullwidthPunctuation = map[rune]bool{
 // one of the explicit fullwidth forms. The lookahead is same-position, so the
 // whole regex is a single-code-point class (verified against the JS source).
 func autocompleteSeparatorRune(r rune) bool {
-	return isJsSpaceRune(r) ||
-		(unicode.IsPunct(r) && isCJKBreakRune(r)) ||
-		cjkFullwidthPunctuation[r]
+	return isJsSpaceRune(r) || isCJKPunctuationRune(r)
+}
+
+// isCJKPunctuationRune reports whether r matches pi's cjkPunctuationRegex:
+// punctuation in a CJK script plus the explicit fullwidth forms above.
+func isCJKPunctuationRune(r rune) bool {
+	return (unicode.IsPunct(r) && isCJKBreakRune(r)) || cjkFullwidthPunctuation[r]
+}
+
+// cjkPunctuationIndex returns the byte index of the first CJK punctuation
+// code point in text, or -1. (pi: token.raw.search(cjkPunctuationRegex))
+func cjkPunctuationIndex(text string) int {
+	for index, r := range text {
+		// U+00B7 is not in the CJK Script_Extensions union but marked's URL
+		// tokenizer treats it as a boundary; include it so bare URLs match pi's
+		// observed stop set (#10934).
+		if isCJKPunctuationRune(r) || r == '\u00b7' {
+			return index
+		}
+	}
+	return -1
 }
 
 // isAutocompleteSeparatorAtEnd reports whether text ends at a token boundary
@@ -1058,18 +1076,74 @@ func (t *ansiCodeTracker) getActiveBackgroundCode() string {
 }
 
 // GetLineEndReset gets reset codes for attributes that need to be turned off
-// at line end. Underline must be closed to prevent bleeding into padding.
-// Active OSC 8 hyperlinks must be closed and re-opened on the next line.
-// Returns empty string if no attributes need closing.
+// at line end. Underline and strikethrough must be closed to prevent bleeding
+// into padding. Active OSC 8 hyperlinks must be closed and re-opened on the
+// next line. Returns empty string if no attributes need closing.
 func (t *ansiCodeTracker) GetLineEndReset() string {
 	result := ""
 	if t.underline {
 		result += "\x1b[24m" // Underline off only
 	}
+	if t.strikethrough {
+		result += "\x1b[29m" // Strikethrough off only, re-opened at line start via GetActiveCodes()
+	}
 	if t.activeLink != nil {
 		result += formatOsc8Close(t.activeLink.terminator) // Re-opened at line start via GetActiveCodes()
 	}
 	return result
+}
+
+// extractAnsiCodes returns every escape sequence in text, in order.
+func extractAnsiCodes(text string) string {
+	var result strings.Builder
+	i := strings.IndexByte(text, 0x1b)
+	for i != -1 {
+		if length := ansiCodeLength(text, i); length > 0 {
+			result.WriteString(text[i : i+length])
+			i += length
+		} else {
+			i++
+		}
+		next := strings.IndexByte(text[i:], 0x1b)
+		if next == -1 {
+			break
+		}
+		i += next
+	}
+	return result.String()
+}
+
+// isWhitespaceToken reports whether a token's visible text is only
+// whitespace. Codes closing a styled word attach to the following space, e.g.
+// "\x1b[22m ", so they are skipped. (pi: isWhitespaceToken)
+func isWhitespaceToken(token string) bool {
+	i := 0
+	for i < len(token) {
+		if token[i] == 0x1b {
+			length := ansiCodeLength(token, i)
+			if length == 0 {
+				return false // A lone ESC is visible text
+			}
+			i += length
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(token[i:])
+		if !isJsSpaceRune(r) {
+			return false
+		}
+		i += size
+	}
+	return true
+}
+
+const controlCharactersPattern = "[\u0000-\u001f\u007f-\u009f]+"
+
+var controlCharactersRegexp = regexp.MustCompile(controlCharactersPattern)
+
+// ReplaceControlCharacters replaces each run of C0 and C1 control characters
+// (ESC, BEL, newlines, ...) with one space (pi: replaceControlCharacters).
+func ReplaceControlCharacters(str string) string {
+	return controlCharactersRegexp.ReplaceAllString(str, " ")
 }
 
 func updateTrackerFromText(text string, tracker *ansiCodeTracker) {
@@ -1234,11 +1308,15 @@ func wrapSingleLine(line string, width int) []string {
 
 	for _, token := range tokens {
 		tokenVisibleLength := VisibleWidth(token)
-		isWhitespace := jsTrim(token) == ""
+		isWhitespace := isWhitespaceToken(token)
 
 		// Token itself is too long - break it character by character
 		if tokenVisibleLength > width && !isWhitespace {
 			if currentLine.Len() > 0 {
+				// Trim before adding the reset, which would otherwise block the final trimEnd()
+				currentLineValue := jsTrimEnd(currentLine.String())
+				currentLine.Reset()
+				currentLine.WriteString(currentLineValue)
 				// Add specific reset for underline only (preserves background)
 				if lineEndReset := tracker.GetLineEndReset(); lineEndReset != "" {
 					currentLine.WriteString(lineEndReset)
@@ -1264,6 +1342,12 @@ func wrapSingleLine(line string, width int) []string {
 		if totalNeeded > width && currentVisibleLength > 0 {
 			// Trim trailing whitespace, then add underline reset (not full reset, to preserve background)
 			lineToWrap := jsTrimEnd(currentLine.String())
+			if isWhitespace {
+				// The dropped space may carry codes (e.g. closing a styled word). Keep them on the wrapped line so
+				// the style ends there and is not re-opened on the next line.
+				lineToWrap += extractAnsiCodes(token)
+				updateTrackerFromText(token, tracker)
+			}
 			if lineEndReset := tracker.GetLineEndReset(); lineEndReset != "" {
 				lineToWrap += lineEndReset
 			}
@@ -1273,11 +1357,15 @@ func wrapSingleLine(line string, width int) []string {
 				currentLine.Reset()
 				currentLine.WriteString(tracker.GetActiveCodes())
 				currentVisibleLength = 0
-			} else {
-				currentLine.Reset()
-				currentLine.WriteString(tracker.GetActiveCodes() + token)
-				currentVisibleLength = tokenVisibleLength
+				continue
 			}
+			currentLine.Reset()
+			currentLine.WriteString(tracker.GetActiveCodes() + token)
+			currentVisibleLength = tokenVisibleLength
+		} else if isWhitespace && totalNeeded > width && strings.Contains(token, "\x1b") {
+			// Whitespace wider than an empty line. Plain spaces are removed by the final trimEnd(), but codes after
+			// them (e.g. a trailing reset) would block that and leave the line wider than width. Keep only the codes.
+			currentLine.WriteString(extractAnsiCodes(token))
 		} else {
 			// Add to current line
 			currentLine.WriteString(token)

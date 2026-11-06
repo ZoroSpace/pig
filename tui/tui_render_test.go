@@ -997,3 +997,24 @@ func TestTuiFakeCursor(t *testing.T) {
 		}
 	})
 }
+
+func TestTuiMainScreenStripsOSC133Markers(t *testing.T) {
+	terminal := newBoundedWriteTerminal()
+	tui := NewTuiMainScreen(terminal, nil, "")
+	component := &testComponent{}
+	tui.AddChild(component)
+	component.SetLines([]string{"\x1b]133;A\x07prompt", "\x1b]133;B\x07\x1b]133;C\x07output"})
+	tui.RenderNow(false)
+	component.SetLines(append(component.Lines(), "\x1b]133;A\x1b\\reply", "\x1b]133;B\x1b\\\x1b]133;C\x1b\\done"))
+	tui.RenderNow(false)
+
+	output := strings.Join(terminal.writes, "")
+	if strings.Contains(output, "\x1b]133;") {
+		t.Fatalf("regular mode emitted OSC 133 markers: %q", output)
+	}
+	for _, text := range []string{"prompt", "output", "reply", "done"} {
+		if !strings.Contains(output, text) {
+			t.Fatalf("output missing %q: %q", text, output)
+		}
+	}
+}

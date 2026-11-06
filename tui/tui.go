@@ -199,6 +199,12 @@ type InputHandler interface {
 	HandleInput(data string)
 }
 
+// ViewportInputCapture is the optional capability for components that consume
+// fullscreen viewport keys while focused (pi: capturesViewportInput).
+type ViewportInputCapture interface {
+	CapturesViewportInput() bool
+}
+
 // MouseHandler is the optional capability for components that receive
 // normalized mouse events (pi: handleMouse?).
 type MouseHandler interface {

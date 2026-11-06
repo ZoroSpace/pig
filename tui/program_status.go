@@ -65,11 +65,6 @@ func isProgramStatusReply(sequence string) bool {
 
 var programStatusAppPattern = regexp.MustCompile(`^[A-Za-z0-9_.+-]{1,32}$`)
 
-// programStatusControlCharacters is the C0/C1 control range; terminals
-// discard reports whose text contains control characters, so they are
-// replaced (pi: CONTROL_CHARACTERS).
-var programStatusControlCharacters = regexp.MustCompile("[\u0000-\u001f\u007f-\u009f]+")
-
 // programStatusMaxMessageBytes is the decoded msg limit. Its base64 encoding
 // stays under the 2732-byte encoded limit (pi: MAX_MESSAGE_BYTES).
 const programStatusMaxMessageBytes = 2048
@@ -102,7 +97,7 @@ func formatProgramStatus(status ProgramStatus) string {
 	if status.State == ProgramStatusBlocked && status.Kind != "" {
 		pairs = append(pairs, "kind="+string(status.Kind))
 	}
-	message := strings.TrimSpace(programStatusControlCharacters.ReplaceAllString(status.Message, " "))
+	message := strings.TrimSpace(ReplaceControlCharacters(status.Message))
 	message = truncateProgramStatusMessage(message, programStatusMaxMessageBytes)
 	if message != "" {
 		pairs = append(pairs, "msg="+base64.StdEncoding.EncodeToString([]byte(message)))

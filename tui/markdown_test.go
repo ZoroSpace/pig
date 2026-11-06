@@ -732,3 +732,90 @@ func TestMarkdownUnclosedDisplayMathBeforeTables(t *testing.T) {
 		})
 	}
 }
+
+func TestMarkdownBareURLStopsAtCJKPunctuation(t *testing.T) {
+	SetCapabilities(TerminalCapabilities{Images: nil, TrueColor: false, Hyperlinks: true})
+	defer ResetCapabilitiesCache()
+
+	for _, punctuation := range "。，；：！？、“”‘’（）【】《》「」『』…—·・〈〉［］｛｝．｡｢｣､･" {
+		source := "https://example.com" + string(punctuation) + "后面的中文"
+		output := strings.Join(NewMarkdown(source, 0, 0, defaultMarkdownTheme, nil, nil).Render(160), "")
+		if !strings.Contains(output, "\x1b]8;;https://example.com\x1b\\") {
+			t.Fatalf("URL hyperlink did not stop at %q: %q", punctuation, output)
+		}
+		if got := stripAnsi(output); !strings.Contains(got, string(punctuation)+"后面的中文") {
+			t.Fatalf("following text lost after %q: %q", punctuation, got)
+		}
+	}
+}
+
+func TestMarkdownBareURLKeepsCJKWithoutPunctuation(t *testing.T) {
+	SetCapabilities(TerminalCapabilities{Images: nil, TrueColor: false, Hyperlinks: true})
+	defer ResetCapabilitiesCache()
+
+	for _, url := range []string{
+		"https://example.com紧接着中文",
+		"https://example.com/中文?q=搜索#片段",
+		"https://example.com/テストー한글",
+	} {
+		output := strings.Join(NewMarkdown(url, 0, 0, defaultMarkdownTheme, nil, nil).Render(160), "")
+		if !strings.Contains(output, "\x1b]8;;"+url+"\x1b\\") {
+			t.Errorf("URL changed: %q -> %q", url, output)
+		}
+	}
+}
+
+func TestMarkdownReusesRenderedBlocks(t *testing.T) {
+	calls := []string{}
+	theme := defaultMarkdownTheme
+	theme.HighlightCode = func(code string, lang string) []string {
+		calls = append(calls, lang+":"+code)
+		return []string{code}
+	}
+
+	markdown := NewMarkdown("```ts\nx\n```", 0, 0, theme, nil, nil)
+	markdown.Render(80)
+	markdown.SetText("```ts\nx\n```\n\nafter")
+	markdown.Render(40)
+	if len(calls) != 1 {
+		t.Fatalf("HighlightCode calls = %v, want one", calls)
+	}
+	markdown.Invalidate()
+	markdown.Render(40)
+	if len(calls) != 2 {
+		t.Fatalf("HighlightCode calls after invalidate = %v, want two", calls)
+	}
+
+	t.Run("follows changed reference link definitions", func(t *testing.T) {
+		SetCapabilities(TerminalCapabilities{Images: nil, TrueColor: false, Hyperlinks: false})
+		defer ResetCapabilitiesCache()
+		markdown := NewMarkdown("[a][x]\n\n[x]: https://one.example", 0, 0, defaultMarkdownTheme, nil, nil)
+		markdown.Render(80)
+		markdown.SetText("[a][x]\n\n[x]: https://two.example")
+		output := strings.Join(markdown.Render(80), "\n")
+		if !strings.Contains(stripAnsi(output), "https://two.example") {
+			t.Fatalf("changed reference link not followed: %q", output)
+		}
+	})
+}
+
+func TestMarkdownDisplayMathFallsBackToRawWhenTooWide(t *testing.T) {
+	markdown := NewMarkdown("$$\\frac{1000000}{2}$$", 0, 0, defaultMarkdownTheme, nil, nil)
+	output := strings.Join(markdown.Render(3), "")
+	if !strings.Contains(stripSGR(output), "frac") {
+		t.Fatalf("wide display math did not fall back to raw source: %q", output)
+	}
+}
+
+func TestMarkdownExplicitLinksKeepCJKPunctuation(t *testing.T) {
+	SetCapabilities(TerminalCapabilities{Images: nil, TrueColor: false, Hyperlinks: true})
+	defer ResetCapabilitiesCache()
+
+	url := "https://example.com/中文，路径·テスト・한글…—。"
+	for _, source := range []string{"[文档](" + url + ")", "<" + url + ">"} {
+		output := strings.Join(NewMarkdown(source, 0, 0, defaultMarkdownTheme, nil, nil).Render(160), "")
+		if !strings.Contains(output, "\x1b]8;;"+url+"\x1b\\") {
+			t.Errorf("%s did not keep CJK punctuation in href: %q", source, output)
+		}
+	}
+}
