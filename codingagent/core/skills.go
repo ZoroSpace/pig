@@ -482,7 +482,7 @@ func FormatSkillsForPrompt(skills []Skill, fileReadTool ...string) string {
 	lines := []string{
 		"\n\nThe following skills provide specialized instructions for specific tasks.",
 		instruction,
-		"When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
+		"Resolve relative paths against the skill's directory (parent of SKILL.md). Use absolute paths in tool calls.",
 		"",
 		"<available_skills>",
 	}
@@ -543,7 +543,7 @@ func LoadSkills(options LoadSkillsOptions) LoadSkillsResult {
 		allDiagnostics = append(allDiagnostics, result.Diagnostics...)
 		for _, skill := range result.Skills {
 			// Resolve symlinks to detect duplicate files
-			realPath := utils.CanonicalizePath(skill.FilePath)
+			realPath := GetResourcePathKey(skill.FilePath)
 
 			// Skip silently if we've already loaded this exact file (via
 			// symlink)
@@ -579,24 +579,12 @@ func LoadSkills(options LoadSkillsOptions) LoadSkillsResult {
 	userSkillsDir := filepath.Join(resolvedAgentDir, "skills")
 	projectSkillsDir := filepath.Join(resolvedCwd, codingagent.ConfigDirName, "skills")
 
-	isUnderPath := func(target string, root string) bool {
-		normalizedRoot := filepath.Clean(root)
-		if target == normalizedRoot {
-			return true
-		}
-		prefix := normalizedRoot
-		if !strings.HasSuffix(prefix, string(filepath.Separator)) {
-			prefix += string(filepath.Separator)
-		}
-		return strings.HasPrefix(target, prefix)
-	}
-
 	getSource := func(resolvedPath string) string {
 		if !includeDefaults {
-			if isUnderPath(resolvedPath, userSkillsDir) {
+			if utils.IsPathWithin(userSkillsDir, resolvedPath) {
 				return "user"
 			}
-			if isUnderPath(resolvedPath, projectSkillsDir) {
+			if utils.IsPathWithin(projectSkillsDir, resolvedPath) {
 				return "project"
 			}
 		}

@@ -236,6 +236,16 @@ type ExtensionCustomOptions struct {
 	// OnHandle receives the overlay handle after the overlay is shown, for
 	// visibility control (pi: onHandle?).
 	OnHandle func(handle tui.OverlayHandle)
+	// Blocked reports the program as blocked on user input while this
+	// component is visible. Only applies to inline components (pi: blocked?).
+	Blocked *ExtensionCustomBlockedStatus
+}
+
+// ExtensionCustomBlockedStatus is the blocked status an inline custom
+// component can report (pi: { kind, message }).
+type ExtensionCustomBlockedStatus struct {
+	Kind    tui.ProgramStatusBlockedKind
+	Message string
 }
 
 // ExtensionThemeInfo is one available theme (pi: getAllThemes' element

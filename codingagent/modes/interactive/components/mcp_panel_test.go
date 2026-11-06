@@ -530,3 +530,14 @@ func TestMCPPanelSignOut(t *testing.T) {
 		t.Fatalf("ctrl+o must call SignOut, calls = %s", calls)
 	}
 }
+
+func TestMCPPanelCapturesViewportInputOnlyOnList(t *testing.T) {
+	h := newMCPPanelHarness(t, newFakeMCPProvider(), nil)
+	if !h.panel.CapturesViewportInput() {
+		t.Fatal("server list should capture viewport page keys")
+	}
+	h.panel.signIn = &mcpSignInView{}
+	if h.panel.CapturesViewportInput() {
+		t.Fatal("sign-in paste screen should not capture viewport page keys")
+	}
+}

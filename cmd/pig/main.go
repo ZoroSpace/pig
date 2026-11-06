@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	// blank import: registers pprof handlers on DefaultServeMux (diagnostic)
 	"fmt"
@@ -677,13 +678,10 @@ func createRuntimeFactory(
 		cachedProjectTrust, hasCachedTrust := projectTrustByCwd[options.Cwd]
 		hasTrustRequiringResources := core.HasTrustRequiringProjectResources(options.Cwd)
 		shouldResolveProjectTrust := parsed.ProjectTrustOverride == nil && !hasCachedTrust && hasTrustRequiringResources
-		projectTrusted := !hasTrustRequiringResources || func() bool {
-			decision, err := trustStore.Get(options.Cwd)
-			if err != nil {
-				return false
-			}
-			return decision != nil && *decision
-		}()
+		projectTrusted := !hasTrustRequiringResources
+		if decision, err := trustStore.Get(options.Cwd); err == nil && decision != nil {
+			projectTrusted = *decision
+		}
 		if hasCachedTrust {
 			projectTrusted = cachedProjectTrust
 		} else if parsed.ProjectTrustOverride != nil {
@@ -862,6 +860,10 @@ func Main(args []string) int {
 
 	cwd, err := cli.ProcessCwd()
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintln(os.Stderr, "Error: The current working directory no longer exists. Change to an existing directory and try again.")
+			return 1
+		}
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 		return 1
 	}

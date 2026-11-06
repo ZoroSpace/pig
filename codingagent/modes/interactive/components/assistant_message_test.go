@@ -117,6 +117,61 @@ func TestAssistantMessageComponent(t *testing.T) {
 		}
 	})
 
+	t.Run("omits hidden thinking rows and spacers when the label is empty", func(t *testing.T) {
+		initTestTheme(t)
+
+		noVisibleChildren := NewAssistantMessageComponent(
+			createAssistantMessage([]types.Content{
+				&types.ThinkingContent{Kind: types.KindThinking, Thinking: "private reasoning"},
+				&types.ToolCall{Kind: types.KindToolCall, ID: "tool-1", Name: "read", Arguments: map[string]any{"path": "file.txt"}},
+			}, ""),
+			&AssistantMessageOptions{HideThinkingBlock: true},
+		)
+		noVisibleChildren.SetHiddenThinkingLabel("")
+		if lines := noVisibleChildren.Render(80); len(lines) != 0 {
+			t.Fatalf("render = %#v, want no lines", lines)
+		}
+
+		withText := NewAssistantMessageComponent(
+			createAssistantMessage([]types.Content{
+				&types.ThinkingContent{Kind: types.KindThinking, Thinking: "private reasoning"},
+				&types.TextContent{Kind: types.KindText, Text: "answer"},
+			}, ""),
+			&AssistantMessageOptions{HideThinkingBlock: true},
+		)
+		withText.SetHiddenThinkingLabel("")
+		lines := withText.Render(80)
+		if len(lines) != 2 {
+			t.Fatalf("render = %#v, want spacer plus text", lines)
+		}
+		if strings.TrimSpace(utils.StripAnsi(lines[0])) != "" {
+			t.Fatalf("first line = %q, want spacer", lines[0])
+		}
+		if !strings.Contains(utils.StripAnsi(lines[1]), "answer") {
+			t.Fatalf("second line = %q, want answer", lines[1])
+		}
+	})
+
+	t.Run("keeps label row and spacing for hidden thinking with a label", func(t *testing.T) {
+		initTestTheme(t)
+
+		component := NewAssistantMessageComponent(
+			createAssistantMessage([]types.Content{
+				&types.ThinkingContent{Kind: types.KindThinking, Thinking: "reasoning"},
+				&types.TextContent{Kind: types.KindText, Text: "answer"},
+			}, ""),
+			&AssistantMessageOptions{HideThinkingBlock: true},
+		)
+		lines := component.Render(80)
+		trimmed := make([]string, len(lines))
+		for i, line := range lines {
+			trimmed[i] = strings.TrimSpace(utils.StripAnsi(line))
+		}
+		if strings.Join(trimmed, "|") != "|Thinking...||answer" {
+			t.Fatalf("rows = %#v", trimmed)
+		}
+	})
+
 	t.Run("uses configured output padding for text and thinking", func(t *testing.T) {
 		initTestTheme(t)
 

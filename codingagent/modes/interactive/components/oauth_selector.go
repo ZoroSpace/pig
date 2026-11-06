@@ -50,6 +50,8 @@ var envSourcePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]*(?:, [A-Z][A-Z0-9_]*)
 
 // OAuthSelectorComponent renders an auth provider selector (pi:
 // OAuthSelectorComponent extends Container implements Focusable).
+const oauthSelectorMaxVisible = 8
+
 type OAuthSelectorComponent struct {
 	tui.Container
 
@@ -71,6 +73,10 @@ type OAuthSelectorComponent struct {
 
 // NewOAuthSelectorComponent builds the selector (pi: constructor).
 // initialSearchInput optional — "" for none.
+// CapturesViewportInput reports that the focused selector consumes page keys
+// instead of scrolling the transcript (pi: Component.capturesViewportInput).
+func (s *OAuthSelectorComponent) CapturesViewportInput() bool { return true }
+
 func NewOAuthSelectorComponent(
 	mode string,
 	providers []AuthSelectorProvider,
@@ -160,7 +166,7 @@ func (s *OAuthSelectorComponent) updateList() {
 	s.listContainer.Clear()
 	currentTheme := theme.Current()
 
-	maxVisible := 8
+	maxVisible := oauthSelectorMaxVisible
 	startIndex := maxInt(0, minInt(s.selectedIndex-maxVisible/2, len(s.filteredProviders)-maxVisible))
 	endIndex := minInt(startIndex+maxVisible, len(s.filteredProviders))
 
@@ -233,6 +239,7 @@ func (s *OAuthSelectorComponent) formatStatusIndicator(provider AuthSelectorProv
 // HandleInput implements InputHandler (pi: handleInput).
 func (s *OAuthSelectorComponent) HandleInput(keyData string) {
 	kb := tui.GetKeybindings()
+	pageIndex, isPageKey := tui.GetSelectPageIndex(kb, keyData, s.selectedIndex, len(s.filteredProviders), oauthSelectorMaxVisible)
 	switch {
 	// Up arrow
 	case kb.Matches(keyData, "tui.select.up"):
@@ -247,6 +254,12 @@ func (s *OAuthSelectorComponent) HandleInput(keyData string) {
 			return
 		}
 		s.selectedIndex = minInt(s.selectedIndex+1, len(s.filteredProviders)-1)
+		s.updateList()
+	case isPageKey:
+		if len(s.filteredProviders) == 0 {
+			return
+		}
+		s.selectedIndex = pageIndex
 		s.updateList()
 	// Enter
 	case kb.Matches(keyData, "tui.select.confirm"):

@@ -25,6 +25,7 @@ type ExtensionEditorComponent struct {
 	tui                   tui.TUI
 	keybindings           *core.KeybindingsManager
 	externalEditorCommand string
+	externalEditorStatus  *tui.Text
 
 	focused bool
 }
@@ -99,6 +100,8 @@ func NewExtensionEditorComponent(
 		c.onSubmitCallback(text)
 	}
 	c.AddChild(c.editor)
+	c.externalEditorStatus = tui.NewText("", 1, 0)
+	c.AddChild(c.externalEditorStatus)
 
 	c.AddChild(tui.NewSpacer(1))
 
@@ -160,7 +163,10 @@ func (c *ExtensionEditorComponent) handleOpenExternalEditor() {
 	if err != nil {
 		return
 	}
+	c.externalEditorStatus.SetText("")
 	if result.Status == "complete" {
 		c.editor.SetText(result.Content)
+	} else if result.Message != "" {
+		c.externalEditorStatus.SetText(theme.Current().Fg("warning", result.Message))
 	}
 }

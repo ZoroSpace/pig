@@ -155,6 +155,15 @@ func (e *CustomEditor) HandleInput(data string) {
 		return
 	}
 
+	// Selection page keys move an open autocomplete menu before app actions
+	// run, so a remapped Ctrl+V pages the menu instead of pasting an image
+	// (pi: #7629).
+	if e.IsShowingAutocomplete() &&
+		(e.keybindings.Matches(data, "tui.select.pageUp") || e.keybindings.Matches(data, "tui.select.pageDown")) {
+		e.Editor.HandleInput(data)
+		return
+	}
+
 	// Check for clipboard paste keybinding
 	if e.keybindings.Matches(data, core.AppKeybindingClipboardPasteImage) {
 		if e.OnPasteImage != nil {

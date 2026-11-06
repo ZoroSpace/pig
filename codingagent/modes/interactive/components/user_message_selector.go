@@ -115,6 +115,7 @@ func (l *userMessageList) Render(width int) []string {
 // HandleInput implements InputHandler (pi: handleInput).
 func (l *userMessageList) HandleInput(keyData string) {
 	kb := tui.GetKeybindings()
+	pageIndex, isPageKey := tui.GetSelectPageIndex(kb, keyData, l.selectedIndex, len(l.messages), l.maxVisible)
 	switch {
 	// Up arrow - go to previous (older) message, wrap to bottom when at top
 	case kb.Matches(keyData, "tui.select.up"):
@@ -130,6 +131,11 @@ func (l *userMessageList) HandleInput(keyData string) {
 		} else {
 			l.selectedIndex++
 		}
+	case isPageKey:
+		if len(l.messages) == 0 {
+			return
+		}
+		l.selectedIndex = pageIndex
 	// Enter - select message and branch
 	case kb.Matches(keyData, "tui.select.confirm"):
 		if l.selectedIndex < len(l.messages) {
@@ -156,6 +162,10 @@ type UserMessageSelectorComponent struct {
 
 // NewUserMessageSelectorComponent builds the selector (pi: constructor).
 // initialSelectedID optional — "" for none.
+// CapturesViewportInput reports that the focused list consumes page keys
+// instead of scrolling the transcript (pi: Component.capturesViewportInput).
+func (l *userMessageList) CapturesViewportInput() bool { return true }
+
 func NewUserMessageSelectorComponent(
 	messages []UserMessageItem,
 	onSelect func(entryID string),

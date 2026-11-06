@@ -337,6 +337,11 @@ type AgentSessionConfig struct {
 	// ModelRuntime is the canonical model/auth runtime used by
 	// coding-agent internals.
 	ModelRuntime *ModelRuntime
+	// RuntimeStreamFunction is the SDK stream function that resolves auth
+	// through ModelRuntime itself. Summaries sent through it must not pass
+	// pre-resolved credentials (pi: markRuntimeStreamFunction; Go functions
+	// are not comparable, so identity is compared via SameFuncValue).
+	RuntimeStreamFunction agent.StreamFn
 	// CacheWarmer keeps the prompt cache entry of the last session request
 	// warm (pi: cacheWarmer; v0.86.0). pig takes the surface the session
 	// consumes (pi: Pick<CacheWarmer, ...>).
@@ -634,7 +639,8 @@ type AgentSession struct {
 	extensionErrorListener         ExtensionErrorListener
 	extensionErrorUnsubscriber     func()
 
-	modelRuntime *ModelRuntime
+	modelRuntime          *ModelRuntime
+	runtimeStreamFunction agent.StreamFn
 
 	// Tool registry for extension getTools/setTools
 	toolRegistry    map[string]agent.AgentTool
@@ -676,15 +682,16 @@ type AgentSession struct {
 // NewAgentSession creates the session (pi: constructor).
 func NewAgentSession(config AgentSessionConfig) *AgentSession {
 	s := &AgentSession{
-		Agent:           config.Agent,
-		SessionManager:  config.SessionManager,
-		SettingsManager: config.SettingsManager,
-		scopedModels:    config.ScopedModels,
-		resourceLoader:  config.ResourceLoader,
-		customTools:     config.CustomTools,
-		cwd:             config.Cwd,
-		modelRuntime:    config.ModelRuntime,
-		bashCancels:     map[int64]context.CancelFunc{},
+		Agent:                 config.Agent,
+		SessionManager:        config.SessionManager,
+		SettingsManager:       config.SettingsManager,
+		scopedModels:          config.ScopedModels,
+		resourceLoader:        config.ResourceLoader,
+		customTools:           config.CustomTools,
+		cwd:                   config.Cwd,
+		modelRuntime:          config.ModelRuntime,
+		runtimeStreamFunction: config.RuntimeStreamFunction,
+		bashCancels:           map[int64]context.CancelFunc{},
 	}
 	s.extensionRunnerRef = config.ExtensionRunnerRef
 	if config.MCPManager != nil {
@@ -864,6 +871,9 @@ func (s *AgentSession) getSummarizationRequestAuth(ctx context.Context, model *t
 		}
 		auth.thinkingLevel = thinkingLevel
 		return auth, nil
+	}
+	if s.runtimeStreamFunction != nil && pigutils.SameFuncValue(s.Agent.StreamFunction, s.runtimeStreamFunction) {
+		return &requestAuth{model: model, thinkingLevel: thinkingLevel}, nil
 	}
 
 	result, err := s.modelRuntime.GetAuthForModel(ctx, model, nil)
@@ -2177,10 +2187,31 @@ func (s *AgentSession) GetToolDefinition(name string) *tools.ToolDefinition {
 // prompt to reflect the new tool set. Changes take effect on the next agent
 // turn (pi: setActiveToolsByName).
 func (s *AgentSession) SetActiveToolsByName(toolNames []string) {
+	// Active tools are a set: tools that stay active keep their current order
+	// and newly active ones are appended, so reordering the same names does
+	// not change the prompt (pi #11495).
+	requested := make(map[string]bool, len(toolNames))
+	for _, name := range toolNames {
+		requested[name] = true
+	}
+	ordered := make([]string, 0, len(toolNames))
+	for _, name := range s.GetActiveToolNames() {
+		if requested[name] {
+			ordered = append(ordered, name)
+			delete(requested, name)
+		}
+	}
+	for _, name := range toolNames {
+		if requested[name] {
+			ordered = append(ordered, name)
+			delete(requested, name)
+		}
+	}
+
 	var toolsList []agent.AgentTool
 	var validToolNames []string
 	s.mu.Lock()
-	for _, name := range toolNames {
+	for _, name := range ordered {
 		if tool, ok := s.toolRegistry[name]; ok {
 			toolsList = append(toolsList, tool)
 			validToolNames = append(validToolNames, name)
@@ -5642,6 +5673,7 @@ func (s *AgentSession) NavigateTree(ctx context.Context, targetID string, option
 			APIKey:              auth.apiKey,
 			Headers:             auth.headers,
 			Env:                 auth.env,
+			ThinkingLevel:       auth.thinkingLevel,
 			CustomInstructions:  customInstructions,
 			ReplaceInstructions: replaceInstructions,
 			ReserveTokens:       &reserveTokens,

@@ -14,6 +14,7 @@ import (
 
 	"github.com/ZoroSpace/pig/ai"
 	"github.com/ZoroSpace/pig/ai/types"
+	"github.com/ZoroSpace/pig/codingagent/utils"
 )
 
 // CreateAgentSessionRuntimeResult is the result returned by runtime creation
@@ -561,7 +562,7 @@ func (r *AgentSessionRuntime) ImportFromJsonl(ctx context.Context, inputPath str
 	// pi (v0.85.1): when importing into the sessions dir, never overwrite an
 	// existing session — pick a unique -<n> suffix instead, and copy with
 	// COPYFILE_EXCL semantics.
-	sourceAlreadyStored := filepath.Clean(destinationPath) == resolvedPath
+	sourceAlreadyStored := utils.PathsEqual(destinationPath, resolvedPath)
 	if !sourceAlreadyStored {
 		ext := filepath.Ext(destinationPath)
 		name := strings.TrimSuffix(filepath.Base(destinationPath), ext)

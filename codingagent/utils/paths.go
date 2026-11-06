@@ -51,6 +51,68 @@ func CanonicalizePath(path string) string {
 	return path
 }
 
+// GetPathComparisonKey returns the key used to compare filesystem paths: the
+// resolved absolute path, lowercased on Windows because Windows paths are
+// case-insensitive. It does not touch the filesystem; call CanonicalizePath
+// first when symlinks must compare equal. Use only for comparison, never for
+// display or filesystem access (pi: getPathComparisonKey).
+func GetPathComparisonKey(path string) string {
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		resolved = filepath.Clean(path)
+	}
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(resolved)
+	}
+	return resolved
+}
+
+// PathsEqual reports whether both paths name the same location (pi:
+// pathsEqual).
+func PathsEqual(left string, right string) bool {
+	return GetPathComparisonKey(left) == GetPathComparisonKey(right)
+}
+
+// IsPathWithin reports whether child is parent or inside it, matching whole
+// path segments (pi: isPathWithin).
+func IsPathWithin(parent string, child string) bool {
+	parentKey := GetPathComparisonKey(parent)
+	childKey := GetPathComparisonKey(child)
+	if childKey == parentKey {
+		return true
+	}
+	sep := string(filepath.Separator)
+	if !strings.HasSuffix(parentKey, sep) {
+		parentKey += sep
+	}
+	return strings.HasPrefix(childKey, parentKey)
+}
+
+// ShortenHomePath replaces a leading home directory with "~" for display
+// (pi: shortenHomePath). An optional homeDir overrides os.UserHomeDir.
+func ShortenHomePath(path string, homeDir ...string) string {
+	home := ""
+	for _, candidate := range homeDir {
+		if candidate != "" {
+			home = candidate
+			break
+		}
+	}
+	if home == "" {
+		if h, err := os.UserHomeDir(); err == nil {
+			home = h
+		}
+	}
+	if home == "" || !filepath.IsAbs(path) || !IsPathWithin(home, path) {
+		return path
+	}
+	relativePath, err := filepath.Rel(home, path)
+	if err != nil || relativePath == "." {
+		return "~"
+	}
+	return "~" + string(filepath.Separator) + relativePath
+}
+
 // GetFileRevision returns a change-detection token for a file (pi:
 // getFileRevision), "" when the path does not exist (pi: undefined). pi
 // includes mtimeNs/ctimeNs; pig uses the modtime nanos only (the ctime is

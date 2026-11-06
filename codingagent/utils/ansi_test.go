@@ -60,6 +60,15 @@ func TestStripAnsi(t *testing.T) {
 		{"\x1b]0;bell\x07body", "body"},
 		{"link\x1b]8;;https://x\x1b\\text\x1b]8;;\x1b\\", "linktext"},
 		{"\u009b31mred\u009b0m", "red"},
+		{"\x1b[<35;59;1Mvisible", "visible"},
+		{"a\x1b=b", "ab"},
+		{"a\x1b=12", "a12"},
+		{"a\x1b[>0;276;0cb", "ab"},
+		{"a\x1b[>cb", "ab"},
+		{"a\x1b[=5hb", "ab"},
+		{"a\u009b<35;59;1Mb", "ab"},
+		{"a\x1b>42", "a42"},
+		{"a\x1b<10", "a10"},
 	}
 	for _, tc := range cases {
 		if got := StripAnsi(tc.value); got != tc.want {

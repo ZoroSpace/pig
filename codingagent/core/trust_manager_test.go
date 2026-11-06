@@ -130,3 +130,31 @@ func TestProjectTrustStore(t *testing.T) {
 func codingagentBoolPtr(value bool) *bool {
 	return &value
 }
+
+func TestResolveProjectTrustedHonorsSavedDenialWithoutResources(t *testing.T) {
+	tempDir := t.TempDir()
+	agentDir := filepath.Join(tempDir, "agent")
+	cwd := filepath.Join(tempDir, "project")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store := NewProjectTrustStore(agentDir)
+	if err := store.Set(cwd, codingagentBoolPtr(false)); err != nil {
+		t.Fatal(err)
+	}
+
+	trusted, err := ResolveProjectTrusted(ResolveProjectTrustedOptions{
+		Cwd:                 cwd,
+		TrustStore:          store,
+		DefaultProjectTrust: DefaultProjectTrustAsk,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trusted {
+		t.Fatal("saved denial must win over auto-trust")
+	}
+}

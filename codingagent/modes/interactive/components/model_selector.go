@@ -65,6 +65,8 @@ const (
 
 // ModelSelectorComponent renders a model selector with search (pi:
 // ModelSelectorComponent extends Container implements Focusable).
+const modelSelectorMaxVisible = 10
+
 type ModelSelectorComponent struct {
 	tui.Container
 
@@ -108,6 +110,10 @@ type ModelSelectorComponent struct {
 // NewModelSelectorComponent builds the selector (pi: constructor;
 // initialSearchInput "" = none, onSelectAsDefault nil = hidden, defaultModel
 // nil = none).
+// CapturesViewportInput reports that the focused selector consumes page keys
+// instead of scrolling the transcript (pi: Component.capturesViewportInput).
+func (s *ModelSelectorComponent) CapturesViewportInput() bool { return true }
+
 func NewModelSelectorComponent(
 	tuiImpl ModelSelectorTUI,
 	currentModel *ai.Model,
@@ -518,6 +524,7 @@ func (s *ModelSelectorComponent) updateList() {
 // HandleInput implements InputHandler.
 func (s *ModelSelectorComponent) HandleInput(keyData string) {
 	kb := tui.GetKeybindings()
+	pageIndex, isPageKey := tui.GetSelectPageIndex(kb, keyData, s.selectedIndex, len(s.filteredModels), modelSelectorMaxVisible)
 	if kb.Matches(keyData, "tui.input.tab") {
 		if len(s.scopedModelItems) > 0 {
 			nextScope := modelScopeAll
@@ -553,6 +560,12 @@ func (s *ModelSelectorComponent) HandleInput(keyData string) {
 		} else {
 			s.selectedIndex++
 		}
+		s.updateList()
+	case isPageKey:
+		if len(s.filteredModels) == 0 {
+			return
+		}
+		s.selectedIndex = pageIndex
 		s.updateList()
 	case kb.Matches(keyData, "tui.select.confirm"):
 		// Enter

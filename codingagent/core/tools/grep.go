@@ -207,7 +207,6 @@ func CreateGrepToolDefinition(cwd string, options *GrepToolOptions) *ToolDefinit
 				content, err := ops.ReadFile(ctx, filePath)
 				if err == nil {
 					content = strings.ReplaceAll(content, "\r\n", "\n")
-					content = strings.ReplaceAll(content, "\r", "\n")
 					lines = strings.Split(content, "\n")
 				}
 				fileCacheMu.Store(filePath, lines)

@@ -785,6 +785,11 @@ func (p *MCPPanelComponent) SetFocused(value bool) {
 	p.searchInput.SetFocused(value)
 }
 
+// CapturesViewportInput reports whether the focused panel consumes page keys
+// itself. The server/tool list does; the sign-in paste screen does not
+// (pi: McpManagerView.inputHandler?.capturesViewportInput).
+func (p *MCPPanelComponent) CapturesViewportInput() bool { return p.signIn == nil }
+
 // HandleInput implements InputHandler: panel actions first (they must win
 // over the select list), then navigation keys, then the filter input. The
 // whole body runs inside p.mutate — in production the TUI lock is reentrant

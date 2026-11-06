@@ -27,6 +27,10 @@ func OpenBrowser(target string) {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	cmd.Stdin = nil
+	// The target is a URL/file, so no launcher needs the cwd. On WSL,
+	// xdg-open launches explorer.exe, which fails when the cwd's
+	// \\wsl.localhost\\... path exceeds MAX_PATH (#11592).
+	cmd.Dir = "/"
 	// Detached + unref'd: the launcher outlives the process (pi: spawn with
 	// detached: true + unref()).
 	cmd.SysProcAttr = spawnSysProcAttr()

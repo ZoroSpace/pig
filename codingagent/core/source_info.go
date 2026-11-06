@@ -8,7 +8,11 @@
 // (the npm/git half of package-manager.ts remains deferred).
 package core
 
-import "github.com/ZoroSpace/pig/codingagent/utils"
+import (
+	"strings"
+
+	"github.com/ZoroSpace/pig/codingagent/utils"
+)
 
 // SourceScope identifies where a resource came from (pi: SourceScope).
 type SourceScope = utils.SourceScope
@@ -39,6 +43,16 @@ type SyntheticSourceInfoOptions struct {
 	Scope   SourceScope
 	Origin  SourceOrigin
 	BaseDir string
+}
+
+// GetResourcePathKey returns the dedup key for a resource path: synthetic
+// identifiers are kept verbatim, file paths go through realpath plus the
+// platform comparison key (pi: getResourcePathKey).
+func GetResourcePathKey(path string) string {
+	if strings.HasPrefix(path, "<") || strings.HasPrefix(path, "builtin:") {
+		return path
+	}
+	return utils.GetPathComparisonKey(utils.CanonicalizePath(path))
 }
 
 // CreateSyntheticSourceInfo builds a SourceInfo without package metadata

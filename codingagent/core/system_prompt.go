@@ -274,7 +274,7 @@ func BuildSystemPromptSections(input BuildSystemPromptOptions) *types.SystemSect
 	if customPrompt != "" {
 		promptSections.set("preamble", customPrompt)
 	} else {
-		promptSections.set("preamble", "You are an expert coding assistant named pig, a Go reimplementation of pi. You help users by reading files, executing commands, editing code, and writing new files.")
+		promptSections.set("preamble", "You are a coding assistant running inside Pig, a Go reimplementation of pi. Help users inspect files, run commands, and modify code.")
 		var visibleTools []string
 		for _, name := range selectedTools {
 			if toolSnippets[name] != "" {
@@ -289,7 +289,7 @@ func BuildSystemPromptSections(input BuildSystemPromptOptions) *types.SystemSect
 			}
 			tools = strings.Join(lines, "\n")
 		}
-		promptSections.set("tools", fmt.Sprintf("%s\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.", tools))
+		promptSections.set("tools", fmt.Sprintf("%s\n\nAdditional tools may be available.", tools))
 		promptSections.set("rules", buildSystemPromptRules(selectedTools, toolGuidelines, promptGuidelines))
 	}
 

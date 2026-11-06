@@ -418,3 +418,12 @@ func TestWithFileMutationQueue(t *testing.T) {
 }
 
 var _ = fmt.Sprintf
+
+func TestShortenHomePathUsesFirstNonEmptyCandidate(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, "project", "file.txt")
+
+	if got, want := utils.ShortenHomePath(path, "", home), filepath.Join("~", "project", "file.txt"); got != want {
+		t.Fatalf("ShortenHomePath = %q, want %q", got, want)
+	}
+}

@@ -9,10 +9,13 @@ package utils
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // ExternalEditorResult is the editor outcome (pi: ExternalEditorResult).
@@ -21,6 +24,8 @@ type ExternalEditorResult struct {
 	Status string
 	// Content is the edited text when Status == "complete".
 	Content string
+	// Message describes the failure when Status == "failed".
+	Message string
 }
 
 // EditInExternalEditor runs the editor command over the content in a temp
@@ -47,7 +52,17 @@ func EditInExternalEditor(ctx context.Context, command string, content string) (
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return ExternalEditorResult{Status: "failed"}, nil
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return ExternalEditorResult{Status: "failed", Message: fmt.Sprintf("Failed to launch external editor: %s", command)}, nil
+		}
+		message := "External editor exited with signal; prompt unchanged"
+		if code := exitErr.ExitCode(); code >= 0 {
+			message = fmt.Sprintf("External editor exited with code %d; prompt unchanged", code)
+		} else if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			message = fmt.Sprintf("External editor exited with %s; prompt unchanged", status.Signal())
+		}
+		return ExternalEditorResult{Status: "failed", Message: message}, nil
 	}
 
 	edited, err := os.ReadFile(filePath)

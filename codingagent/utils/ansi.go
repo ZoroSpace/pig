@@ -16,8 +16,12 @@ const ansiST = "(?:\x07|\x1b\\\\|\u009c)"
 const ansiOSCStart = "\x1b\\]"
 
 // CSI and related: ESC/C1, optional intermediates, optional params (supports
-// ; and :), then final byte (pi: CSI_START / CSI_FINAL).
-const ansiCSIStart = "[\x1b\u009b][[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?"
+// ; and :), then final byte. A private prefix (<, =, >) is accepted only
+// directly after a real CSI introducer (ESC [ or 0x9B), so ESC[<35;59;1M
+// (SGR mouse report) is stripped whole. After a bare ESC these bytes stay
+// final bytes: ESC = and ESC > (keypad modes) must not swallow following
+// digits (pi: CSI_START / CSI_FINAL).
+const ansiCSIStart = "(?:(?:\x1b\\[|\u009b)[<=>]|[\x1b\u009b][[\\]()#;?]*)(?:\\d{1,4}(?:[;:]\\d{0,4})*)?"
 
 const ansiCSIFinal = "[\\dA-PR-TZcf-nq-uy=><~]"
 

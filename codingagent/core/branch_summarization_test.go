@@ -136,3 +136,75 @@ func TestRejectsToolCallsFromBranchSummaries(t *testing.T) {
 		t.Fatalf("expected tool call rejection, got %+v", result)
 	}
 }
+
+func TestPrepareBranchEntriesAppliesLatestContextEdit(t *testing.T) {
+	target := &SessionMessageEntry{
+		EntryBase: EntryBase{Type: "message", ID: "target"},
+		Message: types.UserMessage{
+			Role:      types.RoleUser,
+			Content:   types.UserContent{String: "original"},
+			Timestamp: 1,
+		},
+	}
+	firstEdit := &ContextEditEntry{
+		EntryBase:   EntryBase{Type: "context_edit", ID: "edit-1"},
+		TargetID:    "target",
+		Replacement: &ContextEditReplacement{Content: "first"},
+	}
+	secondEdit := &ContextEditEntry{
+		EntryBase:   EntryBase{Type: "context_edit", ID: "edit-2"},
+		TargetID:    "target",
+		Replacement: &ContextEditReplacement{Content: "second"},
+	}
+
+	prepared := PrepareBranchEntries([]SessionEntry{target, firstEdit, secondEdit}, 0)
+	if len(prepared.Messages) != 1 {
+		t.Fatalf("messages = %#v", prepared.Messages)
+	}
+	user, ok := prepared.Messages[0].(types.UserMessage)
+	if !ok || user.Content.String != "second" {
+		t.Fatalf("message = %#v, want latest replacement", prepared.Messages[0])
+	}
+
+	hidden := &ContextEditEntry{
+		EntryBase: EntryBase{Type: "context_edit", ID: "edit-3"},
+		TargetID:  "target",
+	}
+	prepared = PrepareBranchEntries([]SessionEntry{target, hidden}, 0)
+	if len(prepared.Messages) != 0 {
+		t.Fatalf("messages = %#v, want target omitted", prepared.Messages)
+	}
+}
+
+func TestBranchSummaryUsesConfiguredThinkingLevel(t *testing.T) {
+	var seen []types.ThinkingLevel
+	streamFn := func(ctx context.Context, model *types.Model, llmContext *types.TranscriptContext, options *ai.SimpleStreamOptions) *types.AssistantMessageEventStream {
+		seen = append(seen, options.Reasoning)
+		stream := types.NewAssistantMessageEventStream()
+		return pushDone(stream, types.StopReasonStop, branchResponse([]types.Content{types.NewTextContent("summary")}))
+	}
+	reasoningModel := *branchTestModel
+	reasoningModel.Reasoning = true
+
+	for _, tc := range []struct {
+		model  *ai.Model
+		level  types.ThinkingLevel
+		expect types.ThinkingLevel
+	}{
+		{&reasoningModel, types.ThinkingLevelHigh, types.ThinkingLevelHigh},
+		{&reasoningModel, types.ThinkingLevel("off"), ""},
+		{branchTestModel, types.ThinkingLevelHigh, ""},
+	} {
+		_, err := GenerateBranchSummary(t.Context(), branchTestEntries, &GenerateBranchSummaryOptions{
+			Model:         tc.model,
+			ThinkingLevel: tc.level,
+			StreamFn:      streamFn,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if last := seen[len(seen)-1]; last != tc.expect {
+			t.Fatalf("model reasoning=%v level=%q: reasoning = %q, want %q", tc.model.Reasoning, tc.level, last, tc.expect)
+		}
+	}
+}

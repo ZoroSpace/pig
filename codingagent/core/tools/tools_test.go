@@ -1091,6 +1091,24 @@ func TestGrepTool(t *testing.T) {
 		}
 	})
 
+	t.Run("should align context lines when a file contains a lone CR", func(t *testing.T) {
+		testFile := filepath.Join(testDir, "lone-cr.txt")
+		writeTestFile(t, testFile, "before\rprogress\nneedle\nafter")
+
+		result := execTool(t, grepTool, "test-call-lone-cr", map[string]any{
+			"pattern": "needle", "path": testFile, "context": float64(1),
+		})
+		output := textOf(result)
+		for _, want := range []string{"lone-cr.txt-1- beforeprogress", "lone-cr.txt:2: needle", "lone-cr.txt-3- after"} {
+			if !strings.Contains(output, want) {
+				t.Fatalf("output missing %q: %q", want, output)
+			}
+		}
+		if strings.Contains(output, "lone-cr.txt:2: progress") {
+			t.Fatalf("lone CR shifted match line: %q", output)
+		}
+	})
+
 	t.Run("should ignore RIPGREP_CONFIG_PATH", func(t *testing.T) {
 		configFile := filepath.Join(testDir, "rg-config")
 		testFile := filepath.Join(testDir, "fixture.txt")

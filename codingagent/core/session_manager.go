@@ -1252,7 +1252,7 @@ func readSessionHeaderForDiscovery(filePath string) *SessionHeader {
 // sessionCwdMatches reports whether a session header cwd resolves to
 // resolvedCwd (pi: sessionCwdMatches). Empty/absent cwd never matches.
 func sessionCwdMatches(cwd string, resolvedCwd string) bool {
-	return cwd != "" && utils.ResolvePath(cwd, "", nil) == resolvedCwd
+	return cwd != "" && utils.PathsEqual(utils.ResolvePath(cwd, "", nil), resolvedCwd)
 }
 
 // FindMostRecentSession returns the most recently modified session file in
@@ -1631,7 +1631,7 @@ func (m *SessionManager) GetSessionDir() string {
 func (m *SessionManager) UsesDefaultSessionDir() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.sessionDir == getDefaultSessionDirPath(m.cwd, codingagent.GetAgentDir())
+	return utils.PathsEqual(m.sessionDir, getDefaultSessionDirPath(m.cwd, codingagent.GetAgentDir()))
 }
 
 // GetSessionID returns the session id (pi: getSessionId).
@@ -1710,11 +1710,20 @@ func appendJSONLLine(path string, v any) error {
 }
 
 func (m *SessionManager) appendEntryLocked(entry SessionEntry) error {
+	previousLeafID := m.leafID
 	m.fileEntries = append(m.fileEntries, entry)
 	m.byID[entry.Base().ID] = entry
 	leafID := entry.Base().ID
 	m.leafID = &leafID
-	return m.persistLocked(entry)
+	if err := m.persistLocked(entry); err != nil {
+		// Keep memory in line with the file: an entry that was not written
+		// must not become the parent of later entries.
+		m.fileEntries = m.fileEntries[:len(m.fileEntries)-1]
+		delete(m.byID, entry.Base().ID)
+		m.leafID = previousLeafID
+		return err
+	}
+	return nil
 }
 
 // AppendMessage appends a message as child of current leaf, then advances
@@ -2653,7 +2662,7 @@ func ContinueRecentSession(cwd string, sessionDir string) (*SessionManager, erro
 			return nil, err
 		}
 	}
-	filterCwd := sessionDir != "" && dir != getDefaultSessionDirPath(cwd, codingagent.GetAgentDir())
+	filterCwd := sessionDir != "" && !utils.PathsEqual(dir, getDefaultSessionDirPath(cwd, codingagent.GetAgentDir()))
 	filterCwdArg := ""
 	if filterCwd {
 		filterCwdArg = cwd
@@ -3117,7 +3126,7 @@ func FindSessionById(cwd string, id string, sessionDir string) string {
 			return ""
 		}
 	}
-	filterCwd := sessionDir != "" && dir != getDefaultSessionDirPath(cwd, codingagent.GetAgentDir())
+	filterCwd := sessionDir != "" && !utils.PathsEqual(dir, getDefaultSessionDirPath(cwd, codingagent.GetAgentDir()))
 	resolvedCwd := utils.ResolvePath(cwd, "", nil)
 
 	files, err := os.ReadDir(dir)
@@ -3157,7 +3166,7 @@ func ListSessions(ctx context.Context, cwd string, sessionDir string, onProgress
 			return nil
 		}
 	}
-	filterCwd := sessionDir != "" && dir != getDefaultSessionDirPath(cwd, codingagent.GetAgentDir())
+	filterCwd := sessionDir != "" && !utils.PathsEqual(dir, getDefaultSessionDirPath(cwd, codingagent.GetAgentDir()))
 	resolvedCwd := utils.ResolvePath(cwd, "", nil)
 	includeSession := func(session SessionInfo) bool {
 		return !filterCwd || sessionCwdMatches(session.Cwd, resolvedCwd)

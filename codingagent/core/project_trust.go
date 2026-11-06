@@ -72,6 +72,17 @@ func ResolveProjectTrusted(options ResolveProjectTrustedOptions) (bool, error) {
 		return *options.TrustOverride, nil
 	}
 	if !HasTrustRequiringProjectResources(options.Cwd) {
+		// A saved "do not trust" decision still wins over auto-trust.
+		if options.TrustStore == nil {
+			return true, nil
+		}
+		decision, err := options.TrustStore.Get(options.Cwd)
+		if err != nil {
+			return false, err
+		}
+		if decision != nil {
+			return *decision, nil
+		}
 		return true, nil
 	}
 

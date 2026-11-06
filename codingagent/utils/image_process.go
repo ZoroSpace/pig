@@ -339,19 +339,15 @@ func resizeImage(inputBytes []byte, mimeType string, options *ImageResizeOptions
 	dst := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
 	xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), decoded, bounds, xdraw.Src, nil)
 
-	outMimeType := mimeType
-	encode := func(quality int) ([]byte, bool) {
+	encodeAs := func(outFormat string, quality int) ([]byte, bool) {
 		var buf bytes.Buffer
 		var err error
-		switch mimeType {
+		switch outFormat {
 		case "image/jpeg":
 			err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: quality})
 		case "image/gif":
 			err = gif.Encode(&buf, dst, nil)
 		default:
-			// png, and webp (no Go WebP encoder — header deviation:
-			// re-encodes as PNG).
-			outMimeType = "image/png"
 			err = png.Encode(&buf, dst)
 		}
 		if err != nil {
@@ -359,20 +355,54 @@ func resizeImage(inputBytes []byte, mimeType string, options *ImageResizeOptions
 		}
 		return buf.Bytes(), true
 	}
-
-	encoded, ok := encode(jpegQuality)
-	if !ok {
-		return passThroughImage(inputBytes, mimeType)
+	fits := func(data []byte) bool {
+		return base64.StdEncoding.EncodedLen(len(data)) <= maxBytes
 	}
-	if base64.StdEncoding.EncodedLen(len(encoded)) > maxBytes {
-		if mimeType == "image/jpeg" {
-			// One reduced-quality retry within the explicit budget.
-			encoded, ok = encode(jpegRetryQuality)
-		} else {
-			ok = false
+
+	var encoded []byte
+	outMimeType := mimeType
+	if mimeType == "image/png" || mimeType == "image/jpeg" {
+		// Prefer the smaller of PNG and JPEG at the configured quality; lower
+		// JPEG quality only if neither fits (#11551).
+		pngData, pngOK := encodeAs("image/png", jpegQuality)
+		jpegData, jpegOK := encodeAs("image/jpeg", jpegQuality)
+		if !pngOK || !jpegOK {
+			return passThroughImage(inputBytes, mimeType)
 		}
-		if !ok || base64.StdEncoding.EncodedLen(len(encoded)) > maxBytes {
+		first, firstMime, second, secondMime := pngData, "image/png", jpegData, "image/jpeg"
+		if len(jpegData) < len(pngData) {
+			first, firstMime, second, secondMime = jpegData, "image/jpeg", pngData, "image/png"
+		}
+		if fits(first) {
+			encoded, outMimeType = first, firstMime
+		} else if fits(second) {
+			encoded, outMimeType = second, secondMime
+		} else if retry, ok := encodeAs("image/jpeg", jpegRetryQuality); ok && fits(retry) {
+			encoded, outMimeType = retry, "image/jpeg"
+		} else {
 			return nil
+		}
+	} else {
+		format := mimeType
+		if format != "image/gif" {
+			// webp (no Go WebP encoder — header deviation: re-encodes as PNG).
+			format = "image/png"
+		}
+		var ok bool
+		encoded, ok = encodeAs(format, jpegQuality)
+		if !ok {
+			return passThroughImage(inputBytes, mimeType)
+		}
+		outMimeType = format
+		if !fits(encoded) {
+			if mimeType == "image/jpeg" {
+				encoded, ok = encodeAs("image/jpeg", jpegRetryQuality)
+			} else {
+				ok = false
+			}
+			if !ok || !fits(encoded) {
+				return nil
+			}
 		}
 	}
 

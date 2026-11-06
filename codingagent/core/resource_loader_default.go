@@ -671,9 +671,7 @@ func (l *DefaultResourceLoader) findSourceInfoForPath(resourcePath string, extra
 	normalizedResourcePath := filepath.Clean(resourcePath)
 	if extraSourceInfos != nil {
 		for sourcePath, sourceInfo := range extraSourceInfos {
-			normalizedSourcePath := filepath.Clean(sourcePath)
-			if normalizedResourcePath == normalizedSourcePath ||
-				strings.HasPrefix(normalizedResourcePath, normalizedSourcePath+string(filepath.Separator)) {
+			if utils.IsPathWithin(sourcePath, normalizedResourcePath) {
 				info := sourceInfo
 				info.Path = resourcePath
 				return &info
@@ -692,9 +690,7 @@ func (l *DefaultResourceLoader) findSourceInfoForPath(resourcePath string, extra
 		}
 
 		for sourcePath, metadata := range metadataByPath {
-			normalizedSourcePath := filepath.Clean(sourcePath)
-			if normalizedResourcePath == normalizedSourcePath ||
-				strings.HasPrefix(normalizedResourcePath, normalizedSourcePath+string(filepath.Separator)) {
+			if utils.IsPathWithin(sourcePath, normalizedResourcePath) {
 				info := CreateSourceInfo(resourcePath, metadata)
 				return &info
 			}
@@ -771,11 +767,11 @@ func (l *DefaultResourceLoader) mergePaths(primary []string, additional []string
 
 	for _, p := range append(append([]string{}, primary...), additional...) {
 		resolved := l.resolveResourcePath(p)
-		canonicalPath := utils.CanonicalizePath(resolved)
-		if seen[canonicalPath] {
+		pathKey := GetResourcePathKey(resolved)
+		if seen[pathKey] {
 			continue
 		}
-		seen[canonicalPath] = true
+		seen[pathKey] = true
 		merged = append(merged, resolved)
 	}
 
@@ -996,7 +992,7 @@ func findShadowedContextFile(cwd string) string {
 	// False for an ordinary repo, where the two are the same dir, and for a
 	// sibling worktree (`git worktree add ../feat`), whose main repo is not
 	// an ancestor.
-	if !strings.HasPrefix(worktreeRoot, mainRepoRoot+string(filepath.Separator)) {
+	if !utils.IsPathWithin(mainRepoRoot, worktreeRoot) || utils.PathsEqual(worktreeRoot, mainRepoRoot) {
 		return ""
 	}
 	// dirname of the common git dir is the main worktree root only when that
@@ -1004,7 +1000,7 @@ func findShadowedContextFile(cwd string) string {
 	// (`proj/.bare` + `proj/main`) it is just the directory holding `.bare`,
 	// which tracks nothing; a submodule's gitdir has no `commondir`, so it
 	// lands under `.git/modules`.
-	if utils.CanonicalizePath(filepath.Join(mainRepoRoot, ".git")) != commonGitDir {
+	if !utils.PathsEqual(utils.CanonicalizePath(filepath.Join(mainRepoRoot, ".git")), commonGitDir) {
 		return ""
 	}
 	worktreeContextFile, ok := loadContextFileFromDir(worktreeRoot)
@@ -1040,7 +1036,7 @@ func LoadProjectContextFiles(cwd string, agentDir string) []AgentsFile {
 		// AGENTS.md that symlinks to the main repo's file resolves to the
 		// shadowed path itself.
 		isShadowed := shadowedContextFile != "" && ok &&
-			filepath.Join(utils.CanonicalizePath(currentDir), filepath.Base(contextFile.Path)) == shadowedContextFile
+			utils.PathsEqual(filepath.Join(utils.CanonicalizePath(currentDir), filepath.Base(contextFile.Path)), shadowedContextFile)
 		if ok && !isShadowed && !seenPaths[contextFile.Path] {
 			// pi unshifts — the closest ancestor ends up last, preserving
 			// outer-to-inner order.

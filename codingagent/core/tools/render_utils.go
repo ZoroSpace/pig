@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -21,14 +20,7 @@ import (
 // shortenPath). Non-string input → "" (pi: typeof check; pig's callers pass
 // strings, the empty fallback covers the invalid-arg path).
 func ShortenPath(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	if home != "" && strings.HasPrefix(path, home) {
-		return "~" + path[len(home):]
-	}
-	return path
+	return codingagentutils.ShortenHomePath(path)
 }
 
 // LinkPath wraps the styled path in an OSC 8 hyperlink to the absolute

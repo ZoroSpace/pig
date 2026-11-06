@@ -649,3 +649,21 @@ func mustJSONLine(v any) (string, error) {
 	}
 	return string(data), nil
 }
+
+func TestAppendMessageRollsBackMemoryWhenPersistFails(t *testing.T) {
+	root := t.TempDir()
+	manager := &SessionManager{
+		sessionFile: filepath.Join(root, "missing", "session.jsonl"),
+		persist:     true,
+		byID:        map[string]SessionEntry{},
+	}
+	if _, err := manager.AppendMessage(types.UserMessage{Role: types.RoleUser, Content: types.UserContent{String: "hello"}, Timestamp: 1}); err == nil {
+		t.Fatal("expected persist failure")
+	}
+	if entries := manager.GetEntries(); len(entries) != 0 {
+		t.Fatalf("entries = %#v, want rollback", entries)
+	}
+	if leaf := manager.GetLeafID(); leaf != nil {
+		t.Fatalf("leafID = %q, want nil", *leaf)
+	}
+}

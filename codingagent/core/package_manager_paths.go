@@ -844,7 +844,7 @@ func addAutoDiscoveredResources(
 	var projectAgentsSkillDirs []string
 	if projectTrusted {
 		for _, dir := range collectAncestorAgentsSkillDirs(cwd) {
-			if filepath.Clean(dir) != filepath.Clean(userAgentsSkillsDir) {
+			if !utils.PathsEqual(dir, userAgentsSkillsDir) {
 				projectAgentsSkillDirs = append(projectAgentsSkillDirs, dir)
 			}
 		}
@@ -917,11 +917,11 @@ func toResolvedPaths(accumulator *resourceAccumulator) ResolvedPaths {
 		seen := map[string]bool{}
 		out := make([]ResolvedResource, 0, len(resolved))
 		for _, entry := range resolved {
-			canonicalPath := utils.CanonicalizePath(entry.Path)
-			if seen[canonicalPath] {
+			pathKey := GetResourcePathKey(entry.Path)
+			if seen[pathKey] {
 				continue
 			}
-			seen[canonicalPath] = true
+			seen[pathKey] = true
 			out = append(out, entry)
 		}
 		return out

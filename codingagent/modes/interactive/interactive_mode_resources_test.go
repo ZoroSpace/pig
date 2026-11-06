@@ -463,7 +463,7 @@ func TestShowLoadedResourcesQuietDiagnostics(t *testing.T) {
 	mode.showLoadedResources(&showLoadedResourcesOptions{Force: false, ShowDiagnosticsWhenQuiet: true})
 
 	output := renderAllChildren(mode.loadedResourcesContainer, 220)
-	assertContains(t, output, "[Skill conflicts]")
+	assertContains(t, output, "[Skill warnings]")
 	assertNotContains(t, output, "[Skills]")
 }
 

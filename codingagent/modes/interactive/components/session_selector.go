@@ -37,17 +37,6 @@ const (
 	sessionScopeAll     sessionScope = "all"
 )
 
-func shortenPath(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return path
-	}
-	if path != "" && strings.HasPrefix(path, home) {
-		return "~" + path[len(home):]
-	}
-	return path
-}
-
 func formatSessionDate(date time.Time) string {
 	now := time.Now()
 	diffMs := now.Sub(date)
@@ -272,7 +261,7 @@ func canonicalizeSessionPath(path string) string {
 	if path == "" {
 		return path
 	}
-	return utils.CanonicalizePath(path)
+	return utils.GetPathComparisonKey(utils.CanonicalizePath(path))
 }
 
 // buildSessionTree builds a tree structure from sessions based on
@@ -625,10 +614,10 @@ func (l *sessionList) Render(width int) []string {
 		msgCount := fmt.Sprintf("%d", session.MessageCount)
 		rightPart := fmt.Sprintf("%s %s", msgCount, age)
 		if l.showCwd && session.Cwd != "" {
-			rightPart = fmt.Sprintf("%s %s", shortenPath(session.Cwd), rightPart)
+			rightPart = fmt.Sprintf("%s %s", utils.ShortenHomePath(session.Cwd), rightPart)
 		}
 		if l.showPath {
-			rightPart = fmt.Sprintf("%s %s", shortenPath(session.Path), rightPart)
+			rightPart = fmt.Sprintf("%s %s", utils.ShortenHomePath(session.Path), rightPart)
 		}
 
 		// Cursor
@@ -1122,6 +1111,13 @@ func (s *SessionSelectorComponent) mutate(fn func()) {
 		return
 	}
 	fn()
+}
+
+// CapturesViewportInput reports whether the focused selector consumes page
+// keys; rename mode forwards input to a text field (pi:
+// Component.capturesViewportInput).
+func (s *SessionSelectorComponent) CapturesViewportInput() bool {
+	return s.mode != "rename"
 }
 
 // HandleInput implements InputHandler (pi: handleInput).

@@ -254,3 +254,29 @@ func mustDecodeBase64ForTest(t *testing.T, data string) []byte {
 func boolPtr(v bool) *bool {
 	return &v
 }
+
+func TestResizeImagePrefersSmallerJpegForPngInput(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 300, 300))
+	state := uint32(1)
+	for y := 0; y < 300; y++ {
+		for x := 0; x < 300; x++ {
+			state = state*1664525 + 1013904223
+			img.SetRGBA(x, y, color.RGBA{R: uint8(state >> 24), G: uint8(state >> 16), B: uint8(state >> 8), A: 255})
+		}
+	}
+	var input bytes.Buffer
+	if err := png.Encode(&input, img); err != nil {
+		t.Fatal(err)
+	}
+	maxWidth, maxHeight := 200, 200
+	result := resizeImage(input.Bytes(), "image/png", &ImageResizeOptions{MaxWidth: &maxWidth, MaxHeight: &maxHeight})
+	if result == nil {
+		t.Fatal("expected resized image")
+	}
+	if result.MimeType != "image/jpeg" {
+		t.Fatalf("mimeType = %q, want image/jpeg", result.MimeType)
+	}
+	if result.Width != 200 || result.Height != 200 {
+		t.Fatalf("size = %dx%d, want 200x200", result.Width, result.Height)
+	}
+}

@@ -25,6 +25,7 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/core"
 	coretools "github.com/ZoroSpace/pig/codingagent/core/tools"
 	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
+	"github.com/ZoroSpace/pig/codingagent/utils"
 	"github.com/ZoroSpace/pig/tui"
 )
 
@@ -1240,14 +1241,7 @@ func hasTextContentMessage(msg types.AssistantMessage) bool {
 
 func (l *treeList) formatToolCall(name string, args map[string]any) string {
 	shortenPath := func(p string) string {
-		home, err := os.UserHomeDir()
-		if err != nil || home == "" {
-			return p
-		}
-		if strings.HasPrefix(p, home) {
-			return "~" + p[len(home):]
-		}
-		return p
+		return utils.ShortenHomePath(p, os.Getenv("HOME"), os.Getenv("USERPROFILE"))
 	}
 
 	argsString := func(key string) string {
@@ -1924,6 +1918,13 @@ func (s *TreeSelectorComponent) hideLabelInput() {
 }
 
 // HandleInput implements InputHandler.
+// CapturesViewportInput reports whether the focused selector consumes page
+// keys; label editing forwards input to a text field (pi:
+// Component.capturesViewportInput).
+func (s *TreeSelectorComponent) CapturesViewportInput() bool {
+	return s.labelInput == nil
+}
+
 func (s *TreeSelectorComponent) HandleInput(keyData string) {
 	if s.labelInput != nil {
 		s.labelInput.HandleInput(keyData)

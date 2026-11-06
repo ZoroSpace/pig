@@ -719,26 +719,13 @@ func (m *InteractiveMode) Init() error {
 	// init's changelog load).
 	m.changelogMarkdown = m.getChangelogForDisplay()
 
-	// Model scope notice (pi: console.log before the TUI starts).
-	if scoped := m.session().ScopedModels(); len(scoped) > 0 && m.shouldShowStartupDetails() {
-		modelList := make([]string, 0, len(scoped))
-		for _, sm := range scoped {
-			entry := sm.Model.ID
-			if sm.ThinkingLevel != "" {
-				entry += ":" + string(sm.ThinkingLevel)
-			}
-			modelList = append(modelList, entry)
+	// Fullscreen renders on the alternate screen, so text printed here would
+	// remain in the shell after exit; it shows the notice in the header
+	// instead (#11508).
+	if m.renderer.Mode() != tui.TuiModeFullscreen {
+		if notice := m.getModelScopeNotice(); notice != "" {
+			fmt.Println(notice)
 		}
-		cycleHint := ""
-		if cycleKeys := m.keybindings.GetKeys(core.AppKeybindingModelCycleForward); len(cycleKeys) > 0 {
-			keyTexts := make([]string, 0, len(cycleKeys))
-			for _, k := range cycleKeys {
-				keyTexts = append(keyTexts, string(k))
-			}
-			hint := coretools.FormatKeyText(strings.Join(keyTexts, "/"), coretools.KeyTextFormatOptions{Capitalize: true})
-			cycleHint = theme.Current().Fg("muted", fmt.Sprintf(" (%s to cycle)", hint))
-		}
-		fmt.Println(theme.Current().Fg("dim", fmt.Sprintf("Model scope: %s%s", strings.Join(modelList, ", "), cycleHint)))
 	}
 
 	// Accept text while startup completes, but only enable interrupt, exit,
@@ -873,6 +860,9 @@ func (m *InteractiveMode) Init() error {
 		builtInHeader := tui.NewText("", 0, 0)
 		m.builtInHeader = builtInHeader
 		m.headerContainer.AddChild(builtInHeader)
+	}
+	if m.renderer.Mode() == tui.TuiModeFullscreen {
+		m.showFullscreenModelScopeNotice()
 	}
 	m.ui.RequestRender(false)
 
@@ -1045,6 +1035,46 @@ func (m *InteractiveMode) getStartupExpansionState() bool {
 // shouldShowStartupHeader).
 func (m *InteractiveMode) shouldShowStartupHeader() bool {
 	return m.options.Verbose || m.settingsManager().GetQuietStartup() != core.QuietStartupOn
+}
+
+// getModelScopeNotice returns the startup model scope line, or "" when there
+// are no scoped models or startup details are hidden (pi:
+// getModelScopeNotice).
+func (m *InteractiveMode) getModelScopeNotice() string {
+	scoped := m.session().ScopedModels()
+	if len(scoped) == 0 || !m.shouldShowStartupDetails() {
+		return ""
+	}
+	modelList := make([]string, 0, len(scoped))
+	for _, sm := range scoped {
+		entry := sm.Model.ID
+		if sm.ThinkingLevel != "" {
+			entry += ":" + string(sm.ThinkingLevel)
+		}
+		modelList = append(modelList, entry)
+	}
+	cycleHint := ""
+	if cycleKeys := m.keybindings.GetKeys(core.AppKeybindingModelCycleForward); len(cycleKeys) > 0 {
+		keyTexts := make([]string, 0, len(cycleKeys))
+		for _, k := range cycleKeys {
+			keyTexts = append(keyTexts, string(k))
+		}
+		hint := coretools.FormatKeyText(strings.Join(keyTexts, "/"), coretools.KeyTextFormatOptions{Capitalize: true})
+		cycleHint = theme.Current().Fg("muted", fmt.Sprintf(" (%s to cycle)", hint))
+	}
+	return theme.Current().Fg("dim", fmt.Sprintf("Model scope: %s%s", strings.Join(modelList, ", "), cycleHint))
+}
+
+// showFullscreenModelScopeNotice adds the model scope line below the header
+// (pi: showFullscreenModelScopeNotice; ThemedText is pig's rebuild-on-
+// invalidate expandableText with identical collapsed/expanded text).
+func (m *InteractiveMode) showFullscreenModelScopeNotice() {
+	if m.getModelScopeNotice() == "" {
+		return
+	}
+	getter := func() string { return m.getModelScopeNotice() }
+	m.headerContainer.AddChild(newExpandableText(getter, getter, false, 1, 0))
+	m.headerContainer.AddChild(tui.NewSpacer(1))
 }
 
 // shouldShowStartupDetails reports whether the startup details (model scope
@@ -4369,12 +4399,7 @@ func (m *InteractiveMode) checkTmuxKeyboardSetup(ctx context.Context) string {
 // formatDisplayPath replaces the home directory with ~ (pi:
 // formatDisplayPath).
 func (m *InteractiveMode) formatDisplayPath(p string) string {
-	result := p
-	home, err := os.UserHomeDir()
-	if err == nil && home != "" && strings.HasPrefix(result, home) {
-		result = "~" + result[len(home):]
-	}
-	return result
+	return utils.ShortenHomePath(p)
 }
 
 // formatExtensionDisplayPath strips index entry files (pi:
@@ -5102,7 +5127,7 @@ func (m *InteractiveMode) showLoadedResources(options *showLoadedResourcesOption
 		skillDiagnostics := skillsResult.Diagnostics
 		if len(skillDiagnostics) > 0 {
 			warningLines := m.formatDiagnostics(skillDiagnostics, sourceInfos)
-			m.loadedResourcesContainer.AddChild(tui.NewText(theme.Current().Fg("warning", "[Skill conflicts]")+"\n"+warningLines, 0, 0))
+			m.loadedResourcesContainer.AddChild(tui.NewText(theme.Current().Fg("warning", "[Skill warnings]")+"\n"+warningLines, 0, 0))
 			m.loadedResourcesContainer.AddChild(tui.NewSpacer(1))
 		}
 
@@ -6117,8 +6142,15 @@ func (m *InteractiveMode) setCustomEditorComponent(factory core.EditorFactory) {
 	// Save text from current editor before switching
 	currentText := m.editor.GetText()
 
-	m.disposeActiveSelector()
-	m.mutateUI(func() { m.editorContainer.Clear() })
+	// An open extension dialog keeps the editor slot; the new editor is shown
+	// when the last dialog closes (pi: #11431).
+	m.extensionDialogsMu.Lock()
+	dialogOpen := len(m.extensionDialogs) > 0
+	m.extensionDialogsMu.Unlock()
+	if !dialogOpen {
+		m.disposeActiveSelector()
+		m.mutateUI(func() { m.editorContainer.Clear() })
+	}
 
 	if factory != nil {
 		// Create the custom editor with tui, theme, and keybindings
@@ -6164,7 +6196,9 @@ func (m *InteractiveMode) setCustomEditorComponent(factory core.EditorFactory) {
 	}
 
 	m.mutateUI(func() {
-		m.editorContainer.AddChild(m.editor)
+		if !dialogOpen {
+			m.editorContainer.AddChild(m.editor)
+		}
 		// Re-embed the active indicator when a custom editor without border
 		// embedding was swapped out (pi: setCustomEditorComponent tail;
 		// v0.86.0 drops the WorkingStatusIndicator instanceof gate).
@@ -6175,7 +6209,9 @@ func (m *InteractiveMode) setCustomEditorComponent(factory core.EditorFactory) {
 				m.statusContainer.AddChild(m.activeStatusIndicator)
 			}
 		}
-		m.ui.SetFocus(m.editor)
+		if !dialogOpen {
+			m.ui.SetFocus(m.editor)
+		}
 	})
 	m.ui.RequestRender(false)
 }
@@ -6243,7 +6279,11 @@ func (m *InteractiveMode) showExtensionCustom(ctx context.Context, factory core.
 			options.OnHandle(handle)
 		}
 	} else {
-		m.pushExtensionDialog(component, nil, dispose)
+		var blocked *blockedStatus
+		if options != nil && options.Blocked != nil {
+			blocked = &blockedStatus{kind: options.Blocked.Kind, message: options.Blocked.Message}
+		}
+		m.pushExtensionDialog(component, blocked, dispose)
 	}
 
 	result := <-resultCh
@@ -9050,6 +9090,8 @@ func (m *InteractiveMode) handleOpenExternalEditor(ctx context.Context) {
 	}
 	if result.Status == "complete" {
 		m.editor.SetText(result.Content)
+	} else if result.Message != "" {
+		m.showStatus(result.Message)
 	}
 }
 

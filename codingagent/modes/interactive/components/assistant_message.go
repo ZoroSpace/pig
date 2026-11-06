@@ -164,27 +164,17 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 	// Clear content container
 	c.contentContainer.Clear()
 
-	hasVisibleContent := false
-	for _, content := range message.Content {
-		// Content entries arrive as values from the adapters (pig: value
-		// receivers; pi's duck typing covers both), so accept each.
-		switch block := asTextOrThinking(content).(type) {
-		case *types.TextContent:
-			if strings.TrimSpace(block.Text) != "" {
-				hasVisibleContent = true
-			}
-		case *types.ThinkingContent:
-			if strings.TrimSpace(block.Thinking) != "" {
-				hasVisibleContent = true
-			}
+	// Spacers are added lazily, right before the next visible block: one
+	// before the first visible block and one after a visible thinking run
+	// followed by more visible content. Hidden thinking without a label
+	// contributes nothing (pi: #11470).
+	needsSpacer := true
+	addVisibleChild := func(child tui.Component) {
+		if needsSpacer {
+			c.contentContainer.AddChild(tui.NewSpacer(1))
+			needsSpacer = false
 		}
-		if hasVisibleContent {
-			break
-		}
-	}
-
-	if hasVisibleContent {
-		c.contentContainer.AddChild(tui.NewSpacer(1))
+		c.contentContainer.AddChild(child)
 	}
 
 	// Render content in order. Blocks are normalized to their pointer forms
@@ -204,7 +194,7 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 			}
 			// Assistant text messages with no background - trim the text
 			// Set paddingY=0 to avoid extra spacing before tool executions
-			c.contentContainer.AddChild(tui.NewMarkdown(
+			addVisibleChild(tui.NewMarkdown(
 				strings.TrimSpace(content.Text),
 				c.outputPad,
 				0,
@@ -232,26 +222,17 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 				continue
 			}
 
-			// Add spacing only when another visible assistant content block
-			// follows. This avoids a superfluous blank line before
-			// separately-rendered tool execution blocks.
-			hasVisibleContentAfter := false
-			for _, content := range message.Content[i+1:] {
-				if text, ok := asTextOrThinking(content).(*types.TextContent); ok && strings.TrimSpace(text.Text) != "" {
-					hasVisibleContentAfter = true
-					break
-				}
-				if thinking, ok := content.(*types.ThinkingContent); ok && strings.TrimSpace(thinking.Thinking) != "" {
-					hasVisibleContentAfter = true
-					break
-				}
-			}
-
 			runIndex := thinkingRunIndex
 			thinkingRunIndex++
 			hidden := c.hideThinkingBlock
 			if override, ok := c.thinkingVisibilityOverrides[runIndex]; ok {
 				hidden = override
+			}
+			// A hidden run with an empty label renders nothing, including no
+			// spacing. The run index still advances so click overrides on
+			// other runs keep their indices.
+			if hidden && strings.TrimSpace(c.hiddenThinkingLabel) == "" {
+				continue
 			}
 			var thinkingComponent tui.Component
 			if hidden {
@@ -280,7 +261,7 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 			}
 			// Click toggles this run's visibility (pi: MouseRegion wrapper,
 			// v0.85.1).
-			c.contentContainer.AddChild(tui.NewMouseRegion(thinkingComponent, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
+			addVisibleChild(tui.NewMouseRegion(thinkingComponent, func(event *tui.TuiMouseEvent) *tui.TuiMouseEventResult {
 				if event.Type != tui.MouseEventTypeClick || event.Button != tui.MouseButtonLeft {
 					return nil
 				}
@@ -293,9 +274,9 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 				}
 				return &tui.TuiMouseEventResult{Handled: true}
 			}))
-			if hasVisibleContentAfter {
-				c.contentContainer.AddChild(tui.NewSpacer(1))
-			}
+			// Spacing before the next visible block follows what actually
+			// renders.
+			needsSpacer = true
 		}
 	}
 

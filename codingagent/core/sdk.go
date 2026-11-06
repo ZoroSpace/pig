@@ -473,6 +473,7 @@ func CreateAgentSession(ctx context.Context, options *CreateAgentSessionOptions)
 		CustomTools:            options.CustomTools,
 		MCPManager:             mcpManager,
 		ModelRuntime:           modelRuntime,
+		RuntimeStreamFunction:  agentInstance.StreamFunction,
 		CacheWarmer:            cacheWarmer,
 		InitialActiveToolNames: initialActiveToolNames,
 		UsesDefaultTools:       (options.Tools == nil || toolModifiers != nil) && options.NoTools == "",

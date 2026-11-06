@@ -89,6 +89,9 @@ type GenerateBranchSummaryOptions struct {
 	// Env holds provider-scoped environment values for the model; nil = none
 	// (pi: env?).
 	Env ai.ProviderEnv
+	// ThinkingLevel is the reasoning level for reasoning-capable models
+	// (pi: thinkingLevel?).
+	ThinkingLevel types.ThinkingLevel
 	// CustomInstructions are optional custom instructions for summarization;
 	// "" = none (pi: customInstructions?).
 	CustomInstructions string
@@ -180,7 +183,7 @@ func CollectEntriesForBranchSummary(
 // getMessageFromEntry extracts the AgentMessage from a session entry; similar
 // to getMessageFromEntry in compaction.ts but also handles compaction
 // entries (pi: getMessageFromEntry).
-func getMessageFromEntry(entry SessionEntry) agent.AgentMessage {
+func getMessageFromEntry(entry SessionEntry, edit *ContextEditEntry) agent.AgentMessage {
 	switch e := entry.(type) {
 	case *SessionMessageEntry:
 		// Skip tool results — context is in assistant's tool call. A nil
@@ -189,9 +192,23 @@ func getMessageFromEntry(entry SessionEntry) agent.AgentMessage {
 		if e.Message == nil || e.Message.MessageRole() == types.RoleToolResult {
 			return nil
 		}
+		if edit != nil {
+			projected := projectContextEntry(entry, edit)
+			if len(projected) == 0 {
+				return nil
+			}
+			return projected[0]
+		}
 		return e.Message
 
 	case *CustomMessageEntry:
+		if edit != nil {
+			projected := projectContextEntry(entry, edit)
+			if len(projected) == 0 {
+				return nil
+			}
+			return projected[0]
+		}
 		return harness.CreateCustomMessage(e.CustomType, e.Content, e.Display, e.Details, isoToMillis(e.Timestamp))
 
 	case *BranchSummaryEntry:
@@ -273,10 +290,19 @@ func PrepareBranchEntries(entries []SessionEntry, tokenBudget int64) *BranchPrep
 		}
 	}
 
+	// Context edits hide or replace earlier entries in model context; honor
+	// the latest edit per target.
+	edits := map[string]*ContextEditEntry{}
+	for _, entry := range entries {
+		if edit, ok := entry.(*ContextEditEntry); ok {
+			edits[edit.TargetID] = edit
+		}
+	}
+
 	// Second pass: walk from newest to oldest, adding messages until token budget
 	for i := len(entries) - 1; i >= 0; i-- {
 		entry := entries[i]
-		message := getMessageFromEntry(entry)
+		message := getMessageFromEntry(entry, edits[entry.Base().ID])
 		if message == nil {
 			continue
 		}
@@ -410,6 +436,9 @@ func GenerateBranchSummary(
 	requestOptions := &ai.SimpleStreamOptions{}
 	requestOptions.APIKey = options.APIKey
 	requestOptions.Env = options.Env
+	if options.Model.Reasoning && options.ThinkingLevel != "" && options.ThinkingLevel != types.ThinkingLevel("off") {
+		requestOptions.Reasoning = options.ThinkingLevel
+	}
 	if options.Headers != nil {
 		requestOptions.Headers = ai.ProviderHeaders{}
 		for k, v := range options.Headers {

@@ -449,3 +449,39 @@ func TestSystemPromptToolDeclarationsStableAcrossJSONRoundTrip(t *testing.T) {
 		t.Fatalf("system messages after resume = %d, want 1", systemCount)
 	}
 }
+
+func TestSetActiveToolsByNamePreservesExistingOrder(t *testing.T) {
+	makeTool := func(name string) RegisteredTool {
+		return RegisteredTool{Definition: &coretools.ToolDefinition{
+			Name:        name,
+			Label:       name,
+			Description: name + " tool",
+			Parameters:  rawJSON(`{"type":"object","properties":{}}`),
+			Execute: func(ctx context.Context, toolCallID string, params any, onUpdate agent.AgentToolUpdateCallback, toolCtx coretools.ToolExecuteContext) (agent.AgentToolResult, error) {
+				return agent.AgentToolResult{Content: []types.Content{}, Details: map[string]any{}}, nil
+			},
+		}}
+	}
+	session, _, _ := createAgentTestSession(t, &createAgentTestSessionOptions{
+		GetAPIKey:            true,
+		OmitSeedSystemPrompt: true,
+		ExtensionsResult: []*LoadExtensionsResult{{
+			Extensions: []*Extension{{
+				Path: "order-tools-stub",
+				Tools: map[string]RegisteredTool{
+					"first":  makeTool("first"),
+					"second": makeTool("second"),
+				},
+				Handlers: map[string][]ExtensionHandler{},
+			}},
+			Runtime: CreateExtensionRuntime(),
+		}},
+	})
+	defer session.Dispose()
+
+	session.SetActiveToolsByName([]string{"first", "second"})
+	session.SetActiveToolsByName([]string{"second", "first"})
+	if got := session.GetActiveToolNames(); !reflect.DeepEqual(got, []string{"first", "second"}) {
+		t.Fatalf("active tools = %v, want existing order preserved", got)
+	}
+}

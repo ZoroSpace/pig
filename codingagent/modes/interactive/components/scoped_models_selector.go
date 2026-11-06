@@ -218,6 +218,10 @@ type ScopedModelsSelectorComponent struct {
 }
 
 // NewScopedModelsSelectorComponent builds the selector (pi: constructor).
+// CapturesViewportInput reports that the focused selector consumes page keys
+// instead of scrolling the transcript (pi: Component.capturesViewportInput).
+func (s *ScopedModelsSelectorComponent) CapturesViewportInput() bool { return true }
+
 func NewScopedModelsSelectorComponent(config ScopedModelsConfig, callbacks ScopedModelsCallbacks) *ScopedModelsSelectorComponent {
 	s := &ScopedModelsSelectorComponent{
 		Container:  tui.Container{},
@@ -487,6 +491,15 @@ func (s *ScopedModelsSelectorComponent) updateList() {
 // HandleInput implements InputHandler.
 func (s *ScopedModelsSelectorComponent) HandleInput(data string) {
 	kb := tui.GetKeybindings()
+	pageIndex, isPageKey := tui.GetSelectPageIndex(kb, data, s.selectedIndex, len(s.filteredItems), s.maxVisible)
+	if isPageKey {
+		if len(s.filteredItems) == 0 {
+			return
+		}
+		s.selectedIndex = pageIndex
+		s.updateList()
+		return
+	}
 
 	// Navigation
 	if kb.Matches(data, "tui.select.up") {
