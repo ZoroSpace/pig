@@ -193,3 +193,28 @@ func TestThemeSyntaxHighlighting(t *testing.T) {
 		}
 	})
 }
+
+func TestCodeHighlighter(t *testing.T) {
+	InitTheme("dark", false)
+	t.Cleanup(func() { InitTheme("dark", false) })
+
+	highlighter := &CodeHighlighter{}
+	const code = "const value = 1"
+	first := highlighter.Highlight(code, "javascript")
+	if len(first) == 0 {
+		t.Fatal("no highlighted lines")
+	}
+	second := highlighter.Highlight(code, "javascript")
+	if &first[0] != &second[0] {
+		t.Fatal("unchanged code, language, theme, and grammars must reuse the last result")
+	}
+	if utils.GetHighlightLanguageCount() == 0 {
+		t.Fatal("no highlight languages registered")
+	}
+
+	InitTheme("light", false)
+	third := highlighter.Highlight(code, "javascript")
+	if &third[0] == &second[0] {
+		t.Fatal("a theme change must invalidate the cached highlighting")
+	}
+}

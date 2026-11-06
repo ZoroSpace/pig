@@ -20,11 +20,12 @@ import (
 	"github.com/ZoroSpace/pig/codingagent/core"
 )
 
-// createMarkdownTransform returns a Markdown transform function applying
+// CreateMarkdownTransform returns a Markdown transform function applying
 // the registered transformers in order (pi: createMarkdownTransform).
+// isStreaming is read per transform, so a reused component sees a stream end.
 func CreateMarkdownTransform(
 	messageType string,
-	isStreaming bool,
+	isStreaming func() bool,
 	transformers []core.MarkdownTransformer,
 	messageID string,
 	timestamp string,
@@ -32,7 +33,7 @@ func CreateMarkdownTransform(
 	return func(markdown string, availableWidth int) string {
 		return applyMarkdownTransformers(markdown, core.MarkdownTransformContext{
 			MessageType:    messageType,
-			IsStreaming:    isStreaming,
+			IsStreaming:    isStreaming(),
 			AvailableWidth: availableWidth,
 			MessageID:      messageID,
 			Timestamp:      timestamp,

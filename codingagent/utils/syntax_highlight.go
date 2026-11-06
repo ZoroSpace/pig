@@ -218,6 +218,15 @@ func SupportsLanguage(name string) bool {
 	return lexers.Get(name) != nil
 }
 
+// GetHighlightLanguageCount reports the number of registered lexers. It
+// follows pi's getHighlightLanguageCount (highlight.js's registered
+// grammars); chroma registers its full lexer set eagerly, so the count is
+// stable at runtime but still lets CodeHighlighter invalidate if a lexer
+// was registered after its result was cached.
+func GetHighlightLanguageCount() int {
+	return len(lexers.Names(false))
+}
+
 // ============================================================================
 // HTML span renderer (verbatim port of syntax-highlight.ts's
 // renderHighlightedHtml section)

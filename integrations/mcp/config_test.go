@@ -67,6 +67,7 @@ func TestParseConfigOAuthValidation(t *testing.T) {
 			"portMismatch": {"url": "https://x.example/mcp", "oauth": {"callbackPort": 1111, "callbackUrl": "http://127.0.0.1:2222/cb"}},
 			"stdioOAuth": {"command": "x", "oauth": {"clientId": "c"}},
 			"badProvider": {"url": "http://example.com/mcp", "auth": {"provider": "anthropic"}},
+			"auto": {"url": "https://x.example/mcp", "oauth": {"clientRegistration": "auto"}},
 			"good": {"url": "https://x.example/mcp", "oauth": {"callbackPort": 33418, "clientId": "c"}}
 		}
 	}`))
@@ -89,11 +90,14 @@ func TestParseConfigOAuthValidation(t *testing.T) {
 	if !foundCimd {
 		t.Fatalf("cimd must be rejected with the declared message, got %+v", diags)
 	}
-	if len(config.MCPServers) != 1 {
+	if len(config.MCPServers) != 2 {
 		t.Fatalf("invalid servers must be dropped, got %+v", config.MCPServers)
 	}
 	if _, ok := config.MCPServers["good"]; !ok {
 		t.Fatalf("valid OAuth server must survive, got %+v", config.MCPServers)
+	}
+	if _, ok := config.MCPServers["auto"]; !ok {
+		t.Fatalf("auto client registration must survive, got %+v", config.MCPServers)
 	}
 }
 

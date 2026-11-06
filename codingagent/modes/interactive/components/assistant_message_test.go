@@ -1,11 +1,13 @@
 package components
 
 import (
+	"runtime/debug"
 	"strings"
 	"testing"
 
 	"github.com/ZoroSpace/pig/ai/types"
 	"github.com/ZoroSpace/pig/codingagent/core"
+	"github.com/ZoroSpace/pig/codingagent/modes/interactive/theme"
 	"github.com/ZoroSpace/pig/codingagent/utils"
 	"github.com/ZoroSpace/pig/tui"
 )
@@ -286,6 +288,69 @@ func TestAssistantMessageComponent(t *testing.T) {
 		}
 		if len(streamingStates) != 2 || !streamingStates[0] || streamingStates[1] {
 			t.Fatalf("streamingStates = %v", streamingStates)
+		}
+	})
+
+	t.Run("reuses Markdown instances while streaming and clears them on output padding change", func(t *testing.T) {
+		initTestTheme(t)
+		message := createAssistantMessage([]types.Content{
+			&types.TextContent{Kind: types.KindText, Text: "answer"},
+			&types.ThinkingContent{Kind: types.KindThinking, Thinking: "reasoning"},
+		}, "")
+		component := NewAssistantMessageComponent(message, &AssistantMessageOptions{OutputPad: 1})
+		if len(component.markdownSlots) != 2 {
+			t.Fatalf("slots = %d, want text and thinking", len(component.markdownSlots))
+		}
+		firstText := component.markdownSlots[0].markdown
+		firstThinking := component.markdownSlots[1].markdown
+
+		component.UpdateContent(message, false)
+		if component.markdownSlots[0].markdown != firstText || component.markdownSlots[1].markdown != firstThinking {
+			t.Fatal("streaming update must reuse Markdown instances")
+		}
+
+		component.SetOutputPad(0)
+		if component.markdownSlots[0].markdown == firstText || component.markdownSlots[1].markdown == firstThinking {
+			t.Fatal("output padding change must recreate Markdown instances")
+		}
+	})
+
+	t.Run("reuses rendered Markdown through streaming and re-highlights after a theme change", func(t *testing.T) {
+		initTestTheme(t)
+		// Rendered blocks are weakly held; disable the GC so the cache cannot
+		// be collected between the synchronous renders this test counts.
+		previousGCPercent := debug.SetGCPercent(-1)
+		t.Cleanup(func() { debug.SetGCPercent(previousGCPercent) })
+		markdownTheme := theme.GetMarkdownTheme()
+		highlightCalls := 0
+		highlight := markdownTheme.HighlightCode
+		markdownTheme.HighlightCode = func(code string, lang string) []string {
+			highlightCalls++
+			return highlight(code, lang)
+		}
+		content := func(text string) []types.Content {
+			return []types.Content{
+				&types.ThinkingContent{Kind: types.KindThinking, Thinking: "Thinking with **bold** text"},
+				&types.TextContent{Kind: types.KindText, Text: text},
+			}
+		}
+		code := "```ts\nconst a = 1;\n```"
+		component := NewAssistantMessageComponent(nil, &AssistantMessageOptions{MarkdownTheme: &markdownTheme})
+		component.UpdateContent(createAssistantMessage(content(code), ""), true)
+		component.Render(80)
+		message := createAssistantMessage(content(code+"\n\nThe end."), "")
+		component.UpdateContent(message, false)
+		component.Render(80)
+		if highlightCalls != 1 {
+			t.Fatalf("highlight calls = %d, want one reused block", highlightCalls)
+		}
+
+		theme.InitTheme("light", false)
+		t.Cleanup(func() { theme.InitTheme("dark", false) })
+		component.Invalidate()
+		component.Render(80)
+		if highlightCalls != 2 {
+			t.Fatalf("highlight calls after invalidate = %d, want two", highlightCalls)
 		}
 	})
 

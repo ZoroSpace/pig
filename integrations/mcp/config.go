@@ -137,8 +137,10 @@ type OAuthConfig struct {
 	// Default: "pig".
 	ClientName string `json:"clientName,omitempty"`
 	// ClientRegistration selects how pig identifies itself without a
-	// clientId. Only "dcr" (the default) is supported: pi's "cimd" relies on
-	// pi.dev-hosted Client ID Metadata Documents, which do not exist for pig.
+	// clientId. "auto" (the default) behaves like "dcr" in pig: pi's "cimd"
+	// relies on pi.dev-hosted Client ID Metadata Documents, which identify
+	// pi and do not exist for pig, so "cimd" stays rejected (pi v1.5.0
+	// #11426).
 	ClientRegistration string `json:"clientRegistration,omitempty"`
 	// AuthServerMetadataURL overrides discovery with a configured
 	// authorization server metadata document (RFC 8414 / OIDC), for servers
@@ -387,12 +389,11 @@ func validateOAuthConfig(o *OAuthConfig) string {
 		}
 	}
 	switch o.ClientRegistration {
-	case "":
-	case "dcr":
+	case "", "auto", "dcr":
 	case "cimd":
-		return `oauth.clientRegistration "cimd" is not supported by pig: pi.dev-hosted Client ID Metadata Documents do not exist for pig (use dynamic client registration or oauth.clientId)`
+		return `oauth.clientRegistration "cimd" is not supported by pig: pi.dev-hosted Client ID Metadata Documents identify pi and do not exist for pig (use "auto", "dcr", or oauth.clientId)`
 	default:
-		return `oauth.clientRegistration must be "dcr" or "cimd"`
+		return `oauth.clientRegistration must be "auto", "dcr", or "cimd"`
 	}
 	if o.AuthServerMetadataURL != "" {
 		u, err := url.Parse(o.AuthServerMetadataURL)

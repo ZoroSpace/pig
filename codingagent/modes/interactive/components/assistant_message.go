@@ -11,6 +11,15 @@ import (
 	"github.com/ZoroSpace/pig/tui"
 )
 
+// markdownSlot is a Markdown block of the last update. The next update
+// reuses it at the same position for the same kind of content, so a streamed
+// answer keeps the blocks it already rendered, also once the stream ends
+// (pi: MarkdownSlot).
+type markdownSlot struct {
+	kind     string
+	markdown *tui.Markdown
+}
+
 // AssistantMessageComponent renders a complete assistant message (pi:
 // class AssistantMessageComponent extends Container).
 type AssistantMessageComponent struct {
@@ -31,6 +40,9 @@ type AssistantMessageComponent struct {
 	// (pi: thinkingVisibilityOverrides, v0.85.1); missing = follow
 	// hideThinkingBlock.
 	thinkingVisibilityOverrides map[int]bool
+	// markdownSlots holds the Markdown instances of the last update (pi:
+	// markdownSlots).
+	markdownSlots []markdownSlot
 }
 
 // AssistantMessageOptions carries the constructor's optional parameters
@@ -138,6 +150,8 @@ func (c *AssistantMessageComponent) SetHiddenThinkingLabel(label string) {
 // SetOutputPad updates the padding (pi: setOutputPad).
 func (c *AssistantMessageComponent) SetOutputPad(padding int) {
 	c.outputPad = padding
+	// Markdown takes its padding at construction.
+	c.markdownSlots = nil
 	if c.lastMessage != nil {
 		c.UpdateContent(c.lastMessage, c.isStreaming)
 	}
@@ -163,6 +177,23 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 
 	// Clear content container
 	c.contentContainer.Clear()
+	previousSlots := c.markdownSlots
+	c.markdownSlots = nil
+	markdownBlock := func(kind string, text string, create func() *tui.Markdown) *tui.Markdown {
+		var slot *markdownSlot
+		if len(c.markdownSlots) < len(previousSlots) {
+			slot = &previousSlots[len(c.markdownSlots)]
+		}
+		var markdown *tui.Markdown
+		if slot != nil && slot.kind == kind {
+			markdown = slot.markdown
+		} else {
+			markdown = create()
+		}
+		markdown.SetText(text)
+		c.markdownSlots = append(c.markdownSlots, markdownSlot{kind: kind, markdown: markdown})
+		return markdown
+	}
 
 	// Spacers are added lazily, right before the next visible block: one
 	// before the first visible block and one after a visible thinking run
@@ -194,16 +225,19 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 			}
 			// Assistant text messages with no background - trim the text
 			// Set paddingY=0 to avoid extra spacing before tool executions
-			addVisibleChild(tui.NewMarkdown(
-				strings.TrimSpace(content.Text),
-				c.outputPad,
-				0,
-				c.markdownTheme,
-				nil,
-				&tui.MarkdownOptions{
-					Transform: CreateMarkdownTransform("assistant", c.isStreaming, c.markdownTransformers, c.messageID, c.timestamp),
-				},
-			))
+			text := strings.TrimSpace(content.Text)
+			addVisibleChild(markdownBlock("text", text, func() *tui.Markdown {
+				return tui.NewMarkdown(
+					text,
+					c.outputPad,
+					0,
+					c.markdownTheme,
+					nil,
+					&tui.MarkdownOptions{
+						Transform: CreateMarkdownTransform("assistant", func() bool { return c.isStreaming }, c.markdownTransformers, c.messageID, c.timestamp),
+					},
+				)
+			}))
 		case *types.ThinkingContent:
 			thinkingBlocks := make([]string, 0, 4)
 			for ; i < len(message.Content); i++ {
@@ -245,19 +279,22 @@ func (c *AssistantMessageComponent) UpdateContent(message *types.AssistantMessag
 				)
 			} else {
 				// Render each run of thinking blocks as one Markdown section.
-				thinkingComponent = tui.NewMarkdown(
-					strings.Join(thinkingBlocks, "\n\n"),
-					c.outputPad,
-					0,
-					c.markdownTheme,
-					&tui.DefaultTextStyle{
-						Color:  func(text string) string { return theme.Fg("thinkingText", text) },
-						Italic: true,
-					},
-					&tui.MarkdownOptions{
-						Transform: CreateMarkdownTransform("assistant-thinking", c.isStreaming, c.markdownTransformers, c.messageID, c.timestamp),
-					},
-				)
+				thinking := strings.Join(thinkingBlocks, "\n\n")
+				thinkingComponent = markdownBlock("thinking", thinking, func() *tui.Markdown {
+					return tui.NewMarkdown(
+						thinking,
+						c.outputPad,
+						0,
+						c.markdownTheme,
+						&tui.DefaultTextStyle{
+							Color:  func(text string) string { return theme.Fg("thinkingText", text) },
+							Italic: true,
+						},
+						&tui.MarkdownOptions{
+							Transform: CreateMarkdownTransform("assistant-thinking", func() bool { return c.isStreaming }, c.markdownTransformers, c.messageID, c.timestamp),
+						},
+					)
+				})
 			}
 			// Click toggles this run's visibility (pi: MouseRegion wrapper,
 			// v0.85.1).

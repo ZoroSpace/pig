@@ -1901,6 +1901,45 @@ func HighlightCode(code string, lang string) []string {
 	return highlightCodeWithTheme(Current(), code, lang)
 }
 
+// CodeHighlighter highlights code for one owner, such as a tool row, and
+// reuses the last result while the code, the language, the theme and the
+// registered grammars stay the same. Each owner keeps its own highlighter, so
+// cached results live as long as the code they show instead of in a
+// process-wide cache (pi: class CodeHighlighter).
+type CodeHighlighter struct {
+	last *codeHighlightCache
+}
+
+type codeHighlightCache struct {
+	code          string
+	lang          string
+	theme         *Theme
+	languageCount int
+	lines         []string
+}
+
+// Highlight is like HighlightCode. The result is shared with later calls, so
+// callers must not modify it (pi: CodeHighlighter.highlight).
+func (h *CodeHighlighter) Highlight(code string, lang string) []string {
+	// Renderers cannot tell a theme change from any other redraw, so the
+	// highlighter checks what its result depends on.
+	currentTheme := Current()
+	languageCount := utils.GetHighlightLanguageCount()
+	last := h.last
+	if last != nil && last.code == code && last.lang == lang && last.theme == currentTheme && last.languageCount == languageCount {
+		return last.lines
+	}
+	lines := highlightCodeWithTheme(currentTheme, code, lang)
+	h.last = &codeHighlightCache{
+		code:          code,
+		lang:          lang,
+		theme:         currentTheme,
+		languageCount: languageCount,
+		lines:         lines,
+	}
+	return lines
+}
+
 // GetLanguageFromPath maps a file extension to a language identifier (pi:
 // getLanguageFromPath).
 func GetLanguageFromPath(filePath string) (string, bool) {
@@ -1976,25 +2015,7 @@ func GetMarkdownTheme() tui.MarkdownTheme {
 		Italic:          Italic,
 		Underline:       Underline,
 		Strikethrough:   Strikethrough,
-		HighlightCode: func(code string, lang string) []string {
-			// Validate language before highlighting to avoid stderr spam
-			validLang := ""
-			if lang != "" && utils.SupportsLanguage(lang) {
-				validLang = lang
-			}
-			if validLang == "" {
-				return splitLinesFg(Current(), code, ColorMdCodeBlock)
-			}
-			// pi: the highlight output is already theme-colored (only the
-			// no-language fallback colors per-line); utils.Highlight never
-			// errors, so pi's catch branch (mdCodeBlock-colored lines) is
-			// unreachable here.
-			return strings.Split(utils.Highlight(code, utils.HighlightOptions{
-				Language:       validLang,
-				IgnoreIllegals: true,
-				Theme:          getCliHighlightTheme(Current()),
-			}), "\n")
-		},
+		HighlightCode:   HighlightCode,
 	}
 }
 

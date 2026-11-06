@@ -54,6 +54,10 @@ type WriteHighlightCache struct {
 type WriteCallRenderComponent struct {
 	*tui.Text
 	Cache *WriteHighlightCache
+	// Highlighter reuses line highlighting across deltas and expand
+	// toggles; it also holds the only copy of a complete call's displayed
+	// source (pi: readonly highlighter = new CodeHighlighter()).
+	Highlighter theme.CodeHighlighter
 
 	// pig-only streaming-throttle bookkeeping (same fix doc as
 	// writePreviewThrottleInterval). Rendered only from writeRenderCall,
@@ -94,7 +98,7 @@ func themeGetLanguageFromPath(filePath string) string {
 
 // refreshWriteHighlightPrefix re-highlights the leading lines in place (pi:
 // refreshWriteHighlightPrefix).
-func refreshWriteHighlightPrefix(cache *WriteHighlightCache) {
+func refreshWriteHighlightPrefix(cache *WriteHighlightCache, highlighter *theme.CodeHighlighter) {
 	prefixCount := writePartialFullHighlightLines
 	if len(cache.normalizedLines) < prefixCount {
 		prefixCount = len(cache.normalizedLines)
@@ -103,7 +107,7 @@ func refreshWriteHighlightPrefix(cache *WriteHighlightCache) {
 		return
 	}
 	prefixSource := strings.Join(cache.normalizedLines[:prefixCount], "\n")
-	prefixHighlighted := themeHighlightCode(prefixSource, cache.lang)
+	prefixHighlighted := highlighter.Highlight(prefixSource, cache.lang)
 	for i := 0; i < prefixCount; i++ {
 		if i < len(prefixHighlighted) && prefixHighlighted[i] != "" {
 			cache.highlightedLines[i] = prefixHighlighted[i]
@@ -139,7 +143,7 @@ func rebuildWriteHighlightCacheFull(rawPath *string, fileContent string) *WriteH
 
 // updateWriteHighlightCacheIncremental appends the delta to the cache (pi:
 // updateWriteHighlightCacheIncremental; nil = no language).
-func updateWriteHighlightCacheIncremental(cache *WriteHighlightCache, rawPath *string, fileContent string) *WriteHighlightCache {
+func updateWriteHighlightCacheIncremental(cache *WriteHighlightCache, rawPath *string, fileContent string, highlighter *theme.CodeHighlighter) *WriteHighlightCache {
 	lang := ""
 	if rawPath != nil {
 		lang = themeGetLanguageFromPath(*rawPath)
@@ -176,7 +180,7 @@ func updateWriteHighlightCacheIncremental(cache *WriteHighlightCache, rawPath *s
 		cache.normalizedLines = append(cache.normalizedLines, segments[i])
 		cache.highlightedLines = append(cache.highlightedLines, highlightSingleLine(segments[i], cache.lang))
 	}
-	refreshWriteHighlightPrefix(cache)
+	refreshWriteHighlightPrefix(cache, highlighter)
 	return cache
 }
 
@@ -205,7 +209,7 @@ func stringArg(args map[string]any, key string) (string, bool) {
 }
 
 // formatWriteCall renders the call row (pi: formatWriteCall).
-func formatWriteCall(theme UITheme, args map[string]any, options ToolRenderResultOptions, cache *WriteHighlightCache, cwd string) string {
+func formatWriteCall(theme UITheme, args map[string]any, options ToolRenderResultOptions, cache *WriteHighlightCache, highlighter *theme.CodeHighlighter, cwd string) string {
 	rawPath := rawPathFromArgs(args)
 	fileContent, contentInvalid := stringArg(args, "content")
 	pathDisplay := RenderToolPath(rawPath, theme, cwd, "")
@@ -224,7 +228,7 @@ func formatWriteCall(theme UITheme, args map[string]any, options ToolRenderResul
 			if cache != nil {
 				renderedLines = cache.highlightedLines
 			} else {
-				renderedLines = themeHighlightCode(ReplaceTabs(NormalizeDisplayText(fileContent)), lang)
+				renderedLines = highlighter.Highlight(ReplaceTabs(NormalizeDisplayText(fileContent)), lang)
 			}
 		} else {
 			renderedLines = strings.Split(NormalizeDisplayText(fileContent), "\n")
@@ -316,16 +320,16 @@ func writeRenderCall(args any, themeArg UITheme, context ToolRenderContext) tui.
 	component.lastPreviewExpanded = context.Expanded
 	if !contentInvalid {
 		if context.ArgsComplete {
-			component.Cache = rebuildWriteHighlightCacheFull(rawPath, fileContent)
+			component.Cache = nil
 		} else {
-			component.Cache = updateWriteHighlightCacheIncremental(component.Cache, rawPath, fileContent)
+			component.Cache = updateWriteHighlightCacheIncremental(component.Cache, rawPath, fileContent, &component.Highlighter)
 		}
 	} else {
 		component.Cache = nil
 	}
 	component.SetText(formatWriteCall(themeArg, renderArgs,
 		ToolRenderResultOptions{Expanded: context.Expanded, IsPartial: context.IsPartial},
-		component.Cache, context.Cwd))
+		component.Cache, &component.Highlighter, context.Cwd))
 	return component
 }
 

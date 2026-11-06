@@ -85,7 +85,7 @@ func (c *UserMessageComponent) rebuild() {
 		&tui.MarkdownOptions{
 			PreserveOrderedListMarkers: true,
 			PreserveBackslashEscapes:   true,
-			Transform:                  CreateMarkdownTransform("user", false, c.markdownTransformers, c.messageID, c.timestamp),
+			Transform:                  CreateMarkdownTransform("user", func() bool { return false }, c.markdownTransformers, c.messageID, c.timestamp),
 		},
 	)))
 	c.AddChild(NewDynamicBorderCorner(ruleColor, '└'))
